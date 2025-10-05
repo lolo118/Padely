@@ -24,24 +24,52 @@
         .group-card:hover {
             transform: translateY(-2px);
         }
+        .tab-active {
+            background-color: #374151;
+            border-color: #ef4444;
+            color: white;
+        }
+        .search-highlight {
+            background-color: #fef3c7;
+            color: #92400e;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body class="text-gray-300">
 
     <div id="app" class="container mx-auto p-4 md:p-6 max-w-7xl">
         <!-- Header -->
-        <header class="bg-gray-800/50 backdrop-blur-sm border border-gray-700 shadow-lg rounded-xl p-4 md:p-6 mb-8 flex justify-between items-center sticky top-4 z-50">
-            <div>
-                <h1 class="text-2xl md:text-4xl font-extrabold text-white tracking-tight">Matchpoint</h1>
-                <p class="text-gray-400 text-sm md:text-base mt-1">Torneo 8va Categoría Masculino</p>
-            </div>
-            <div>
-                <button id="admin-login-btn" class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors text-sm md:text-base">
-                    Admin
-                </button>
-                <button id="logout-btn" class="hidden bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm md:text-base">
-                    Cerrar Sesión
-                </button>
+        <header class="bg-gray-800/50 backdrop-blur-sm border border-gray-700 shadow-lg rounded-xl p-4 md:p-6 mb-8">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="text-center md:text-left mb-4 md:mb-0">
+                    <h1 class="text-2xl md:text-4xl font-extrabold text-white tracking-tight">Matchpoint</h1>
+                    <p class="text-gray-400 text-sm md:text-base mt-1">Torneo 8va Categoría Masculino</p>
+                </div>
+                
+                <!-- Search Bar -->
+                <div class="w-full md:w-1/3 mb-4 md:mb-0">
+                    <div class="relative">
+                        <input type="text" id="player-search" placeholder="Buscar por apellido..." 
+                               class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                        <svg class="absolute right-3 top-2.5 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+                
+                <!-- Quick Group Links -->
+                <div class="flex flex-wrap justify-center gap-2">
+                    <a href="#group-A" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">A</a>
+                    <a href="#group-B" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">B</a>
+                    <a href="#group-C" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">C</a>
+                    <a href="#group-D" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">D</a>
+                    <a href="#group-E" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">E</a>
+                    <a href="#group-F" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">F</a>
+                    <a href="#group-G" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">G</a>
+                    <a href="#group-H" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">H</a>
+                </div>
             </div>
         </header>
 
@@ -81,62 +109,173 @@
 
             <!-- Admin View -->
             <div id="admin-view" class="hidden mt-8">
-                 <section id="admin-matches-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
-                    <h2 class="text-2xl font-bold mb-6 text-center text-white">Actualizar Resultados</h2>
-                    <div id="admin-matches-container" class="space-y-4">
-                        <!-- JS will inject admin forms -->
-                    </div>
-                </section>
+                <!-- Admin Tabs -->
+                <div class="border-b border-gray-700 mb-6">
+                    <nav class="flex -mb-px">
+                        <button id="tab-matches" class="tab-active py-2 px-4 font-medium text-sm border-b-2 border-red-500 text-white">
+                            Partidos
+                        </button>
+                        <button id="tab-players" class="py-2 px-4 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-white">
+                            Parejas
+                        </button>
+                        <button id="tab-tournament" class="py-2 px-4 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-white">
+                            Torneo
+                        </button>
+                    </nav>
+                </div>
                 
-                <!-- Add Match Section -->
-                <section id="add-match-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md mt-6">
-                    <h2 class="text-2xl font-bold mb-6 text-center text-white">Agregar Partido</h2>
-                    <form id="add-match-form" class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-1">Grupo</label>
-                                <select id="new-match-group" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
-                                    <option value="">Seleccionar Grupo</option>
-                                    <option value="A">Grupo A</option>
-                                    <option value="B">Grupo B</option>
-                                    <option value="C">Grupo C</option>
-                                    <option value="D">Grupo D</option>
-                                    <option value="E">Grupo E</option>
-                                    <option value="F">Grupo F</option>
-                                    <option value="G">Grupo G</option>
-                                    <option value="H">Grupo H</option>
-                                </select>
+                <!-- Matches Tab -->
+                <div id="tab-content-matches" class="tab-content">
+                    <section id="admin-matches-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
+                        <h2 class="text-2xl font-bold mb-6 text-center text-white">Actualizar Resultados</h2>
+                        <div id="admin-matches-container" class="space-y-4">
+                            <!-- JS will inject admin forms -->
+                        </div>
+                    </section>
+                    
+                    <!-- Add Match Section -->
+                    <section id="add-match-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md mt-6">
+                        <h2 class="text-2xl font-bold mb-6 text-center text-white">Agregar Partido</h2>
+                        <form id="add-match-form" class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Grupo</label>
+                                    <select id="new-match-group" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                        <option value="">Seleccionar Grupo</option>
+                                        <option value="A">Grupo A</option>
+                                        <option value="B">Grupo B</option>
+                                        <option value="C">Grupo C</option>
+                                        <option value="D">Grupo D</option>
+                                        <option value="E">Grupo E</option>
+                                        <option value="F">Grupo F</option>
+                                        <option value="G">Grupo G</option>
+                                        <option value="H">Grupo H</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Cancha</label>
+                                    <input type="number" id="new-match-court" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" min="1" max="10" required>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Hora</label>
+                                    <input type="time" id="new-match-time" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                </div>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-1">Cancha</label>
-                                <input type="number" id="new-match-court" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" min="1" max="10" required>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Pareja 1</label>
+                                    <select id="new-match-team1" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                        <option value="">Seleccionar Pareja</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Pareja 2</label>
+                                    <select id="new-match-team2" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                        <option value="">Seleccionar Pareja</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-1">Hora</label>
-                                <input type="time" id="new-match-time" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                            <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-colors">Agregar Partido</button>
+                        </form>
+                    </section>
+                </div>
+                
+                <!-- Players Tab -->
+                <div id="tab-content-players" class="tab-content hidden">
+                    <section class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
+                        <h2 class="text-2xl font-bold mb-6 text-center text-white">Gestionar Parejas</h2>
+                        
+                        <!-- Add Player Form -->
+                        <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg mb-6">
+                            <h3 class="text-xl font-bold mb-4 text-white">Agregar Nueva Pareja</h3>
+                            <form id="add-player-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Jugador 1</label>
+                                    <input type="text" id="player1-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="Apellido, Nombre" required>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Jugador 2</label>
+                                    <input type="text" id="player2-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="Apellido, Nombre" required>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Nombre de Pareja</label>
+                                    <input type="text" id="team-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="Apellido1 - Apellido2" required>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Grupo</label>
+                                    <select id="player-group" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                        <option value="">Seleccionar Grupo</option>
+                                        <option value="A">Grupo A</option>
+                                        <option value="B">Grupo B</option>
+                                        <option value="C">Grupo C</option>
+                                        <option value="D">Grupo D</option>
+                                        <option value="E">Grupo E</option>
+                                        <option value="F">Grupo F</option>
+                                        <option value="G">Grupo G</option>
+                                        <option value="H">Grupo H</option>
+                                    </select>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-colors">Agregar Pareja</button>
+                                </div>
+                            </form>
+                        </div>
+                        
+                        <!-- Players List -->
+                        <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
+                            <h3 class="text-xl font-bold mb-4 text-white">Parejas Registradas</h3>
+                            <div id="players-list" class="space-y-3">
+                                <!-- JS will inject players list -->
                             </div>
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-1">Pareja 1</label>
-                                <select id="new-match-team1" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
-                                    <option value="">Seleccionar Pareja</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-1">Pareja 2</label>
-                                <select id="new-match-team2" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
-                                    <option value="">Seleccionar Pareja</option>
-                                </select>
+                    </section>
+                </div>
+                
+                <!-- Tournament Tab -->
+                <div id="tab-content-tournament" class="tab-content hidden">
+                    <section class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
+                        <h2 class="text-2xl font-bold mb-6 text-center text-white">Configuración del Torneo</h2>
+                        
+                        <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg mb-6">
+                            <h3 class="text-xl font-bold mb-4 text-white">Información General</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Nombre del Torneo</label>
+                                    <input type="text" id="tournament-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" value="Torneo 8va Categoría Masculino">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Fecha</label>
+                                    <input type="date" id="tournament-date" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Cantidad de Canchas</label>
+                                    <input type="number" id="court-count" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" min="1" max="10" value="4">
+                                </div>
+                                <div class="flex items-end">
+                                    <button id="save-tournament-settings" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors">Guardar Configuración</button>
+                                </div>
                             </div>
                         </div>
-                        <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-colors">Agregar Partido</button>
-                    </form>
-                </section>
+                        
+                        <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
+                            <h3 class="text-xl font-bold mb-4 text-white">Acciones del Torneo</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <button id="generate-groups" class="bg-yellow-600 text-white font-bold py-3 rounded-lg hover:bg-yellow-700 transition-colors">Generar Grupos Automáticamente</button>
+                                <button id="reset-tournament" class="bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700 transition-colors">Reiniciar Torneo</button>
+                            </div>
+                        </div>
+                    </section>
+                </div>
             </div>
         </main>
         
         <footer class="text-center mt-12 text-gray-500 text-sm">
+            <button id="admin-login-btn" class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors text-sm md:text-base mb-4">
+                Acceso Administrador
+            </button>
+            <button id="logout-btn" class="hidden bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm md:text-base mb-4">
+                Cerrar Sesión
+            </button>
             <p>&copy; 2025 Matchpoint. Todos los derechos reservados.</p>
         </footer>
     </div>
@@ -164,129 +303,47 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // --- DATA (Completa basada en la planilla Excel) ---
-            const tournamentData = {
+            // --- DATA (Inicialmente vacía, se llena a través del admin) ---
+            let tournamentData = {
                 groups: {
-                    'A': [
-                        { name: 'COSTA VILLAMAYOR', PJ: 2, PG: 2, PP: 0, GF: 12, GC: 6, DG: 6, Pts: 6 },
-                        { name: 'SAAVEDRA ANTUÑA', PJ: 2, PG: 1, PP: 1, GF: 10, GC: 11, DG: -1, Pts: 3 },
-                        { name: 'SOTELO AYUNTA', PJ: 2, PG: 0, PP: 2, GF: 8, GC: 13, DG: -5, Pts: 0 }
-                    ],
-                    'B': [
-                        { name: 'PORFIRIO REYNA', PJ: 2, PG: 2, PP: 0, GF: 13, GC: 8, DG: 5, Pts: 6 },
-                        { name: 'FALCON TORRES', PJ: 2, PG: 1, PP: 1, GF: 9, GC: 9, DG: 0, Pts: 3 },
-                        { name: 'FAISAL CASTELLANOS', PJ: 2, PG: 0, PP: 2, GF: 8, GC: 13, DG: -5, Pts: 0 }
-                    ],
-                    'C': [
-                        { name: 'DE LA RUA SOSA', PJ: 2, PG: 2, PP: 0, GF: 12, GC: 5, DG: 7, Pts: 6 },
-                        { name: 'BURGOS RUIZ', PJ: 2, PG: 1, PP: 1, GF: 8, GC: 9, DG: -1, Pts: 3 },
-                        { name: 'HERRERA CUELLAR', PJ: 2, PG: 0, PP: 2, GF: 6, GC: 12, DG: -6, Pts: 0 }
-                    ],
-                    'D': [
-                        { name: 'LEGUIZAMON UNGHARO', PJ: 2, PG: 2, PP: 0, GF: 12, GC: 5, DG: 7, Pts: 6 },
-                        { name: 'AVACA REIMUNDI', PJ: 2, PG: 1, PP: 1, GF: 8, GC: 9, DG: -1, Pts: 3 },
-                        { name: 'ACOSTA MELIN', PJ: 2, PG: 0, PP: 2, GF: 6, GC: 12, DG: -6, Pts: 0 }
-                    ],
-                    'E': [
-                        { name: 'BASUALDO RAINERI', PJ: 2, PG: 2, PP: 0, GF: 13, GC: 5, DG: 8, Pts: 6 },
-                        { name: 'SORIA JIMENEZ', PJ: 2, PG: 1, PP: 1, GF: 11, GC: 7, DG: 4, Pts: 3 },
-                        { name: 'CORVALAN BALISTA', PJ: 2, PG: 0, PP: 2, GF: 0, GC: 12, DG: -12, Pts: 0 }
-                    ],
-                    'F': [
-                        { name: 'LAZARTE PACHILA', PJ: 2, PG: 2, PP: 0, GF: 12, GC: 3, DG: 9, Pts: 6 },
-                        { name: 'LUCCA MONTES', PJ: 2, PG: 1, PP: 1, GF: 8, GC: 7, DG: 1, Pts: 3 },
-                        { name: 'WITTE WITTE', PJ: 2, PG: 0, PP: 2, GF: 2, GC: 12, DG: -10, Pts: 0 }
-                    ],
-                    'G': [
-                        { name: 'MIRANDA SCHONFELD', PJ: 2, PG: 2, PP: 0, GF: 13, GC: 7, DG: 6, Pts: 6 },
-                        { name: 'LOPEZ CARRILLO', PJ: 2, PG: 1, PP: 1, GF: 11, GC: 8, DG: 3, Pts: 3 },
-                        { name: 'KILMASZ RODRIGUEZ', PJ: 2, PG: 0, PP: 2, GF: 3, GC: 12, DG: -9, Pts: 0 }
-                    ],
-                    'H': [
-                        { name: 'AVACA LETURIA', PJ: 2, PG: 2, PP: 0, GF: 13, GC: 8, DG: 5, Pts: 6 },
-                        { name: 'SEILER APESTEGUIA', PJ: 2, PG: 1, PP: 1, GF: 11, GC: 10, DG: 1, Pts: 3 },
-                        { name: 'REAL SILVA', PJ: 2, PG: 0, PP: 2, GF: 6, GC: 12, DG: -6, Pts: 0 }
-                    ]
+                    'A': [],
+                    'B': [],
+                    'C': [],
+                    'D': [],
+                    'E': [],
+                    'F': [],
+                    'G': [],
+                    'H': []
                 },
-                matches: [
-                    // Grupo A
-                    { id: 1, group: 'A', team1: 'COSTA VILLAMAYOR', score1: 6, team2: 'SAAVEDRA ANTUÑA', score2: 3, time: '10:00', court: 1, completed: true },
-                    { id: 2, group: 'A', team1: 'SAAVEDRA ANTUÑA', score1: 7, team2: 'SOTELO AYUNTA', score2: 5, time: '11:00', court: 1, completed: true },
-                    { id: 3, group: 'A', team1: 'SOTELO AYUNTA', score1: 3, team2: 'COSTA VILLAMAYOR', score2: 6, time: '12:00', court: 1, completed: true },
-                    
-                    // Grupo B
-                    { id: 4, group: 'B', team1: 'FAISAL CASTELLANOS', score1: 5, team2: 'PORFIRIO REYNA', score2: 7, time: '10:00', court: 2, completed: true },
-                    { id: 5, group: 'B', team1: 'PORFIRIO REYNA', score1: 6, team2: 'FALCON TORRES', score2: 3, time: '11:00', court: 2, completed: true },
-                    { id: 6, group: 'B', team1: 'FALCON TORRES', score1: 6, team2: 'FAISAL CASTELLANOS', score2: 3, time: '12:00', court: 2, completed: true },
-                    
-                    // Grupo E
-                    { id: 7, group: 'E', team1: 'SORIA JIMENEZ', score1: 7, team2: 'CORVALAN BALISTA', score2: 5, time: '12:00', court: 3, completed: true },
-                    { id: 8, group: 'E', team1: 'CORVALAN BALISTA', score1: 0, team2: 'BASUALDO RAINERI', score2: 6, time: '13:00', court: 3, completed: true },
-                    { id: 9, group: 'E', team1: 'BASUALDO RAINERI', score1: 7, team2: 'SORIA JIMENEZ', score2: 5, time: '14:00', court: 3, completed: true },
-                    
-                    // Grupo F
-                    { id: 10, group: 'F', team1: 'LAZARTE PACHILA', score1: 6, team2: 'LUCCA MONTES', score2: 1, time: '13:00', court: 4, completed: true },
-                    { id: 11, group: 'F', team1: 'LUCCA MONTES', score1: 1, team2: 'WITTE WITTE', score2: 6, time: '14:00', court: 4, completed: true },
-                    { id: 12, group: 'F', team1: 'WITTE WITTE', score1: 2, team2: 'LAZARTE PACHILA', score2: 6, time: '15:00', court: 4, completed: true },
-                    
-                    // Partidos pendientes
-                    { id: 13, group: 'C', team1: 'DE LA RUA SOSA', score1: null, team2: 'BURGOS RUIZ', score2: null, time: '16:00', court: 1, completed: false },
-                    { id: 14, group: 'C', team1: 'BURGOS RUIZ', score1: null, team2: 'HERRERA CUELLAR', score2: null, time: '17:00', court: 1, completed: false },
-                    { id: 15, group: 'C', team1: 'HERRERA CUELLAR', score1: null, team2: 'DE LA RUA SOSA', score2: null, time: '18:00', court: 1, completed: false },
-                    
-                    { id: 16, group: 'D', team1: 'LEGUIZAMON UNGHARO', score1: null, team2: 'AVACA REIMUNDI', score2: null, time: '16:00', court: 2, completed: false },
-                    { id: 17, group: 'D', team1: 'AVACA REIMUNDI', score1: null, team2: 'ACOSTA MELIN', score2: null, time: '17:00', court: 2, completed: false },
-                    { id: 18, group: 'D', team1: 'ACOSTA MELIN', score1: null, team2: 'LEGUIZAMON UNGHARO', score2: null, time: '18:00', court: 2, completed: false },
-                    
-                    { id: 19, group: 'G', team1: 'MIRANDA SCHONFELD', score1: null, team2: 'LOPEZ CARRILLO', score2: null, time: '16:00', court: 3, completed: false },
-                    { id: 20, group: 'G', team1: 'LOPEZ CARRILLO', score1: null, team2: 'KILMASZ RODRIGUEZ', score2: null, time: '17:00', court: 3, completed: false },
-                    { id: 21, group: 'G', team1: 'KILMASZ RODRIGUEZ', score1: null, team2: 'MIRANDA SCHONFELD', score2: null, time: '18:00', court: 3, completed: false },
-                    
-                    { id: 22, group: 'H', team1: 'AVACA LETURIA', score1: null, team2: 'SEILER APESTEGUIA', score2: null, time: '16:00', court: 4, completed: false },
-                    { id: 23, group: 'H', team1: 'SEILER APESTEGUIA', score1: null, team2: 'REAL SILVA', score2: null, time: '17:00', court: 4, completed: false },
-                    { id: 24, group: 'H', team1: 'REAL SILVA', score1: null, team2: 'AVACA LETURIA', score2: null, time: '18:00', court: 4, completed: false }
-                ],
+                matches: [],
                 knockout: {
                     rounds: [
-                        {
-                            name: 'Octavos de Final',
-                            matches: [
-                                { team1: 'LAZARTE PACHILA', score1: 6, team2: 'SEILER APESTEGUIA', score2: 3, completed: true },
-                                { team1: 'DE LA RUA SOSA', score1: 7, team2: 'SAAVEDRA ANTUÑA', score2: 5, completed: true },
-                                { team1: 'COSTA VILLAMAYOR', score1: 6, team2: 'LOPEZ CARRILLO', score2: 2, completed: true },
-                                { team1: 'MIRANDA SCHONFELD', score1: 6, team2: 'AVACA REIMUNDI', score2: 4, completed: true },
-                                { team1: 'BASUALDO RAINERI', score1: 6, team2: 'SORIA JIMENEZ', score2: 3, completed: true },
-                                { team1: 'PORFIRIO REYNA', score1: 6, team2: 'FALCON TORRES', score2: 3, completed: true },
-                                { team1: 'LEGUIZAMON UNGHARO', score1: 7, team2: 'BURGOS RUIZ', score2: 6, completed: true },
-                                { team1: 'AVACA LETURIA', score1: 6, team2: 'LUCCA MONTES', score2: 4, completed: true }
-                            ]
-                        },
-                        {
-                            name: 'Cuartos de Final',
-                            matches: [
-                                { team1: 'LAZARTE PACHILA', score1: 6, team2: 'DE LA RUA SOSA', score2: 4, completed: true },
-                                { team1: 'COSTA VILLAMAYOR', score1: 6, team2: 'MIRANDA SCHONFELD', score2: 4, completed: true },
-                                { team1: 'BASUALDO RAINERI', score1: 6, team2: 'PORFIRIO REYNA', score2: 3, completed: true },
-                                { team1: 'LEGUIZAMON UNGHARO', score1: 4, team2: 'AVACA LETURIA', score2: 6, completed: true }
-                            ]
-                        },
-                        {
-                            name: 'Semifinal',
-                            matches: [
-                                { team1: 'LAZARTE PACHILA', score1: 6, team2: 'COSTA VILLAMAYOR', score2: 4, completed: true },
-                                { team1: 'BASUALDO RAINERI', score1: 6, team2: 'AVACA LETURIA', score2: 2, completed: true }
-                            ]
-                        },
-                        {
-                            name: 'Final',
-                            matches: [
-                                { team1: 'LAZARTE PACHILA', score1: 4, team2: 'BASUALDO RAINERI', score2: 6, completed: true }
-                            ]
-                        }
+                        { name: 'Octavos de Final', matches: [] },
+                        { name: 'Cuartos de Final', matches: [] },
+                        { name: 'Semifinal', matches: [] },
+                        { name: 'Final', matches: [] }
                     ]
+                },
+                settings: {
+                    name: 'Torneo 8va Categoría Masculino',
+                    date: new Date().toISOString().split('T')[0],
+                    courts: 4
                 }
             };
-            
+
+            // Cargar datos del localStorage si existen
+            function loadFromLocalStorage() {
+                const savedData = localStorage.getItem('tournamentData');
+                if (savedData) {
+                    tournamentData = JSON.parse(savedData);
+                }
+            }
+
+            // Guardar datos en localStorage
+            function saveToLocalStorage() {
+                localStorage.setItem('tournamentData', JSON.stringify(tournamentData));
+            }
+
             // --- DOM ELEMENTS ---
             const groupsGrid = document.getElementById('groups-grid');
             const scheduleContainer = document.getElementById('schedule-container');
@@ -303,6 +360,18 @@
             const newMatchGroup = document.getElementById('new-match-group');
             const newMatchTeam1 = document.getElementById('new-match-team1');
             const newMatchTeam2 = document.getElementById('new-match-team2');
+            const playerSearch = document.getElementById('player-search');
+            const addPlayerForm = document.getElementById('add-player-form');
+            const playersList = document.getElementById('players-list');
+            const tabMatches = document.getElementById('tab-matches');
+            const tabPlayers = document.getElementById('tab-players');
+            const tabTournament = document.getElementById('tab-tournament');
+            const tabContentMatches = document.getElementById('tab-content-matches');
+            const tabContentPlayers = document.getElementById('tab-content-players');
+            const tabContentTournament = document.getElementById('tab-content-tournament');
+            const generateGroupsBtn = document.getElementById('generate-groups');
+            const resetTournamentBtn = document.getElementById('reset-tournament');
+            const saveTournamentSettingsBtn = document.getElementById('save-tournament-settings');
 
             // --- RENDER FUNCTIONS ---
             function renderGroups() {
@@ -311,6 +380,7 @@
                     const groupData = tournamentData.groups[groupName];
                     const groupCard = document.createElement('div');
                     groupCard.className = 'bg-gray-800 border border-gray-700 p-4 rounded-lg group-card';
+                    groupCard.id = `group-${groupName}`;
                     
                     // Ordenar por puntos (desc) y diferencia de games (desc)
                     const sortedGroup = [...groupData].sort((a, b) => {
@@ -321,23 +391,27 @@
                     let teamsHTML = `<h3 class="font-bold text-xl mb-4 text-white text-center border-b border-gray-700 pb-2">Grupo ${groupName}</h3>
                                      <div class="space-y-2">`;
                     
-                    sortedGroup.forEach((team, index) => {
-                        const positionClass = index === 0 ? 'border-green-500' : 
-                                            index === 1 ? 'border-yellow-500' : 'border-gray-600';
-                        
-                        teamsHTML += `<div class="bg-gray-900 rounded-lg p-3 border-l-4 ${positionClass}">
-                                        <div class="flex justify-between items-center">
-                                            <span class="font-bold text-sm text-white truncate pr-2">${team.name}</span>
-                                            <span class="font-bold text-lg ${index === 0 ? 'text-green-400' : index === 1 ? 'text-yellow-400' : 'text-red-400'} flex-shrink-0">${team.Pts} Pts</span>
-                                        </div>
-                                        <div class="grid grid-cols-4 gap-1 text-center text-xs mt-2 text-gray-400">
-                                            <div><span class="font-semibold text-gray-200">${team.PJ}</span> PJ</div>
-                                            <div><span class="font-semibold text-gray-200">${team.PG}</span> PG</div>
-                                            <div><span class="font-semibold text-gray-200">${team.PP}</span> PP</div>
-                                            <div><span class="font-semibold text-gray-200">${team.DG > 0 ? '+' : ''}${team.DG}</span> DG</div>
-                                        </div>
-                                      </div>`;
-                    });
+                    if (sortedGroup.length === 0) {
+                        teamsHTML += `<div class="text-center text-gray-500 py-4">No hay parejas en este grupo</div>`;
+                    } else {
+                        sortedGroup.forEach((team, index) => {
+                            const positionClass = index === 0 ? 'border-green-500' : 
+                                                index === 1 ? 'border-yellow-500' : 'border-gray-600';
+                            
+                            teamsHTML += `<div class="bg-gray-900 rounded-lg p-3 border-l-4 ${positionClass}">
+                                            <div class="flex justify-between items-center">
+                                                <span class="font-bold text-sm text-white truncate pr-2">${team.name}</span>
+                                                <span class="font-bold text-lg ${index === 0 ? 'text-green-400' : index === 1 ? 'text-yellow-400' : 'text-red-400'} flex-shrink-0">${team.Pts} Pts</span>
+                                            </div>
+                                            <div class="grid grid-cols-4 gap-1 text-center text-xs mt-2 text-gray-400">
+                                                <div><span class="font-semibold text-gray-200">${team.PJ}</span> PJ</div>
+                                                <div><span class="font-semibold text-gray-200">${team.PG}</span> PG</div>
+                                                <div><span class="font-semibold text-gray-200">${team.PP}</span> PP</div>
+                                                <div><span class="font-semibold text-gray-200">${team.DG > 0 ? '+' : ''}${team.DG}</span> DG</div>
+                                            </div>
+                                          </div>`;
+                        });
+                    }
                     teamsHTML += `</div>`;
                     groupCard.innerHTML = teamsHTML;
                     groupsGrid.appendChild(groupCard);
@@ -346,6 +420,11 @@
 
             function renderSchedule() {
                 scheduleContainer.innerHTML = '';
+                
+                if (tournamentData.matches.length === 0) {
+                    scheduleContainer.innerHTML = `<div class="text-center text-gray-500 py-8">No hay partidos programados</div>`;
+                    return;
+                }
                 
                 // Agrupar partidos por grupo
                 const matchesByGroup = {};
@@ -394,12 +473,21 @@
 
             function renderKnockout() {
                 knockoutContainer.innerHTML = '';
+                let hasMatches = false;
+                
                 tournamentData.knockout.rounds.forEach(round => {
+                    // Verificar si hay partidos en esta ronda
+                    const hasRoundMatches = round.matches.some(match => match.team1 || match.team2);
+                    if (!hasRoundMatches) return;
+                    
+                    hasMatches = true;
                     const roundElement = document.createElement('div');
                     roundElement.className = 'flex-1 mb-6 md:mb-0';
                     
                     let matchesHTML = '';
                     round.matches.forEach(match => {
+                        if (!match.team1 && !match.team2) return;
+                        
                         const winnerClass = match.completed ? 
                             (match.score1 > match.score2 ? 'text-green-400 font-bold' : 'text-gray-300') : 'text-gray-300';
                         const loserClass = match.completed ? 
@@ -408,11 +496,11 @@
                         matchesHTML += `
                             <div class="bg-gray-900 p-3 rounded-lg mb-2 border ${match.completed ? 'border-green-700' : 'border-gray-700'}">
                                 <div class="flex justify-between items-center mb-1">
-                                    <span class="${winnerClass}">${match.team1}</span>
+                                    <span class="${winnerClass}">${match.team1 || 'Por definir'}</span>
                                     <span class="font-bold text-white bg-gray-700 px-2 rounded">${match.completed ? match.score1 : '-'}</span>
                                 </div>
                                 <div class="flex justify-between items-center">
-                                    <span class="${loserClass}">${match.team2}</span>
+                                    <span class="${loserClass}">${match.team2 || 'Por definir'}</span>
                                     <span class="font-bold text-white bg-gray-700 px-2 rounded">${match.completed ? match.score2 : '-'}</span>
                                 </div>
                             </div>
@@ -422,11 +510,15 @@
                     roundElement.innerHTML = `
                         <h3 class="font-semibold text-lg text-center text-white mb-4 border-b border-gray-700 pb-2">${round.name}</h3>
                         <div class="space-y-2">
-                            ${matchesHTML}
+                            ${matchesHTML || '<div class="text-center text-gray-500 py-4">No hay partidos programados</div>'}
                         </div>
                     `;
                     knockoutContainer.appendChild(roundElement);
                 });
+                
+                if (!hasMatches) {
+                    knockoutContainer.innerHTML = '<div class="text-center text-gray-500 py-8">La fase eliminatoria comenzará después de la fase de grupos</div>';
+                }
             }
 
             function renderAdminMatches() {
@@ -459,6 +551,43 @@
                         <button type="submit" class="w-full md:w-auto bg-red-600 text-white font-bold px-6 py-2 rounded-lg hover:bg-red-700 transition-colors">Guardar</button>`;
                     formElement.addEventListener('submit', handleMatchUpdate);
                     adminMatchesContainer.appendChild(formElement);
+                });
+            }
+            
+            function renderPlayersList() {
+                playersList.innerHTML = '';
+                
+                let allPlayers = [];
+                for (const groupName in tournamentData.groups) {
+                    tournamentData.groups[groupName].forEach(team => {
+                        allPlayers.push({...team, group: groupName});
+                    });
+                }
+                
+                if (allPlayers.length === 0) {
+                    playersList.innerHTML = '<div class="text-center text-gray-500 py-4">No hay parejas registradas</div>';
+                    return;
+                }
+                
+                allPlayers.forEach(player => {
+                    const playerElement = document.createElement('div');
+                    playerElement.className = 'bg-gray-800 border border-gray-700 p-3 rounded-lg flex justify-between items-center';
+                    playerElement.innerHTML = `
+                        <div>
+                            <div class="font-bold text-white">${player.name}</div>
+                            <div class="text-sm text-gray-400">Grupo ${player.group}</div>
+                        </div>
+                        <button class="delete-player bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors" data-team="${player.name}">Eliminar</button>
+                    `;
+                    playersList.appendChild(playerElement);
+                });
+                
+                // Agregar event listeners a los botones de eliminar
+                document.querySelectorAll('.delete-player').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const teamName = this.getAttribute('data-team');
+                        deletePlayer(teamName);
+                    });
                 });
             }
             
@@ -510,6 +639,7 @@
                     // Actualizar estadísticas del grupo
                     updateGroupStats(match.group, match.team1, match.team2, score1, score2);
                     
+                    saveToLocalStorage();
                     renderAll();
                     alert('Resultado guardado exitosamente!');
                 }
@@ -574,7 +704,8 @@
                 }
                 
                 // Crear nuevo partido
-                const newMatchId = Math.max(...tournamentData.matches.map(m => m.id)) + 1;
+                const newMatchId = tournamentData.matches.length > 0 ? 
+                    Math.max(...tournamentData.matches.map(m => m.id)) + 1 : 1;
                 const newMatch = {
                     id: newMatchId,
                     group: group,
@@ -588,9 +719,211 @@
                 };
                 
                 tournamentData.matches.push(newMatch);
+                saveToLocalStorage();
                 renderAll();
                 addMatchForm.reset();
                 alert('Partido agregado exitosamente!');
+            }
+            
+            function handleAddPlayer(e) {
+                e.preventDefault();
+                
+                const player1 = document.getElementById('player1-name').value.trim();
+                const player2 = document.getElementById('player2-name').value.trim();
+                const teamName = document.getElementById('team-name').value.trim();
+                const group = document.getElementById('player-group').value;
+                
+                if (!player1 || !player2 || !teamName || !group) {
+                    alert('Por favor, complete todos los campos.');
+                    return;
+                }
+                
+                // Verificar si la pareja ya existe
+                const existingTeam = Object.values(tournamentData.groups).flat().find(t => t.name === teamName);
+                if (existingTeam) {
+                    alert('Ya existe una pareja con ese nombre.');
+                    return;
+                }
+                
+                // Crear nueva pareja
+                const newTeam = {
+                    name: teamName,
+                    players: [player1, player2],
+                    PJ: 0,
+                    PG: 0,
+                    PP: 0,
+                    GF: 0,
+                    GC: 0,
+                    DG: 0,
+                    Pts: 0
+                };
+                
+                tournamentData.groups[group].push(newTeam);
+                saveToLocalStorage();
+                renderAll();
+                renderPlayersList();
+                populateTeamSelects();
+                addPlayerForm.reset();
+                alert('Pareja agregada exitosamente!');
+            }
+            
+            function deletePlayer(teamName) {
+                if (confirm(`¿Está seguro de que desea eliminar a la pareja "${teamName}"?`)) {
+                    for (const groupName in tournamentData.groups) {
+                        tournamentData.groups[groupName] = tournamentData.groups[groupName].filter(team => team.name !== teamName);
+                    }
+                    
+                    // También eliminar partidos relacionados
+                    tournamentData.matches = tournamentData.matches.filter(match => 
+                        match.team1 !== teamName && match.team2 !== teamName
+                    );
+                    
+                    saveToLocalStorage();
+                    renderAll();
+                    renderPlayersList();
+                    populateTeamSelects();
+                    alert('Pareja eliminada exitosamente!');
+                }
+            }
+            
+            function handlePlayerSearch() {
+                const searchTerm = playerSearch.value.trim().toLowerCase();
+                
+                if (searchTerm === '') {
+                    // Restaurar todos los grupos
+                    document.querySelectorAll('.group-card').forEach(card => {
+                        card.style.display = 'block';
+                    });
+                    return;
+                }
+                
+                // Ocultar todos los grupos primero
+                document.querySelectorAll('.group-card').forEach(card => {
+                    card.style.display = 'none';
+                });
+                
+                // Buscar en todos los grupos
+                for (const groupName in tournamentData.groups) {
+                    const group = tournamentData.groups[groupName];
+                    const found = group.some(team => 
+                        team.name.toLowerCase().includes(searchTerm) || 
+                        team.players.some(player => player.toLowerCase().includes(searchTerm))
+                    );
+                    
+                    if (found) {
+                        document.getElementById(`group-${groupName}`).style.display = 'block';
+                        
+                        // Resaltar el término buscado en los nombres
+                        const teamElements = document.querySelectorAll(`#group-${groupName} .bg-gray-900`);
+                        teamElements.forEach(element => {
+                            const teamName = element.querySelector('.font-bold').textContent;
+                            if (teamName.toLowerCase().includes(searchTerm)) {
+                                const highlightedName = teamName.replace(
+                                    new RegExp(searchTerm, 'gi'), 
+                                    match => `<span class="search-highlight">${match}</span>`
+                                );
+                                element.querySelector('.font-bold').innerHTML = highlightedName;
+                            }
+                        });
+                    }
+                }
+            }
+            
+            function generateGroupsAutomatically() {
+                // Obtener todas las parejas
+                let allTeams = [];
+                for (const groupName in tournamentData.groups) {
+                    allTeams = allTeams.concat(tournamentData.groups[groupName]);
+                }
+                
+                if (allTeams.length === 0) {
+                    alert('No hay parejas para distribuir en grupos.');
+                    return;
+                }
+                
+                // Limpiar grupos actuales
+                for (const groupName in tournamentData.groups) {
+                    tournamentData.groups[groupName] = [];
+                }
+                
+                // Distribuir parejas en grupos (método round-robin simple)
+                const groupNames = Object.keys(tournamentData.groups);
+                allTeams.forEach((team, index) => {
+                    const groupIndex = index % groupNames.length;
+                    tournamentData.groups[groupNames[groupIndex]].push(team);
+                });
+                
+                saveToLocalStorage();
+                renderAll();
+                renderPlayersList();
+                populateTeamSelects();
+                alert('Grupos generados automáticamente!');
+            }
+            
+            function resetTournament() {
+                if (confirm('¿Está seguro de que desea reiniciar el torneo? Se perderán todos los datos.')) {
+                    tournamentData = {
+                        groups: {
+                            'A': [],
+                            'B': [],
+                            'C': [],
+                            'D': [],
+                            'E': [],
+                            'F': [],
+                            'G': [],
+                            'H': []
+                        },
+                        matches: [],
+                        knockout: {
+                            rounds: [
+                                { name: 'Octavos de Final', matches: [] },
+                                { name: 'Cuartos de Final', matches: [] },
+                                { name: 'Semifinal', matches: [] },
+                                { name: 'Final', matches: [] }
+                            ]
+                        },
+                        settings: {
+                            name: 'Torneo 8va Categoría Masculino',
+                            date: new Date().toISOString().split('T')[0],
+                            courts: 4
+                        }
+                    };
+                    
+                    saveToLocalStorage();
+                    renderAll();
+                    renderPlayersList();
+                    populateTeamSelects();
+                    alert('Torneo reiniciado exitosamente!');
+                }
+            }
+            
+            function saveTournamentSettings() {
+                tournamentData.settings.name = document.getElementById('tournament-name').value;
+                tournamentData.settings.date = document.getElementById('tournament-date').value;
+                tournamentData.settings.courts = parseInt(document.getElementById('court-count').value);
+                
+                saveToLocalStorage();
+                alert('Configuración guardada exitosamente!');
+            }
+            
+            function switchTab(tabName) {
+                // Ocultar todos los contenidos de pestañas
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.add('hidden');
+                });
+                
+                // Remover clase activa de todas las pestañas
+                document.querySelectorAll('nav button').forEach(tab => {
+                    tab.classList.remove('tab-active', 'text-white');
+                    tab.classList.add('text-gray-400');
+                });
+                
+                // Mostrar contenido de la pestaña seleccionada
+                document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
+                
+                // Marcar pestaña como activa
+                document.getElementById(`tab-${tabName}`).classList.add('tab-active', 'text-white');
+                document.getElementById(`tab-${tabName}`).classList.remove('text-gray-400');
             }
             
             function renderAll() {
@@ -598,6 +931,13 @@
                 renderSchedule();
                 renderKnockout();
                 renderAdminMatches();
+                renderPlayersList();
+                populateTeamSelects();
+                
+                // Actualizar configuración en la interfaz
+                document.getElementById('tournament-name').value = tournamentData.settings.name;
+                document.getElementById('tournament-date').value = tournamentData.settings.date;
+                document.getElementById('court-count').value = tournamentData.settings.courts;
             }
 
             // --- AUTH & MODAL LOGIC ---
@@ -638,10 +978,21 @@
                 logoutBtn.classList.add('hidden');
             });
             
+            // --- EVENT LISTENERS ---
             addMatchForm.addEventListener('submit', handleAddMatch);
+            addPlayerForm.addEventListener('submit', handleAddPlayer);
+            playerSearch.addEventListener('input', handlePlayerSearch);
+            generateGroupsBtn.addEventListener('click', generateGroupsAutomatically);
+            resetTournamentBtn.addEventListener('click', resetTournament);
+            saveTournamentSettingsBtn.addEventListener('click', saveTournamentSettings);
+            
+            // Tab switching
+            tabMatches.addEventListener('click', () => switchTab('matches'));
+            tabPlayers.addEventListener('click', () => switchTab('players'));
+            tabTournament.addEventListener('click', () => switchTab('tournament'));
 
             // --- INITIALIZATION ---
-            populateTeamSelects();
+            loadFromLocalStorage();
             renderAll();
         });
     </script>
