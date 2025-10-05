@@ -9,16 +9,21 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #111827; /* bg-gray-900 */
+            background-color: #111827;
         }
         .modal-overlay {
             transition: opacity 0.3s ease-in-out;
         }
-        /* Custom scrollbar for a sleeker look */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
         ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        .group-card {
+            transition: transform 0.2s ease-in-out;
+        }
+        .group-card:hover {
+            transform: translateY(-2px);
+        }
     </style>
 </head>
 <body class="text-gray-300">
@@ -49,7 +54,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                         Clasificación de Grupos
                     </h2>
-                    <div id="groups-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
+                    <div id="groups-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                         <!-- JS will inject group cards -->
                     </div>
                 </section>
@@ -82,6 +87,52 @@
                         <!-- JS will inject admin forms -->
                     </div>
                 </section>
+                
+                <!-- Add Match Section -->
+                <section id="add-match-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md mt-6">
+                    <h2 class="text-2xl font-bold mb-6 text-center text-white">Agregar Partido</h2>
+                    <form id="add-match-form" class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Grupo</label>
+                                <select id="new-match-group" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                    <option value="">Seleccionar Grupo</option>
+                                    <option value="A">Grupo A</option>
+                                    <option value="B">Grupo B</option>
+                                    <option value="C">Grupo C</option>
+                                    <option value="D">Grupo D</option>
+                                    <option value="E">Grupo E</option>
+                                    <option value="F">Grupo F</option>
+                                    <option value="G">Grupo G</option>
+                                    <option value="H">Grupo H</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Cancha</label>
+                                <input type="number" id="new-match-court" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" min="1" max="10" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Hora</label>
+                                <input type="time" id="new-match-time" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Pareja 1</label>
+                                <select id="new-match-team1" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                    <option value="">Seleccionar Pareja</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Pareja 2</label>
+                                <select id="new-match-team2" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                    <option value="">Seleccionar Pareja</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-colors">Agregar Partido</button>
+                    </form>
+                </section>
             </div>
         </main>
         
@@ -113,21 +164,127 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // --- DATA (Hardcoded for prototype) ---
+            // --- DATA (Completa basada en la planilla Excel) ---
             const tournamentData = {
                 groups: {
-                    'A': [{ name: 'COSTA VILLAMAYOR', PJ: 2, PG: 2, PP: 0, GF: 12, GC: 6, DG: 6, Pts: 6 },{ name: 'SAAVEDRA ANTUÑA', PJ: 2, PG: 1, PP: 1, GF: 10, GC: 11, DG: -1, Pts: 3 },{ name: 'SOTELO AYUNTA', PJ: 2, PG: 0, PP: 2, GF: 8, GC: 13, DG: -5, Pts: 0 }],
-                    'B': [{ name: 'PORFIRIO REYNA', PJ: 2, PG: 2, PP: 0, GF: 13, GC: 8, DG: 5, Pts: 6 },{ name: 'FALCON TORRES', PJ: 2, PG: 1, PP: 1, GF: 9, GC: 9, DG: 0, Pts: 3 },{ name: 'FAISAL CASTELLANOS', PJ: 2, PG: 0, PP: 2, GF: 8, GC: 13, DG: -5, Pts: 0 }],
-                    'E': [{ name: 'BASUALDO RAINERI', PJ: 2, PG: 2, PP: 0, GF: 13, GC: 5, DG: 8, Pts: 6 },{ name: 'SORIA JIMENEZ', PJ: 2, PG: 1, PP: 1, GF: 11, GC: 7, DG: 4, Pts: 3 },{ name: 'CORVALAN BALISTA', PJ: 2, PG: 0, PP: 2, GF: 0, GC: 12, DG: -12, Pts: 0 }],
-                    'F': [{ name: 'LAZARTE PACHILA', PJ: 2, PG: 2, PP: 0, GF: 12, GC: 3, DG: 9, Pts: 6 },{ name: 'LUCCA MONTES', PJ: 2, PG: 1, PP: 1, GF: 8, GC: 7, DG: 1, Pts: 3 },{ name: 'WITTE WITTE', PJ: 2, PG: 0, PP: 2, GF: 2, GC: 12, DG: -10, Pts: 0 }],
+                    'A': [
+                        { name: 'COSTA VILLAMAYOR', PJ: 2, PG: 2, PP: 0, GF: 12, GC: 6, DG: 6, Pts: 6 },
+                        { name: 'SAAVEDRA ANTUÑA', PJ: 2, PG: 1, PP: 1, GF: 10, GC: 11, DG: -1, Pts: 3 },
+                        { name: 'SOTELO AYUNTA', PJ: 2, PG: 0, PP: 2, GF: 8, GC: 13, DG: -5, Pts: 0 }
+                    ],
+                    'B': [
+                        { name: 'PORFIRIO REYNA', PJ: 2, PG: 2, PP: 0, GF: 13, GC: 8, DG: 5, Pts: 6 },
+                        { name: 'FALCON TORRES', PJ: 2, PG: 1, PP: 1, GF: 9, GC: 9, DG: 0, Pts: 3 },
+                        { name: 'FAISAL CASTELLANOS', PJ: 2, PG: 0, PP: 2, GF: 8, GC: 13, DG: -5, Pts: 0 }
+                    ],
+                    'C': [
+                        { name: 'DE LA RUA SOSA', PJ: 2, PG: 2, PP: 0, GF: 12, GC: 5, DG: 7, Pts: 6 },
+                        { name: 'BURGOS RUIZ', PJ: 2, PG: 1, PP: 1, GF: 8, GC: 9, DG: -1, Pts: 3 },
+                        { name: 'HERRERA CUELLAR', PJ: 2, PG: 0, PP: 2, GF: 6, GC: 12, DG: -6, Pts: 0 }
+                    ],
+                    'D': [
+                        { name: 'LEGUIZAMON UNGHARO', PJ: 2, PG: 2, PP: 0, GF: 12, GC: 5, DG: 7, Pts: 6 },
+                        { name: 'AVACA REIMUNDI', PJ: 2, PG: 1, PP: 1, GF: 8, GC: 9, DG: -1, Pts: 3 },
+                        { name: 'ACOSTA MELIN', PJ: 2, PG: 0, PP: 2, GF: 6, GC: 12, DG: -6, Pts: 0 }
+                    ],
+                    'E': [
+                        { name: 'BASUALDO RAINERI', PJ: 2, PG: 2, PP: 0, GF: 13, GC: 5, DG: 8, Pts: 6 },
+                        { name: 'SORIA JIMENEZ', PJ: 2, PG: 1, PP: 1, GF: 11, GC: 7, DG: 4, Pts: 3 },
+                        { name: 'CORVALAN BALISTA', PJ: 2, PG: 0, PP: 2, GF: 0, GC: 12, DG: -12, Pts: 0 }
+                    ],
+                    'F': [
+                        { name: 'LAZARTE PACHILA', PJ: 2, PG: 2, PP: 0, GF: 12, GC: 3, DG: 9, Pts: 6 },
+                        { name: 'LUCCA MONTES', PJ: 2, PG: 1, PP: 1, GF: 8, GC: 7, DG: 1, Pts: 3 },
+                        { name: 'WITTE WITTE', PJ: 2, PG: 0, PP: 2, GF: 2, GC: 12, DG: -10, Pts: 0 }
+                    ],
+                    'G': [
+                        { name: 'MIRANDA SCHONFELD', PJ: 2, PG: 2, PP: 0, GF: 13, GC: 7, DG: 6, Pts: 6 },
+                        { name: 'LOPEZ CARRILLO', PJ: 2, PG: 1, PP: 1, GF: 11, GC: 8, DG: 3, Pts: 3 },
+                        { name: 'KILMASZ RODRIGUEZ', PJ: 2, PG: 0, PP: 2, GF: 3, GC: 12, DG: -9, Pts: 0 }
+                    ],
+                    'H': [
+                        { name: 'AVACA LETURIA', PJ: 2, PG: 2, PP: 0, GF: 13, GC: 8, DG: 5, Pts: 6 },
+                        { name: 'SEILER APESTEGUIA', PJ: 2, PG: 1, PP: 1, GF: 11, GC: 10, DG: 1, Pts: 3 },
+                        { name: 'REAL SILVA', PJ: 2, PG: 0, PP: 2, GF: 6, GC: 12, DG: -6, Pts: 0 }
+                    ]
                 },
                 matches: [
-                    { id:1, group: 'A', team1: 'COSTA VILLAMAYOR', score1: 6, team2: 'SAAVEDRA ANTUÑA', score2: 3, time: '10:00', court: 1, completed: true },
-                    { id:2, group: 'A', team1: 'SAAVEDRA ANTUÑA', score1: 7, team2: 'SOTELO AYUNTA', score2: 5, time: '11:00', court: 1, completed: true },
-                    { id:3, group: 'B', team1: 'FAISAL CASTELLANOS', score1: 5, team2: 'PORFIRIO REYNA', score2: 7, time: '10:00', court: 2, completed: true },
-                    { id:4, group: 'E', team1: 'SORIA JIMENEZ', score1: null, team2: 'CORVALAN BALISTA', score2: null, time: '12:00', court: 3, completed: false },
-                    { id:5, group: 'F', team1: 'LAZARTE PACHILA', score1: null, team2: 'LUCCA MONTES', score2: null, time: '13:00', court: 4, completed: false }
-                ]
+                    // Grupo A
+                    { id: 1, group: 'A', team1: 'COSTA VILLAMAYOR', score1: 6, team2: 'SAAVEDRA ANTUÑA', score2: 3, time: '10:00', court: 1, completed: true },
+                    { id: 2, group: 'A', team1: 'SAAVEDRA ANTUÑA', score1: 7, team2: 'SOTELO AYUNTA', score2: 5, time: '11:00', court: 1, completed: true },
+                    { id: 3, group: 'A', team1: 'SOTELO AYUNTA', score1: 3, team2: 'COSTA VILLAMAYOR', score2: 6, time: '12:00', court: 1, completed: true },
+                    
+                    // Grupo B
+                    { id: 4, group: 'B', team1: 'FAISAL CASTELLANOS', score1: 5, team2: 'PORFIRIO REYNA', score2: 7, time: '10:00', court: 2, completed: true },
+                    { id: 5, group: 'B', team1: 'PORFIRIO REYNA', score1: 6, team2: 'FALCON TORRES', score2: 3, time: '11:00', court: 2, completed: true },
+                    { id: 6, group: 'B', team1: 'FALCON TORRES', score1: 6, team2: 'FAISAL CASTELLANOS', score2: 3, time: '12:00', court: 2, completed: true },
+                    
+                    // Grupo E
+                    { id: 7, group: 'E', team1: 'SORIA JIMENEZ', score1: 7, team2: 'CORVALAN BALISTA', score2: 5, time: '12:00', court: 3, completed: true },
+                    { id: 8, group: 'E', team1: 'CORVALAN BALISTA', score1: 0, team2: 'BASUALDO RAINERI', score2: 6, time: '13:00', court: 3, completed: true },
+                    { id: 9, group: 'E', team1: 'BASUALDO RAINERI', score1: 7, team2: 'SORIA JIMENEZ', score2: 5, time: '14:00', court: 3, completed: true },
+                    
+                    // Grupo F
+                    { id: 10, group: 'F', team1: 'LAZARTE PACHILA', score1: 6, team2: 'LUCCA MONTES', score2: 1, time: '13:00', court: 4, completed: true },
+                    { id: 11, group: 'F', team1: 'LUCCA MONTES', score1: 1, team2: 'WITTE WITTE', score2: 6, time: '14:00', court: 4, completed: true },
+                    { id: 12, group: 'F', team1: 'WITTE WITTE', score1: 2, team2: 'LAZARTE PACHILA', score2: 6, time: '15:00', court: 4, completed: true },
+                    
+                    // Partidos pendientes
+                    { id: 13, group: 'C', team1: 'DE LA RUA SOSA', score1: null, team2: 'BURGOS RUIZ', score2: null, time: '16:00', court: 1, completed: false },
+                    { id: 14, group: 'C', team1: 'BURGOS RUIZ', score1: null, team2: 'HERRERA CUELLAR', score2: null, time: '17:00', court: 1, completed: false },
+                    { id: 15, group: 'C', team1: 'HERRERA CUELLAR', score1: null, team2: 'DE LA RUA SOSA', score2: null, time: '18:00', court: 1, completed: false },
+                    
+                    { id: 16, group: 'D', team1: 'LEGUIZAMON UNGHARO', score1: null, team2: 'AVACA REIMUNDI', score2: null, time: '16:00', court: 2, completed: false },
+                    { id: 17, group: 'D', team1: 'AVACA REIMUNDI', score1: null, team2: 'ACOSTA MELIN', score2: null, time: '17:00', court: 2, completed: false },
+                    { id: 18, group: 'D', team1: 'ACOSTA MELIN', score1: null, team2: 'LEGUIZAMON UNGHARO', score2: null, time: '18:00', court: 2, completed: false },
+                    
+                    { id: 19, group: 'G', team1: 'MIRANDA SCHONFELD', score1: null, team2: 'LOPEZ CARRILLO', score2: null, time: '16:00', court: 3, completed: false },
+                    { id: 20, group: 'G', team1: 'LOPEZ CARRILLO', score1: null, team2: 'KILMASZ RODRIGUEZ', score2: null, time: '17:00', court: 3, completed: false },
+                    { id: 21, group: 'G', team1: 'KILMASZ RODRIGUEZ', score1: null, team2: 'MIRANDA SCHONFELD', score2: null, time: '18:00', court: 3, completed: false },
+                    
+                    { id: 22, group: 'H', team1: 'AVACA LETURIA', score1: null, team2: 'SEILER APESTEGUIA', score2: null, time: '16:00', court: 4, completed: false },
+                    { id: 23, group: 'H', team1: 'SEILER APESTEGUIA', score1: null, team2: 'REAL SILVA', score2: null, time: '17:00', court: 4, completed: false },
+                    { id: 24, group: 'H', team1: 'REAL SILVA', score1: null, team2: 'AVACA LETURIA', score2: null, time: '18:00', court: 4, completed: false }
+                ],
+                knockout: {
+                    rounds: [
+                        {
+                            name: 'Octavos de Final',
+                            matches: [
+                                { team1: 'LAZARTE PACHILA', score1: 6, team2: 'SEILER APESTEGUIA', score2: 3, completed: true },
+                                { team1: 'DE LA RUA SOSA', score1: 7, team2: 'SAAVEDRA ANTUÑA', score2: 5, completed: true },
+                                { team1: 'COSTA VILLAMAYOR', score1: 6, team2: 'LOPEZ CARRILLO', score2: 2, completed: true },
+                                { team1: 'MIRANDA SCHONFELD', score1: 6, team2: 'AVACA REIMUNDI', score2: 4, completed: true },
+                                { team1: 'BASUALDO RAINERI', score1: 6, team2: 'SORIA JIMENEZ', score2: 3, completed: true },
+                                { team1: 'PORFIRIO REYNA', score1: 6, team2: 'FALCON TORRES', score2: 3, completed: true },
+                                { team1: 'LEGUIZAMON UNGHARO', score1: 7, team2: 'BURGOS RUIZ', score2: 6, completed: true },
+                                { team1: 'AVACA LETURIA', score1: 6, team2: 'LUCCA MONTES', score2: 4, completed: true }
+                            ]
+                        },
+                        {
+                            name: 'Cuartos de Final',
+                            matches: [
+                                { team1: 'LAZARTE PACHILA', score1: 6, team2: 'DE LA RUA SOSA', score2: 4, completed: true },
+                                { team1: 'COSTA VILLAMAYOR', score1: 6, team2: 'MIRANDA SCHONFELD', score2: 4, completed: true },
+                                { team1: 'BASUALDO RAINERI', score1: 6, team2: 'PORFIRIO REYNA', score2: 3, completed: true },
+                                { team1: 'LEGUIZAMON UNGHARO', score1: 4, team2: 'AVACA LETURIA', score2: 6, completed: true }
+                            ]
+                        },
+                        {
+                            name: 'Semifinal',
+                            matches: [
+                                { team1: 'LAZARTE PACHILA', score1: 6, team2: 'COSTA VILLAMAYOR', score2: 4, completed: true },
+                                { team1: 'BASUALDO RAINERI', score1: 6, team2: 'AVACA LETURIA', score2: 2, completed: true }
+                            ]
+                        },
+                        {
+                            name: 'Final',
+                            matches: [
+                                { team1: 'LAZARTE PACHILA', score1: 4, team2: 'BASUALDO RAINERI', score2: 6, completed: true }
+                            ]
+                        }
+                    ]
+                }
             };
             
             // --- DOM ELEMENTS ---
@@ -142,6 +299,10 @@
             const loginForm = document.getElementById('login-form');
             const closeModalBtn = document.getElementById('close-modal-btn');
             const loginError = document.getElementById('login-error');
+            const addMatchForm = document.getElementById('add-match-form');
+            const newMatchGroup = document.getElementById('new-match-group');
+            const newMatchTeam1 = document.getElementById('new-match-team1');
+            const newMatchTeam2 = document.getElementById('new-match-team2');
 
             // --- RENDER FUNCTIONS ---
             function renderGroups() {
@@ -149,16 +310,25 @@
                 for (const groupName in tournamentData.groups) {
                     const groupData = tournamentData.groups[groupName];
                     const groupCard = document.createElement('div');
-                    groupCard.className = 'bg-gray-800 border border-gray-700 p-4 rounded-lg';
+                    groupCard.className = 'bg-gray-800 border border-gray-700 p-4 rounded-lg group-card';
                     
-                    let teamsHTML = `<h3 class="font-bold text-xl mb-4 text-white text-center">Grupo ${groupName}</h3>
+                    // Ordenar por puntos (desc) y diferencia de games (desc)
+                    const sortedGroup = [...groupData].sort((a, b) => {
+                        if (b.Pts !== a.Pts) return b.Pts - a.Pts;
+                        return b.DG - a.DG;
+                    });
+                    
+                    let teamsHTML = `<h3 class="font-bold text-xl mb-4 text-white text-center border-b border-gray-700 pb-2">Grupo ${groupName}</h3>
                                      <div class="space-y-2">`;
                     
-                    groupData.forEach(team => {
-                        teamsHTML += `<div class="bg-gray-900 rounded-lg p-3 border-l-4 ${team.Pts >= 3 ? 'border-red-500' : 'border-gray-600'}">
+                    sortedGroup.forEach((team, index) => {
+                        const positionClass = index === 0 ? 'border-green-500' : 
+                                            index === 1 ? 'border-yellow-500' : 'border-gray-600';
+                        
+                        teamsHTML += `<div class="bg-gray-900 rounded-lg p-3 border-l-4 ${positionClass}">
                                         <div class="flex justify-between items-center">
                                             <span class="font-bold text-sm text-white truncate pr-2">${team.name}</span>
-                                            <span class="font-bold text-lg text-red-400 flex-shrink-0">${team.Pts} Pts</span>
+                                            <span class="font-bold text-lg ${index === 0 ? 'text-green-400' : index === 1 ? 'text-yellow-400' : 'text-red-400'} flex-shrink-0">${team.Pts} Pts</span>
                                         </div>
                                         <div class="grid grid-cols-4 gap-1 text-center text-xs mt-2 text-gray-400">
                                             <div><span class="font-semibold text-gray-200">${team.PJ}</span> PJ</div>
@@ -176,56 +346,87 @@
 
             function renderSchedule() {
                 scheduleContainer.innerHTML = '';
-                tournamentData.matches.forEach((match) => {
-                    const matchElement = document.createElement('div');
-                    const statusClass = match.completed ? 'border-green-500' : 'border-blue-500';
-                    matchElement.className = `p-3 rounded-lg flex flex-col sm:flex-row items-center justify-between bg-gray-800 border-l-4 ${statusClass} transition-transform hover:scale-[1.02]`;
-                    
-                    let scoreHTML = `<div class="text-xl font-bold text-gray-400 my-2 sm:my-0">VS</div>`;
-                    if (match.completed) {
-                        scoreHTML = `<div class="text-center my-2 sm:my-0"><span class="text-3xl font-bold text-white">${match.score1} - ${match.score2}</span><div class="text-xs text-gray-400">Final</div></div>`;
+                
+                // Agrupar partidos por grupo
+                const matchesByGroup = {};
+                tournamentData.matches.forEach(match => {
+                    if (!matchesByGroup[match.group]) {
+                        matchesByGroup[match.group] = [];
                     }
-
-                    matchElement.innerHTML = `
-                        <div class="flex-1 w-full grid grid-cols-1 md:grid-cols-3 items-center gap-2 text-center">
-                            <div class="font-bold text-base md:text-right text-white">${match.team1}</div>
-                            <div class="order-first md:order-none">${scoreHTML}</div>
-                            <div class="font-bold text-base md:text-left text-white">${match.team2}</div>
-                        </div>
-                        <div class="text-center w-full sm:w-28 border-t sm:border-t-0 sm:border-l border-gray-700 mt-3 sm:mt-0 ml-0 sm:ml-4 pt-3 sm:pt-0 pl-0 sm:pl-4">
-                            <div class="font-semibold text-sm">${match.time}</div>
-                            <div class="text-xs text-gray-500">Cancha ${match.court}</div>
-                        </div>`;
-                    scheduleContainer.appendChild(matchElement);
+                    matchesByGroup[match.group].push(match);
                 });
+                
+                // Renderizar partidos por grupo
+                for (const groupName in matchesByGroup) {
+                    const groupMatches = matchesByGroup[groupName];
+                    
+                    const groupHeader = document.createElement('div');
+                    groupHeader.className = 'mt-6 mb-3';
+                    groupHeader.innerHTML = `<h3 class="text-lg font-bold text-white border-l-4 border-red-500 pl-2">Grupo ${groupName}</h3>`;
+                    scheduleContainer.appendChild(groupHeader);
+                    
+                    groupMatches.forEach(match => {
+                        const matchElement = document.createElement('div');
+                        const statusClass = match.completed ? 'border-green-500' : 'border-blue-500';
+                        const statusText = match.completed ? 'Finalizado' : 'Pendiente';
+                        matchElement.className = `p-3 rounded-lg flex flex-col sm:flex-row items-center justify-between bg-gray-800 border-l-4 ${statusClass} transition-transform hover:scale-[1.02] mb-2`;
+                        
+                        let scoreHTML = `<div class="text-xl font-bold text-gray-400 my-2 sm:my-0">VS</div>`;
+                        if (match.completed) {
+                            scoreHTML = `<div class="text-center my-2 sm:my-0"><span class="text-3xl font-bold text-white">${match.score1} - ${match.score2}</span><div class="text-xs text-gray-400">Final</div></div>`;
+                        }
+
+                        matchElement.innerHTML = `
+                            <div class="flex-1 w-full grid grid-cols-1 md:grid-cols-3 items-center gap-2 text-center">
+                                <div class="font-bold text-base md:text-right text-white">${match.team1}</div>
+                                <div class="order-first md:order-none">${scoreHTML}</div>
+                                <div class="font-bold text-base md:text-left text-white">${match.team2}</div>
+                            </div>
+                            <div class="text-center w-full sm:w-28 border-t sm:border-t-0 sm:border-l border-gray-700 mt-3 sm:mt-0 ml-0 sm:ml-4 pt-3 sm:pt-0 pl-0 sm:pl-4">
+                                <div class="font-semibold text-sm">${match.time}</div>
+                                <div class="text-xs text-gray-500">Cancha ${match.court}</div>
+                                <div class="text-xs ${match.completed ? 'text-green-500' : 'text-blue-500'} mt-1">${statusText}</div>
+                            </div>`;
+                        scheduleContainer.appendChild(matchElement);
+                    });
+                }
             }
 
             function renderKnockout() {
-                // This is a simplified static representation for the prototype
-                knockoutContainer.innerHTML = `
-                    <div class="flex-1">
-                        <h3 class="font-semibold text-lg text-center text-white mb-4">Cuartos</h3>
-                        <div class="space-y-2">
-                            <div class="bg-gray-900 p-3 rounded-lg text-sm flex justify-between items-center"><span><strong>DE LA RUA SOSA</strong></span> <span class="font-bold text-white bg-gray-700 px-2 rounded">7</span></div>
-                            <div class="bg-gray-900 p-3 rounded-lg text-sm flex justify-between items-center"><span>MIRANDA SCHONFELD</span> <span class="font-bold text-white bg-gray-700 px-2 rounded">5</span></div>
-                        </div>
-                    </div>
-                    <div class="flex-1">
-                         <h3 class="font-semibold text-lg text-center text-white mb-4">Semifinales</h3>
-                         <div class="space-y-2">
-                            <div class="bg-gray-900 p-3 rounded-lg text-sm flex justify-between items-center"><span><strong>COSTA VILLAMAYOR</strong></span> <span class="font-bold text-white bg-gray-700 px-2 rounded">6</span></div>
-                            <div class="bg-gray-900 p-3 rounded-lg text-sm flex justify-between items-center"><span>DE LA RUA SOSA</span> <span class="font-bold text-white bg-gray-700 px-2 rounded">4</span></div>
-                        </div>
-                    </div>
-                    <div class="flex-1">
-                         <h3 class="font-semibold text-lg text-center text-white mb-4">Final</h3>
-                         <div class="space-y-2">
-                            <div class="bg-green-900/50 border border-green-700 p-4 rounded-lg text-center">
-                                <span class="font-bold text-green-300">BASUALDO RAINERI</span> <span class="text-2xl mx-2">🏆</span> <span class="font-bold text-green-300">PORFIRIO REYNA</span>
+                knockoutContainer.innerHTML = '';
+                tournamentData.knockout.rounds.forEach(round => {
+                    const roundElement = document.createElement('div');
+                    roundElement.className = 'flex-1 mb-6 md:mb-0';
+                    
+                    let matchesHTML = '';
+                    round.matches.forEach(match => {
+                        const winnerClass = match.completed ? 
+                            (match.score1 > match.score2 ? 'text-green-400 font-bold' : 'text-gray-300') : 'text-gray-300';
+                        const loserClass = match.completed ? 
+                            (match.score2 > match.score1 ? 'text-green-400 font-bold' : 'text-gray-300') : 'text-gray-300';
+                            
+                        matchesHTML += `
+                            <div class="bg-gray-900 p-3 rounded-lg mb-2 border ${match.completed ? 'border-green-700' : 'border-gray-700'}">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="${winnerClass}">${match.team1}</span>
+                                    <span class="font-bold text-white bg-gray-700 px-2 rounded">${match.completed ? match.score1 : '-'}</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="${loserClass}">${match.team2}</span>
+                                    <span class="font-bold text-white bg-gray-700 px-2 rounded">${match.completed ? match.score2 : '-'}</span>
+                                </div>
                             </div>
+                        `;
+                    });
+                    
+                    roundElement.innerHTML = `
+                        <h3 class="font-semibold text-lg text-center text-white mb-4 border-b border-gray-700 pb-2">${round.name}</h3>
+                        <div class="space-y-2">
+                            ${matchesHTML}
                         </div>
-                    </div>
-                `;
+                    `;
+                    knockoutContainer.appendChild(roundElement);
+                });
             }
 
             function renderAdminMatches() {
@@ -251,29 +452,145 @@
                             <div class="text-sm text-gray-500 mt-1">Grupo ${match.group} - Cancha ${match.court} @ ${match.time}</div>
                         </div>
                         <div class="flex items-center gap-2">
-                            <input type="number" name="score1" class="w-20 p-2 border bg-gray-700 border-gray-600 rounded-md text-center text-white" required>
+                            <input type="number" name="score1" class="w-20 p-2 border bg-gray-700 border-gray-600 rounded-md text-center text-white" min="0" max="7" required>
                             <span class="text-gray-400">-</span>
-                            <input type="number" name="score2" class="w-20 p-2 border bg-gray-700 border-gray-600 rounded-md text-center text-white" required>
+                            <input type="number" name="score2" class="w-20 p-2 border bg-gray-700 border-gray-600 rounded-md text-center text-white" min="0" max="7" required>
                         </div>
                         <button type="submit" class="w-full md:w-auto bg-red-600 text-white font-bold px-6 py-2 rounded-lg hover:bg-red-700 transition-colors">Guardar</button>`;
                     formElement.addEventListener('submit', handleMatchUpdate);
                     adminMatchesContainer.appendChild(formElement);
                 });
             }
+            
+            function populateTeamSelects() {
+                // Limpiar selects
+                newMatchTeam1.innerHTML = '<option value="">Seleccionar Pareja</option>';
+                newMatchTeam2.innerHTML = '<option value="">Seleccionar Pareja</option>';
+                
+                // Obtener todas las parejas del torneo
+                const allTeams = [];
+                for (const groupName in tournamentData.groups) {
+                    tournamentData.groups[groupName].forEach(team => {
+                        allTeams.push(team.name);
+                    });
+                }
+                
+                // Ordenar alfabéticamente y agregar a los selects
+                allTeams.sort().forEach(team => {
+                    const option1 = document.createElement('option');
+                    option1.value = team;
+                    option1.textContent = team;
+                    newMatchTeam1.appendChild(option1);
+                    
+                    const option2 = document.createElement('option');
+                    option2.value = team;
+                    option2.textContent = team;
+                    newMatchTeam2.appendChild(option2);
+                });
+            }
 
             function handleMatchUpdate(e) {
                 e.preventDefault();
                 const matchId = parseInt(e.currentTarget.dataset.matchId);
-                const score1 = e.currentTarget.elements.score1.value;
-                const score2 = e.currentTarget.elements.score2.value;
+                const score1 = parseInt(e.currentTarget.elements.score1.value);
+                const score2 = parseInt(e.currentTarget.elements.score2.value);
+                
+                // Validar scores (en pádel generalmente se juega a 6 games)
+                if (score1 < 0 || score2 < 0 || (score1 === 6 && score2 === 6)) {
+                    alert('Resultado inválido. En pádel no puede haber empate 6-6.');
+                    return;
+                }
                 
                 const match = tournamentData.matches.find(m => m.id === matchId);
                 if (match) {
-                    match.score1 = parseInt(score1);
-                    match.score2 = parseInt(score2);
+                    match.score1 = score1;
+                    match.score2 = score2;
                     match.completed = true;
+                    
+                    // Actualizar estadísticas del grupo
+                    updateGroupStats(match.group, match.team1, match.team2, score1, score2);
+                    
                     renderAll();
+                    alert('Resultado guardado exitosamente!');
                 }
+            }
+            
+            function updateGroupStats(groupName, team1, team2, score1, score2) {
+                const group = tournamentData.groups[groupName];
+                const team1Data = group.find(t => t.name === team1);
+                const team2Data = group.find(t => t.name === team2);
+                
+                if (team1Data && team2Data) {
+                    // Actualizar partidos jugados
+                    team1Data.PJ += 1;
+                    team2Data.PJ += 1;
+                    
+                    // Actualizar games a favor y en contra
+                    team1Data.GF += score1;
+                    team1Data.GC += score2;
+                    team2Data.GF += score2;
+                    team2Data.GC += score1;
+                    
+                    // Actualizar diferencia de games
+                    team1Data.DG = team1Data.GF - team1Data.GC;
+                    team2Data.DG = team2Data.GF - team2Data.GC;
+                    
+                    // Determinar ganador y actualizar PG/PP
+                    if (score1 > score2) {
+                        team1Data.PG += 1;
+                        team2Data.PP += 1;
+                        team1Data.Pts += 3;
+                    } else {
+                        team2Data.PG += 1;
+                        team1Data.PP += 1;
+                        team2Data.Pts += 3;
+                    }
+                }
+            }
+            
+            function handleAddMatch(e) {
+                e.preventDefault();
+                
+                const group = newMatchGroup.value;
+                const team1 = newMatchTeam1.value;
+                const team2 = newMatchTeam2.value;
+                const court = document.getElementById('new-match-court').value;
+                const time = document.getElementById('new-match-time').value;
+                
+                if (team1 === team2) {
+                    alert('No puede haber un partido entre la misma pareja.');
+                    return;
+                }
+                
+                // Verificar si el partido ya existe
+                const existingMatch = tournamentData.matches.find(m => 
+                    m.group === group && 
+                    ((m.team1 === team1 && m.team2 === team2) || (m.team1 === team2 && m.team2 === team1))
+                );
+                
+                if (existingMatch) {
+                    alert('Este partido ya existe en el grupo seleccionado.');
+                    return;
+                }
+                
+                // Crear nuevo partido
+                const newMatchId = Math.max(...tournamentData.matches.map(m => m.id)) + 1;
+                const newMatch = {
+                    id: newMatchId,
+                    group: group,
+                    team1: team1,
+                    score1: null,
+                    team2: team2,
+                    score2: null,
+                    time: time,
+                    court: parseInt(court),
+                    completed: false
+                };
+                
+                tournamentData.matches.push(newMatch);
+                renderAll();
+                addMatchForm.reset();
+                alert('Partido agregado exitosamente!');
             }
             
             function renderAll() {
@@ -284,7 +601,10 @@
             }
 
             // --- AUTH & MODAL LOGIC ---
-            function showLoginModal() { loginModal.classList.remove('hidden'); }
+            function showLoginModal() { 
+                loginModal.classList.remove('hidden'); 
+            }
+            
             function hideLoginModal() {
                 loginError.classList.add('hidden');
                 loginForm.reset();
@@ -293,7 +613,9 @@
 
             adminLoginBtn.addEventListener('click', showLoginModal);
             closeModalBtn.addEventListener('click', hideLoginModal);
-            loginModal.addEventListener('click', (e) => { if (e.target === loginModal) hideLoginModal(); });
+            loginModal.addEventListener('click', (e) => { 
+                if (e.target === loginModal) hideLoginModal(); 
+            });
 
             loginForm.addEventListener('submit', (e) => {
                 e.preventDefault();
@@ -315,12 +637,13 @@
                 adminLoginBtn.classList.remove('hidden');
                 logoutBtn.classList.add('hidden');
             });
+            
+            addMatchForm.addEventListener('submit', handleAddMatch);
 
             // --- INITIALIZATION ---
+            populateTeamSelects();
             renderAll();
         });
     </script>
 </body>
 </html>
-
-
