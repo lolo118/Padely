@@ -5,88 +5,80 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestor de Torneos de Pádel - Matchpoint</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
+            background-color: #111827; /* bg-gray-900 */
         }
         .modal-overlay {
             transition: opacity 0.3s ease-in-out;
         }
+        /* Custom scrollbar for a sleeker look */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
     </style>
 </head>
-<body class="bg-black text-gray-200">
+<body class="text-gray-300">
 
-    <div id="app" class="container mx-auto p-4 md:p-8 max-w-7xl">
+    <div id="app" class="container mx-auto p-4 md:p-6 max-w-7xl">
         <!-- Header -->
-        <header class="bg-gray-900 shadow-md rounded-xl p-6 mb-8 flex justify-between items-center">
+        <header class="bg-gray-800/50 backdrop-blur-sm border border-gray-700 shadow-lg rounded-xl p-4 md:p-6 mb-8 flex justify-between items-center sticky top-4 z-50">
             <div>
-                <h1 class="text-4xl font-bold text-white">Matchpoint</h1>
-                <p class="text-gray-400 mt-1">Torneo de 8va Categoría - Masculino</p>
+                <h1 class="text-2xl md:text-4xl font-extrabold text-white tracking-tight">Matchpoint</h1>
+                <p class="text-gray-400 text-sm md:text-base mt-1">Torneo 8va Categoría Masculino</p>
             </div>
-            <button id="admin-login-btn" class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors">
-                Admin
-            </button>
-            <button id="logout-btn" class="hidden bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors">
-                Cerrar Sesión
-            </button>
+            <div>
+                <button id="admin-login-btn" class="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors text-sm md:text-base">
+                    Admin
+                </button>
+                <button id="logout-btn" class="hidden bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm md:text-base">
+                    Cerrar Sesión
+                </button>
+            </div>
         </header>
 
         <!-- Main Content -->
         <main id="content-area">
-            <!-- Player View (Default) -->
             <div id="player-view" class="space-y-8">
                 <!-- Group Standings -->
-                <section id="groups-section" class="bg-gray-800 p-6 rounded-xl shadow-md">
-                    <h2 class="text-2xl font-bold mb-6 text-center text-white">Clasificación de Grupos</h2>
-                    <div id="groups-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <section id="groups-section">
+                    <h2 class="text-2xl font-bold mb-4 text-center text-white flex items-center justify-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                        Clasificación de Grupos
+                    </h2>
+                    <div id="groups-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
                         <!-- JS will inject group cards -->
                     </div>
                 </section>
 
                 <!-- Match Schedule -->
-                <section id="schedule-section" class="bg-gray-800 p-6 rounded-xl shadow-md">
-                    <h2 class="text-2xl font-bold mb-6 text-center text-white">Programa de Partidos</h2>
-                    <div id="schedule-container" class="space-y-4">
+                <section id="schedule-section">
+                    <h2 class="text-2xl font-bold mb-4 text-center text-white flex items-center justify-center gap-3">
+                       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                        Programa de Partidos
+                    </h2>
+                    <div id="schedule-container" class="space-y-3">
                        <!-- JS will inject schedule items -->
                     </div>
                 </section>
 
                  <!-- Knockout Stage -->
-                <section id="knockout-section" class="bg-gray-800 p-6 rounded-xl shadow-md">
+                <section id="knockout-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
                     <h2 class="text-2xl font-bold mb-6 text-center text-white">Fase Eliminatoria</h2>
                     <div class="flex flex-col md:flex-row md:justify-around space-y-8 md:space-y-0 md:space-x-4">
-                        <div class="flex-1">
-                            <h3 class="font-semibold text-lg text-center text-white mb-4">Cuartos de final</h3>
-                            <div class="space-y-4">
-                                <div class="bg-gray-900 p-3 rounded-lg text-sm flex justify-between items-center"><span><strong>DE LA RUA SOSA</strong></span> <span class="font-bold text-white">7</span></div>
-                                <div class="bg-gray-900 p-3 rounded-lg text-sm flex justify-between items-center"><span>MIRANDA SCHONFELD</span> <span class="font-bold">5</span></div>
-                            </div>
-                        </div>
-                        <div class="flex-1">
-                             <h3 class="font-semibold text-lg text-center text-white mb-4">Semifinales</h3>
-                             <div class="space-y-4">
-                                <div class="bg-gray-900 p-3 rounded-lg text-sm flex justify-between items-center"><span><strong>COSTA VILLAMAYOR</strong></span> <span class="font-bold text-white">6</span></div>
-                                <div class="bg-gray-900 p-3 rounded-lg text-sm flex justify-between items-center"><span>DE LA RUA SOSA</span> <span class="font-bold">4</span></div>
-                            </div>
-                        </div>
-                        <div class="flex-1">
-                             <h3 class="font-semibold text-lg text-center text-white mb-4">Final</h3>
-                             <div class="space-y-4">
-                                <div class="bg-green-900/50 border border-green-700 p-4 rounded-lg text-center">
-                                    <span class="font-bold">BASUALDO RAINERI</span> <span class="text-2xl font-bold text-green-400 mx-2">🏆</span> <span class="font-bold">PORFIRIO REYNA</span>
-                                </div>
-                            </div>
-                        </div>
+                        <!-- JS will inject knockout rounds -->
                     </div>
                 </section>
             </div>
 
-            <!-- Admin View (hidden by default) -->
+            <!-- Admin View -->
             <div id="admin-view" class="hidden mt-8">
-                 <section id="admin-matches-section" class="bg-gray-800 p-6 rounded-xl shadow-md">
-                    <h2 class="text-2xl font-bold mb-6 text-center text-white">Actualizar Resultados de Partidos</h2>
-                    <div id="admin-matches-container" class="space-y-6">
+                 <section id="admin-matches-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
+                    <h2 class="text-2xl font-bold mb-6 text-center text-white">Actualizar Resultados</h2>
+                    <div id="admin-matches-container" class="space-y-4">
                         <!-- JS will inject admin forms -->
                     </div>
                 </section>
@@ -99,26 +91,25 @@
     </div>
 
     <!-- Admin Login Modal -->
-    <div id="login-modal" class="modal-overlay fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 hidden">
-        <div class="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl p-8 w-full max-w-sm">
+    <div id="login-modal" class="modal-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden">
+        <div class="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl p-8 w-full max-w-sm relative">
+            <button id="close-modal-btn" class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">&times;</button>
             <h2 class="text-2xl font-bold text-center mb-2 text-white">Acceso Admin</h2>
             <p class="text-center text-gray-400 mb-6">Ingresa tus credenciales.</p>
             <form id="login-form">
                 <div class="mb-4">
                     <label for="username" class="block text-sm font-medium text-gray-300 mb-1">Usuario</label>
-                    <input type="text" id="username" name="username" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-1 focus:ring-red-500" required>
+                    <input type="text" id="username" name="username" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
                 </div>
                 <div class="mb-6">
                     <label for="password" class="block text-sm font-medium text-gray-300 mb-1">Contraseña</label>
-                    <input type="password" id="password" name="password" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-1 focus:ring-red-500" required>
+                    <input type="password" id="password" name="password" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
                 </div>
                 <p id="login-error" class="text-red-500 text-sm text-center mb-4 hidden">Usuario o contraseña incorrectos.</p>
-                <button type="submit" class="w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700 transition-transform transform hover:scale-105">Ingresar</button>
+                <button type="submit" class="w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-red-500">Ingresar</button>
             </form>
-             <button id="close-modal-btn" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">&times;</button>
         </div>
     </div>
-
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -131,19 +122,19 @@
                     'F': [{ name: 'LAZARTE PACHILA', PJ: 2, PG: 2, PP: 0, GF: 12, GC: 3, DG: 9, Pts: 6 },{ name: 'LUCCA MONTES', PJ: 2, PG: 1, PP: 1, GF: 8, GC: 7, DG: 1, Pts: 3 },{ name: 'WITTE WITTE', PJ: 2, PG: 0, PP: 2, GF: 2, GC: 12, DG: -10, Pts: 0 }],
                 },
                 matches: [
-                    { group: 'A', team1: 'COSTA VILLAMAYOR', score1: 6, team2: 'SAAVEDRA ANTUÑA', score2: 3, time: '10:00', court: 1, completed: true },
-                    { group: 'A', team1: 'SAAVEDRA ANTUÑA', score1: 7, team2: 'SOTELO AYUNTA', score2: 5, time: '11:00', court: 1, completed: true },
-                    { group: 'B', team1: 'FAISAL CASTELLANOS', score1: 5, team2: 'PORFIRIO REYNA', score2: 7, time: '10:00', court: 2, completed: true },
-                    { group: 'E', team1: 'SORIA JIMENEZ', score1: null, team2: 'CORVALAN BALISTA', score2: null, time: '12:00', court: 3, completed: false },
-                    { group: 'F', team1: 'LAZARTE PACHILA', score1: null, team2: 'LUCCA MONTES', score2: null, time: '13:00', court: 4, completed: false }
+                    { id:1, group: 'A', team1: 'COSTA VILLAMAYOR', score1: 6, team2: 'SAAVEDRA ANTUÑA', score2: 3, time: '10:00', court: 1, completed: true },
+                    { id:2, group: 'A', team1: 'SAAVEDRA ANTUÑA', score1: 7, team2: 'SOTELO AYUNTA', score2: 5, time: '11:00', court: 1, completed: true },
+                    { id:3, group: 'B', team1: 'FAISAL CASTELLANOS', score1: 5, team2: 'PORFIRIO REYNA', score2: 7, time: '10:00', court: 2, completed: true },
+                    { id:4, group: 'E', team1: 'SORIA JIMENEZ', score1: null, team2: 'CORVALAN BALISTA', score2: null, time: '12:00', court: 3, completed: false },
+                    { id:5, group: 'F', team1: 'LAZARTE PACHILA', score1: null, team2: 'LUCCA MONTES', score2: null, time: '13:00', court: 4, completed: false }
                 ]
             };
-
-
+            
             // --- DOM ELEMENTS ---
-            const adminView = document.getElementById('admin-view');
             const groupsGrid = document.getElementById('groups-grid');
             const scheduleContainer = document.getElementById('schedule-container');
+            const knockoutContainer = document.querySelector('#knockout-section > div');
+            const adminView = document.getElementById('admin-view');
             const adminMatchesContainer = document.getElementById('admin-matches-container');
             const adminLoginBtn = document.getElementById('admin-login-btn');
             const logoutBtn = document.getElementById('logout-btn');
@@ -158,27 +149,27 @@
                 for (const groupName in tournamentData.groups) {
                     const groupData = tournamentData.groups[groupName];
                     const groupCard = document.createElement('div');
-                    groupCard.className = 'bg-gray-900 border border-gray-700 p-4 rounded-lg';
+                    groupCard.className = 'bg-gray-800 border border-gray-700 p-4 rounded-lg';
                     
-                    let tableHTML = `<h3 class="font-semibold text-lg mb-3 text-white">Grupo ${groupName}</h3>
-                                     <div class="overflow-x-auto">
-                                        <table class="w-full text-sm text-left">
-                                            <thead class="text-xs text-gray-400 uppercase bg-gray-800">
-                                                <tr>
-                                                    <th class="px-2 py-2">Equipo</th><th class="px-2 py-2 text-center">Pts</th><th class="px-2 py-2 text-center">PJ</th>
-                                                    <th class="px-2 py-2 text-center">G</th><th class="px-2 py-2 text-center">P</th><th class="px-2 py-2 text-center">DG</th>
-                                                </tr>
-                                            </thead><tbody>`;
+                    let teamsHTML = `<h3 class="font-bold text-xl mb-4 text-white text-center">Grupo ${groupName}</h3>
+                                     <div class="space-y-2">`;
                     
                     groupData.forEach(team => {
-                        tableHTML += `<tr class="border-b border-gray-700">
-                                        <td class="px-2 py-2 font-medium text-white">${team.name}</td><td class="px-2 py-2 text-center font-bold">${team.Pts}</td>
-                                        <td class="px-2 py-2 text-center">${team.PJ}</td><td class="px-2 py-2 text-center">${team.PG}</td>
-                                        <td class="px-2 py-2 text-center">${team.PP}</td><td class="px-2 py-2 text-center">${team.DG > 0 ? '+' : ''}${team.DG}</td>
-                                      </tr>`;
+                        teamsHTML += `<div class="bg-gray-900 rounded-lg p-3 border-l-4 ${team.Pts >= 3 ? 'border-red-500' : 'border-gray-600'}">
+                                        <div class="flex justify-between items-center">
+                                            <span class="font-bold text-sm text-white truncate pr-2">${team.name}</span>
+                                            <span class="font-bold text-lg text-red-400 flex-shrink-0">${team.Pts} Pts</span>
+                                        </div>
+                                        <div class="grid grid-cols-4 gap-1 text-center text-xs mt-2 text-gray-400">
+                                            <div><span class="font-semibold text-gray-200">${team.PJ}</span> PJ</div>
+                                            <div><span class="font-semibold text-gray-200">${team.PG}</span> PG</div>
+                                            <div><span class="font-semibold text-gray-200">${team.PP}</span> PP</div>
+                                            <div><span class="font-semibold text-gray-200">${team.DG > 0 ? '+' : ''}${team.DG}</span> DG</div>
+                                        </div>
+                                      </div>`;
                     });
-                    tableHTML += `</tbody></table></div>`;
-                    groupCard.innerHTML = tableHTML;
+                    teamsHTML += `</div>`;
+                    groupCard.innerHTML = teamsHTML;
                     groupsGrid.appendChild(groupCard);
                 }
             }
@@ -187,64 +178,108 @@
                 scheduleContainer.innerHTML = '';
                 tournamentData.matches.forEach((match) => {
                     const matchElement = document.createElement('div');
-                    const statusClass = match.completed ? 'border-l-4 border-green-500' : 'border-l-4 border-blue-500';
-                    matchElement.className = `p-4 rounded-lg flex items-center justify-between bg-gray-900 ${statusClass}`;
-                    let scoreHTML = `<span class="text-2xl font-bold text-gray-400">VS</span>`;
+                    const statusClass = match.completed ? 'border-green-500' : 'border-blue-500';
+                    matchElement.className = `p-3 rounded-lg flex flex-col sm:flex-row items-center justify-between bg-gray-800 border-l-4 ${statusClass} transition-transform hover:scale-[1.02]`;
+                    
+                    let scoreHTML = `<div class="text-xl font-bold text-gray-400 my-2 sm:my-0">VS</div>`;
                     if (match.completed) {
-                        scoreHTML = `<div class="text-center"><span class="text-3xl font-bold text-white">${match.score1} - ${match.score2}</span><div class="text-xs text-gray-400">Resultado Final</div></div>`;
+                        scoreHTML = `<div class="text-center my-2 sm:my-0"><span class="text-3xl font-bold text-white">${match.score1} - ${match.score2}</span><div class="text-xs text-gray-400">Final</div></div>`;
                     }
+
                     matchElement.innerHTML = `
-                        <div class="text-right flex-1"><div class="font-bold text-lg text-white">${match.team1}</div></div>
-                        <div class="w-24 text-center">${scoreHTML}</div>
-                        <div class="text-left flex-1"><div class="font-bold text-lg text-white">${match.team2}</div></div>
-                        <div class="text-center w-28 border-l border-gray-700 ml-4 pl-4"><div class="font-semibold">${match.time}</div><div class="text-sm text-gray-500">Cancha ${match.court}</div></div>`;
+                        <div class="flex-1 w-full grid grid-cols-1 md:grid-cols-3 items-center gap-2 text-center">
+                            <div class="font-bold text-base md:text-right text-white">${match.team1}</div>
+                            <div class="order-first md:order-none">${scoreHTML}</div>
+                            <div class="font-bold text-base md:text-left text-white">${match.team2}</div>
+                        </div>
+                        <div class="text-center w-full sm:w-28 border-t sm:border-t-0 sm:border-l border-gray-700 mt-3 sm:mt-0 ml-0 sm:ml-4 pt-3 sm:pt-0 pl-0 sm:pl-4">
+                            <div class="font-semibold text-sm">${match.time}</div>
+                            <div class="text-xs text-gray-500">Cancha ${match.court}</div>
+                        </div>`;
                     scheduleContainer.appendChild(matchElement);
                 });
             }
 
+            function renderKnockout() {
+                // This is a simplified static representation for the prototype
+                knockoutContainer.innerHTML = `
+                    <div class="flex-1">
+                        <h3 class="font-semibold text-lg text-center text-white mb-4">Cuartos</h3>
+                        <div class="space-y-2">
+                            <div class="bg-gray-900 p-3 rounded-lg text-sm flex justify-between items-center"><span><strong>DE LA RUA SOSA</strong></span> <span class="font-bold text-white bg-gray-700 px-2 rounded">7</span></div>
+                            <div class="bg-gray-900 p-3 rounded-lg text-sm flex justify-between items-center"><span>MIRANDA SCHONFELD</span> <span class="font-bold text-white bg-gray-700 px-2 rounded">5</span></div>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                         <h3 class="font-semibold text-lg text-center text-white mb-4">Semifinales</h3>
+                         <div class="space-y-2">
+                            <div class="bg-gray-900 p-3 rounded-lg text-sm flex justify-between items-center"><span><strong>COSTA VILLAMAYOR</strong></span> <span class="font-bold text-white bg-gray-700 px-2 rounded">6</span></div>
+                            <div class="bg-gray-900 p-3 rounded-lg text-sm flex justify-between items-center"><span>DE LA RUA SOSA</span> <span class="font-bold text-white bg-gray-700 px-2 rounded">4</span></div>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                         <h3 class="font-semibold text-lg text-center text-white mb-4">Final</h3>
+                         <div class="space-y-2">
+                            <div class="bg-green-900/50 border border-green-700 p-4 rounded-lg text-center">
+                                <span class="font-bold text-green-300">BASUALDO RAINERI</span> <span class="text-2xl mx-2">🏆</span> <span class="font-bold text-green-300">PORFIRIO REYNA</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
             function renderAdminMatches() {
                 adminMatchesContainer.innerHTML = '';
-                tournamentData.matches.filter(m => !m.completed).forEach((match) => {
-                    const originalIndex = tournamentData.matches.findIndex(m => m === match);
+                const pendingMatches = tournamentData.matches.filter(m => !m.completed);
+                
+                if (pendingMatches.length === 0) {
+                     adminMatchesContainer.innerHTML = `<p class="text-center text-gray-400 py-4">¡No hay partidos pendientes!</p>`;
+                     return;
+                }
+
+                pendingMatches.forEach((match) => {
                     const formElement = document.createElement('form');
-                    formElement.className = 'bg-gray-900 border border-gray-700 p-4 rounded-lg flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0';
-                    formElement.dataset.matchIndex = originalIndex;
+                    formElement.className = 'bg-gray-900 border border-gray-700 p-4 rounded-lg flex flex-col md:flex-row items-center justify-between gap-4';
+                    formElement.dataset.matchId = match.id;
                     formElement.innerHTML = `
                         <div class="flex-1 text-center md:text-left">
-                            <span class="font-semibold text-white">${match.team1}</span><span class="mx-2 text-gray-400">vs</span><span class="font-semibold text-white">${match.team2}</span>
+                            <div class="font-semibold text-white">
+                                <span class="block sm:inline">${match.team1}</span>
+                                <span class="text-gray-400 mx-2 text-sm">vs</span>
+                                <span class="block sm:inline">${match.team2}</span>
+                            </div>
                             <div class="text-sm text-gray-500 mt-1">Grupo ${match.group} - Cancha ${match.court} @ ${match.time}</div>
                         </div>
-                        <div class="flex items-center space-x-2">
-                            <input type="number" name="score1" class="w-16 p-2 border bg-gray-700 border-gray-600 rounded-md text-center text-white" placeholder="${match.team1.split(' ')[0]}"><span>-</span>
-                            <input type="number" name="score2" class="w-16 p-2 border bg-gray-700 border-gray-600 rounded-md text-center text-white" placeholder="${match.team2.split(' ')[0]}">
+                        <div class="flex items-center gap-2">
+                            <input type="number" name="score1" class="w-20 p-2 border bg-gray-700 border-gray-600 rounded-md text-center text-white" required>
+                            <span class="text-gray-400">-</span>
+                            <input type="number" name="score2" class="w-20 p-2 border bg-gray-700 border-gray-600 rounded-md text-center text-white" required>
                         </div>
                         <button type="submit" class="w-full md:w-auto bg-red-600 text-white font-bold px-6 py-2 rounded-lg hover:bg-red-700 transition-colors">Guardar</button>`;
                     formElement.addEventListener('submit', handleMatchUpdate);
                     adminMatchesContainer.appendChild(formElement);
                 });
-                if (adminMatchesContainer.innerHTML === '') {
-                    adminMatchesContainer.innerHTML = `<p class="text-center text-gray-500 py-4">¡Todos los partidos se han completado!</p>`;
-                }
             }
 
             function handleMatchUpdate(e) {
                 e.preventDefault();
-                const matchIndex = parseInt(e.currentTarget.dataset.matchIndex);
+                const matchId = parseInt(e.currentTarget.dataset.matchId);
                 const score1 = e.currentTarget.elements.score1.value;
                 const score2 = e.currentTarget.elements.score2.value;
-                if (score1 !== '' && score2 !== '') {
-                    tournamentData.matches[matchIndex].score1 = parseInt(score1);
-                    tournamentData.matches[matchIndex].score2 = parseInt(score2);
-                    tournamentData.matches[matchIndex].completed = true;
+                
+                const match = tournamentData.matches.find(m => m.id === matchId);
+                if (match) {
+                    match.score1 = parseInt(score1);
+                    match.score2 = parseInt(score2);
+                    match.completed = true;
                     renderAll();
-                } else {
-                    alert('Por favor, ingrese los resultados para ambos equipos.');
                 }
             }
             
             function renderAll() {
                 renderGroups();
                 renderSchedule();
+                renderKnockout();
                 renderAdminMatches();
             }
 
@@ -287,4 +322,5 @@
     </script>
 </body>
 </html>
+
 
