@@ -76,6 +76,64 @@
         <!-- Main Content -->
         <main id="content-area">
             <div id="player-view" class="space-y-8">
+                <!-- Inscripción para Jugadores -->
+                <section id="registration-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
+                    <h2 class="text-2xl font-bold mb-6 text-center text-white">Inscripción al Torneo</h2>
+                    <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
+                        <form id="registration-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Jugador 1</label>
+                                <input type="text" id="reg-player1" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="Apellido, Nombre" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Jugador 2</label>
+                                <input type="text" id="reg-player2" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="Apellido, Nombre" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Nombre de Pareja</label>
+                                <input type="text" id="reg-team-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="Apellido1 - Apellido2" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Categoría</label>
+                                <select id="reg-category" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                    <option value="">Seleccionar Categoría</option>
+                                    <option value="8va">8va Categoría</option>
+                                    <option value="9na">9na Categoría</option>
+                                    <option value="7ma">7ma Categoría</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Método de Pago</label>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                    <button type="button" class="payment-method bg-gray-700 border border-gray-600 rounded-md p-3 text-white hover:bg-gray-600 transition-colors" data-method="mercadopago">Mercado Pago</button>
+                                    <button type="button" class="payment-method bg-gray-700 border border-gray-600 rounded-md p-3 text-white hover:bg-gray-600 transition-colors" data-method="paypal">PayPal</button>
+                                    <button type="button" class="payment-method bg-gray-700 border border-gray-600 rounded-md p-3 text-white hover:bg-gray-600 transition-colors" data-method="transferencia">Transferencia</button>
+                                    <button type="button" class="payment-method bg-gray-700 border border-gray-600 rounded-md p-3 text-white hover:bg-gray-600 transition-colors" data-method="efectivo">Efectivo</button>
+                                </div>
+                            </div>
+                            <div class="md:col-span-2">
+                                <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-colors">Inscribirse y Pagar</button>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- Selección de Horarios -->
+                <section id="schedule-selection-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
+                    <h2 class="text-2xl font-bold mb-6 text-center text-white">Selección de Horarios Disponibles</h2>
+                    <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
+                        <form id="schedule-selection-form">
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Selecciona los horarios en los que estás disponible:</label>
+                                <div id="time-slots" class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                    <!-- Los horarios se generarán con JavaScript -->
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors">Guardar Horarios</button>
+                        </form>
+                    </div>
+                </section>
+
                 <!-- Group Standings -->
                 <section id="groups-section">
                     <h2 class="text-2xl font-bold mb-4 text-center text-white flex items-center justify-center gap-3">
@@ -120,6 +178,9 @@
                         </button>
                         <button id="tab-tournament" class="py-2 px-4 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-white">
                             Torneo
+                        </button>
+                        <button id="tab-profiles" class="py-2 px-4 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-white">
+                            Perfiles
                         </button>
                     </nav>
                 </div>
@@ -238,23 +299,49 @@
                         
                         <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg mb-6">
                             <h3 class="text-xl font-bold mb-4 text-white">Información General</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <form id="tournament-settings-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-300 mb-1">Nombre del Torneo</label>
-                                    <input type="text" id="tournament-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" value="Torneo 8va Categoría Masculino">
+                                    <input type="text" id="tournament-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" value="Torneo 8va Categoría Masculino" required>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-300 mb-1">Fecha</label>
-                                    <input type="date" id="tournament-date" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Fecha de Inicio</label>
+                                    <input type="date" id="tournament-start-date" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Fecha de Fin</label>
+                                    <input type="date" id="tournament-end-date" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-300 mb-1">Cantidad de Canchas</label>
-                                    <input type="number" id="court-count" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" min="1" max="10" value="4">
+                                    <input type="number" id="court-count" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" min="1" max="10" value="4" required>
                                 </div>
-                                <div class="flex items-end">
-                                    <button id="save-tournament-settings" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors">Guardar Configuración</button>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Categorías</label>
+                                    <select id="tournament-categories" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" multiple>
+                                        <option value="8va">8va Categoría</option>
+                                        <option value="9na">9na Categoría</option>
+                                        <option value="7ma">7ma Categoría</option>
+                                        <option value="6ta">6ta Categoría</option>
+                                        <option value="5ta">5ta Categoría</option>
+                                    </select>
                                 </div>
-                            </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Formato del Torneo</label>
+                                    <select id="tournament-format" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                                        <option value="grupos-eliminatoria">Grupos + Eliminatoria</option>
+                                        <option value="eliminatoria-directa">Eliminatoria Directa</option>
+                                        <option value="todos-contra-todos">Todos contra Todos</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Cantidad de Parejas</label>
+                                    <input type="number" id="team-count" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" min="1" max="100" value="24">
+                                </div>
+                                <div class="md:col-span-2">
+                                    <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors">Guardar Configuración</button>
+                                </div>
+                            </form>
                         </div>
                         
                         <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
@@ -262,6 +349,55 @@
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <button id="generate-groups" class="bg-yellow-600 text-white font-bold py-3 rounded-lg hover:bg-yellow-700 transition-colors">Generar Grupos Automáticamente</button>
                                 <button id="reset-tournament" class="bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700 transition-colors">Reiniciar Torneo</button>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Profiles Tab -->
+                <div id="tab-content-profiles" class="tab-content hidden">
+                    <section class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
+                        <h2 class="text-2xl font-bold mb-6 text-center text-white">Gestión de Perfiles</h2>
+                        
+                        <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg mb-6">
+                            <h3 class="text-xl font-bold mb-4 text-white">Crear Perfil de Jugador</h3>
+                            <form id="player-profile-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Nombre Completo</label>
+                                    <input type="text" id="profile-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="Apellido, Nombre" required>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Email</label>
+                                    <input type="email" id="profile-email" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Teléfono</label>
+                                    <input type="tel" id="profile-phone" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Categoría</label>
+                                    <select id="profile-category" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                                        <option value="8va">8va Categoría</option>
+                                        <option value="9na">9na Categoría</option>
+                                        <option value="7ma">7ma Categoría</option>
+                                        <option value="6ta">6ta Categoría</option>
+                                        <option value="5ta">5ta Categoría</option>
+                                    </select>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Información Adicional</label>
+                                    <textarea id="profile-info" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" rows="3"></textarea>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-colors">Guardar Perfil</button>
+                                </div>
+                            </form>
+                        </div>
+                        
+                        <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
+                            <h3 class="text-xl font-bold mb-4 text-white">Perfiles Registrados</h3>
+                            <div id="profiles-list" class="space-y-3">
+                                <!-- JS will inject profiles list -->
                             </div>
                         </div>
                     </section>
@@ -326,9 +462,14 @@
                 },
                 settings: {
                     name: 'Torneo 8va Categoría Masculino',
-                    date: new Date().toISOString().split('T')[0],
-                    courts: 4
-                }
+                    startDate: new Date().toISOString().split('T')[0],
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    courts: 4,
+                    categories: ['8va'],
+                    format: 'grupos-eliminatoria',
+                    teamCount: 24
+                },
+                playerProfiles: []
             };
 
             // Cargar datos del localStorage si existen
@@ -366,12 +507,19 @@
             const tabMatches = document.getElementById('tab-matches');
             const tabPlayers = document.getElementById('tab-players');
             const tabTournament = document.getElementById('tab-tournament');
+            const tabProfiles = document.getElementById('tab-profiles');
             const tabContentMatches = document.getElementById('tab-content-matches');
             const tabContentPlayers = document.getElementById('tab-content-players');
             const tabContentTournament = document.getElementById('tab-content-tournament');
+            const tabContentProfiles = document.getElementById('tab-content-profiles');
             const generateGroupsBtn = document.getElementById('generate-groups');
             const resetTournamentBtn = document.getElementById('reset-tournament');
-            const saveTournamentSettingsBtn = document.getElementById('save-tournament-settings');
+            const tournamentSettingsForm = document.getElementById('tournament-settings-form');
+            const playerProfileForm = document.getElementById('player-profile-form');
+            const profilesList = document.getElementById('profiles-list');
+            const registrationForm = document.getElementById('registration-form');
+            const scheduleSelectionForm = document.getElementById('schedule-selection-form');
+            const timeSlotsContainer = document.getElementById('time-slots');
 
             // --- RENDER FUNCTIONS ---
             function renderGroups() {
@@ -591,6 +739,27 @@
                 });
             }
             
+            function renderProfilesList() {
+                profilesList.innerHTML = '';
+                
+                if (tournamentData.playerProfiles.length === 0) {
+                    profilesList.innerHTML = '<div class="text-center text-gray-500 py-4">No hay perfiles registrados</div>';
+                    return;
+                }
+                
+                tournamentData.playerProfiles.forEach(profile => {
+                    const profileElement = document.createElement('div');
+                    profileElement.className = 'bg-gray-800 border border-gray-700 p-3 rounded-lg';
+                    profileElement.innerHTML = `
+                        <div class="font-bold text-white">${profile.name}</div>
+                        <div class="text-sm text-gray-400">${profile.email} - ${profile.phone}</div>
+                        <div class="text-sm text-gray-400">Categoría: ${profile.category}</div>
+                        <div class="text-sm text-gray-400 mt-1">${profile.info || 'Sin información adicional'}</div>
+                    `;
+                    profilesList.appendChild(profileElement);
+                });
+            }
+            
             function populateTeamSelects() {
                 // Limpiar selects
                 newMatchTeam1.innerHTML = '<option value="">Seleccionar Pareja</option>';
@@ -616,6 +785,26 @@
                     option2.textContent = team;
                     newMatchTeam2.appendChild(option2);
                 });
+            }
+
+            function generateTimeSlots() {
+                timeSlotsContainer.innerHTML = '';
+                // Generar horarios de ejemplo: de 8:00 a 20:00 cada 2 horas
+                const startHour = 8;
+                const endHour = 20;
+                const interval = 2;
+                
+                for (let hour = startHour; hour <= endHour; hour += interval) {
+                    const timeSlot = document.createElement('div');
+                    const timeLabel = `${hour}:00 - ${hour + interval}:00`;
+                    timeSlot.innerHTML = `
+                        <label class="flex items-center">
+                            <input type="checkbox" name="time-slot" value="${timeLabel}" class="mr-2">
+                            <span>${timeLabel}</span>
+                        </label>
+                    `;
+                    timeSlotsContainer.appendChild(timeSlot);
+                }
             }
 
             function handleMatchUpdate(e) {
@@ -884,26 +1073,103 @@
                         },
                         settings: {
                             name: 'Torneo 8va Categoría Masculino',
-                            date: new Date().toISOString().split('T')[0],
-                            courts: 4
-                        }
+                            startDate: new Date().toISOString().split('T')[0],
+                            endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                            courts: 4,
+                            categories: ['8va'],
+                            format: 'grupos-eliminatoria',
+                            teamCount: 24
+                        },
+                        playerProfiles: []
                     };
                     
                     saveToLocalStorage();
                     renderAll();
                     renderPlayersList();
+                    renderProfilesList();
                     populateTeamSelects();
                     alert('Torneo reiniciado exitosamente!');
                 }
             }
             
-            function saveTournamentSettings() {
+            function saveTournamentSettings(e) {
+                e.preventDefault();
                 tournamentData.settings.name = document.getElementById('tournament-name').value;
-                tournamentData.settings.date = document.getElementById('tournament-date').value;
+                tournamentData.settings.startDate = document.getElementById('tournament-start-date').value;
+                tournamentData.settings.endDate = document.getElementById('tournament-end-date').value;
                 tournamentData.settings.courts = parseInt(document.getElementById('court-count').value);
+                tournamentData.settings.format = document.getElementById('tournament-format').value;
+                tournamentData.settings.teamCount = parseInt(document.getElementById('team-count').value);
+                
+                // Obtener categorías seleccionadas
+                const categorySelect = document.getElementById('tournament-categories');
+                tournamentData.settings.categories = Array.from(categorySelect.selectedOptions).map(option => option.value);
                 
                 saveToLocalStorage();
                 alert('Configuración guardada exitosamente!');
+            }
+            
+            function savePlayerProfile(e) {
+                e.preventDefault();
+                
+                const name = document.getElementById('profile-name').value.trim();
+                const email = document.getElementById('profile-email').value.trim();
+                const phone = document.getElementById('profile-phone').value.trim();
+                const category = document.getElementById('profile-category').value;
+                const info = document.getElementById('profile-info').value.trim();
+                
+                if (!name || !email) {
+                    alert('Por favor, complete al menos el nombre y el email.');
+                    return;
+                }
+                
+                const newProfile = {
+                    name,
+                    email,
+                    phone,
+                    category,
+                    info
+                };
+                
+                tournamentData.playerProfiles.push(newProfile);
+                saveToLocalStorage();
+                renderProfilesList();
+                playerProfileForm.reset();
+                alert('Perfil guardado exitosamente!');
+            }
+            
+            function handleRegistration(e) {
+                e.preventDefault();
+                
+                const player1 = document.getElementById('reg-player1').value.trim();
+                const player2 = document.getElementById('reg-player2').value.trim();
+                const teamName = document.getElementById('reg-team-name').value.trim();
+                const category = document.getElementById('reg-category').value;
+                
+                if (!player1 || !player2 || !teamName || !category) {
+                    alert('Por favor, complete todos los campos.');
+                    return;
+                }
+                
+                // Simular proceso de pago
+                alert('Inscripción enviada. Serás redirigido al pago.');
+                // Aquí iría la integración con la pasarela de pago
+                
+                // Después del pago, se agregaría la pareja al torneo
+                // Por ahora, solo mostramos un mensaje
+                alert('¡Inscripción completada! Tu pareja será asignada a un grupo próximamente.');
+                registrationForm.reset();
+            }
+            
+            function handleScheduleSelection(e) {
+                e.preventDefault();
+                const selectedSlots = Array.from(document.querySelectorAll('input[name="time-slot"]:checked')).map(cb => cb.value);
+                if (selectedSlots.length === 0) {
+                    alert('Por favor, selecciona al menos un horario.');
+                    return;
+                }
+                alert(`Horarios guardados: ${selectedSlots.join(', ')}`);
+                // Aquí se guardarían los horarios en el perfil del jugador o en una base de datos
             }
             
             function switchTab(tabName) {
@@ -932,12 +1198,22 @@
                 renderKnockout();
                 renderAdminMatches();
                 renderPlayersList();
+                renderProfilesList();
                 populateTeamSelects();
                 
                 // Actualizar configuración en la interfaz
                 document.getElementById('tournament-name').value = tournamentData.settings.name;
-                document.getElementById('tournament-date').value = tournamentData.settings.date;
+                document.getElementById('tournament-start-date').value = tournamentData.settings.startDate;
+                document.getElementById('tournament-end-date').value = tournamentData.settings.endDate;
                 document.getElementById('court-count').value = tournamentData.settings.courts;
+                document.getElementById('tournament-format').value = tournamentData.settings.format;
+                document.getElementById('team-count').value = tournamentData.settings.teamCount;
+                
+                // Seleccionar categorías en el multi-select
+                const categorySelect = document.getElementById('tournament-categories');
+                Array.from(categorySelect.options).forEach(option => {
+                    option.selected = tournamentData.settings.categories.includes(option.value);
+                });
             }
 
             // --- AUTH & MODAL LOGIC ---
@@ -984,15 +1260,20 @@
             playerSearch.addEventListener('input', handlePlayerSearch);
             generateGroupsBtn.addEventListener('click', generateGroupsAutomatically);
             resetTournamentBtn.addEventListener('click', resetTournament);
-            saveTournamentSettingsBtn.addEventListener('click', saveTournamentSettings);
+            tournamentSettingsForm.addEventListener('submit', saveTournamentSettings);
+            playerProfileForm.addEventListener('submit', savePlayerProfile);
+            registrationForm.addEventListener('submit', handleRegistration);
+            scheduleSelectionForm.addEventListener('submit', handleScheduleSelection);
             
             // Tab switching
             tabMatches.addEventListener('click', () => switchTab('matches'));
             tabPlayers.addEventListener('click', () => switchTab('players'));
             tabTournament.addEventListener('click', () => switchTab('tournament'));
+            tabProfiles.addEventListener('click', () => switchTab('profiles'));
 
             // --- INITIALIZATION ---
             loadFromLocalStorage();
+            generateTimeSlots();
             renderAll();
         });
     </script>
