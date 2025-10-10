@@ -42,6 +42,10 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        .tournament-card {
+            background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+            border: 1px solid #4b5563;
+        }
     </style>
 </head>
 <body class="text-gray-300">
@@ -52,13 +56,13 @@
             <div class="flex flex-col md:flex-row justify-between items-center">
                 <div class="text-center md:text-left mb-4 md:mb-0">
                     <h1 class="text-2xl md:text-4xl font-extrabold text-white tracking-tight">Matchpoint</h1>
-                    <p class="text-gray-400 text-sm md:text-base mt-1">Torneo 8va Categoría Masculino</p>
+                    <p id="tournament-title" class="text-gray-400 text-sm md:text-base mt-1">Cargando torneo...</p>
                 </div>
                 
                 <!-- User Auth Section -->
                 <div class="flex items-center space-x-4 mb-4 md:mb-0">
                     <div id="user-info" class="hidden items-center space-x-2">
-                        <div class="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
                             <span id="user-initials"></span>
                         </div>
                         <span id="user-name" class="text-white font-medium"></span>
@@ -70,15 +74,8 @@
                 </div>
                 
                 <!-- Quick Group Links -->
-                <div class="flex flex-wrap justify-center gap-2">
-                    <a href="#group-A" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">A</a>
-                    <a href="#group-B" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">B</a>
-                    <a href="#group-C" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">C</a>
-                    <a href="#group-D" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">D</a>
-                    <a href="#group-E" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">E</a>
-                    <a href="#group-F" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">F</a>
-                    <a href="#group-G" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">G</a>
-                    <a href="#group-H" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors">H</a>
+                <div id="group-links" class="flex flex-wrap justify-center gap-2">
+                    <!-- Los enlaces se generarán dinámicamente -->
                 </div>
             </div>
             
@@ -96,6 +93,43 @@
 
         <!-- Main Content -->
         <main id="content-area">
+            <!-- Tournament Overview -->
+            <section id="tournament-overview" class="mb-8">
+                <div class="tournament-card rounded-xl p-6 shadow-lg">
+                    <div class="flex flex-col md:flex-row justify-between items-center">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white" id="overview-tournament-name">Torneo de Pádel</h2>
+                            <div class="flex flex-wrap gap-4 mt-2 text-sm">
+                                <div class="flex items-center">
+                                    <svg class="w-4 h-4 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                    </svg>
+                                    <span id="overview-date" class="text-gray-300">Fecha por definir</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <svg class="w-4 h-4 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                    </svg>
+                                    <span id="overview-teams" class="text-gray-300">0 parejas</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <svg class="w-4 h-4 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                    </svg>
+                                    <span id="overview-courts" class="text-gray-300">0 canchas</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-4 md:mt-0">
+                            <div class="bg-gray-800 rounded-lg p-3 text-center">
+                                <div class="text-2xl font-bold text-white" id="overview-groups">0</div>
+                                <div class="text-xs text-gray-400">Grupos</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <div id="player-view" class="space-y-8">
                 <!-- Group Standings -->
                 <section id="groups-section">
@@ -133,71 +167,61 @@
                 <!-- Admin Tabs -->
                 <div class="border-b border-gray-700 mb-6">
                     <nav class="flex -mb-px">
-                        <button id="tab-matches" class="tab-active py-2 px-4 font-medium text-sm border-b-2 border-red-500 text-white">
-                            Partidos
+                        <button id="tab-tournament" class="tab-active py-2 px-4 font-medium text-sm border-b-2 border-red-500 text-white">
+                            Torneo
                         </button>
                         <button id="tab-players" class="py-2 px-4 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-white">
                             Parejas
                         </button>
-                        <button id="tab-tournament" class="py-2 px-4 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-white">
-                            Torneo
+                        <button id="tab-matches" class="py-2 px-4 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-white">
+                            Partidos
                         </button>
                     </nav>
                 </div>
                 
-                <!-- Matches Tab -->
-                <div id="tab-content-matches" class="tab-content">
-                    <section id="admin-matches-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
-                        <h2 class="text-2xl font-bold mb-6 text-center text-white">Actualizar Resultados</h2>
-                        <div id="admin-matches-container" class="space-y-4">
-                            <!-- JS will inject admin forms -->
+                <!-- Tournament Tab -->
+                <div id="tab-content-tournament" class="tab-content">
+                    <section class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
+                        <h2 class="text-2xl font-bold mb-6 text-center text-white">Configuración del Torneo</h2>
+                        
+                        <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg mb-6">
+                            <h3 class="text-xl font-bold mb-4 text-white">Información General</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Nombre del Torneo</label>
+                                    <input type="text" id="tournament-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="Ej: Torneo 8va Categoría Masculino">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Fecha</label>
+                                    <input type="date" id="tournament-date" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Cantidad de Canchas</label>
+                                    <input type="number" id="court-count" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" min="1" max="10" value="4">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Cantidad de Grupos</label>
+                                    <select id="group-count" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                                        <option value="4">4 Grupos</option>
+                                        <option value="6">6 Grupos</option>
+                                        <option value="8" selected>8 Grupos</option>
+                                    </select>
+                                </div>
+                                <div class="md:col-span-2 flex items-end">
+                                    <button id="save-tournament-settings" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors">Guardar Configuración</button>
+                                </div>
+                            </div>
                         </div>
-                    </section>
-                    
-                    <!-- Add Match Section -->
-                    <section id="add-match-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md mt-6">
-                        <h2 class="text-2xl font-bold mb-6 text-center text-white">Agregar Partido</h2>
-                        <form id="add-match-form" class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-300 mb-1">Grupo</label>
-                                    <select id="new-match-group" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
-                                        <option value="">Seleccionar Grupo</option>
-                                        <option value="A">Grupo A</option>
-                                        <option value="B">Grupo B</option>
-                                        <option value="C">Grupo C</option>
-                                        <option value="D">Grupo D</option>
-                                        <option value="E">Grupo E</option>
-                                        <option value="F">Grupo F</option>
-                                        <option value="G">Grupo G</option>
-                                        <option value="H">Grupo H</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-300 mb-1">Cancha</label>
-                                    <input type="number" id="new-match-court" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" min="1" max="10" required>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-300 mb-1">Hora</label>
-                                    <input type="time" id="new-match-time" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
-                                </div>
+                        
+                        <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
+                            <h3 class="text-xl font-bold mb-4 text-white">Acciones del Torneo</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <button id="generate-groups" class="bg-yellow-600 text-white font-bold py-3 rounded-lg hover:bg-yellow-700 transition-colors">Generar Grupos Automáticamente</button>
+                                <button id="generate-knockout" class="bg-purple-600 text-white font-bold py-3 rounded-lg hover:bg-purple-700 transition-colors">Generar Fase Eliminatoria</button>
+                                <button id="reset-tournament" class="bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700 transition-colors">Reiniciar Torneo</button>
+                                <button id="export-tournament" class="bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-colors">Exportar Datos</button>
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-300 mb-1">Pareja 1</label>
-                                    <select id="new-match-team1" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
-                                        <option value="">Seleccionar Pareja</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-300 mb-1">Pareja 2</label>
-                                    <select id="new-match-team2" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
-                                        <option value="">Seleccionar Pareja</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-colors">Agregar Partido</button>
-                        </form>
+                        </div>
                     </section>
                 </div>
                 
@@ -226,14 +250,7 @@
                                     <label class="block text-sm font-medium text-gray-300 mb-1">Grupo</label>
                                     <select id="player-group" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
                                         <option value="">Seleccionar Grupo</option>
-                                        <option value="A">Grupo A</option>
-                                        <option value="B">Grupo B</option>
-                                        <option value="C">Grupo C</option>
-                                        <option value="D">Grupo D</option>
-                                        <option value="E">Grupo E</option>
-                                        <option value="F">Grupo F</option>
-                                        <option value="G">Grupo G</option>
-                                        <option value="H">Grupo H</option>
+                                        <!-- Los grupos se generarán dinámicamente -->
                                     </select>
                                 </div>
                                 <div class="md:col-span-2">
@@ -252,39 +269,52 @@
                     </section>
                 </div>
                 
-                <!-- Tournament Tab -->
-                <div id="tab-content-tournament" class="tab-content hidden">
-                    <section class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
-                        <h2 class="text-2xl font-bold mb-6 text-center text-white">Configuración del Torneo</h2>
-                        
-                        <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg mb-6">
-                            <h3 class="text-xl font-bold mb-4 text-white">Información General</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Matches Tab -->
+                <div id="tab-content-matches" class="tab-content hidden">
+                    <section id="admin-matches-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
+                        <h2 class="text-2xl font-bold mb-6 text-center text-white">Actualizar Resultados</h2>
+                        <div id="admin-matches-container" class="space-y-4">
+                            <!-- JS will inject admin forms -->
+                        </div>
+                    </section>
+                    
+                    <!-- Add Match Section -->
+                    <section id="add-match-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md mt-6">
+                        <h2 class="text-2xl font-bold mb-6 text-center text-white">Agregar Partido</h2>
+                        <form id="add-match-form" class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-300 mb-1">Nombre del Torneo</label>
-                                    <input type="text" id="tournament-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" value="Torneo 8va Categoría Masculino">
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Grupo</label>
+                                    <select id="new-match-group" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                        <option value="">Seleccionar Grupo</option>
+                                        <!-- Los grupos se generarán dinámicamente -->
+                                    </select>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-300 mb-1">Fecha</label>
-                                    <input type="date" id="tournament-date" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Cancha</label>
+                                    <input type="number" id="new-match-court" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" min="1" max="10" required>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-300 mb-1">Cantidad de Canchas</label>
-                                    <input type="number" id="court-count" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" min="1" max="10" value="4">
-                                </div>
-                                <div class="flex items-end">
-                                    <button id="save-tournament-settings" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors">Guardar Configuración</button>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Hora</label>
+                                    <input type="time" id="new-match-time" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
-                            <h3 class="text-xl font-bold mb-4 text-white">Acciones del Torneo</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <button id="generate-groups" class="bg-yellow-600 text-white font-bold py-3 rounded-lg hover:bg-yellow-700 transition-colors">Generar Grupos Automáticamente</button>
-                                <button id="reset-tournament" class="bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700 transition-colors">Reiniciar Torneo</button>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Pareja 1</label>
+                                    <select id="new-match-team1" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                        <option value="">Seleccionar Pareja</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-1">Pareja 2</label>
+                                    <select id="new-match-team2" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                        <option value="">Seleccionar Pareja</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
+                            <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-colors">Agregar Partido</button>
+                        </form>
                     </section>
                 </div>
             </div>
@@ -383,16 +413,13 @@
         document.addEventListener('DOMContentLoaded', function() {
             // --- DATA (Inicialmente vacía, se llena a través del admin) ---
             let tournamentData = {
-                groups: {
-                    'A': [],
-                    'B': [],
-                    'C': [],
-                    'D': [],
-                    'E': [],
-                    'F': [],
-                    'G': [],
-                    'H': []
+                settings: {
+                    name: 'Torneo de Pádel',
+                    date: new Date().toISOString().split('T')[0],
+                    courts: 4,
+                    groups: 8
                 },
+                groups: {},
                 matches: [],
                 knockout: {
                     rounds: [
@@ -401,22 +428,30 @@
                         { name: 'Semifinal', matches: [] },
                         { name: 'Final', matches: [] }
                     ]
-                },
-                settings: {
-                    name: 'Torneo 8va Categoría Masculino',
-                    date: new Date().toISOString().split('T')[0],
-                    courts: 4
                 }
             };
 
             // Datos de usuarios (jugadores)
             let users = [];
 
+            // Inicializar grupos basados en la configuración
+            function initializeGroups() {
+                tournamentData.groups = {};
+                const groupCount = tournamentData.settings.groups;
+                const groupLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+                
+                for (let i = 0; i < groupCount; i++) {
+                    tournamentData.groups[groupLetters[i]] = [];
+                }
+            }
+
             // Cargar datos del localStorage si existen
             function loadFromLocalStorage() {
                 const savedData = localStorage.getItem('tournamentData');
                 if (savedData) {
                     tournamentData = JSON.parse(savedData);
+                } else {
+                    initializeGroups();
                 }
                 
                 const savedUsers = localStorage.getItem('tournamentUsers');
@@ -459,6 +494,15 @@
             const generateGroupsBtn = document.getElementById('generate-groups');
             const resetTournamentBtn = document.getElementById('reset-tournament');
             const saveTournamentSettingsBtn = document.getElementById('save-tournament-settings');
+            const generateKnockoutBtn = document.getElementById('generate-knockout');
+            const exportTournamentBtn = document.getElementById('export-tournament');
+            const groupLinks = document.getElementById('group-links');
+            const tournamentTitle = document.getElementById('tournament-title');
+            const overviewTournamentName = document.getElementById('overview-tournament-name');
+            const overviewDate = document.getElementById('overview-date');
+            const overviewTeams = document.getElementById('overview-teams');
+            const overviewCourts = document.getElementById('overview-courts');
+            const overviewGroups = document.getElementById('overview-groups');
             
             // User auth elements
             const userAuthModal = document.getElementById('user-auth-modal');
@@ -478,6 +522,46 @@
             const userLogout = document.getElementById('user-logout');
 
             // --- RENDER FUNCTIONS ---
+            function renderTournamentOverview() {
+                // Actualizar información del torneo
+                tournamentTitle.textContent = tournamentData.settings.name;
+                overviewTournamentName.textContent = tournamentData.settings.name;
+                
+                // Formatear fecha
+                const date = new Date(tournamentData.settings.date);
+                overviewDate.textContent = date.toLocaleDateString('es-ES', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                });
+                
+                // Contar parejas
+                let totalTeams = 0;
+                for (const group in tournamentData.groups) {
+                    totalTeams += tournamentData.groups[group].length;
+                }
+                overviewTeams.textContent = `${totalTeams} pareja${totalTeams !== 1 ? 's' : ''}`;
+                
+                // Información de canchas y grupos
+                overviewCourts.textContent = `${tournamentData.settings.courts} cancha${tournamentData.settings.courts !== 1 ? 's' : ''}`;
+                overviewGroups.textContent = Object.keys(tournamentData.groups).length;
+                
+                // Actualizar enlaces rápidos a grupos
+                renderGroupLinks();
+            }
+            
+            function renderGroupLinks() {
+                groupLinks.innerHTML = '';
+                for (const groupName in tournamentData.groups) {
+                    const link = document.createElement('a');
+                    link.href = `#group-${groupName}`;
+                    link.className = 'px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md text-sm transition-colors';
+                    link.textContent = groupName;
+                    groupLinks.appendChild(link);
+                }
+            }
+
             function renderGroups() {
                 groupsGrid.innerHTML = '';
                 for (const groupName in tournamentData.groups) {
@@ -679,7 +763,7 @@
                     playerElement.innerHTML = `
                         <div>
                             <div class="font-bold text-white">${player.name}</div>
-                            <div class="text-sm text-gray-400">Grupo ${player.group}</div>
+                            <div class="text-sm text-gray-400">Grupo ${player.group} • ${player.players.join(' / ')}</div>
                         </div>
                         <button class="delete-player bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors" data-team="${player.name}">Eliminar</button>
                     `;
@@ -693,6 +777,28 @@
                         deletePlayer(teamName);
                     });
                 });
+            }
+            
+            function populateGroupSelects() {
+                // Limpiar selects
+                const playerGroupSelect = document.getElementById('player-group');
+                const matchGroupSelect = document.getElementById('new-match-group');
+                
+                playerGroupSelect.innerHTML = '<option value="">Seleccionar Grupo</option>';
+                matchGroupSelect.innerHTML = '<option value="">Seleccionar Grupo</option>';
+                
+                // Agregar opciones de grupos
+                for (const groupName in tournamentData.groups) {
+                    const option1 = document.createElement('option');
+                    option1.value = groupName;
+                    option1.textContent = `Grupo ${groupName}`;
+                    playerGroupSelect.appendChild(option1);
+                    
+                    const option2 = document.createElement('option');
+                    option2.value = groupName;
+                    option2.textContent = `Grupo ${groupName}`;
+                    matchGroupSelect.appendChild(option2);
+                }
             }
             
             function populateTeamSelects() {
@@ -964,19 +1070,83 @@
                 alert('Grupos generados automáticamente!');
             }
             
+            function generateKnockoutStage() {
+                // Obtener los primeros de cada grupo
+                const groupWinners = [];
+                for (const groupName in tournamentData.groups) {
+                    const group = tournamentData.groups[groupName];
+                    if (group.length > 0) {
+                        // Ordenar por puntos y diferencia
+                        const sorted = [...group].sort((a, b) => {
+                            if (b.Pts !== a.Pts) return b.Pts - a.Pts;
+                            return b.DG - a.DG;
+                        });
+                        groupWinners.push(sorted[0]);
+                    }
+                }
+                
+                if (groupWinners.length < 2) {
+                    alert('Se necesitan al menos 2 parejas para generar la fase eliminatoria.');
+                    return;
+                }
+                
+                // Limpiar fase eliminatoria actual
+                tournamentData.knockout.rounds.forEach(round => {
+                    round.matches = [];
+                });
+                
+                // Generar octavos de final (si hay suficientes equipos)
+                if (groupWinners.length >= 8) {
+                    for (let i = 0; i < 8; i += 2) {
+                        tournamentData.knockout.rounds[0].matches.push({
+                            team1: groupWinners[i].name,
+                            score1: null,
+                            team2: groupWinners[i+1].name,
+                            score2: null,
+                            completed: false
+                        });
+                    }
+                }
+                // O generar cuartos de final directamente
+                else if (groupWinners.length >= 4) {
+                    for (let i = 0; i < 4; i += 2) {
+                        tournamentData.knockout.rounds[1].matches.push({
+                            team1: groupWinners[i].name,
+                            score1: null,
+                            team2: groupWinners[i+1].name,
+                            score2: null,
+                            completed: false
+                        });
+                    }
+                }
+                // O semifinales directamente
+                else if (groupWinners.length >= 2) {
+                    for (let i = 0; i < 2; i += 2) {
+                        tournamentData.knockout.rounds[2].matches.push({
+                            team1: groupWinners[i].name,
+                            score1: null,
+                            team2: groupWinners[i+1].name,
+                            score2: null,
+                            completed: false
+                        });
+                    }
+                }
+                
+                saveToLocalStorage();
+                renderAll();
+                alert('Fase eliminatoria generada exitosamente!');
+            }
+            
             function resetTournament() {
                 if (confirm('¿Está seguro de que desea reiniciar el torneo? Se perderán todos los datos.')) {
                     tournamentData = {
-                        groups: {
-                            'A': [],
-                            'B': [],
-                            'C': [],
-                            'D': [],
-                            'E': [],
-                            'F': [],
-                            'G': [],
-                            'H': []
+                        settings: {
+                            name: 'Torneo de Pádel',
+                            date: new Date().toISOString().split('T')[0],
+                            courts: 4,
+                            groups: 8
                         },
+                        groups: {},
                         matches: [],
                         knockout: {
                             rounds: [
@@ -985,14 +1155,10 @@
                                 { name: 'Semifinal', matches: [] },
                                 { name: 'Final', matches: [] }
                             ]
-                        },
-                        settings: {
-                            name: 'Torneo 8va Categoría Masculino',
-                            date: new Date().toISOString().split('T')[0],
-                            courts: 4
                         }
                     };
                     
+                    initializeGroups();
                     saveToLocalStorage();
                     renderAll();
                     renderPlayersList();
@@ -1005,9 +1171,30 @@
                 tournamentData.settings.name = document.getElementById('tournament-name').value;
                 tournamentData.settings.date = document.getElementById('tournament-date').value;
                 tournamentData.settings.courts = parseInt(document.getElementById('court-count').value);
+                tournamentData.settings.groups = parseInt(document.getElementById('group-count').value);
+                
+                // Re-inicializar grupos con la nueva configuración
+                initializeGroups();
                 
                 saveToLocalStorage();
+                renderAll();
                 alert('Configuración guardada exitosamente!');
+            }
+            
+            function exportTournamentData() {
+                const dataStr = JSON.stringify(tournamentData, null, 2);
+                const dataBlob = new Blob([dataStr], {type: 'application/json'});
+                
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `torneo-${tournamentData.settings.name.replace(/\s+/g, '-').toLowerCase()}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                
+                alert('Datos del torneo exportados exitosamente!');
             }
             
             function switchTab(tabName) {
@@ -1135,11 +1322,13 @@
             }
             
             function renderAll() {
+                renderTournamentOverview();
                 renderGroups();
                 renderSchedule();
                 renderKnockout();
                 renderAdminMatches();
                 renderPlayersList();
+                populateGroupSelects();
                 populateTeamSelects();
                 updateUserUI();
                 
@@ -1147,6 +1336,7 @@
                 document.getElementById('tournament-name').value = tournamentData.settings.name;
                 document.getElementById('tournament-date').value = tournamentData.settings.date;
                 document.getElementById('court-count').value = tournamentData.settings.courts;
+                document.getElementById('group-count').value = tournamentData.settings.groups;
             }
 
             // --- AUTH & MODAL LOGIC ---
@@ -1204,8 +1394,10 @@
             addPlayerForm.addEventListener('submit', handleAddPlayer);
             playerSearch.addEventListener('input', handlePlayerSearch);
             generateGroupsBtn.addEventListener('click', generateGroupsAutomatically);
+            generateKnockoutBtn.addEventListener('click', generateKnockoutStage);
             resetTournamentBtn.addEventListener('click', resetTournament);
             saveTournamentSettingsBtn.addEventListener('click', saveTournamentSettings);
+            exportTournamentBtn.addEventListener('click', exportTournamentData);
             
             // Tab switching
             tabMatches.addEventListener('click', () => switchTab('matches'));
