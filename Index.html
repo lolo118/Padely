@@ -27,7 +27,7 @@
         }
         .tab-active {
             background-color: #374151;
-            border-color: #ef4444;
+            border-color: #ef4444 !important;
             color: white;
         }
         .search-highlight {
@@ -71,6 +71,7 @@
             height: 4px;
             background: linear-gradient(90deg, #ef4444, #3b82f6);
             border-radius: 2px;
+            transition: width 0.5s ease-in-out;
         }
         .team-avatar {
             width: 40px;
@@ -131,7 +132,6 @@
 </head>
 <body class="text-gray-300">
     <div id="app" class="container mx-auto p-4 md:p-6 max-w-7xl">
-        <!-- Header -->
         <header class="bg-gray-800/50 backdrop-blur-sm border border-gray-700 shadow-lg rounded-xl p-4 md:p-6 mb-8">
             <div class="flex flex-col md:flex-row justify-between items-center">
                 <div class="text-center md:text-left mb-4 md:mb-0">
@@ -139,7 +139,6 @@
                     <p id="tournament-title" class="text-gray-400 text-sm md:text-base mt-1">Cargando torneo...</p>
                 </div>
                 
-                <!-- User Auth Section -->
                 <div class="flex items-center space-x-4 mb-4 md:mb-0">
                     <div id="user-info" class="hidden items-center space-x-2">
                         <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
@@ -153,13 +152,10 @@
                     </button>
                 </div>
                 
-                <!-- Quick Group Links -->
                 <div id="group-links" class="flex flex-wrap justify-center gap-2">
-                    <!-- Los enlaces se generarán dinámicamente -->
-                </div>
+                    </div>
             </div>
             
-            <!-- Search Bar -->
             <div class="mt-4 w-full md:w-2/3 mx-auto">
                 <div class="relative">
                     <input type="text" id="player-search" placeholder="Buscar jugador por apellido..." 
@@ -171,9 +167,7 @@
             </div>
         </header>
 
-        <!-- Main Content -->
         <main id="content-area">
-            <!-- Tournament Overview -->
             <section id="tournament-overview" class="mb-8">
                 <div class="tournament-card rounded-xl p-6 shadow-lg">
                     <div class="flex flex-col md:flex-row justify-between items-center">
@@ -211,7 +205,6 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Progress Bar -->
                     <div class="mt-4">
                         <div class="flex justify-between text-sm text-gray-400 mb-1">
                             <span>Progreso del Torneo</span>
@@ -224,7 +217,6 @@
                 </div>
             </section>
 
-            <!-- Dashboard de Jugadores -->
             <section id="player-dashboard" class="mb-8 hidden">
                 <h2 class="text-2xl font-bold mb-4 text-center text-white">
                     <i class="fas fa-user-circle mr-2"></i>Mi Dashboard
@@ -245,7 +237,6 @@
                 </div>
             </section>
 
-            <!-- Statistics Section -->
             <section id="statistics-section" class="mb-8">
                 <h2 class="text-2xl font-bold mb-4 text-center text-white">Estadísticas del Torneo</h2>
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -268,7 +259,6 @@
                 </div>
             </section>
 
-            <!-- Navigation Tabs -->
             <div class="border-b border-gray-700 mb-6">
                 <nav class="flex -mb-px" id="main-tabs">
                     <button id="tab-groups" class="tab-active mobile-tab py-2 px-4 font-medium text-sm border-b-2 border-red-500 text-white">
@@ -289,9 +279,7 @@
                 </nav>
             </div>
 
-            <!-- Tab Contents -->
             <div id="tab-content">
-                <!-- Groups Tab -->
                 <div id="tab-content-groups" class="tab-content fade-in">
                     <section id="groups-section">
                         <h2 class="text-2xl font-bold mb-4 text-center text-white flex items-center justify-center gap-3">
@@ -299,12 +287,10 @@
                             Clasificación de Grupos
                         </h2>
                         <div id="groups-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-                            <!-- JS will inject group cards -->
-                        </div>
+                            </div>
                     </section>
                 </div>
 
-                <!-- Schedule Tab -->
                 <div id="tab-content-schedule" class="tab-content hidden fade-in">
                     <section id="schedule-section">
                         <h2 class="text-2xl font-bold mb-4 text-center text-white flex items-center justify-center gap-3">
@@ -325,12 +311,10 @@
                             </div>
                         </div>
                         <div id="schedule-container" class="space-y-3">
-                           <!-- JS will inject schedule items -->
-                        </div>
+                           </div>
                     </section>
                 </div>
 
-                <!-- Knockout Tab -->
                 <div id="tab-content-knockout" class="tab-content hidden fade-in">
                     <section id="knockout-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
                         <h2 class="text-2xl font-bold mb-6 text-center text-white">
@@ -338,12 +322,10 @@
                             Fase Eliminatoria
                         </h2>
                         <div class="flex flex-col md:flex-row md:justify-around space-y-8 md:space-y-0 md:space-x-4">
-                            <!-- JS will inject knockout rounds -->
-                        </div>
+                            </div>
                     </section>
                 </div>
 
-                <!-- Ranking Tab -->
                 <div id="tab-content-ranking" class="tab-content hidden fade-in">
                     <section id="ranking-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
                         <h2 class="text-2xl font-bold mb-6 text-center text-white">
@@ -367,14 +349,12 @@
                                     </tr>
                                 </thead>
                                 <tbody id="ranking-body" class="divide-y divide-gray-700">
-                                    <!-- JS will inject ranking rows -->
-                                </tbody>
+                                    </tbody>
                             </table>
                         </div>
                     </section>
                 </div>
 
-                <!-- Chat Tab -->
                 <div id="tab-content-chat" class="tab-content hidden fade-in">
                     <section id="tournament-chat" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
                         <h2 class="text-2xl font-bold mb-4 text-white">
@@ -394,9 +374,7 @@
             </div>
         </main>
 
-        <!-- Admin View -->
         <div id="admin-view" class="hidden mt-8">
-            <!-- Admin Tabs -->
             <div class="border-b border-gray-700 mb-6">
                 <nav class="flex -mb-px">
                     <button id="admin-tab-tournament" class="tab-active mobile-tab py-2 px-4 font-medium text-sm border-b-2 border-red-500 text-white">
@@ -414,7 +392,6 @@
                 </nav>
             </div>
             
-            <!-- Tournament Tab -->
             <div id="admin-tab-content-tournament" class="tab-content">
                 <section class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
                     <h2 class="text-2xl font-bold mb-6 text-center text-white">Configuración del Torneo</h2>
@@ -468,7 +445,7 @@
                         <h3 class="text-xl font-bold mb-4 text-white">Acciones del Torneo</h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <button id="generate-groups" class="bg-yellow-600 text-white font-bold py-3 rounded-lg hover:bg-yellow-700 transition-colors">
-                                <i class="fas fa-random mr-2"></i>Generar Grupos Automáticamente
+                                <i class="fas fa-random mr-2"></i>Generar Grupos y Partidos
                             </button>
                             <button id="generate-knockout" class="bg-purple-600 text-white font-bold py-3 rounded-lg hover:bg-purple-700 transition-colors">
                                 <i class="fas fa-trophy mr-2"></i>Generar Fase Eliminatoria
@@ -484,12 +461,10 @@
                 </section>
             </div>
             
-            <!-- Players Tab -->
             <div id="admin-tab-content-players" class="tab-content hidden">
                 <section class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
                     <h2 class="text-2xl font-bold mb-6 text-center text-white">Gestionar Parejas</h2>
                     
-                    <!-- Add Player Form -->
                     <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg mb-6">
                         <h3 class="text-xl font-bold mb-4 text-white">Agregar Nueva Pareja</h3>
                         <form id="add-player-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -506,11 +481,10 @@
                                 <input type="text" id="team-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="Apellido1 - Apellido2" required>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-1">Grupo</label>
-                                <select id="player-group" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Asignar a Grupo (Opcional)</label>
+                                <select id="player-group" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500">
                                     <option value="">Seleccionar Grupo</option>
-                                    <!-- Los grupos se generarán dinámicamente -->
-                                </select>
+                                    </select>
                             </div>
                             <div class="md:col-span-2">
                                 <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-colors">
@@ -520,36 +494,30 @@
                         </form>
                     </div>
                     
-                    <!-- Players List -->
                     <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
                         <h3 class="text-xl font-bold mb-4 text-white">Parejas Registradas</h3>
                         <div id="players-list" class="space-y-3">
-                            <!-- JS will inject players list -->
-                        </div>
+                            </div>
                     </div>
                 </section>
             </div>
             
-            <!-- Matches Tab -->
             <div id="admin-tab-content-matches" class="tab-content hidden">
                 <section id="admin-matches-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
                     <h2 class="text-2xl font-bold mb-6 text-center text-white">Actualizar Resultados</h2>
                     <div id="admin-matches-container" class="space-y-4">
-                        <!-- JS will inject admin forms -->
-                    </div>
+                        </div>
                 </section>
                 
-                <!-- Add Match Section -->
                 <section id="add-match-section" class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md mt-6">
-                    <h2 class="text-2xl font-bold mb-6 text-center text-white">Agregar Partido</h2>
+                    <h2 class="text-2xl font-bold mb-6 text-center text-white">Agregar Partido Manual</h2>
                     <form id="add-match-form" class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-300 mb-1">Grupo</label>
                                 <select id="new-match-group" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" required>
                                     <option value="">Seleccionar Grupo</option>
-                                    <!-- Los grupos se generarán dinámicamente -->
-                                </select>
+                                    </select>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-300 mb-1">Cancha</label>
@@ -581,7 +549,6 @@
                 </section>
             </div>
             
-            <!-- Analytics Tab -->
             <div id="admin-tab-content-analytics" class="tab-content hidden">
                 <section class="bg-gray-800 p-4 md:p-6 rounded-xl shadow-md">
                     <h2 class="text-2xl font-bold mb-6 text-center text-white">Analíticas del Torneo</h2>
@@ -653,7 +620,6 @@
         </footer>
     </div>
 
-    <!-- Admin Login Modal -->
     <div id="login-modal" class="modal-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden">
         <div class="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl p-8 w-full max-w-sm relative">
             <button id="close-modal-btn" class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">&times;</button>
@@ -676,12 +642,10 @@
         </div>
     </div>
 
-    <!-- User Login/Register Modal -->
     <div id="user-auth-modal" class="modal-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden">
         <div class="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl p-8 w-full max-w-sm relative">
             <button id="close-user-modal-btn" class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">&times;</button>
             
-            <!-- Login Form -->
             <div id="user-login-form">
                 <h2 class="text-2xl font-bold text-center mb-2 text-white">Acceso Jugadores</h2>
                 <p class="text-center text-gray-400 mb-6">Ingresa a tu cuenta</p>
@@ -704,7 +668,6 @@
                 </p>
             </div>
             
-            <!-- Register Form -->
             <div id="user-register-form" class="hidden">
                 <h2 class="text-2xl font-bold text-center mb-2 text-white">Crear Cuenta</h2>
                 <p class="text-center text-gray-400 mb-6">Regístrate como jugador</p>
@@ -737,458 +700,601 @@
         </div>
     </div>
 
-    <script>
-        // ===== CONFIGURACIONES MEJORADAS =====
-        const tournamentEnhancements = {
-            // Sistema de puntos configurable
-            scoringSystem: {
-                win: 3,
-                loss: 0,
-                tie: 1,
-                pointsPerSet: true
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // =================================================================================
+        // 1. STATE MANAGEMENT (El "cerebro" de la aplicación)
+        // =================================================================================
+        let appState = {
+            tournament: {
+                name: "Torneo de Pádel Matchpoint",
+                date: new Date().toISOString().split('T')[0],
+                courts: 4,
+                groups: 8,
+                setFormat: 'best-of-1',
+                scoringSystem: 'standard'
             },
-            
-            // Tipos de torneo
-            tournamentTypes: {
-                ROUND_ROBIN: "round_robin",
-                SINGLE_ELIMINATION: "single_elimination",
-                DOUBLE_ELIMINATION: "double_elimination"
-            },
-            
-            // Configuración de sets
-            setConfiguration: {
-                bestOf: 3, // al mejor de 3 sets
-                tieBreak: true,
-                pointsToWin: 6,
-                tieBreakPoints: 7
-            }
+            teams: [],
+            matches: [],
+            knockout: {},
+            isAdmin: false,
+            currentUser: null
         };
 
-        // ===== SISTEMA DE NOTIFICACIONES =====
-        class NotificationSystem {
-            static showNotification(message, type = 'info') {
-                const notification = document.createElement('div');
-                notification.className = `notification ${type}`;
-                notification.textContent = message;
-                
-                document.body.appendChild(notification);
-                
-                setTimeout(() => {
-                    notification.style.opacity = '0';
-                    setTimeout(() => {
-                        notification.remove();
-                    }, 300);
-                }, 5000);
-            }
-            
-            static confirmAction(message) {
-                return new Promise((resolve) => {
-                    const confirmed = window.confirm(message);
-                    resolve(confirmed);
-                });
-            }
+        const dom = {
+            // Vistas principales
+            app: document.getElementById('app'),
+            adminView: document.getElementById('admin-view'),
+            mainContent: document.getElementById('content-area'),
+
+            // Header y Overview
+            tournamentTitle: document.getElementById('tournament-title'),
+            overviewName: document.getElementById('overview-tournament-name'),
+            overviewDate: document.getElementById('overview-date'),
+            overviewTeams: document.getElementById('overview-teams'),
+            overviewCourts: document.getElementById('overview-courts'),
+            overviewGroups: document.getElementById('overview-groups'),
+            overviewMatches: document.getElementById('overview-matches'),
+            progressBar: document.getElementById('tournament-progress-bar'),
+            progressText: document.getElementById('tournament-progress-text'),
+
+            // Tabs principales
+            mainTabs: document.getElementById('main-tabs'),
+            tabContents: {
+                groups: document.getElementById('tab-content-groups'),
+                schedule: document.getElementById('tab-content-schedule'),
+                knockout: document.getElementById('tab-content-knockout'),
+                ranking: document.getElementById('tab-content-ranking'),
+                chat: document.getElementById('tab-content-chat'),
+            },
+
+            // Contenedores de contenido
+            groupsGrid: document.getElementById('groups-grid'),
+            scheduleContainer: document.getElementById('schedule-container'),
+            rankingBody: document.getElementById('ranking-body'),
+
+            // Admin: Configuración del Torneo
+            tournamentNameInput: document.getElementById('tournament-name'),
+            tournamentDateInput: document.getElementById('tournament-date'),
+            courtCountInput: document.getElementById('court-count'),
+            groupCountSelect: document.getElementById('group-count'),
+            setFormatSelect: document.getElementById('set-format'),
+            scoringSystemSelect: document.getElementById('scoring-system'),
+            saveTournamentSettingsBtn: document.getElementById('save-tournament-settings'),
+            generateGroupsBtn: document.getElementById('generate-groups'),
+            resetTournamentBtn: document.getElementById('reset-tournament'),
+
+            // Admin: Gestión de Parejas
+            addPlayerForm: document.getElementById('add-player-form'),
+            player1NameInput: document.getElementById('player1-name'),
+            player2NameInput: document.getElementById('player2-name'),
+            teamNameInput: document.getElementById('team-name'),
+            playerGroupSelect: document.getElementById('player-group'),
+            playersListContainer: document.getElementById('players-list'),
+
+            // Admin: Gestión de Partidos
+            adminMatchesContainer: document.getElementById('admin-matches-container'),
+
+            // Autenticación
+            adminLoginBtn: document.getElementById('admin-login-btn'),
+            logoutBtn: document.getElementById('logout-btn'),
+            loginModal: document.getElementById('login-modal'),
+            closeModalBtn: document.getElementById('close-modal-btn'),
+            loginForm: document.getElementById('login-form'),
+            loginError: document.getElementById('login-error')
+        };
+
+
+        // =================================================================================
+        // 2. RENDERING FUNCTIONS (Dibujan los datos en la pantalla)
+        // =================================================================================
+
+        function renderAll() {
+            renderTournamentInfo();
+            renderGroups();
+            renderSchedule();
+            renderRanking();
+            renderAdminView();
+            updateProgressBar();
         }
 
-        // ===== ACTUALIZACIONES EN TIEMPO REAL =====
-        class RealTimeUpdates {
-            constructor() {
-                this.socket = null;
-                this.initWebSocket();
-            }
-            
-            initWebSocket() {
-                // Simulación de conexión en tiempo real
-                this.socket = {
-                    on: (event, callback) => {
-                        if (event === 'matchUpdate') {
-                            // Simular actualizaciones cada 30 segundos
-                            setInterval(() => {
-                                this.simulateMatchUpdates();
-                            }, 30000);
-                        }
-                    }
-                };
-            }
-            
-            simulateMatchUpdates() {
-                // Actualizar partidos en curso
-                this.updateLiveMatches();
-            }
-            
-            updateLiveMatches() {
-                // En una aplicación real, aquí se actualizarían los partidos en tiempo real
-                const liveMatches = document.querySelectorAll('.live-match');
-                liveMatches.forEach(match => {
-                    // Simular actualización de puntuación
-                    const scores = match.querySelectorAll('.score');
-                    if (scores.length > 0) {
-                        // Simular cambio de score
-                        console.log('Actualizando partido en tiempo real:', match);
-                    }
-                });
-            }
+        function renderTournamentInfo() {
+            const { name, date } = appState.tournament;
+            const { teams, courts, groups, matches } = appState;
+            dom.tournamentTitle.textContent = name || "Gestor de Torneos";
+            dom.overviewName.textContent = name || "Torneo de Pádel";
+            dom.overviewDate.textContent = date ? new Date(date + 'T00:00:00').toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : "Fecha por definir";
+            dom.overviewTeams.textContent = `${teams.length} parejas`;
+            dom.overviewCourts.textContent = `${courts} canchas`;
+            dom.overviewGroups.textContent = groups;
+            dom.overviewMatches.textContent = matches.length;
+
+            // Stats
+            document.getElementById('stat-teams').textContent = teams.length;
+            const playedMatches = matches.filter(m => m.completed).length;
+            document.getElementById('stat-matches-played').textContent = playedMatches;
+            document.getElementById('stat-matches-pending').textContent = matches.length - playedMatches;
         }
 
-        // ===== ANALÍTICAS DEL TORNEO =====
-        class TournamentAnalytics {
-            generateMatchReport(matchId) {
-                // Generar reporte detallado del partido
-                console.log(`Generando reporte para el partido ${matchId}`);
-                NotificationSystem.showNotification('Reporte generado correctamente', 'success');
+        function updateProgressBar() {
+            const totalMatches = appState.matches.length;
+            if (totalMatches === 0) {
+                dom.progressBar.style.width = '0%';
+                dom.progressText.textContent = '0%';
+                return;
             }
-            
-            calculatePlayerStats(playerId) {
-                // Calcular estadísticas avanzadas del jugador
-                return {
-                    winRate: 0,
-                    averagePoints: 0,
-                    performanceTrend: 'up' // up, down, stable
-                };
-            }
-            
-            exportToPDF() {
-                // Exportar clasificación a PDF
-                console.log('Exportando a PDF...');
-                NotificationSystem.showNotification('Datos exportados a PDF', 'success');
-            }
+            const completedMatches = appState.matches.filter(m => m.completed).length;
+            const progress = Math.round((completedMatches / totalMatches) * 100);
+            dom.progressBar.style.width = `${progress}%`;
+            dom.progressText.textContent = `${progress}%`;
         }
 
-        // ===== OPTIMIZACIÓN PARA MÓVILES =====
-        class MobileOptimization {
-            constructor() {
-                this.isMobile = this.checkMobile();
-                this.optimizeForMobile();
-            }
-            
-            checkMobile() {
-                return window.innerWidth <= 768;
-            }
-            
-            optimizeForMobile() {
-                if (this.isMobile) {
-                    this.simplifyNavigation();
-                    this.optimizeTouchInteractions();
-                }
-            }
-            
-            simplifyNavigation() {
-                // Simplificar navegación para móviles
-                const nav = document.querySelector('#main-tabs');
-                if (nav) {
-                    nav.classList.add('overflow-x-auto', 'whitespace-nowrap');
-                }
-            }
-            
-            optimizeTouchInteractions() {
-                // Aumentar el tamaño de los botones para touch
-                const buttons = document.querySelectorAll('button');
-                buttons.forEach(btn => {
-                    if (!btn.classList.contains('mobile-optimized')) {
-                        btn.classList.add('min-h-10', 'mobile-optimized');
-                    }
-                });
-            }
-        }
+        function renderGroups() {
+            dom.groupsGrid.innerHTML = '';
+            for (let i = 1; i <= appState.tournament.groups; i++) {
+                const groupName = `Grupo ${String.fromCharCode(64 + i)}`;
+                const groupTeams = appState.teams
+                    .filter(t => t.group === groupName)
+                    .map(team => calculateTeamStats(team.id))
+                    .sort((a, b) => b.points - a.points || b.diff - a.diff);
 
-        // ===== GESTIÓN DE DATOS =====
-        class DataManager {
-            static autoSave() {
-                setInterval(() => {
-                    this.backupToLocalStorage();
-                }, 30000); // Auto-save cada 30 segundos
-            }
-            
-            static backupToLocalStorage() {
-                const tournamentData = this.getTournamentData();
-                localStorage.setItem('tournament_backup', JSON.stringify(tournamentData));
-                localStorage.setItem('last_backup', new Date().toISOString());
-                this.updateLastBackupTime();
-            }
-            
-            static restoreFromBackup() {
-                const backup = localStorage.getItem('tournament_backup');
-                if (backup) {
-                    return JSON.parse(backup);
-                }
-                return null;
-            }
-            
-            static getTournamentData() {
-                // Recopilar todos los datos del torneo
-                // Esta función debe ser implementada según la estructura de datos de la aplicación
-                return {
-                    teams: [],
-                    matches: [],
-                    groups: [],
-                    tournamentInfo: {}
-                };
-            }
-            
-            static updateLastBackupTime() {
-                const lastBackup = localStorage.getItem('last_backup');
-                const lastBackupTime = document.getElementById('last-backup-time');
-                if (lastBackupTime && lastBackup) {
-                    const date = new Date(lastBackup);
-                    lastBackupTime.textContent = date.toLocaleString();
-                }
-            }
-        }
-
-        // ===== CHAT DEL TORNEO =====
-        class TournamentChat {
-            constructor() {
-                this.messages = [];
-                this.init();
-            }
-            
-            init() {
-                const chatInput = document.getElementById('chat-input');
-                const sendButton = document.getElementById('send-message');
+                const groupCard = document.createElement('div');
+                groupCard.className = "group-card bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-700";
                 
-                if (chatInput && sendButton) {
-                    sendButton.addEventListener('click', () => {
-                        this.sendMessage(chatInput.value);
-                        chatInput.value = '';
-                    });
-                    
-                    chatInput.addEventListener('keypress', (e) => {
-                        if (e.key === 'Enter') {
-                            this.sendMessage(chatInput.value);
-                            chatInput.value = '';
-                        }
-                    });
-                }
-            }
-            
-            sendMessage(text) {
-                if (text.trim() === '') return;
-                
-                const message = {
-                    id: Date.now(),
-                    user: 'Jugador', // En una app real, usar el nombre del usuario logueado
-                    text: text,
-                    time: new Date().toLocaleTimeString()
-                };
-                
-                this.messages.push(message);
-                this.displayMessage(message);
-            }
-            
-            displayMessage(message) {
-                const chatMessages = document.getElementById('chat-messages');
-                if (!chatMessages) return;
-                
-                const messageElement = document.createElement('div');
-                messageElement.className = 'bg-gray-700 p-3 rounded-lg';
-                messageElement.innerHTML = `
-                    <div class="flex justify-between">
-                        <span class="font-bold text-blue-400">${message.user}</span>
-                        <span class="text-gray-400 text-sm">${message.time}</span>
-                    </div>
-                    <p class="mt-1">${message.text}</p>
-                `;
-                chatMessages.appendChild(messageElement);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }
-        }
-
-        // ===== DASHBOARD DE JUGADORES =====
-        class PlayerDashboard {
-            constructor() {
-                this.userData = null;
-            }
-            
-            loadUserData(userId) {
-                // Cargar datos del usuario desde localStorage o API
-                this.userData = JSON.parse(localStorage.getItem('user_data')) || {};
-                this.renderDashboard();
-            }
-            
-            renderDashboard() {
-                // Renderizar el dashboard con los datos del usuario
-                const dashboard = document.getElementById('player-dashboard');
-                if (dashboard && this.userData) {
-                    // Mostrar próximos partidos
-                    this.renderUpcomingMatches();
-                    // Mostrar estadísticas
-                    this.renderPlayerStats();
-                    // Mostrar información del grupo
-                    this.renderGroupInfo();
-                    
-                    dashboard.classList.remove('hidden');
-                }
-            }
-            
-            renderUpcomingMatches() {
-                const container = document.getElementById('my-upcoming-matches');
-                if (!container) return;
-                
-                // Datos de ejemplo
-                const matches = [
-                    { opponent: 'Pareja A', time: '10:00', court: 1 },
-                    { opponent: 'Pareja B', time: '12:30', court: 3 }
-                ];
-                
-                container.innerHTML = matches.map(match => `
-                    <div class="bg-gray-700 p-3 rounded-lg mb-2">
-                        <div class="font-semibold">vs ${match.opponent}</div>
-                        <div class="text-sm text-gray-400">${match.time} - Cancha ${match.court}</div>
-                    </div>
+                let teamsHtml = groupTeams.map((team, index) => `
+                    <tr class="border-b border-gray-700 last:border-b-0 hover:bg-gray-700/50">
+                        <td class="p-2">${index + 1}</td>
+                        <td class="p-2 font-medium text-white">${team.name}</td>
+                        <td class="p-2 text-center">${team.played}</td>
+                        <td class="p-2 text-center">${team.wins}</td>
+                        <td class="p-2 text-center">${team.diff > 0 ? '+' : ''}${team.diff}</td>
+                        <td class="p-2 text-center font-bold text-red-400">${team.points}</td>
+                    </tr>
                 `).join('');
-            }
-            
-            renderPlayerStats() {
-                const container = document.getElementById('my-stats');
-                if (!container) return;
-                
-                // Estadísticas de ejemplo
-                const stats = {
-                    matchesPlayed: 5,
-                    wins: 3,
-                    losses: 2,
-                    points: 9
-                };
-                
-                container.innerHTML = `
-                    <div class="grid grid-cols-2 gap-2 text-sm">
-                        <div>Partidos Jugados:</div>
-                        <div class="text-right">${stats.matchesPlayed}</div>
-                        <div>Victorias:</div>
-                        <div class="text-right">${stats.wins}</div>
-                        <div>Derrotas:</div>
-                        <div class="text-right">${stats.losses}</div>
-                        <div>Puntos:</div>
-                        <div class="text-right">${stats.points}</div>
+
+                if (groupTeams.length === 0) {
+                    teamsHtml = `<tr><td colspan="6" class="p-4 text-center text-gray-400">Sin parejas en este grupo.</td></tr>`;
+                }
+
+                groupCard.innerHTML = `
+                    <h3 class="text-xl font-bold mb-3 text-white text-center">${groupName}</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left table-responsive">
+                            <thead class="bg-gray-700 text-xs text-gray-300 uppercase">
+                                <tr>
+                                    <th class="p-2">#</th>
+                                    <th class="p-2">Pareja</th>
+                                    <th class="p-2 text-center">PJ</th>
+                                    <th class="p-2 text-center">PG</th>
+                                    <th class="p-2 text-center">DG</th>
+                                    <th class="p-2 text-center">Pts</th>
+                                </tr>
+                            </thead>
+                            <tbody>${teamsHtml}</tbody>
+                        </table>
                     </div>
                 `;
+                dom.groupsGrid.appendChild(groupCard);
             }
-            
-            renderGroupInfo() {
-                const container = document.getElementById('my-group-info');
-                if (!container) return;
+        }
+        
+        function renderSchedule() {
+            dom.scheduleContainer.innerHTML = '';
+            if (appState.matches.length === 0) {
+                dom.scheduleContainer.innerHTML = `<p class="text-center text-gray-400">No hay partidos programados. Genera los grupos y partidos desde el panel de administrador.</p>`;
+                return;
+            }
+            appState.matches.forEach(match => {
+                const team1 = findTeamById(match.team1Id);
+                const team2 = findTeamById(match.team2Id);
+                if (!team1 || !team2) return;
+
+                const card = document.createElement('div');
+                card.className = `match-card bg-gray-800 p-4 rounded-lg shadow-md border ${match.completed ? 'border-green-600/50' : 'border-gray-700'}`;
                 
-                // Información de grupo de ejemplo
-                container.innerHTML = `
-                    <div class="text-center">
-                        <div class="text-xl font-bold text-blue-400">Grupo B</div>
-                        <div class="text-sm text-gray-400 mt-1">Posición: 2/4</div>
-                        <div class="mt-3 text-sm">
-                            <div class="flex justify-between">
-                                <span>Próximo partido:</span>
-                                <span>14:00</span>
-                            </div>
+                card.innerHTML = `
+                    <div class="flex justify-between items-center text-xs text-gray-400 mb-2">
+                        <span>${match.group} - Cancha ${match.court}</span>
+                        <span>${match.time}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div class="text-center w-2/5">
+                            <div class="font-bold text-sm md:text-base text-white">${team1.name}</div>
+                            <div class="text-xs text-gray-400">${team1.player1} / ${team1.player2}</div>
+                        </div>
+                        <div class="text-xl md:text-2xl font-bold text-white px-2">
+                            ${match.completed ? `<span class="text-green-400">${match.score1} - ${match.score2}</span>` : '<span class="text-gray-500">vs</span>'}
+                        </div>
+                        <div class="text-center w-2/5">
+                            <div class="font-bold text-sm md:text-base text-white">${team2.name}</div>
+                            <div class="text-xs text-gray-400">${team2.player1} / ${team2.player2}</div>
                         </div>
                     </div>
+                    ${match.completed ? `<div class="text-center text-xs mt-2 text-green-500">Finalizado</div>` : ''}
                 `;
-            }
+                dom.scheduleContainer.appendChild(card);
+            });
+        }
+        
+        function renderRanking() {
+            const allTeamsStats = appState.teams.map(team => calculateTeamStats(team.id))
+                                              .sort((a, b) => b.points - a.points || b.diff - a.diff);
+            
+            dom.rankingBody.innerHTML = allTeamsStats.map((team, index) => `
+                <tr class="hover:bg-gray-700/50">
+                    <td class="px-4 py-3 font-bold">${index + 1}</td>
+                    <td class="px-4 py-3 text-white font-medium">${team.name}</td>
+                    <td class="px-4 py-3">${team.group}</td>
+                    <td class="px-4 py-3">${team.played}</td>
+                    <td class="px-4 py-3 text-green-400">${team.wins}</td>
+                    <td class="px-4 py-3 text-red-400">${team.losses}</td>
+                    <td class="px-4 py-3">${team.gamesFor}</td>
+                    <td class="px-4 py-3">${team.gamesAgainst}</td>
+                    <td class="px-4 py-3 font-bold ${team.diff >= 0 ? 'text-green-400' : 'text-red-400'}">${team.diff > 0 ? '+' : ''}${team.diff}</td>
+                    <td class="px-4 py-3 text-xl font-extrabold text-red-400">${team.points}</td>
+                </tr>
+            `).join('');
         }
 
-        // ===== GESTIÓN DE PROGRESO DEL TORNEO =====
-        class TournamentProgress {
-            constructor() {
-                this.totalMatches = 0;
-                this.completedMatches = 0;
-            }
-            
-            calculateProgress() {
-                // Calcular progreso basado en partidos completados
-                if (this.totalMatches === 0) return 0;
-                return Math.round((this.completedMatches / this.totalMatches) * 100);
-            }
-            
-            updateProgressBar() {
-                const progress = this.calculateProgress();
-                const progressBar = document.getElementById('tournament-progress-bar');
-                const progressText = document.getElementById('tournament-progress-text');
+        function renderAdminView() {
+            if (appState.isAdmin) {
+                dom.adminView.classList.remove('hidden');
+                dom.adminLoginBtn.classList.add('hidden');
+                dom.logoutBtn.classList.remove('hidden');
                 
-                if (progressBar) {
-                    progressBar.style.width = `${progress}%`;
-                }
+                // Cargar datos actuales en los formularios de admin
+                dom.tournamentNameInput.value = appState.tournament.name;
+                dom.tournamentDateInput.value = appState.tournament.date;
+                dom.courtCountInput.value = appState.tournament.courts;
+                dom.groupCountSelect.value = appState.tournament.groups;
                 
-                if (progressText) {
-                    progressText.textContent = `${progress}%`;
+                renderAdminGroupOptions();
+                renderAdminPlayersList();
+                renderAdminMatchesForms();
+            } else {
+                dom.adminView.classList.add('hidden');
+                dom.adminLoginBtn.classList.remove('hidden');
+                dom.logoutBtn.classList.add('hidden');
+            }
+        }
+        
+        function renderAdminGroupOptions() {
+            dom.playerGroupSelect.innerHTML = '<option value="">Sin asignar</option>';
+            for (let i = 1; i <= appState.tournament.groups; i++) {
+                const groupName = `Grupo ${String.fromCharCode(64 + i)}`;
+                dom.playerGroupSelect.innerHTML += `<option value="${groupName}">${groupName}</option>`;
+            }
+        }
+
+        function renderAdminPlayersList() {
+            dom.playersListContainer.innerHTML = appState.teams.map(team => `
+                <div class="flex justify-between items-center bg-gray-800 p-3 rounded-lg">
+                    <div>
+                        <p class="font-bold text-white">${team.name} <span class="text-xs text-gray-400 font-normal">(${team.group || 'Sin grupo'})</span></p>
+                        <p class="text-sm text-gray-300">${team.player1} / ${team.player2}</p>
+                    </div>
+                    <button class="delete-team-btn text-red-500 hover:text-red-400" data-id="${team.id}">&times; Eliminar</button>
+                </div>
+            `).join('');
+        }
+        
+        function renderAdminMatchesForms() {
+            dom.adminMatchesContainer.innerHTML = '';
+            if (appState.matches.length === 0) {
+                dom.adminMatchesContainer.innerHTML = `<p class="text-center text-gray-400">No hay partidos para mostrar. Genéralos primero.</p>`;
+                return;
+            }
+            appState.matches.forEach(match => {
+                const team1 = findTeamById(match.team1Id);
+                const team2 = findTeamById(match.team2Id);
+                if (!team1 || !team2) return;
+                
+                const form = document.createElement('form');
+                form.className = "update-match-form bg-gray-900 p-4 rounded-lg space-y-3";
+                form.dataset.id = match.id;
+                
+                form.innerHTML = `
+                    <p class="text-center font-bold text-white">${match.group} - Cancha ${match.court} (${match.time})</p>
+                    <div class="grid grid-cols-3 items-center gap-2">
+                        <label class="text-right text-gray-300">${team1.name}</label>
+                        <input type="number" name="score1" value="${match.score1}" class="w-full text-center bg-gray-700 border border-gray-600 rounded-md p-1" ${match.completed ? 'disabled' : ''}>
+                        <div class="text-sm text-gray-400">Resultado 1</div>
+                    </div>
+                    <div class="grid grid-cols-3 items-center gap-2">
+                        <label class="text-right text-gray-300">${team2.name}</label>
+                        <input type="number" name="score2" value="${match.score2}" class="w-full text-center bg-gray-700 border border-gray-600 rounded-md p-1" ${match.completed ? 'disabled' : ''}>
+                        <div class="text-sm text-gray-400">Resultado 2</div>
+                    </div>
+                    <button type="submit" class="w-full py-2 rounded-lg transition-colors ${match.completed ? 'bg-green-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}">
+                        ${match.completed ? 'Resultado Guardado' : 'Guardar Resultado'}
+                    </button>
+                `;
+                dom.adminMatchesContainer.appendChild(form);
+            });
+        }
+
+
+        // =================================================================================
+        // 3. LOGIC & HELPER FUNCTIONS (El "motor" que hace los cálculos)
+        // =================================================================================
+
+        function saveState() {
+            localStorage.setItem('padelTournamentState', JSON.stringify(appState));
+        }
+
+        function loadState() {
+            const savedState = localStorage.getItem('padelTournamentState');
+            if (savedState) {
+                appState = JSON.parse(savedState);
+            }
+        }
+
+        function findTeamById(id) {
+            return appState.teams.find(t => t.id === id);
+        }
+
+        function calculateTeamStats(teamId) {
+            const team = findTeamById(teamId);
+            if (!team) return {};
+
+            let stats = {
+                id: team.id,
+                name: team.name,
+                group: team.group,
+                played: 0,
+                wins: 0,
+                losses: 0,
+                gamesFor: 0,
+                gamesAgainst: 0,
+                diff: 0,
+                points: 0
+            };
+
+            appState.matches
+                .filter(m => (m.team1Id === teamId || m.team2Id === teamId) && m.completed)
+                .forEach(m => {
+                    stats.played++;
+                    const isTeam1 = m.team1Id === teamId;
+                    const scoreFor = isTeam1 ? m.score1 : m.score2;
+                    const scoreAgainst = isTeam1 ? m.score2 : m.score1;
+
+                    stats.gamesFor += scoreFor;
+                    stats.gamesAgainst += scoreAgainst;
+
+                    if (scoreFor > scoreAgainst) {
+                        stats.wins++;
+                        stats.points += 3;
+                    } else {
+                        stats.losses++;
+                    }
+                });
+
+            stats.diff = stats.gamesFor - stats.gamesAgainst;
+            return stats;
+        }
+
+        function generateRoundRobinMatches(groupName, teamsInGroup) {
+            const matches = [];
+            if (teamsInGroup.length < 2) return [];
+
+            for (let i = 0; i < teamsInGroup.length; i++) {
+                for (let j = i + 1; j < teamsInGroup.length; j++) {
+                    matches.push({
+                        id: `m-${Date.now()}-${Math.random()}`,
+                        group: groupName,
+                        team1Id: teamsInGroup[i].id,
+                        team2Id: teamsInGroup[j].id,
+                        score1: 0,
+                        score2: 0,
+                        court: 0,
+                        time: "00:00",
+                        completed: false
+                    });
                 }
             }
-            
-            setMatchesData(total, completed) {
-                this.totalMatches = total;
-                this.completedMatches = completed;
-                this.updateProgressBar();
-            }
+            return matches;
         }
 
-        // ===== INICIALIZACIÓN DE LA APLICACIÓN =====
-        document.addEventListener('DOMContentLoaded', function() {
-            // Inicializar optimización móvil
-            new MobileOptimization();
-            
-            // Inicializar chat
-            new TournamentChat();
-            
-            // Iniciar autoguardado
-            DataManager.autoSave();
-            DataManager.updateLastBackupTime();
-            
-            // Inicializar progreso del torneo
-            const tournamentProgress = new TournamentProgress();
-            tournamentProgress.setMatchesData(20, 5); // Ejemplo: 20 partidos totales, 5 completados
-            
-            // Inicializar dashboard (si el usuario está logueado)
-            const userDashboard = new PlayerDashboard();
-            // Simular usuario logueado para demostración
-            // userDashboard.loadUserData(1);
-            
-            // Configurar eventos de botones de analíticas
-            document.getElementById('generate-ranking-report')?.addEventListener('click', () => {
-                new TournamentAnalytics().generateMatchReport('demo');
+        // =================================================================================
+        // 4. EVENT LISTENERS (Conectan la UI con la lógica)
+        // =================================================================================
+        
+        function initializeEventListeners() {
+            // Navegación por Pestañas
+            dom.mainTabs.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON') {
+                    dom.mainTabs.querySelectorAll('button').forEach(btn => {
+                        btn.classList.remove('tab-active');
+                        btn.classList.add('text-gray-400', 'border-transparent');
+                    });
+                    e.target.classList.add('tab-active');
+                    e.target.classList.remove('text-gray-400', 'border-transparent');
+                    
+                    Object.values(dom.tabContents).forEach(content => content.classList.add('hidden'));
+                    
+                    if (e.target.id === 'tab-groups') dom.tabContents.groups.classList.remove('hidden');
+                    if (e.target.id === 'tab-schedule') dom.tabContents.schedule.classList.remove('hidden');
+                    if (e.target.id === 'tab-ranking') dom.tabContents.ranking.classList.remove('hidden');
+                    if (e.target.id === 'tab-chat') dom.tabContents.chat.classList.remove('hidden');
+                    if (e.target.id === 'tab-knockout') dom.tabContents.knockout.classList.remove('hidden');
+                }
             });
-            
-            document.getElementById('export-pdf')?.addEventListener('click', () => {
-                new TournamentAnalytics().exportToPDF();
-            });
-            
-            document.getElementById('backup-data')?.addEventListener('click', () => {
-                DataManager.backupToLocalStorage();
-                NotificationSystem.showNotification('Backup creado correctamente', 'success');
-            });
-            
-            // Iniciar simulador de tiempo real (solo en modo administrador o para partidos en vivo)
-            // new RealTimeUpdates();
-            
-            // Ejemplo de uso del sistema de notificaciones
-            // NotificationSystem.showNotification('Bienvenido a Matchpoint', 'info');
-        });
 
-        // ===== CÓDIGO EXISTENTE (SIMPLIFICADO) =====
-        // Aquí iría el resto del código JavaScript original de la aplicación
-        // que maneja la lógica de torneos, partidos, grupos, etc.
-        
-        // Por ejemplo:
-        let currentTournament = {
-            name: "Torneo Demo",
-            date: "2023-11-15",
-            courts: 4,
-            groups: 8,
-            teams: [],
-            matches: []
-        };
-        
-        // Función para cargar datos del torneo
-        function loadTournamentData() {
-            document.getElementById('overview-tournament-name').textContent = currentTournament.name;
-            document.getElementById('tournament-title').textContent = currentTournament.name;
-            document.getElementById('overview-date').textContent = currentTournament.date;
-            document.getElementById('overview-teams').textContent = `${currentTournament.teams.length} parejas`;
-            document.getElementById('overview-courts').textContent = `${currentTournament.courts} canchas`;
-            document.getElementById('overview-groups').textContent = currentTournament.groups;
+            // Admin: Guardar configuración
+            dom.saveTournamentSettingsBtn.addEventListener('click', () => {
+                appState.tournament.name = dom.tournamentNameInput.value;
+                appState.tournament.date = dom.tournamentDateInput.value;
+                appState.tournament.courts = parseInt(dom.courtCountInput.value);
+                appState.tournament.groups = parseInt(dom.groupCountSelect.value);
+                saveState();
+                renderAll();
+                alert('Configuración guardada!');
+            });
             
-            // Actualizar estadísticas
-            document.getElementById('stat-teams').textContent = currentTournament.teams.length;
-            // ... resto de actualizaciones
+            // Admin: Añadir Pareja
+            dom.addPlayerForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const newTeam = {
+                    id: `t-${Date.now()}`,
+                    player1: dom.player1NameInput.value,
+                    player2: dom.player2NameInput.value,
+                    name: dom.teamNameInput.value,
+                    group: dom.playerGroupSelect.value
+                };
+                appState.teams.push(newTeam);
+                saveState();
+                renderAll();
+                dom.addPlayerForm.reset();
+            });
+
+            // Admin: Eliminar Pareja
+            dom.playersListContainer.addEventListener('click', (e) => {
+                if (e.target.classList.contains('delete-team-btn')) {
+                    const teamId = e.target.dataset.id;
+                    if (confirm('¿Seguro que quieres eliminar esta pareja? Se eliminarán también sus partidos.')) {
+                        appState.teams = appState.teams.filter(t => t.id !== teamId);
+                        appState.matches = appState.matches.filter(m => m.team1Id !== teamId && m.team2Id !== teamId);
+                        saveState();
+                        renderAll();
+                    }
+                }
+            });
+            
+            // Admin: Generar Grupos y Partidos
+            dom.generateGroupsBtn.addEventListener('click', () => {
+                if (appState.teams.length === 0) {
+                    alert("Agrega parejas antes de generar los grupos.");
+                    return;
+                }
+                if (appState.matches.length > 0 && !confirm("Esto reiniciará los partidos existentes. ¿Continuar?")) return;
+
+                appState.matches = [];
+                const shuffledTeams = [...appState.teams].sort(() => 0.5 - Math.random());
+                const numGroups = appState.tournament.groups;
+                
+                // Asignar equipos a grupos
+                shuffledTeams.forEach((team, index) => {
+                    const groupIndex = (index % numGroups) + 1;
+                    team.group = `Grupo ${String.fromCharCode(64 + groupIndex)}`;
+                });
+
+                // Generar partidos para cada grupo
+                for (let i = 1; i <= numGroups; i++) {
+                    const groupName = `Grupo ${String.fromCharCode(64 + i)}`;
+                    const teamsInGroup = appState.teams.filter(t => t.group === groupName);
+                    const groupMatches = generateRoundRobinMatches(groupName, teamsInGroup);
+                    appState.matches.push(...groupMatches);
+                }
+
+                // Asignar canchas y horarios (lógica simple)
+                let courtCounter = 1;
+                let time = new Date();
+                time.setHours(9, 0, 0, 0);
+
+                appState.matches.forEach(match => {
+                    match.court = courtCounter;
+                    match.time = time.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+                    courtCounter++;
+                    if (courtCounter > appState.tournament.courts) {
+                        courtCounter = 1;
+                        time.setMinutes(time.getMinutes() + 45); // Siguiente turno
+                    }
+                });
+
+                saveState();
+                renderAll();
+                alert('Grupos y calendario de partidos generados!');
+            });
+            
+            // Admin: Actualizar resultado de partido
+            dom.adminMatchesContainer.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (!e.target.classList.contains('update-match-form')) return;
+                
+                const matchId = e.target.dataset.id;
+                const match = appState.matches.find(m => m.id === matchId);
+                if (!match || match.completed) return;
+
+                const score1 = parseInt(e.target.elements.score1.value);
+                const score2 = parseInt(e.target.elements.score2.value);
+                
+                if (isNaN(score1) || isNaN(score2)) {
+                    alert("Ingresa un resultado válido.");
+                    return;
+                }
+
+                match.score1 = score1;
+                match.score2 = score2;
+                match.completed = true;
+
+                saveState();
+                renderAll();
+            });
+            
+            // Admin: Resetear Torneo
+            dom.resetTournamentBtn.addEventListener('click', () => {
+                if (confirm('¿ESTÁS SEGURO? Esto borrará todas las parejas y partidos de forma permanente.')) {
+                    appState.teams = [];
+                    appState.matches = [];
+                    appState.knockout = {};
+                    saveState();
+                    renderAll();
+                    alert('Torneo reiniciado.');
+                }
+            });
+
+            // Autenticación de Admin
+            dom.adminLoginBtn.addEventListener('click', () => dom.loginModal.classList.remove('hidden'));
+            dom.closeModalBtn.addEventListener('click', () => dom.loginModal.classList.add('hidden'));
+            dom.logoutBtn.addEventListener('click', () => {
+                appState.isAdmin = false;
+                saveState();
+                renderAll();
+            });
+            
+            dom.loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const user = e.target.elements.username.value;
+                const pass = e.target.elements.password.value;
+
+                // Lógica de login simple (reemplazar con una real si es necesario)
+                if (user === 'admin' && pass === '1234') {
+                    appState.isAdmin = true;
+                    dom.loginModal.classList.add('hidden');
+                    dom.loginError.classList.add('hidden');
+                    saveState();
+                    renderAll();
+                } else {
+                    dom.loginError.classList.remove('hidden');
+                }
+            });
+            
+            // Lógica simple de las pestañas de admin
+            const adminTabs = document.querySelectorAll('#admin-view nav button');
+            const adminTabContents = document.querySelectorAll('#admin-view .tab-content');
+            adminTabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    adminTabs.forEach(t => t.classList.remove('tab-active'));
+                    tab.classList.add('tab-active');
+                    
+                    adminTabContents.forEach(content => content.classList.add('hidden'));
+                    const contentId = `admin-tab-content-${tab.id.split('-')[2]}`;
+                    document.getElementById(contentId).classList.remove('hidden');
+                });
+            });
+
         }
-        
-        // Inicializar datos del torneo
-        loadTournamentData();
-    </script>
+
+        // =================================================================================
+        // 5. INITIALIZATION (El arranque de la aplicación)
+        // =================================================================================
+
+        loadState();
+        renderAll();
+        initializeEventListeners();
+    });
+</script>
 </body>
 </html>
+
