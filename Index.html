@@ -230,6 +230,35 @@
             background: var(--primary);
         }
         
+        /* Estilos para el cuestionario de torneos */
+        .tournament-step {
+            animation: slideInRight 0.4s ease-out;
+        }
+        
+        .tournament-type-card {
+            @apply glass-card p-4 rounded-xl border-2 border-gray-700 cursor-pointer transition-all duration-300;
+        }
+        
+        .tournament-type-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .modality-option div, .level-option div, .age-option div, .team-option div, .schedule-option div {
+            transition: all 0.3s ease;
+        }
+        
+        .modality-option input:checked + div,
+        .level-option input:checked + div,
+        .age-option input:checked + div,
+        .team-option input:checked + div {
+            transform: scale(1.05);
+        }
+        
+        .schedule-option input:checked + div {
+            transform: scale(1.05);
+        }
+        
         /* Custom scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
@@ -531,17 +560,15 @@
                 </div>
             </div>
 
-            <!-- Resto de las páginas (se mantienen similares pero con mejoras de estilo) -->
             <!-- PAGINA: TORNEOS -->
             <div id="page-tournaments" class="page-content hidden">
-                <!-- Contenido mejorado de torneos -->
                 <div class="flex flex-col md:flex-row md:items-center justify-between mb-8">
                     <h2 class="text-4xl font-bold text-white mb-4 md:mb-0">Torneos</h2>
                     <div class="flex space-x-4">
                         <button class="bg-gray-800/50 hover:bg-gray-700 border border-gray-700 text-white px-4 py-2 rounded-lg transition-all text-sm font-medium">
                             <i class="fas fa-filter mr-2"></i>Filtrar
                         </button>
-                        <button class="btn-primary text-white px-4 py-2 rounded-lg transition-all text-sm font-medium">
+                        <button id="create-tournament-btn" class="btn-primary text-white px-4 py-2 rounded-lg transition-all text-sm font-medium">
                             <i class="fas fa-plus mr-2"></i>Nuevo Torneo
                         </button>
                     </div>
@@ -634,7 +661,7 @@
                 </div>
             </div>
 
-            <!-- PAGINAS EN CONSTRUCCION (con mejor diseño) -->
+            <!-- PAGINAS EN CONSTRUCCION -->
             <div id="page-bookings" class="page-content hidden">
                 <div class="text-center py-12">
                     <i class="fas fa-calendar-alt text-6xl text-gray-600 mb-4"></i>
@@ -677,7 +704,7 @@
         <i class="fas fa-plus"></i>
     </div>
 
-    <!-- MODAL DE LOGIN (mejorado) -->
+    <!-- MODAL DE LOGIN -->
     <div id="login-modal" class="modal-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
         <div class="glass-card border border-gray-700 rounded-xl shadow-2xl p-8 w-full max-w-sm relative transform transition-transform duration-300 scale-95">
             <button class="close-modal-btn absolute top-4 right-4 text-gray-400 hover:text-white transition-colors p-1 rounded-full">
@@ -725,7 +752,7 @@
         </div>
     </div>
 
-    <!-- MODAL DE REGISTRO (mejorado) -->
+    <!-- MODAL DE REGISTRO -->
     <div id="register-modal" class="modal-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
         <div class="glass-card border border-gray-700 rounded-xl shadow-2xl p-8 w-full max-w-lg relative transform transition-transform duration-300 scale-95">
             <button class="close-modal-btn absolute top-4 right-4 text-gray-400 hover:text-white transition-colors p-1 rounded-full">
@@ -763,7 +790,7 @@
                 </div>
             </div>
 
-            <!-- Paso 2: Formularios (Ocultos por defecto) -->
+            <!-- Paso 2: Formularios -->
             <div id="form-steps" class="hidden">
                 <button class="back-to-roles text-gray-400 hover:text-white transition-colors mb-6 flex items-center">
                     <i class="fas fa-arrow-left mr-2"></i>Volver a elegir rol
@@ -810,7 +837,420 @@
                     </button>
                 </form>
                 
-                <!-- Formularios para Organizador y Club (similares) -->
+                <!-- Formularios para Organizador y Club -->
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE CREACIÓN DE TORNEO - CUESTIONARIO -->
+    <div id="create-tournament-modal" class="modal-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
+        <div class="glass-card border border-gray-700 rounded-xl shadow-2xl w-full max-w-2xl relative max-h-[90vh] overflow-hidden">
+            <button class="close-modal-btn absolute top-4 right-4 text-gray-400 hover:text-white transition-colors p-2 rounded-full z-10">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+            
+            <!-- Barra de progreso -->
+            <div class="h-1 bg-gray-700">
+                <div id="tournament-progress-bar" class="h-full bg-gradient-to-r from-red-500 to-orange-500 transition-all duration-500" style="width: 0%"></div>
+            </div>
+            
+            <div class="p-8 overflow-y-auto" style="max-height: calc(90vh - 4rem)">
+                <!-- Paso 1: Tipo de Torneo -->
+                <div id="tournament-step-1" class="tournament-step">
+                    <div class="text-center mb-8">
+                        <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-trophy text-2xl text-red-400"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-white">Crear Nuevo Torneo</h2>
+                        <p class="text-gray-400 mt-2">Elige el tipo de torneo que quieres organizar</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                        <div class="tournament-type-card" data-type="american">
+                            <div class="bg-blue-500/10 p-4 rounded-lg mb-3">
+                                <i class="fas fa-users text-3xl text-blue-400"></i>
+                            </div>
+                            <h3 class="font-bold text-white text-lg mb-2">Torneo Americano</h3>
+                            <p class="text-gray-400 text-sm">Perfecto para grupos grandes. Todos juegan con todos en rotación.</p>
+                            <div class="mt-3 text-xs text-gray-500">
+                                <span class="inline-block bg-gray-700 px-2 py-1 rounded mr-2">8-32 jugadores</span>
+                                <span class="inline-block bg-gray-700 px-2 py-1 rounded">4+ horas</span>
+                            </div>
+                        </div>
+                        
+                        <div class="tournament-type-card" data-type="elimination">
+                            <div class="bg-red-500/10 p-4 rounded-lg mb-3">
+                                <i class="fas fa-chess-board text-3xl text-red-400"></i>
+                            </div>
+                            <h3 class="font-bold text-white text-lg mb-2">Eliminación Directa</h3>
+                            <p class="text-gray-400 text-sm">Clásico formato de playoff. Pierdes y quedas fuera.</p>
+                            <div class="mt-3 text-xs text-gray-500">
+                                <span class="inline-block bg-gray-700 px-2 py-1 rounded mr-2">8-16 parejas</span>
+                                <span class="inline-block bg-gray-700 px-2 py-1 rounded">2-3 horas</span>
+                            </div>
+                        </div>
+                        
+                        <div class="tournament-type-card" data-type="league">
+                            <div class="bg-green-500/10 p-4 rounded-lg mb-3">
+                                <i class="fas fa-table text-3xl text-green-400"></i>
+                            </div>
+                            <h3 class="font-bold text-white text-lg mb-2">Liga por Grupos</h3>
+                            <p class="text-gray-400 text-sm">Grupos fase regular + playoffs. Máxima competitividad.</p>
+                            <div class="mt-3 text-xs text-gray-500">
+                                <span class="inline-block bg-gray-700 px-2 py-1 rounded mr-2">12-24 parejas</span>
+                                <span class="inline-block bg-gray-700 px-2 py-1 rounded">Varias semanas</span>
+                            </div>
+                        </div>
+                        
+                        <div class="tournament-type-card" data-type="custom">
+                            <div class="bg-purple-500/10 p-4 rounded-lg mb-3">
+                                <i class="fas fa-cogs text-3xl text-purple-400"></i>
+                            </div>
+                            <h3 class="font-bold text-white text-lg mb-2">Personalizado</h3>
+                            <p class="text-gray-400 text-sm">Configura cada detalle a tu medida y necesidades.</p>
+                            <div class="mt-3 text-xs text-gray-500">
+                                <span class="inline-block bg-gray-700 px-2 py-1 rounded mr-2">Flexible</span>
+                                <span class="inline-block bg-gray-700 px-2 py-1 rounded">Total control</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end">
+                        <button class="next-step-btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-all font-medium">
+                            Siguiente <i class="fas fa-arrow-right ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Paso 2: Modalidad y Categoría -->
+                <div id="tournament-step-2" class="tournament-step hidden">
+                    <div class="text-center mb-8">
+                        <div class="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-venus-mars text-2xl text-blue-400"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-white">Modalidad y Categoría</h2>
+                        <p class="text-gray-400 mt-2">Define las características principales del torneo</p>
+                    </div>
+                    
+                    <div class="space-y-6">
+                        <div>
+                            <h3 class="text-lg font-semibold text-white mb-3">Modalidad</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <label class="modality-option">
+                                    <input type="radio" name="modality" value="masculino" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-4 text-center cursor-pointer transition-all hover:border-blue-500">
+                                        <i class="fas fa-mars text-2xl text-blue-400 mb-2"></i>
+                                        <p class="font-medium text-white">Masculino</p>
+                                    </div>
+                                </label>
+                                <label class="modality-option">
+                                    <input type="radio" name="modality" value="femenino" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-4 text-center cursor-pointer transition-all hover:border-pink-500">
+                                        <i class="fas fa-venus text-2xl text-pink-400 mb-2"></i>
+                                        <p class="font-medium text-white">Femenino</p>
+                                    </div>
+                                </label>
+                                <label class="modality-option">
+                                    <input type="radio" name="modality" value="mixto" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-4 text-center cursor-pointer transition-all hover:border-purple-500">
+                                        <i class="fas fa-venus-mars text-2xl text-purple-400 mb-2"></i>
+                                        <p class="font-medium text-white">Mixto</p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h3 class="text-lg font-semibold text-white mb-3">Nivel de Juego</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                <label class="level-option">
+                                    <input type="radio" name="level" value="iniciacion" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-green-500">
+                                        <div class="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                                            <span class="text-green-400 font-bold">I</span>
+                                        </div>
+                                        <p class="font-medium text-white text-sm">Iniciación</p>
+                                    </div>
+                                </label>
+                                <label class="level-option">
+                                    <input type="radio" name="level" value="intermedio" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-yellow-500">
+                                        <div class="w-8 h-8 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                                            <span class="text-yellow-400 font-bold">II</span>
+                                        </div>
+                                        <p class="font-medium text-white text-sm">Intermedio</p>
+                                    </div>
+                                </label>
+                                <label class="level-option">
+                                    <input type="radio" name="level" value="avanzado" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-orange-500">
+                                        <div class="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                                            <span class="text-orange-400 font-bold">III</span>
+                                        </div>
+                                        <p class="font-medium text-white text-sm">Avanzado</p>
+                                    </div>
+                                </label>
+                                <label class="level-option">
+                                    <input type="radio" name="level" value="competitivo" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-red-500">
+                                        <div class="w-8 h-8 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                                            <span class="text-red-400 font-bold">IV</span>
+                                        </div>
+                                        <p class="font-medium text-white text-sm">Competitivo</p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h3 class="text-lg font-semibold text-white mb-3">Categoría de Edad</h3>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <label class="age-option">
+                                    <input type="radio" name="ageCategory" value="open" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-blue-500">
+                                        <p class="font-medium text-white text-sm">Open</p>
+                                        <p class="text-gray-400 text-xs">Sin límite</p>
+                                    </div>
+                                </label>
+                                <label class="age-option">
+                                    <input type="radio" name="ageCategory" value="sub19" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-green-500">
+                                        <p class="font-medium text-white text-sm">Sub-19</p>
+                                        <p class="text-gray-400 text-xs">Hasta 19 años</p>
+                                    </div>
+                                </label>
+                                <label class="age-option">
+                                    <input type="radio" name="ageCategory" value="veteranos" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-purple-500">
+                                        <p class="font-medium text-white text-sm">+35</p>
+                                        <p class="text-gray-400 text-xs">Veteranos</p>
+                                    </div>
+                                </label>
+                                <label class="age-option">
+                                    <input type="radio" name="ageCategory" value="senior" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-orange-500">
+                                        <p class="font-medium text-white text-sm">+45</p>
+                                        <p class="text-gray-400 text-xs">Senior</p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between mt-8">
+                        <button class="prev-step-btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-all font-medium">
+                            <i class="fas fa-arrow-left mr-2"></i> Anterior
+                        </button>
+                        <button class="next-step-btn bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-all font-medium">
+                            Siguiente <i class="fas fa-arrow-right ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Paso 3: Configuración de Participantes -->
+                <div id="tournament-step-3" class="tournament-step hidden">
+                    <div class="text-center mb-8">
+                        <div class="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-users text-2xl text-green-400"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-white">Participantes</h2>
+                        <p class="text-gray-400 mt-2">Configura el número de participantes y formato</p>
+                    </div>
+                    
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-lg font-semibold text-white mb-3">Número de Parejas</label>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <label class="team-option">
+                                    <input type="radio" name="teamCount" value="8" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-4 text-center cursor-pointer transition-all hover:border-blue-500">
+                                        <p class="text-2xl font-bold text-white">8</p>
+                                        <p class="text-gray-400 text-xs">Parejas</p>
+                                    </div>
+                                </label>
+                                <label class="team-option">
+                                    <input type="radio" name="teamCount" value="12" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-4 text-center cursor-pointer transition-all hover:border-blue-500">
+                                        <p class="text-2xl font-bold text-white">12</p>
+                                        <p class="text-gray-400 text-xs">Parejas</p>
+                                    </div>
+                                </label>
+                                <label class="team-option">
+                                    <input type="radio" name="teamCount" value="16" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-4 text-center cursor-pointer transition-all hover:border-blue-500">
+                                        <p class="text-2xl font-bold text-white">16</p>
+                                        <p class="text-gray-400 text-xs">Parejas</p>
+                                    </div>
+                                </label>
+                                <label class="team-option">
+                                    <input type="radio" name="teamCount" value="custom" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-4 text-center cursor-pointer transition-all hover:border-purple-500">
+                                        <p class="text-2xl font-bold text-white">#</p>
+                                        <p class="text-gray-400 text-xs">Personalizado</p>
+                                    </div>
+                                </label>
+                            </div>
+                            
+                            <div id="custom-team-count" class="hidden mt-4">
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Número exacto de parejas</label>
+                                <input type="number" min="4" max="32" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50" placeholder="Ej: 20">
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-lg font-semibold text-white mb-3">Formato de Inscripción</label>
+                            <div class="space-y-3">
+                                <label class="flex items-center space-x-3 cursor-pointer">
+                                    <input type="radio" name="registrationType" value="open" class="text-blue-500 focus:ring-blue-500">
+                                    <div>
+                                        <p class="font-medium text-white">Inscripción Abierta</p>
+                                        <p class="text-gray-400 text-sm">Cualquier pareja puede inscribirse hasta completar cupos</p>
+                                    </div>
+                                </label>
+                                <label class="flex items-center space-x-3 cursor-pointer">
+                                    <input type="radio" name="registrationType" value="invitation" class="text-blue-500 focus:ring-blue-500">
+                                    <div>
+                                        <p class="font-medium text-white">Por Invitación</p>
+                                        <p class="text-gray-400 text-sm">Solo las parejas invitadas pueden participar</p>
+                                    </div>
+                                </label>
+                                <label class="flex items-center space-x-3 cursor-pointer">
+                                    <input type="radio" name="registrationType" value="qualification" class="text-blue-500 focus:ring-blue-500">
+                                    <div>
+                                        <p class="font-medium text-white">Con Clasificación</p>
+                                        <p class="text-gray-400 text-sm">Fase previa de clasificación para determinar participantes</p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between mt-8">
+                        <button class="prev-step-btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-all font-medium">
+                            <i class="fas fa-arrow-left mr-2"></i> Anterior
+                        </button>
+                        <button class="next-step-btn bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-all font-medium">
+                            Siguiente <i class="fas fa-arrow-right ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Paso 4: Fechas y Horarios -->
+                <div id="tournament-step-4" class="tournament-step hidden">
+                    <div class="text-center mb-8">
+                        <div class="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-calendar-alt text-2xl text-purple-400"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-white">Fechas y Horarios</h2>
+                        <p class="text-gray-400 mt-2">Programa la duración del torneo</p>
+                    </div>
+                    
+                    <div class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Fecha de Inicio</label>
+                                <input type="date" id="startDate" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Fecha de Fin</label>
+                                <input type="date" id="endDate" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50">
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-lg font-semibold text-white mb-3">Horarios Preferidos</label>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <label class="schedule-option">
+                                    <input type="checkbox" name="schedule" value="morning" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-yellow-500">
+                                        <i class="fas fa-sun text-yellow-400 text-xl mb-2"></i>
+                                        <p class="font-medium text-white text-sm">Mañana</p>
+                                        <p class="text-gray-400 text-xs">8:00 - 12:00</p>
+                                    </div>
+                                </label>
+                                <label class="schedule-option">
+                                    <input type="checkbox" name="schedule" value="afternoon" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-orange-500">
+                                        <i class="fas fa-cloud-sun text-orange-400 text-xl mb-2"></i>
+                                        <p class="font-medium text-white text-sm">Tarde</p>
+                                        <p class="text-gray-400 text-xs">12:00 - 18:00</p>
+                                    </div>
+                                </label>
+                                <label class="schedule-option">
+                                    <input type="checkbox" name="schedule" value="evening" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-blue-500">
+                                        <i class="fas fa-moon text-blue-400 text-xl mb-2"></i>
+                                        <p class="font-medium text-white text-sm">Noche</p>
+                                        <p class="text-gray-400 text-xs">18:00 - 22:00</p>
+                                    </div>
+                                </label>
+                                <label class="schedule-option">
+                                    <input type="checkbox" name="schedule" value="weekend" class="hidden">
+                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-green-500">
+                                        <i class="fas fa-calendar-day text-green-400 text-xl mb-2"></i>
+                                        <p class="font-medium text-white text-sm">Fin de Semana</p>
+                                        <p class="text-gray-400 text-xs">Sáb/Dom</p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-lg font-semibold text-white mb-3">Duración Estimada</label>
+                            <div class="bg-gray-800/50 rounded-lg p-4">
+                                <div id="duration-estimate" class="text-center">
+                                    <p class="text-2xl font-bold text-white">-</p>
+                                    <p class="text-gray-400 text-sm">Basado en tu configuración</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between mt-8">
+                        <button class="prev-step-btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-all font-medium">
+                            <i class="fas fa-arrow-left mr-2"></i> Anterior
+                        </button>
+                        <button class="next-step-btn bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-all font-medium">
+                            Siguiente <i class="fas fa-arrow-right ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Paso 5: Resumen y Confirmación -->
+                <div id="tournament-step-5" class="tournament-step hidden">
+                    <div class="text-center mb-8">
+                        <div class="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-check-circle text-2xl text-green-400"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-white">Resumen del Torneo</h2>
+                        <p class="text-gray-400 mt-2">Revisa la configuración antes de crear el torneo</p>
+                    </div>
+                    
+                    <div class="glass-card rounded-xl p-6 mb-6">
+                        <div id="tournament-summary" class="space-y-4">
+                            <!-- El resumen se llenará dinámicamente -->
+                        </div>
+                    </div>
+                    
+                    <div class="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 mb-6">
+                        <div class="flex items-start">
+                            <i class="fas fa-exclamation-triangle text-yellow-400 mt-1 mr-3"></i>
+                            <div>
+                                <p class="text-yellow-300 font-medium">¡Atención!</p>
+                                <p class="text-yellow-200 text-sm">Una vez creado el torneo, no podrás modificar su formato básico. Revisa cuidadosamente la configuración.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between">
+                        <button class="prev-step-btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-all font-medium">
+                            <i class="fas fa-arrow-left mr-2"></i> Anterior
+                        </button>
+                        <button id="create-tournament-final" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg transition-all font-medium flex items-center">
+                            <i class="fas fa-plus-circle mr-2"></i> Crear Torneo
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -873,13 +1313,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // --- Botón de acción rápida ---
     quickActionBtn.addEventListener('click', () => {
-        // Aquí podrías abrir un modal de acción rápida o realizar una acción común
         document.getElementById('register-modal').classList.remove('hidden');
     });
     
     // --- Lógica de Modales ---
     const loginModal = document.getElementById('login-modal');
     const registerModal = document.getElementById('register-modal');
+    const createTournamentModal = document.getElementById('create-tournament-modal');
     
     document.getElementById('login-btn').addEventListener('click', () => {
         loginModal.classList.remove('hidden');
@@ -1060,10 +1500,374 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // =================================================================================
+    // SISTEMA DE CREACIÓN DE TORNEO - CUESTIONARIO
+    // =================================================================================
+    function initializeTournamentCreation() {
+        const tournamentSteps = document.querySelectorAll('.tournament-step');
+        const progressBar = document.getElementById('tournament-progress-bar');
+        let currentStep = 1;
+        let tournamentData = {};
+
+        // Abrir modal de creación de torneo
+        document.getElementById('create-tournament-btn').addEventListener('click', function() {
+            createTournamentModal.classList.remove('hidden');
+            resetTournamentCreation();
+        });
+
+        // Navegación entre pasos
+        document.querySelectorAll('.next-step-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (validateStep(currentStep)) {
+                    saveStepData(currentStep);
+                    currentStep++;
+                    showStep(currentStep);
+                    updateProgressBar();
+                }
+            });
+        });
+
+        document.querySelectorAll('.prev-step-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                currentStep--;
+                showStep(currentStep);
+                updateProgressBar();
+            });
+        });
+
+        // Selección de tipo de torneo
+        document.querySelectorAll('.tournament-type-card').forEach(card => {
+            card.addEventListener('click', function() {
+                document.querySelectorAll('.tournament-type-card').forEach(c => {
+                    c.classList.remove('border-blue-500', 'bg-blue-500/10');
+                });
+                this.classList.add('border-blue-500', 'bg-blue-500/10');
+                tournamentData.type = this.dataset.type;
+            });
+        });
+
+        // Selección de modalidad
+        document.querySelectorAll('.modality-option').forEach(option => {
+            option.addEventListener('click', function() {
+                document.querySelectorAll('.modality-option').forEach(o => {
+                    o.querySelector('div').classList.remove('border-blue-500', 'border-pink-500', 'border-purple-500', 'bg-blue-500/10', 'bg-pink-500/10', 'bg-purple-500/10');
+                });
+                const input = this.querySelector('input');
+                input.checked = true;
+                const div = this.querySelector('div');
+                if (input.value === 'masculino') {
+                    div.classList.add('border-blue-500', 'bg-blue-500/10');
+                } else if (input.value === 'femenino') {
+                    div.classList.add('border-pink-500', 'bg-pink-500/10');
+                } else {
+                    div.classList.add('border-purple-500', 'bg-purple-500/10');
+                }
+            });
+        });
+
+        // Selección de nivel
+        document.querySelectorAll('.level-option').forEach(option => {
+            option.addEventListener('click', function() {
+                document.querySelectorAll('.level-option').forEach(o => {
+                    o.querySelector('div').classList.remove('border-green-500', 'border-yellow-500', 'border-orange-500', 'border-red-500', 'bg-green-500/10', 'bg-yellow-500/10', 'bg-orange-500/10', 'bg-red-500/10');
+                });
+                const input = this.querySelector('input');
+                input.checked = true;
+                const div = this.querySelector('div');
+                const colorMap = {
+                    'iniciacion': ['border-green-500', 'bg-green-500/10'],
+                    'intermedio': ['border-yellow-500', 'bg-yellow-500/10'],
+                    'avanzado': ['border-orange-500', 'bg-orange-500/10'],
+                    'competitivo': ['border-red-500', 'bg-red-500/10']
+                };
+                div.classList.add(...colorMap[input.value]);
+            });
+        });
+
+        // Selección de categoría de edad
+        document.querySelectorAll('.age-option').forEach(option => {
+            option.addEventListener('click', function() {
+                document.querySelectorAll('.age-option').forEach(o => {
+                    o.querySelector('div').classList.remove('border-blue-500', 'border-green-500', 'border-purple-500', 'border-orange-500', 'bg-blue-500/10', 'bg-green-500/10', 'bg-purple-500/10', 'bg-orange-500/10');
+                });
+                const input = this.querySelector('input');
+                input.checked = true;
+                const div = this.querySelector('div');
+                div.classList.add('border-blue-500', 'bg-blue-500/10');
+            });
+        });
+
+        // Selección de número de equipos
+        document.querySelectorAll('.team-option').forEach(option => {
+            option.addEventListener('click', function() {
+                document.querySelectorAll('.team-option').forEach(o => {
+                    o.querySelector('div').classList.remove('border-blue-500', 'border-purple-500', 'bg-blue-500/10', 'bg-purple-500/10');
+                });
+                const input = this.querySelector('input');
+                input.checked = true;
+                const div = this.querySelector('div');
+                
+                if (input.value === 'custom') {
+                    div.classList.add('border-purple-500', 'bg-purple-500/10');
+                    document.getElementById('custom-team-count').classList.remove('hidden');
+                } else {
+                    div.classList.add('border-blue-500', 'bg-blue-500/10');
+                    document.getElementById('custom-team-count').classList.add('hidden');
+                }
+            });
+        });
+
+        // Selección de horarios
+        document.querySelectorAll('.schedule-option').forEach(option => {
+            option.addEventListener('click', function() {
+                const input = this.querySelector('input');
+                input.checked = !input.checked;
+                const div = this.querySelector('div');
+                
+                if (input.checked) {
+                    const colorMap = {
+                        'morning': ['border-yellow-500', 'bg-yellow-500/10'],
+                        'afternoon': ['border-orange-500', 'bg-orange-500/10'],
+                        'evening': ['border-blue-500', 'bg-blue-500/10'],
+                        'weekend': ['border-green-500', 'bg-green-500/10']
+                    };
+                    div.classList.add(...colorMap[input.value]);
+                } else {
+                    div.classList.remove('border-yellow-500', 'border-orange-500', 'border-blue-500', 'border-green-500', 'bg-yellow-500/10', 'bg-orange-500/10', 'bg-blue-500/10', 'bg-green-500/10');
+                }
+            });
+        });
+
+        // Crear torneo final
+        document.getElementById('create-tournament-final').addEventListener('click', function() {
+            saveStepData(currentStep);
+            if (validateStep(currentStep)) {
+                createTournament();
+            }
+        });
+
+        function showStep(step) {
+            tournamentSteps.forEach(s => s.classList.add('hidden'));
+            document.getElementById(`tournament-step-${step}`).classList.remove('hidden');
+        }
+
+        function updateProgressBar() {
+            const progress = ((currentStep - 1) / (tournamentSteps.length - 1)) * 100;
+            progressBar.style.width = `${progress}%`;
+        }
+
+        function validateStep(step) {
+            switch(step) {
+                case 1:
+                    if (!tournamentData.type) {
+                        showError('Por favor selecciona un tipo de torneo');
+                        return false;
+                    }
+                    return true;
+                case 2:
+                    const modality = document.querySelector('input[name="modality"]:checked');
+                    const level = document.querySelector('input[name="level"]:checked');
+                    const ageCategory = document.querySelector('input[name="ageCategory"]:checked');
+                    
+                    if (!modality || !level || !ageCategory) {
+                        showError('Por favor completa todas las opciones de modalidad y categoría');
+                        return false;
+                    }
+                    return true;
+                case 3:
+                    const teamCount = document.querySelector('input[name="teamCount"]:checked');
+                    const registrationType = document.querySelector('input[name="registrationType"]:checked');
+                    
+                    if (!teamCount || !registrationType) {
+                        showError('Por favor completa la configuración de participantes');
+                        return false;
+                    }
+                    
+                    if (teamCount.value === 'custom') {
+                        const customCount = document.querySelector('#custom-team-count input');
+                        if (!customCount.value || customCount.value < 4) {
+                            showError('El número de parejas debe ser al menos 4');
+                            return false;
+                        }
+                    }
+                    return true;
+                case 4:
+                    const startDate = document.getElementById('startDate').value;
+                    const endDate = document.getElementById('endDate').value;
+                    const schedules = document.querySelectorAll('input[name="schedule"]:checked');
+                    
+                    if (!startDate || !endDate) {
+                        showError('Por favor selecciona las fechas de inicio y fin');
+                        return false;
+                    }
+                    
+                    if (schedules.length === 0) {
+                        showError('Por favor selecciona al menos un horario preferido');
+                        return false;
+                    }
+                    return true;
+                case 5:
+                    return true;
+                default:
+                    return true;
+            }
+        }
+
+        function saveStepData(step) {
+            switch(step) {
+                case 1:
+                    // Ya se guarda en el evento click
+                    break;
+                case 2:
+                    tournamentData.modality = document.querySelector('input[name="modality"]:checked').value;
+                    tournamentData.level = document.querySelector('input[name="level"]:checked').value;
+                    tournamentData.ageCategory = document.querySelector('input[name="ageCategory"]:checked').value;
+                    break;
+                case 3:
+                    tournamentData.teamCount = document.querySelector('input[name="teamCount"]:checked').value;
+                    if (tournamentData.teamCount === 'custom') {
+                        tournamentData.customTeamCount = document.querySelector('#custom-team-count input').value;
+                    }
+                    tournamentData.registrationType = document.querySelector('input[name="registrationType"]:checked').value;
+                    break;
+                case 4:
+                    tournamentData.startDate = document.getElementById('startDate').value;
+                    tournamentData.endDate = document.getElementById('endDate').value;
+                    tournamentData.schedules = Array.from(document.querySelectorAll('input[name="schedule"]:checked')).map(input => input.value);
+                    updateDurationEstimate();
+                    updateSummary();
+                    break;
+            }
+        }
+
+        function updateDurationEstimate() {
+            const durationElement = document.getElementById('duration-estimate');
+            let duration = '1 día';
+            
+            if (tournamentData.type === 'league') {
+                const teamCount = tournamentData.teamCount === 'custom' ? tournamentData.customTeamCount : tournamentData.teamCount;
+                if (teamCount >= 16) duration = '3-4 semanas';
+                else if (teamCount >= 12) duration = '2-3 semanas';
+                else duration = '1-2 semanas';
+            } else if (tournamentData.type === 'american') {
+                duration = '1 día completo';
+            } else {
+                duration = '1-2 días';
+            }
+            
+            durationElement.querySelector('p:first-child').textContent = duration;
+        }
+
+        function updateSummary() {
+            const summaryElement = document.getElementById('tournament-summary');
+            const typeNames = {
+                'american': 'Torneo Americano',
+                'elimination': 'Eliminación Directa',
+                'league': 'Liga por Grupos',
+                'custom': 'Personalizado'
+            };
+            
+            const modalityNames = {
+                'masculino': 'Masculino',
+                'femenino': 'Femenino',
+                'mixto': 'Mixto'
+            };
+            
+            const levelNames = {
+                'iniciacion': 'Iniciación',
+                'intermedio': 'Intermedio',
+                'avanzado': 'Avanzado',
+                'competitivo': 'Competitivo'
+            };
+
+            const teamCount = tournamentData.teamCount === 'custom' ? tournamentData.customTeamCount : tournamentData.teamCount;
+
+            summaryElement.innerHTML = `
+                <div class="flex justify-between items-center py-2 border-b border-gray-700">
+                    <span class="text-gray-400">Tipo de Torneo:</span>
+                    <span class="font-semibold text-white">${typeNames[tournamentData.type]}</span>
+                </div>
+                <div class="flex justify-between items-center py-2 border-b border-gray-700">
+                    <span class="text-gray-400">Modalidad:</span>
+                    <span class="font-semibold text-white">${modalityNames[tournamentData.modality]}</span>
+                </div>
+                <div class="flex justify-between items-center py-2 border-b border-gray-700">
+                    <span class="text-gray-400">Nivel:</span>
+                    <span class="font-semibold text-white">${levelNames[tournamentData.level]}</span>
+                </div>
+                <div class="flex justify-between items-center py-2 border-b border-gray-700">
+                    <span class="text-gray-400">Parejas:</span>
+                    <span class="font-semibold text-white">${teamCount} parejas</span>
+                </div>
+                <div class="flex justify-between items-center py-2 border-b border-gray-700">
+                    <span class="text-gray-400">Fechas:</span>
+                    <span class="font-semibold text-white">${formatDate(tournamentData.startDate)} - ${formatDate(tournamentData.endDate)}</span>
+                </div>
+                <div class="flex justify-between items-center py-2">
+                    <span class="text-gray-400">Horarios:</span>
+                    <span class="font-semibold text-white">${tournamentData.schedules.join(', ')}</span>
+                </div>
+            `;
+        }
+
+        function formatDate(dateString) {
+            const options = { day: 'numeric', month: 'short' };
+            return new Date(dateString).toLocaleDateString('es-ES', options);
+        }
+
+        function createTournament() {
+            // Aquí iría la lógica para crear el torneo en el backend
+            console.log('Creando torneo con datos:', tournamentData);
+            
+            // Simulación de creación exitosa
+            showSuccess('¡Torneo creado exitosamente!');
+            createTournamentModal.classList.add('hidden');
+            
+            // Redirigir a la página del torneo creado
+            setTimeout(() => {
+                document.querySelector('[data-page="tournaments"]').click();
+            }, 2000);
+        }
+
+        function showError(message) {
+            alert(message);
+        }
+
+        function showSuccess(message) {
+            alert(message);
+        }
+
+        function resetTournamentCreation() {
+            currentStep = 1;
+            tournamentData = {};
+            showStep(currentStep);
+            updateProgressBar();
+            
+            // Resetear todas las selecciones
+            document.querySelectorAll('.tournament-type-card, .modality-option, .level-option, .age-option, .team-option, .schedule-option').forEach(el => {
+                el.querySelector('div').classList.remove(
+                    'border-blue-500', 'border-pink-500', 'border-purple-500', 'border-green-500', 
+                    'border-yellow-500', 'border-orange-500', 'border-red-500',
+                    'bg-blue-500/10', 'bg-pink-500/10', 'bg-purple-500/10', 'bg-green-500/10',
+                    'bg-yellow-500/10', 'bg-orange-500/10', 'bg-red-500/10'
+                );
+            });
+            
+            document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(input => {
+                input.checked = false;
+            });
+            
+            document.getElementById('custom-team-count').classList.add('hidden');
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+        }
+    }
+
+    // =================================================================================
     // INICIALIZACIÓN
     // =================================================================================
     updateAuthUI();
     initializeCharts();
+    initializeTournamentCreation();
     
     // Simular datos de usuario para demostración
     setTimeout(() => {
