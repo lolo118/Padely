@@ -46,9 +46,12 @@
     </style>
 </head>
 <body class="text-gray-300">
-    <div class="flex h-screen bg-gray-900">
+    <div class="relative min-h-screen lg:flex">
+        <!-- Overlay para menú móvil -->
+        <div id="menu-overlay" class="fixed inset-0 bg-black/60 z-30 hidden lg:hidden"></div>
+
         <!-- Barra de Navegación Lateral -->
-        <aside class="w-64 flex-shrink-0 bg-gray-800 p-4 flex flex-col justify-between">
+        <aside id="sidebar" class="fixed inset-y-0 left-0 w-64 bg-gray-800 p-4 flex flex-col justify-between transform -translate-x-full lg:translate-x-0 lg:static lg:flex-shrink-0 z-40 transition-transform duration-300 ease-in-out">
             <div>
                 <div class="text-center mb-10">
                     <h1 class="text-3xl font-extrabold text-white tracking-tight">Padely</h1>
@@ -94,6 +97,10 @@
 
         <!-- Contenido Principal -->
         <main class="flex-1 overflow-y-auto p-4 md:p-8">
+            <!-- Botón de Menú Móvil -->
+            <button id="menu-toggle" class="lg:hidden fixed top-4 left-4 z-50 bg-gray-800 p-2 rounded-md text-white">
+                <i class="fas fa-bars"></i>
+            </button>
             
             <!-- PAGINA: INICIO -->
             <div id="page-home" class="page-content">
@@ -460,23 +467,37 @@
 document.addEventListener('DOMContentLoaded', function() {
     
     // =================================================================================
-    // 1. NAVEGACIÓN PRINCIPAL
+    // 1. NAVEGACIÓN PRINCIPAL Y MENÚ MÓVIL
     // =================================================================================
     const navLinks = document.querySelectorAll('.nav-link');
     const pages = document.querySelectorAll('.page-content');
+    const menuToggle = document.getElementById('menu-toggle');
+    const sidebar = document.getElementById('sidebar');
+    const menuOverlay = document.getElementById('menu-overlay');
+
+    const toggleMenu = () => {
+        sidebar.classList.toggle('-translate-x-full');
+        menuOverlay.classList.toggle('hidden');
+    };
+
+    menuToggle.addEventListener('click', toggleMenu);
+    menuOverlay.addEventListener('click', toggleMenu);
 
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
             const pageId = link.dataset.page;
 
-            pages.forEach(page => {
-                page.classList.add('hidden');
-            });
+            pages.forEach(page => page.classList.add('hidden'));
             document.getElementById(`page-${pageId}`).classList.remove('hidden');
 
             navLinks.forEach(nav => nav.classList.remove('active'));
             link.classList.add('active');
+
+            // Cerrar menú en móvil al seleccionar una opción
+            if (window.innerWidth < 1024) {
+                toggleMenu();
+            }
         });
     });
 
