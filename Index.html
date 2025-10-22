@@ -43,6 +43,13 @@
             background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
             border: 1px solid #4b5563;
         }
+        .role-card {
+            transition: all 0.2s ease-in-out;
+        }
+        .role-card:hover {
+            transform: translateY(-5px);
+            border-color: #ef4444;
+        }
     </style>
 </head>
 <body class="text-gray-300">
@@ -51,8 +58,9 @@
         <div id="menu-overlay" class="fixed inset-0 bg-black/60 z-30 hidden lg:hidden"></div>
 
         <!-- Barra de Navegación Lateral -->
-        <aside id="sidebar" class="fixed inset-y-0 left-0 w-64 bg-gray-800 p-4 flex flex-col justify-between transform -translate-x-full lg:translate-x-0 lg:static lg:flex-shrink-0 z-40 transition-transform duration-300 ease-in-out">
-            <div>
+        <aside id="sidebar" class="fixed inset-y-0 left-0 w-64 bg-gray-800 p-4 flex flex-col h-screen transform -translate-x-full lg:translate-x-0 lg:static lg:flex-shrink-0 z-40 transition-transform duration-300 ease-in-out">
+            <!-- Sección superior (scrollable) -->
+            <div class="flex-1 overflow-y-auto">
                 <div class="text-center mb-10">
                     <h1 class="text-3xl font-extrabold text-white tracking-tight">Padely</h1>
                     <p class="text-gray-400 text-sm">Tu Mundo de Pádel</p>
@@ -84,74 +92,76 @@
                     </a>
                 </nav>
             </div>
-            <div class="text-center">
-                 <button id="admin-login-btn" class="w-full bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors text-sm mb-2">
-                    <i class="fas fa-user-shield mr-2"></i>Acceso Administrador
-                </button>
-                <button id="logout-btn" class="hidden w-full bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm mb-2">
-                    <i class="fas fa-sign-out-alt mr-2"></i>Cerrar Sesión Admin
-                </button>
-                <p class="text-gray-500 text-xs">&copy; 2025 Padely.</p>
+            <!-- Sección inferior (fija) -->
+            <div class="flex-shrink-0 pt-4 border-t border-gray-700">
+                <!-- Perfil de Usuario (Logueado) -->
+                <div id="user-profile" class="hidden items-center p-2 mb-2">
+                    <div class="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center text-white font-bold mr-3">
+                        <span id="user-initials"></span>
+                    </div>
+                    <div>
+                        <p class="font-bold text-white" id="user-name"></p>
+                        <p class="text-xs text-gray-400" id="user-role"></p>
+                    </div>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div class="space-y-2">
+                    <button id="register-btn" class="w-full bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm">
+                        <i class="fas fa-user-plus mr-2"></i>Registrarse
+                    </button>
+                    <button id="login-btn" class="w-full bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors text-sm">
+                        <i class="fas fa-sign-in-alt mr-2"></i>Login
+                    </button>
+                    <button id="logout-btn" class="hidden w-full bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors text-sm">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Cerrar Sesión
+                    </button>
+                </div>
+                <p class="text-gray-500 text-xs text-center pt-4">&copy; 2025 Padely.</p>
             </div>
         </aside>
 
         <!-- Contenido Principal -->
-        <main class="flex-1 overflow-y-auto p-4 md:p-8">
-            <!-- Botón de Menú Móvil -->
-            <button id="menu-toggle" class="lg:hidden fixed top-4 left-4 z-50 bg-gray-800 p-2 rounded-md text-white">
-                <i class="fas fa-bars"></i>
-            </button>
+        <main class="flex-1 overflow-y-auto p-4 md:p-8 pt-20 lg:pt-8">
+            <!-- Botón de Menú Móvil y Header -->
+            <div class="lg:hidden fixed top-0 left-0 right-0 bg-gray-900/80 backdrop-blur-sm h-16 flex items-center px-4 z-20 border-b border-gray-700">
+                <button id="menu-toggle" class="text-white">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+                <h2 id="mobile-header-title" class="text-xl font-bold text-white ml-4">Inicio</h2>
+            </div>
             
             <!-- PAGINA: INICIO -->
             <div id="page-home" class="page-content">
                 <h2 class="text-4xl font-bold text-white mb-8">Inicio</h2>
-
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    
-                    <!-- Columna Principal (Noticias y Torneos) -->
                     <div class="lg:col-span-2 space-y-8">
-                        
-                        <!-- Sección de Noticias/Novedades -->
                         <div>
                             <h3 class="text-2xl font-semibold text-white mb-4">Novedades y Anuncios</h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <!-- Noticia Principal -->
                                 <div class="md:col-span-2 bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-red-500/20 transition-shadow duration-300">
-                                    <div class="bg-gray-700 h-56 w-full flex items-center justify-center text-gray-500">
-                                        <i class="fas fa-image text-4xl"></i>
-                                    </div>
+                                    <div class="bg-gray-700 h-56 w-full flex items-center justify-center text-gray-500"><i class="fas fa-image text-4xl"></i></div>
                                     <div class="p-6">
                                         <h4 class="font-bold text-xl text-white mb-2">¡Nueva Apertura de Canchas Panorámicas!</h4>
-                                        <p class="text-gray-400 mb-4">
-                                            Estamos emocionados de anunciar la inauguración de nuestras 3 nuevas canchas panorámicas. Ven a probar la mejor experiencia de pádel.
-                                        </p>
+                                        <p class="text-gray-400 mb-4">Estamos emocionados de anunciar la inauguración de nuestras 3 nuevas canchas panorámicas.</p>
                                         <a href="#" class="text-red-500 hover:text-red-400 font-semibold">Leer más &rarr;</a>
                                     </div>
                                 </div>
-                                <!-- Noticia Secundaria 1 -->
                                 <div class="bg-gray-800 rounded-lg p-6 shadow-lg hover:shadow-red-500/20 transition-shadow duration-300">
-                                    <h4 class="font-bold text-lg text-white mb-2">Clases de Perfeccionamiento con Pro</h4>
-                                    <p class="text-gray-400 text-sm mb-3">
-                                       Mejora tu víbora y bandeja con nuestras nuevas clases grupales.
-                                    </p>
+                                    <h4 class="font-bold text-lg text-white mb-2">Clases de Perfeccionamiento</h4>
+                                    <p class="text-gray-400 text-sm mb-3">Mejora tu víbora y bandeja con nuestras nuevas clases grupales.</p>
                                     <a href="#" class="text-red-500 hover:text-red-400 font-semibold text-sm">Inscríbete</a>
                                 </div>
-                                <!-- Noticia Secundaria 2 -->
                                 <div class="bg-gray-800 rounded-lg p-6 shadow-lg hover:shadow-red-500/20 transition-shadow duration-300">
                                     <h4 class="font-bold text-lg text-white mb-2">Liga Interna de Verano</h4>
-                                    <p class="text-gray-400 text-sm mb-3">
-                                       Anotate en la liga de verano y compite para ser el mejor del club.
-                                    </p>
+                                    <p class="text-gray-400 text-sm mb-3">Anotate en la liga de verano y compite para ser el mejor del club.</p>
                                     <a href="#" class="text-red-500 hover:text-red-400 font-semibold text-sm">Más Info</a>
                                 </div>
                             </div>
                         </div>
-
-                        <!-- Sección de Torneos Activos -->
                         <div>
                             <h3 class="text-2xl font-semibold text-white mb-4">Torneos Activos</h3>
                             <div class="space-y-4">
-                                <!-- Torneo 1 -->
                                 <div class="bg-gray-800 rounded-lg p-4 flex justify-between items-center shadow-lg hover:shadow-red-500/20 transition-shadow duration-300">
                                     <div>
                                         <p class="font-bold text-white">Torneo Americano 5ta Categoría</p>
@@ -159,7 +169,6 @@
                                     </div>
                                     <a href="#" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm font-semibold">Ver Cuadros</a>
                                 </div>
-                                <!-- Torneo 2 -->
                                 <div class="bg-gray-800 rounded-lg p-4 flex justify-between items-center shadow-lg hover:shadow-red-500/20 transition-shadow duration-300">
                                     <div>
                                         <p class="font-bold text-white">Torneo Femenino C</p>
@@ -169,58 +178,37 @@
                                 </div>
                             </div>
                         </div>
-
                     </div>
-
-                    <!-- Columna Lateral (Turnos Libres) -->
                     <div class="lg:col-span-1">
                         <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
                             <h3 class="text-2xl font-semibold text-white mb-4">Turnos Libres Hoy</h3>
                             <div class="space-y-4">
-                                <!-- Turno 1 -->
                                 <div class="bg-gray-900 rounded-md p-3 flex justify-between items-center">
-                                    <div>
-                                        <p class="font-semibold text-white">Cancha 1 (Cristal)</p>
-                                        <p class="text-sm text-green-400">Ahora: 12:00 PM</p>
-                                    </div>
+                                    <div><p class="font-semibold text-white">Cancha 1 (Cristal)</p><p class="text-sm text-green-400">Ahora: 12:00 PM</p></div>
                                     <a href="#" class="bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-700 text-xs font-bold">RESERVAR</a>
                                 </div>
-                                <!-- Turno 2 -->
                                 <div class="bg-gray-900 rounded-md p-3 flex justify-between items-center">
-                                    <div>
-                                        <p class="font-semibold text-white">Cancha 3 (Cemento)</p>
-                                        <p class="text-sm text-gray-300">Próximo: 13:30 PM</p>
-                                    </div>
+                                    <div><p class="font-semibold text-white">Cancha 3 (Cemento)</p><p class="text-sm text-gray-300">Próximo: 13:30 PM</p></div>
                                     <a href="#" class="bg-gray-600 text-white px-3 py-1 rounded-md hover:bg-gray-700 text-xs font-bold">RESERVAR</a>
                                 </div>
-                                <!-- Turno 3 -->
                                 <div class="bg-gray-900 rounded-md p-3 flex justify-between items-center">
-                                    <div>
-                                        <p class="font-semibold text-white">Cancha 2 (Panorámica)</p>
-                                        <p class="text-sm text-gray-300">Próximo: 15:00 PM</p>
-                                    </div>
+                                    <div><p class="font-semibold text-white">Cancha 2 (Panorámica)</p><p class="text-sm text-gray-300">Próximo: 15:00 PM</p></div>
                                     <a href="#" class="bg-gray-600 text-white px-3 py-1 rounded-md hover:bg-gray-700 text-xs font-bold">RESERVAR</a>
                                 </div>
-                                 <!-- Turno 4 -->
                                 <div class="bg-gray-900 rounded-md p-3 flex justify-between items-center">
-                                    <div>
-                                        <p class="font-semibold text-white">Cancha 1 (Cristal)</p>
-                                        <p class="text-sm text-gray-300">Próximo: 16:30 PM</p>
-                                    </div>
+                                    <div><p class="font-semibold text-white">Cancha 1 (Cristal)</p><p class="text-sm text-gray-300">Próximo: 16:30 PM</p></div>
                                     <a href="#" class="bg-gray-600 text-white px-3 py-1 rounded-md hover:bg-gray-700 text-xs font-bold">RESERVAR</a>
                                 </div>
                             </div>
                             <button class="w-full mt-6 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition-colors">Ver todos los turnos</button>
                         </div>
                     </div>
-
                 </div>
             </div>
 
-            <!-- PAGINA: TORNEOS (Contenido anterior movido aquí) -->
+            <!-- PAGINA: TORNEOS -->
             <div id="page-tournaments" class="page-content hidden">
                 <div id="app" class="container mx-auto max-w-7xl">
-                    <!-- Header -->
                     <header class="bg-gray-800/50 backdrop-blur-sm border border-gray-700 shadow-lg rounded-xl p-4 md:p-6 mb-8">
                         <div class="flex flex-col md:flex-row justify-between items-center">
                             <div class="text-center md:text-left mb-4 md:mb-0">
@@ -229,237 +217,175 @@
                             </div>
                             <div class="mt-4 w-full md:w-1/3">
                                 <div class="relative">
-                                    <input type="text" id="player-search" placeholder="Buscar jugador por apellido..." 
-                                           class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                                    <input type="text" id="player-search" placeholder="Buscar jugador por apellido..." class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500">
                                     <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
                                 </div>
                             </div>
                         </div>
                     </header>
-            
-                    <!-- Main Content -->
                     <main id="content-area">
-                        <!-- Tournament Overview -->
                         <section id="tournament-overview" class="mb-8">
                             <div class="tournament-card rounded-xl p-6 shadow-lg">
                                 <div class="flex flex-col md:flex-row justify-between items-center">
                                     <div>
                                         <h2 class="text-2xl font-bold text-white" id="overview-tournament-name">Torneo de Pádel</h2>
                                         <div class="flex flex-wrap gap-4 mt-2 text-sm">
-                                            <div class="flex items-center">
-                                                <i class="fas fa-calendar-alt w-4 h-4 mr-2 text-gray-400"></i>
-                                                <span id="overview-date" class="text-gray-300">Fecha por definir</span>
-                                            </div>
-                                            <div class="flex items-center">
-                                                <i class="fas fa-users w-4 h-4 mr-2 text-gray-400"></i>
-                                                <span id="overview-teams" class="text-gray-300">0 parejas</span>
-                                            </div>
-                                            <div class="flex items-center">
-                                                <i class="fas fa-th w-4 h-4 mr-2 text-gray-400"></i>
-                                                <span id="overview-courts" class="text-gray-300">0 canchas</span>
-                                            </div>
+                                            <div class="flex items-center"><i class="fas fa-calendar-alt w-4 h-4 mr-2 text-gray-400"></i><span id="overview-date">Fecha por definir</span></div>
+                                            <div class="flex items-center"><i class="fas fa-users w-4 h-4 mr-2 text-gray-400"></i><span id="overview-teams">0 parejas</span></div>
+                                            <div class="flex items-center"><i class="fas fa-th w-4 h-4 mr-2 text-gray-400"></i><span id="overview-courts">0 canchas</span></div>
                                         </div>
                                     </div>
                                     <div class="mt-4 md:mt-0 flex space-x-4">
-                                        <div class="bg-gray-800 rounded-lg p-3 text-center">
-                                            <div class="text-2xl font-bold text-white" id="overview-groups">0</div>
-                                            <div class="text-xs text-gray-400">Grupos</div>
-                                        </div>
-                                        <div class="bg-gray-800 rounded-lg p-3 text-center">
-                                            <div class="text-2xl font-bold text-white" id="overview-matches">0</div>
-                                            <div class="text-xs text-gray-400">Partidos</div>
-                                        </div>
+                                        <div class="bg-gray-800 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-white" id="overview-groups">0</div><div class="text-xs text-gray-400">Grupos</div></div>
+                                        <div class="bg-gray-800 rounded-lg p-3 text-center"><div class="text-2xl font-bold text-white" id="overview-matches">0</div><div class="text-xs text-gray-400">Partidos</div></div>
                                     </div>
                                 </div>
-                                <!-- Progress Bar -->
                                 <div class="mt-4">
-                                    <div class="flex justify-between text-sm text-gray-400 mb-1">
-                                        <span>Progreso del Torneo</span>
-                                        <span id="tournament-progress-text">0%</span>
-                                    </div>
-                                    <div class="w-full bg-gray-700 rounded-full h-2">
-                                        <div id="tournament-progress-bar" class="bg-red-500 h-2 rounded-full" style="width: 0%; transition: width 0.5s ease;"></div>
-                                    </div>
+                                    <div class="flex justify-between text-sm text-gray-400 mb-1"><span>Progreso</span><span id="tournament-progress-text">0%</span></div>
+                                    <div class="w-full bg-gray-700 rounded-full h-2"><div id="tournament-progress-bar" class="bg-red-500 h-2 rounded-full" style="width: 0%; transition: width 0.5s ease;"></div></div>
                                 </div>
                             </div>
                         </section>
-            
-                        <!-- Navigation Tabs -->
                         <div class="border-b border-gray-700 mb-6">
                             <nav class="flex -mb-px" id="main-tabs">
-                                <button data-tab="groups" class="tab-button tab-active mobile-tab py-2 px-4 font-medium text-sm border-b-2">
-                                    <i class="fas fa-users mr-2"></i>Grupos
-                                </button>
-                                <button data-tab="schedule" class="tab-button mobile-tab py-2 px-4 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-white">
-                                    <i class="fas fa-calendar-alt mr-2"></i>Partidos
-                                </button>
-                                <button data-tab="ranking" class="tab-button mobile-tab py-2 px-4 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-white">
-                                    <i class="fas fa-chart-line mr-2"></i>Clasificación
-                                </button>
+                                <button data-tab="groups" class="tab-button tab-active py-2 px-4 font-medium text-sm border-b-2"><i class="fas fa-users mr-2"></i>Grupos</button>
+                                <button data-tab="schedule" class="tab-button py-2 px-4 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-white"><i class="fas fa-calendar-alt mr-2"></i>Partidos</button>
+                                <button data-tab="ranking" class="tab-button py-2 px-4 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-white"><i class="fas fa-chart-line mr-2"></i>Clasificación</button>
                             </nav>
                         </div>
-            
-                        <!-- Tab Contents -->
                         <div id="tab-content">
-                            <div id="tab-content-groups" class="tab-inner-content">
-                                <div id="groups-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"></div>
-                            </div>
-                            <div id="tab-content-schedule" class="tab-inner-content hidden">
-                                <div id="schedule-container" class="space-y-3"></div>
-                            </div>
+                            <div id="tab-content-groups" class="tab-inner-content"><div id="groups-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"></div></div>
+                            <div id="tab-content-schedule" class="tab-inner-content hidden"><div id="schedule-container" class="space-y-3"></div></div>
                             <div id="tab-content-ranking" class="tab-inner-content hidden">
                                 <div class="overflow-x-auto bg-gray-800 rounded-xl p-4">
                                     <table class="min-w-full divide-y divide-gray-700">
-                                        <thead>
-                                            <tr>
-                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">#</th>
-                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Pareja</th>
-                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Grupo</th>
-                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">PJ</th>
-                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">PG</th>
-                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">PP</th>
-                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">DG</th>
-                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Pts</th>
-                                            </tr>
-                                        </thead>
+                                        <thead><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">#</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Pareja</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Grupo</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">PJ</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">PG</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">PP</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">DG</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Pts</th></tr></thead>
                                         <tbody id="ranking-body" class="divide-y divide-gray-700"></tbody>
                                     </table>
                                 </div>
                             </div>
                         </div>
                     </main>
-            
-                    <!-- Admin View -->
                     <div id="admin-view" class="hidden mt-8">
                         <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-6">
                             <h2 class="text-2xl font-bold mb-6 text-center text-white">Panel de Administrador</h2>
-                            <!-- Admin Tabs -->
                              <div class="border-b border-gray-700 mb-6">
                                 <nav class="flex -mb-px" id="admin-tabs">
-                                    <button data-tab="tournament" class="tab-button tab-active mobile-tab py-2 px-4 font-medium text-sm border-b-2"><i class="fas fa-cog mr-2"></i>Torneo</button>
-                                    <button data-tab="players" class="tab-button mobile-tab py-2 px-4 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-white"><i class="fas fa-users mr-2"></i>Parejas</button>
-                                    <button data-tab="matches" class="tab-button mobile-tab py-2 px-4 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-white"><i class="fas fa-calendar-alt mr-2"></i>Partidos</button>
+                                    <button data-tab="tournament" class="tab-button tab-active py-2 px-4 font-medium text-sm border-b-2"><i class="fas fa-cog mr-2"></i>Torneo</button>
+                                    <button data-tab="players" class="tab-button py-2 px-4 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-white"><i class="fas fa-users mr-2"></i>Parejas</button>
+                                    <button data-tab="matches" class="tab-button py-2 px-4 font-medium text-sm border-b-2 border-transparent text-gray-400 hover:text-white"><i class="fas fa-calendar-alt mr-2"></i>Partidos</button>
                                 </nav>
                             </div>
-                            
-                            <!-- Admin Tournament Tab -->
                             <div id="admin-tab-content-tournament" class="tab-inner-content">
-                                <!-- Tournament Settings Form -->
                                 <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg mb-6">
                                     <h3 class="text-xl font-bold mb-4 text-white">Información General</h3>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-300 mb-1">Nombre del Torneo</label>
-                                            <input type="text" id="tournament-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500">
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-300 mb-1">Fecha</label>
-                                            <input type="date" id="tournament-date" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500">
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-300 mb-1">Cantidad de Canchas</label>
-                                            <input type="number" id="court-count" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500" min="1" max="10" value="4">
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-300 mb-1">Cantidad de Grupos</label>
-                                            <select id="group-count" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500">
-                                                <option value="4">4 Grupos</option>
-                                                <option value="6">6 Grupos</option>
-                                                <option value="8" selected>8 Grupos</option>
-                                            </select>
-                                        </div>
-                                        <div class="md:col-span-2">
-                                            <button id="save-tournament-settings" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors">Guardar Configuración</button>
-                                        </div>
+                                        <div><label class="block text-sm font-medium text-gray-300 mb-1">Nombre</label><input type="text" id="tournament-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white"></div>
+                                        <div><label class="block text-sm font-medium text-gray-300 mb-1">Fecha</label><input type="date" id="tournament-date" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white"></div>
+                                        <div><label class="block text-sm font-medium text-gray-300 mb-1">Canchas</label><input type="number" id="court-count" class="w-full px-3 py-2 bg-gray-700 rounded-md" min="1" max="10" value="4"></div>
+                                        <div><label class="block text-sm font-medium text-gray-300 mb-1">Grupos</label><select id="group-count" class="w-full px-3 py-2 bg-gray-700 rounded-md text-white"><option value="4">4</option><option value="6">6</option><option value="8" selected>8</option></select></div>
+                                        <div class="md:col-span-2"><button id="save-tournament-settings" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700">Guardar</button></div>
                                     </div>
                                 </div>
                                 <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
-                                    <h3 class="text-xl font-bold mb-4 text-white">Acciones del Torneo</h3>
+                                    <h3 class="text-xl font-bold mb-4 text-white">Acciones</h3>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <button id="generate-groups" class="bg-yellow-600 text-white font-bold py-3 rounded-lg hover:bg-yellow-700 transition-colors"><i class="fas fa-random mr-2"></i>Generar Grupos y Partidos</button>
-                                        <button id="reset-tournament" class="bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700 transition-colors"><i class="fas fa-trash-alt mr-2"></i>Reiniciar Torneo</button>
+                                        <button id="generate-groups" class="bg-yellow-600 text-white font-bold py-3 rounded-lg hover:bg-yellow-700"><i class="fas fa-random mr-2"></i>Generar Grupos/Partidos</button>
+                                        <button id="reset-tournament" class="bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700"><i class="fas fa-trash-alt mr-2"></i>Reiniciar Torneo</button>
                                     </div>
                                 </div>
                             </div>
-                            
-                             <!-- Admin Players Tab -->
                             <div id="admin-tab-content-players" class="tab-inner-content hidden">
-                                <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg mb-6">
-                                    <h3 class="text-xl font-bold mb-4 text-white">Agregar Nueva Pareja</h3>
-                                    <form id="add-player-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <input type="text" id="player1-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white" placeholder="Jugador 1 (Apellido, Nombre)" required>
-                                        <input type="text" id="player2-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white" placeholder="Jugador 2 (Apellido, Nombre)" required>
-                                        <input type="text" id="team-name" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white" placeholder="Nombre de Pareja" required>
-                                        <select id="player-group" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white">
-                                            <option value="">Asignar a Grupo (Opcional)</option>
-                                        </select>
-                                        <div class="md:col-span-2">
-                                            <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-colors"><i class="fas fa-plus-circle mr-2"></i>Agregar Pareja</button>
-                                        </div>
-                                    </form>
-                                </div>
-                                <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
-                                     <h3 class="text-xl font-bold mb-4 text-white">Parejas Registradas</h3>
-                                     <div id="players-list" class="space-y-3"></div>
-                                </div>
+                                <div class="bg-gray-900 p-4 rounded-lg mb-6"><h3 class="text-xl font-bold mb-4 text-white">Agregar Pareja</h3><form id="add-player-form" class="grid grid-cols-1 md:grid-cols-2 gap-4"><input type="text" id="player1-name" class="w-full px-3 py-2 bg-gray-700 rounded-md text-white" placeholder="Jugador 1" required><input type="text" id="player2-name" class="w-full px-3 py-2 bg-gray-700 rounded-md text-white" placeholder="Jugador 2" required><input type="text" id="team-name" class="w-full px-3 py-2 bg-gray-700 rounded-md text-white" placeholder="Nombre Pareja" required><select id="player-group" class="w-full px-3 py-2 bg-gray-700 rounded-md text-white"><option value="">Asignar Grupo (Opcional)</option></select><div class="md:col-span-2"><button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700"><i class="fas fa-plus-circle mr-2"></i>Agregar</button></div></form></div>
+                                <div class="bg-gray-900 p-4 rounded-lg"><h3 class="text-xl font-bold mb-4 text-white">Parejas Registradas</h3><div id="players-list" class="space-y-3"></div></div>
                             </div>
-
-                            <!-- Admin Matches Tab -->
-                            <div id="admin-tab-content-matches" class="tab-inner-content hidden">
-                                 <div id="admin-matches-container" class="space-y-4"></div>
-                            </div>
+                            <div id="admin-tab-content-matches" class="tab-inner-content hidden"><div id="admin-matches-container" class="space-y-4"></div></div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- PAGINA: TURNOS -->
-            <div id="page-bookings" class="page-content hidden">
-                <h2 class="text-4xl font-bold text-white mb-6">Reserva de Turnos</h2>
-                <p class="text-lg text-gray-400">Esta sección está en construcción. Próximamente podrás reservar canchas desde aquí.</p>
-            </div>
-
-            <!-- PAGINA: DESAFIOS -->
-            <div id="page-challenges" class="page-content hidden">
-                <h2 class="text-4xl font-bold text-white mb-6">Desafíos</h2>
-                <p class="text-lg text-gray-400">Esta sección está en construcción. Próximamente podrás desafiar a otras parejas.</p>
-            </div>
-
-            <!-- PAGINA: FORO -->
-            <div id="page-forum" class="page-content hidden">
-                <h2 class="text-4xl font-bold text-white mb-6">Foro de la Comunidad</h2>
-                <p class="text-lg text-gray-400">Esta sección está en construcción. Próximamente podrás participar en debates y conversaciones.</p>
-            </div>
-
-            <!-- PAGINA: MARKETPLACE -->
-            <div id="page-marketplace" class="page-content hidden">
-                <h2 class="text-4xl font-bold text-white mb-6">Marketplace</h2>
-                <p class="text-lg text-gray-400">Esta sección está en construcción. Próximamente podrás comprar y vender artículos de pádel.</p>
-            </div>
-
+            <!-- PAGINAS EN CONSTRUCCION -->
+            <div id="page-bookings" class="page-content hidden"><h2 class="text-4xl font-bold text-white">Reserva de Turnos</h2><p class="text-lg text-gray-400 mt-4">En construcción.</p></div>
+            <div id="page-challenges" class="page-content hidden"><h2 class="text-4xl font-bold text-white">Desafíos</h2><p class="text-lg text-gray-400 mt-4">En construcción.</p></div>
+            <div id="page-forum" class="page-content hidden"><h2 class="text-4xl font-bold text-white">Foro</h2><p class="text-lg text-gray-400 mt-4">En construcción.</p></div>
+            <div id="page-marketplace" class="page-content hidden"><h2 class="text-4xl font-bold text-white">Marketplace</h2><p class="text-lg text-gray-400 mt-4">En construcción.</p></div>
         </main>
     </div>
 
-    <!-- Admin Login Modal -->
-    <div id="login-modal" class="modal-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden">
+    <!-- MODAL DE LOGIN -->
+    <div id="login-modal" class="modal-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
         <div class="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl p-8 w-full max-w-sm relative">
-            <button id="close-modal-btn" class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">&times;</button>
-            <h2 class="text-2xl font-bold text-center mb-2 text-white">Acceso Admin</h2>
-            <p class="text-center text-gray-400 mb-6">Ingresa tus credenciales.</p>
+            <button class="close-modal-btn absolute top-4 right-4 text-gray-400 hover:text-white">&times;</button>
+            <h2 class="text-2xl font-bold text-center mb-6 text-white">Acceso</h2>
             <form id="login-form">
-                <div class="mb-4">
-                    <label for="username" class="block text-sm font-medium text-gray-300 mb-1">Usuario</label>
-                    <input type="text" id="username" name="username" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white" required>
-                </div>
-                <div class="mb-6">
-                    <label for="password" class="block text-sm font-medium text-gray-300 mb-1">Contraseña</label>
-                    <input type="password" id="password" name="password" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white" required>
-                </div>
-                <p id="login-error" class="text-red-500 text-sm text-center mb-4 hidden">Usuario o contraseña incorrectos.</p>
-                <button type="submit" class="w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700 transition-transform transform hover:scale-105">
-                    <i class="fas fa-sign-in-alt mr-2"></i>Ingresar
-                </button>
+                <div class="mb-4"><label class="block text-sm font-medium text-gray-300 mb-1">Usuario</label><input type="text" id="username" name="username" class="w-full px-3 py-2 bg-gray-700 border-gray-600 rounded-md text-white" required></div>
+                <div class="mb-6"><label class="block text-sm font-medium text-gray-300 mb-1">Contraseña</label><input type="password" id="password" name="password" class="w-full px-3 py-2 bg-gray-700 border-gray-600 rounded-md text-white" required></div>
+                <p id="login-error" class="text-red-500 text-sm text-center mb-4 hidden">Credenciales incorrectas.</p>
+                <button type="submit" class="w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700"><i class="fas fa-sign-in-alt mr-2"></i>Ingresar</button>
             </form>
+        </div>
+    </div>
+
+    <!-- MODAL DE REGISTRO -->
+    <div id="register-modal" class="modal-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl p-8 w-full max-w-lg relative">
+            <button class="close-modal-btn absolute top-4 right-4 text-gray-400 hover:text-white">&times;</button>
+            
+            <!-- Paso 1: Selección de Rol -->
+            <div id="role-selection-step">
+                <h2 class="text-2xl font-bold text-center mb-2 text-white">Crear una Cuenta</h2>
+                <p class="text-center text-gray-400 mb-8">Elige tu tipo de perfil para comenzar.</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div data-role="player" class="role-card cursor-pointer bg-gray-900 p-6 rounded-lg border-2 border-gray-700 text-center">
+                        <i class="fas fa-user text-3xl text-red-500 mb-3"></i>
+                        <h3 class="font-bold text-white">Jugador</h3>
+                        <p class="text-xs text-gray-400">Para participar en torneos y desafíos.</p>
+                    </div>
+                    <div data-role="organizer" class="role-card cursor-pointer bg-gray-900 p-6 rounded-lg border-2 border-gray-700 text-center">
+                        <i class="fas fa-trophy text-3xl text-red-500 mb-3"></i>
+                        <h3 class="font-bold text-white">Organizador</h3>
+                        <p class="text-xs text-gray-400">Para crear y gestionar tus propios torneos.</p>
+                    </div>
+                    <div data-role="club" class="role-card cursor-pointer bg-gray-900 p-6 rounded-lg border-2 border-gray-700 text-center">
+                        <i class="fas fa-shield-alt text-3xl text-red-500 mb-3"></i>
+                        <h3 class="font-bold text-white">Dueño de Club</h3>
+                        <p class="text-xs text-gray-400">Para administrar canchas y turnos.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Paso 2: Formularios (Ocultos por defecto) -->
+            <div id="form-steps" class="hidden">
+                <button class="back-to-roles text-gray-400 hover:text-white mb-4"><i class="fas fa-arrow-left mr-2"></i>Volver a elegir rol</button>
+                <!-- Formulario para Jugador -->
+                <form id="register-form-player" class="register-form hidden space-y-4">
+                    <h2 class="text-2xl font-bold text-white">Registro de Jugador</h2>
+                    <div><label class="block text-sm">Nombre Completo</label><input type="text" class="w-full p-2 bg-gray-700 rounded-md" required></div>
+                    <div><label class="block text-sm">Email</label><input type="email" class="w-full p-2 bg-gray-700 rounded-md" required></div>
+                    <div><label class="block text-sm">Contraseña</label><input type="password" class="w-full p-2 bg-gray-700 rounded-md" required></div>
+                    <div><label class="block text-sm">Nivel de Juego</label><select class="w-full p-2 bg-gray-700 rounded-md"><option>Iniciación</option><option>Intermedio</option><option>Avanzado</option></select></div>
+                    <button type="submit" class="w-full bg-red-600 font-bold py-3 rounded-lg hover:bg-red-700">Crear Cuenta de Jugador</button>
+                </form>
+                <!-- Formulario para Organizador -->
+                <form id="register-form-organizer" class="register-form hidden space-y-4">
+                     <h2 class="text-2xl font-bold text-white">Registro de Organizador</h2>
+                    <div><label class="block text-sm">Nombre Completo</label><input type="text" class="w-full p-2 bg-gray-700 rounded-md" required></div>
+                    <div><label class="block text-sm">Nombre de Organización (Opcional)</label><input type="text" class="w-full p-2 bg-gray-700 rounded-md"></div>
+                    <div><label class="block text-sm">Email</label><input type="email" class="w-full p-2 bg-gray-700 rounded-md" required></div>
+                    <div><label class="block text-sm">Contraseña</label><input type="password" class="w-full p-2 bg-gray-700 rounded-md" required></div>
+                    <button type="submit" class="w-full bg-red-600 font-bold py-3 rounded-lg hover:bg-red-700">Crear Cuenta de Organizador</button>
+                </form>
+                <!-- Formulario para Dueño de Club -->
+                <form id="register-form-club" class="register-form hidden space-y-4">
+                     <h2 class="text-2xl font-bold text-white">Registro de Dueño de Club</h2>
+                    <div><label class="block text-sm">Nombre del Club</label><input type="text" class="w-full p-2 bg-gray-700 rounded-md" required></div>
+                    <div><label class="block text-sm">Dirección del Club</label><input type="text" class="w-full p-2 bg-gray-700 rounded-md" required></div>
+                    <div><label class="block text-sm">Email de Contacto</label><input type="email" class="w-full p-2 bg-gray-700 rounded-md" required></div>
+                    <div><label class="block text-sm">Contraseña</label><input type="password" class="w-full p-2 bg-gray-700 rounded-md" required></div>
+                    <button type="submit" class="w-full bg-red-600 font-bold py-3 rounded-lg hover:bg-red-700">Crear Cuenta de Club</button>
+                </form>
+            </div>
         </div>
     </div>
     
@@ -467,55 +393,131 @@
 document.addEventListener('DOMContentLoaded', function() {
     
     // =================================================================================
-    // 1. NAVEGACIÓN PRINCIPAL Y MENÚ MÓVIL
+    // ESTADO GLOBAL DE LA APLICACIÓN
+    // =================================================================================
+    let globalState = {
+        currentUser: null // o { name: 'Admin', role: 'Administrador' }
+    };
+
+    // =================================================================================
+    // 1. NAVEGACIÓN Y LÓGICA DE UI GENERAL
     // =================================================================================
     const navLinks = document.querySelectorAll('.nav-link');
     const pages = document.querySelectorAll('.page-content');
     const menuToggle = document.getElementById('menu-toggle');
     const sidebar = document.getElementById('sidebar');
     const menuOverlay = document.getElementById('menu-overlay');
+    const mobileHeaderTitle = document.getElementById('mobile-header-title');
 
+    // --- Menú Móvil ---
     const toggleMenu = () => {
         sidebar.classList.toggle('-translate-x-full');
         menuOverlay.classList.toggle('hidden');
     };
-
     menuToggle.addEventListener('click', toggleMenu);
     menuOverlay.addEventListener('click', toggleMenu);
 
+    // --- Navegación entre páginas ---
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
             const pageId = link.dataset.page;
+            const pageTitle = link.querySelector('span').textContent;
 
             pages.forEach(page => page.classList.add('hidden'));
             document.getElementById(`page-${pageId}`).classList.remove('hidden');
 
             navLinks.forEach(nav => nav.classList.remove('active'));
             link.classList.add('active');
+            
+            mobileHeaderTitle.textContent = pageTitle;
 
-            // Cerrar menú en móvil al seleccionar una opción
-            if (window.innerWidth < 1024) {
-                toggleMenu();
-            }
+            if (window.innerWidth < 1024) toggleMenu();
+        });
+    });
+    
+    // --- Lógica de Modales ---
+    const loginModal = document.getElementById('login-modal');
+    const registerModal = document.getElementById('register-modal');
+    document.getElementById('login-btn').addEventListener('click', () => loginModal.classList.remove('hidden'));
+    document.getElementById('register-btn').addEventListener('click', () => registerModal.classList.remove('hidden'));
+    document.querySelectorAll('.close-modal-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            loginModal.classList.add('hidden');
+            registerModal.classList.add('hidden');
         });
     });
 
-    // =================================================================================
-    // 2. MÓDULO DE TORNEOS (Código anterior encapsulado)
-    // =================================================================================
+    // --- Lógica del Modal de Registro por Roles ---
+    const roleSelectionStep = document.getElementById('role-selection-step');
+    const formSteps = document.getElementById('form-steps');
+    const backToRolesBtn = document.querySelector('.back-to-roles');
     
+    roleSelectionStep.querySelectorAll('.role-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const role = card.dataset.role;
+            roleSelectionStep.classList.add('hidden');
+            formSteps.classList.remove('hidden');
+            document.querySelectorAll('.register-form').forEach(form => form.classList.add('hidden'));
+            document.getElementById(`register-form-${role}`).classList.remove('hidden');
+        });
+    });
+
+    backToRolesBtn.addEventListener('click', () => {
+        formSteps.classList.add('hidden');
+        roleSelectionStep.classList.remove('hidden');
+    });
+
+    document.querySelector('#register-modal .close-modal-btn').addEventListener('click', () => {
+         setTimeout(() => {
+            formSteps.classList.add('hidden');
+            roleSelectionStep.classList.remove('hidden');
+         }, 300);
+    });
+
+    // --- Lógica de Autenticación UI ---
+    const userProfile = document.getElementById('user-profile');
+    const userInitials = document.getElementById('user-initials');
+    const userNameEl = document.getElementById('user-name');
+    const userRoleEl = document.getElementById('user-role');
+    const registerBtn = document.getElementById('register-btn');
+    const loginBtn = document.getElementById('login-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    function updateAuthUI() {
+        if (globalState.currentUser) {
+            userProfile.classList.remove('hidden');
+            userProfile.classList.add('flex');
+            registerBtn.classList.add('hidden');
+            loginBtn.classList.add('hidden');
+            logoutBtn.classList.remove('hidden');
+
+            userNameEl.textContent = globalState.currentUser.name;
+            userRoleEl.textContent = globalState.currentUser.role;
+            userInitials.textContent = globalState.currentUser.name.charAt(0);
+        } else {
+            userProfile.classList.add('hidden');
+            userProfile.classList.remove('flex');
+            registerBtn.classList.remove('hidden');
+            loginBtn.classList.remove('hidden');
+            logoutBtn.classList.add('hidden');
+        }
+    }
+    
+    logoutBtn.addEventListener('click', () => {
+        globalState.currentUser = null;
+        updateAuthUI();
+        initializeTournamentModule(); 
+    });
+
+
+    // =================================================================================
+    // 2. MÓDULO DE TORNEOS
+    // =================================================================================
     function initializeTournamentModule() {
         let appState = {
-            tournament: {
-                name: "Mi Primer Torneo",
-                date: new Date().toISOString().split('T')[0],
-                courts: 4,
-                groups: 8,
-            },
-            teams: [],
-            matches: [],
-            isAdmin: false,
+            tournament: { name: "Mi Primer Torneo", date: new Date().toISOString().split('T')[0], courts: 4, groups: 8, },
+            teams: [], matches: [], isAdmin: false,
         };
 
         const dom = {
@@ -548,10 +550,6 @@ document.addEventListener('DOMContentLoaded', function() {
             playerGroupSelect: document.getElementById('player-group'),
             playersListContainer: document.getElementById('players-list'),
             adminMatchesContainer: document.getElementById('admin-matches-container'),
-            adminLoginBtn: document.getElementById('admin-login-btn'),
-            logoutBtn: document.getElementById('logout-btn'),
-            loginModal: document.getElementById('login-modal'),
-            closeModalBtn: document.getElementById('close-modal-btn'),
             loginForm: document.getElementById('login-form'),
             loginError: document.getElementById('login-error')
         };
@@ -579,11 +577,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         function updateProgressBar() {
             const totalMatches = appState.matches.length;
-            if (totalMatches === 0) {
-                dom.progressBar.style.width = '0%';
-                dom.progressText.textContent = '0%';
-                return;
-            }
+            if (totalMatches === 0) { dom.progressBar.style.width = '0%'; dom.progressText.textContent = '0%'; return; }
             const completedMatches = appState.matches.filter(m => m.completed).length;
             const progress = Math.round((completedMatches / totalMatches) * 100);
             dom.progressBar.style.width = `${progress}%`;
@@ -594,200 +588,83 @@ document.addEventListener('DOMContentLoaded', function() {
             dom.groupsGrid.innerHTML = '';
             for (let i = 1; i <= appState.tournament.groups; i++) {
                 const groupName = `Grupo ${String.fromCharCode(64 + i)}`;
-                const groupTeams = appState.teams
-                    .filter(t => t.group === groupName)
-                    .map(team => calculateTeamStats(team.id))
-                    .sort((a, b) => b.points - a.points || b.diff - a.diff);
-
+                const groupTeams = appState.teams.filter(t => t.group === groupName).map(team => calculateTeamStats(team.id)).sort((a, b) => b.points - a.points || b.diff - a.diff);
                 const groupCard = document.createElement('div');
                 groupCard.className = "bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-700";
-                
-                let teamsHtml = groupTeams.map((team, index) => `
-                    <tr class="border-b border-gray-700 last:border-b-0 hover:bg-gray-700/50">
-                        <td class="p-2">${index + 1}</td>
-                        <td class="p-2 font-medium text-white">${team.name}</td>
-                        <td class="p-2 text-center">${team.played}</td>
-                        <td class="p-2 text-center">${team.wins}</td>
-                        <td class="p-2 text-center">${team.diff > 0 ? '+' : ''}${team.diff}</td>
-                        <td class="p-2 text-center font-bold text-red-400">${team.points}</td>
-                    </tr>`).join('');
+                let teamsHtml = groupTeams.map((team, index) => `<tr class="border-b border-gray-700 last:border-b-0 hover:bg-gray-700/50"><td class="p-2">${index + 1}</td><td class="p-2 font-medium text-white">${team.name}</td><td class="p-2 text-center">${team.played}</td><td class="p-2 text-center">${team.wins}</td><td class="p-2 text-center">${team.diff > 0 ? '+' : ''}${team.diff}</td><td class="p-2 text-center font-bold text-red-400">${team.points}</td></tr>`).join('');
                 if (groupTeams.length === 0) teamsHtml = `<tr><td colspan="6" class="p-4 text-center text-gray-400">Sin parejas.</td></tr>`;
-
-                groupCard.innerHTML = `
-                    <h3 class="text-xl font-bold mb-3 text-white text-center">${groupName}</h3>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-sm text-left">
-                            <thead class="bg-gray-700 text-xs text-gray-300 uppercase">
-                                <tr>
-                                    <th class="p-2">#</th><th class="p-2">Pareja</th><th class="p-2 text-center">PJ</th>
-                                    <th class="p-2 text-center">PG</th><th class="p-2 text-center">DG</th><th class="p-2 text-center">Pts</th>
-                                </tr>
-                            </thead>
-                            <tbody>${teamsHtml}</tbody>
-                        </table>
-                    </div>`;
+                groupCard.innerHTML = `<h3 class="text-xl font-bold mb-3 text-white text-center">${groupName}</h3><div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead class="bg-gray-700 text-xs text-gray-300 uppercase"><tr><th class="p-2">#</th><th class="p-2">Pareja</th><th class="p-2 text-center">PJ</th><th class="p-2 text-center">PG</th><th class="p-2 text-center">DG</th><th class="p-2 text-center">Pts</th></tr></thead><tbody>${teamsHtml}</tbody></table></div>`;
                 dom.groupsGrid.appendChild(groupCard);
             }
         }
         
         function renderSchedule() {
             dom.scheduleContainer.innerHTML = '';
-            if (appState.matches.length === 0) {
-                dom.scheduleContainer.innerHTML = `<p class="text-center text-gray-400">No hay partidos programados.</p>`;
-                return;
-            }
+            if (appState.matches.length === 0) { dom.scheduleContainer.innerHTML = `<p class="text-center text-gray-400">No hay partidos.</p>`; return; }
             appState.matches.forEach(match => {
-                const team1 = findTeamById(match.team1Id);
-                const team2 = findTeamById(match.team2Id);
-                if (!team1 || !team2) return;
-
+                const team1 = findTeamById(match.team1Id); const team2 = findTeamById(match.team2Id); if (!team1 || !team2) return;
                 const card = document.createElement('div');
                 card.className = `bg-gray-800 p-4 rounded-lg shadow-md border ${match.completed ? 'border-green-600/50' : 'border-gray-700'}`;
-                card.innerHTML = `
-                    <div class="flex justify-between items-center text-xs text-gray-400 mb-2">
-                        <span>${match.group} - Cancha ${match.court}</span><span>${match.time}</span>
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <div class="text-center w-2/5"><div class="font-bold text-sm md:text-base text-white">${team1.name}</div></div>
-                        <div class="text-xl md:text-2xl font-bold text-white px-2">
-                            ${match.completed ? `<span class="text-green-400">${match.score1} - ${match.score2}</span>` : '<span class="text-gray-500">vs</span>'}
-                        </div>
-                        <div class="text-center w-2/5"><div class="font-bold text-sm md:text-base text-white">${team2.name}</div></div>
-                    </div>
-                    ${match.completed ? `<div class="text-center text-xs mt-2 text-green-500">Finalizado</div>` : ''}`;
+                card.innerHTML = `<div class="flex justify-between items-center text-xs text-gray-400 mb-2"><span>${match.group} - C${match.court}</span><span>${match.time}</span></div><div class="flex items-center justify-between"><div class="text-center w-2/5"><div class="font-bold text-sm md:text-base text-white">${team1.name}</div></div><div class="text-xl md:text-2xl font-bold text-white px-2">${match.completed ? `<span class="text-green-400">${match.score1} - ${match.score2}</span>` : '<span class="text-gray-500">vs</span>'}</div><div class="text-center w-2/5"><div class="font-bold text-sm md:text-base text-white">${team2.name}</div></div></div>${match.completed ? `<div class="text-center text-xs mt-2 text-green-500">Finalizado</div>` : ''}`;
                 dom.scheduleContainer.appendChild(card);
             });
         }
         
         function renderRanking() {
-            const allTeamsStats = appState.teams.map(team => calculateTeamStats(team.id))
-                                              .sort((a, b) => b.points - a.points || b.diff - a.diff);
-            
-            dom.rankingBody.innerHTML = allTeamsStats.map((team, index) => `
-                <tr class="hover:bg-gray-700/50">
-                    <td class="px-4 py-3 font-bold">${index + 1}</td>
-                    <td class="px-4 py-3 text-white font-medium">${team.name}</td>
-                    <td class="px-4 py-3">${team.group}</td><td class="px-4 py-3">${team.played}</td>
-                    <td class="px-4 py-3 text-green-400">${team.wins}</td><td class="px-4 py-3 text-red-400">${team.losses}</td>
-                    <td class="px-4 py-3 font-bold ${team.diff >= 0 ? 'text-green-400' : 'text-red-400'}">${team.diff > 0 ? '+' : ''}${team.diff}</td>
-                    <td class="px-4 py-3 text-xl font-extrabold text-red-400">${team.points}</td>
-                </tr>`).join('');
+            const allTeamsStats = appState.teams.map(team => calculateTeamStats(team.id)).sort((a, b) => b.points - a.points || b.diff - a.diff);
+            dom.rankingBody.innerHTML = allTeamsStats.map((team, index) => `<tr class="hover:bg-gray-700/50"><td class="px-4 py-3 font-bold">${index + 1}</td><td class="px-4 py-3 text-white font-medium">${team.name}</td><td class="px-4 py-3">${team.group}</td><td class="px-4 py-3">${team.played}</td><td class="px-4 py-3 text-green-400">${team.wins}</td><td class="px-4 py-3 text-red-400">${team.losses}</td><td class="px-4 py-3 font-bold ${team.diff >= 0 ? 'text-green-400' : 'text-red-400'}">${team.diff > 0 ? '+' : ''}${team.diff}</td><td class="px-4 py-3 text-xl font-extrabold text-red-400">${team.points}</td></tr>`).join('');
         }
 
         function renderAdminView() {
+            appState.isAdmin = (globalState.currentUser && globalState.currentUser.role === 'Admin');
             if (appState.isAdmin) {
                 dom.adminView.classList.remove('hidden');
-                dom.adminLoginBtn.classList.add('hidden');
-                dom.logoutBtn.classList.remove('hidden');
-                dom.tournamentNameInput.value = appState.tournament.name;
-                dom.tournamentDateInput.value = appState.tournament.date;
-                dom.courtCountInput.value = appState.tournament.courts;
-                dom.groupCountSelect.value = appState.tournament.groups;
-                renderAdminGroupOptions();
-                renderAdminPlayersList();
-                renderAdminMatchesForms();
+                dom.tournamentNameInput.value = appState.tournament.name; dom.tournamentDateInput.value = appState.tournament.date;
+                dom.courtCountInput.value = appState.tournament.courts; dom.groupCountSelect.value = appState.tournament.groups;
+                renderAdminGroupOptions(); renderAdminPlayersList(); renderAdminMatchesForms();
             } else {
                 dom.adminView.classList.add('hidden');
-                dom.adminLoginBtn.classList.remove('hidden');
-                dom.logoutBtn.classList.add('hidden');
             }
         }
         
         function renderAdminGroupOptions() {
             dom.playerGroupSelect.innerHTML = '<option value="">Sin asignar</option>';
-            for (let i = 1; i <= appState.tournament.groups; i++) {
-                const groupName = `Grupo ${String.fromCharCode(64 + i)}`;
-                dom.playerGroupSelect.innerHTML += `<option value="${groupName}">${groupName}</option>`;
-            }
+            for (let i = 1; i <= appState.tournament.groups; i++) dom.playerGroupSelect.innerHTML += `<option value="Grupo ${String.fromCharCode(64 + i)}">Grupo ${String.fromCharCode(64 + i)}</option>`;
         }
 
         function renderAdminPlayersList() {
-            dom.playersListContainer.innerHTML = appState.teams.map(team => `
-                <div class="flex justify-between items-center bg-gray-800 p-3 rounded-lg">
-                    <div>
-                        <p class="font-bold text-white">${team.name} <span class="text-xs text-gray-400 font-normal">(${team.group || 'Sin grupo'})</span></p>
-                        <p class="text-sm text-gray-300">${team.player1} / ${team.player2}</p>
-                    </div>
-                    <button class="delete-team-btn text-red-500 hover:text-red-400" data-id="${team.id}">&times; Eliminar</button>
-                </div>`).join('');
+            dom.playersListContainer.innerHTML = appState.teams.map(team => `<div class="flex justify-between items-center bg-gray-800 p-3 rounded-lg"><div><p class="font-bold text-white">${team.name} <span class="text-xs text-gray-400 font-normal">(${team.group || 'Sin grupo'})</span></p><p class="text-sm text-gray-300">${team.player1} / ${team.player2}</p></div><button class="delete-team-btn text-red-500 hover:text-red-400" data-id="${team.id}">&times; Eliminar</button></div>`).join('');
         }
         
         function renderAdminMatchesForms() {
-            dom.adminMatchesContainer.innerHTML = '';
-            if (appState.matches.length === 0) {
-                dom.adminMatchesContainer.innerHTML = `<p class="text-center text-gray-400">No hay partidos para mostrar.</p>`;
-                return;
-            }
+            dom.adminMatchesContainer.innerHTML = ''; if (appState.matches.length === 0) { dom.adminMatchesContainer.innerHTML = `<p class="text-center text-gray-400">No hay partidos.</p>`; return; }
             appState.matches.forEach(match => {
-                const team1 = findTeamById(match.team1Id);
-                const team2 = findTeamById(match.team2Id);
-                if (!team1 || !team2) return;
-                
-                const form = document.createElement('form');
-                form.className = "update-match-form bg-gray-900 p-4 rounded-lg space-y-3";
-                form.dataset.id = match.id;
-                
-                form.innerHTML = `
-                    <p class="text-center font-bold text-white">${match.group} - Cancha ${match.court} (${match.time})</p>
-                    <div class="grid grid-cols-3 items-center gap-2">
-                        <label class="text-right text-gray-300">${team1.name}</label>
-                        <input type="number" name="score1" value="${match.score1}" class="w-full text-center bg-gray-700 rounded-md p-1" ${match.completed ? 'disabled' : ''}>
-                        <div class="text-sm text-gray-400">Resultado 1</div>
-                    </div>
-                    <div class="grid grid-cols-3 items-center gap-2">
-                        <label class="text-right text-gray-300">${team2.name}</label>
-                        <input type="number" name="score2" value="${match.score2}" class="w-full text-center bg-gray-700 rounded-md p-1" ${match.completed ? 'disabled' : ''}>
-                        <div class="text-sm text-gray-400">Resultado 2</div>
-                    </div>
-                    <button type="submit" class="w-full py-2 rounded-lg ${match.completed ? 'bg-green-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}">
-                        ${match.completed ? 'Guardado' : 'Guardar Resultado'}
-                    </button>`;
+                const team1 = findTeamById(match.team1Id); const team2 = findTeamById(match.team2Id); if (!team1 || !team2) return;
+                const form = document.createElement('form'); form.className = "update-match-form bg-gray-900 p-4 rounded-lg space-y-3"; form.dataset.id = match.id;
+                form.innerHTML = `<p class="text-center font-bold text-white">${match.group} - C${match.court} (${match.time})</p><div class="grid grid-cols-3 items-center gap-2"><label class="text-right text-gray-300">${team1.name}</label><input type="number" name="score1" value="${match.score1}" class="w-full text-center bg-gray-700 rounded-md p-1" ${match.completed ? 'disabled' : ''}><div class="text-sm text-gray-400">Res 1</div></div><div class="grid grid-cols-3 items-center gap-2"><label class="text-right text-gray-300">${team2.name}</label><input type="number" name="score2" value="${match.score2}" class="w-full text-center bg-gray-700 rounded-md p-1" ${match.completed ? 'disabled' : ''}><div class="text-sm text-gray-400">Res 2</div></div><button type="submit" class="w-full py-2 rounded-lg ${match.completed ? 'bg-green-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}">${match.completed ? 'Guardado' : 'Guardar'}</button>`;
                 dom.adminMatchesContainer.appendChild(form);
             });
         }
 
-        function saveState() {
-            localStorage.setItem('padelTournamentState', JSON.stringify(appState));
-        }
-
-        function loadState() {
-            const savedState = localStorage.getItem('padelTournamentState');
-            if (savedState) appState = JSON.parse(savedState);
-        }
-
-        function findTeamById(id) {
-            return appState.teams.find(t => t.id === id);
-        }
+        function saveState() { localStorage.setItem('padelTournamentState', JSON.stringify(appState)); }
+        function loadState() { const savedState = localStorage.getItem('padelTournamentState'); if (savedState) appState = JSON.parse(savedState); }
+        function findTeamById(id) { return appState.teams.find(t => t.id === id); }
 
         function calculateTeamStats(teamId) {
-            const team = findTeamById(teamId);
-            if (!team) return {};
+            const team = findTeamById(teamId); if (!team) return {};
             let stats = { id: team.id, name: team.name, group: team.group, played: 0, wins: 0, losses: 0, gamesFor: 0, gamesAgainst: 0, diff: 0, points: 0 };
             appState.matches.filter(m => (m.team1Id === teamId || m.team2Id === teamId) && m.completed).forEach(m => {
-                stats.played++;
-                const isTeam1 = m.team1Id === teamId;
-                const scoreFor = isTeam1 ? m.score1 : m.score2;
-                const scoreAgainst = isTeam1 ? m.score2 : m.score1;
-                stats.gamesFor += scoreFor;
-                stats.gamesAgainst += scoreAgainst;
-                if (scoreFor > scoreAgainst) {
-                    stats.wins++;
-                    stats.points += 3;
-                } else stats.losses++;
+                stats.played++; const isTeam1 = m.team1Id === teamId; const scoreFor = isTeam1 ? m.score1 : m.score2; const scoreAgainst = isTeam1 ? m.score2 : m.score1;
+                stats.gamesFor += scoreFor; stats.gamesAgainst += scoreAgainst;
+                if (scoreFor > scoreAgainst) { stats.wins++; stats.points += 3; } else stats.losses++;
             });
-            stats.diff = stats.gamesFor - stats.gamesAgainst;
-            return stats;
+            stats.diff = stats.gamesFor - stats.gamesAgainst; return stats;
         }
         
         function handleTabClick(container, e) {
             if (e.target.tagName === 'BUTTON') {
-                container.querySelectorAll('.tab-button').forEach(btn => {
-                    btn.classList.remove('tab-active');
-                    btn.classList.add('text-gray-400', 'border-transparent');
-                });
-                e.target.classList.add('tab-active');
-                e.target.classList.remove('text-gray-400', 'border-transparent');
-                
+                container.querySelectorAll('.tab-button').forEach(btn => { btn.classList.remove('tab-active'); btn.classList.add('text-gray-400', 'border-transparent'); });
+                e.target.classList.add('tab-active'); e.target.classList.remove('text-gray-400', 'border-transparent');
                 container.parentElement.querySelectorAll('.tab-inner-content').forEach(content => content.classList.add('hidden'));
                 document.getElementById(`${container.id.replace('tabs', 'tab-content')}-${e.target.dataset.tab}`).classList.remove('hidden');
             }
@@ -795,106 +672,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
         dom.mainTabs.addEventListener('click', (e) => handleTabClick(dom.mainTabs, e));
         dom.adminTabs.addEventListener('click', (e) => handleTabClick(dom.adminTabs, e));
-
-        dom.saveTournamentSettingsBtn.addEventListener('click', () => {
-            appState.tournament.name = dom.tournamentNameInput.value;
-            appState.tournament.date = dom.tournamentDateInput.value;
-            appState.tournament.courts = parseInt(dom.courtCountInput.value);
-            appState.tournament.groups = parseInt(dom.groupCountSelect.value);
-            saveState();
-            renderAll();
-            alert('Configuración guardada!');
-        });
-        
-        dom.addPlayerForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            appState.teams.push({
-                id: `t-${Date.now()}`,
-                player1: dom.player1NameInput.value,
-                player2: dom.player2NameInput.value,
-                name: dom.teamNameInput.value,
-                group: dom.playerGroupSelect.value
-            });
-            saveState();
-            renderAll();
-            dom.addPlayerForm.reset();
-        });
-
-        dom.playersListContainer.addEventListener('click', (e) => {
-            if (e.target.classList.contains('delete-team-btn')) {
-                const teamId = e.target.dataset.id;
-                if (confirm('¿Seguro que quieres eliminar esta pareja?')) {
-                    appState.teams = appState.teams.filter(t => t.id !== teamId);
-                    appState.matches = appState.matches.filter(m => m.team1Id !== teamId && m.team2Id !== teamId);
-                    saveState();
-                    renderAll();
-                }
-            }
-        });
-        
-        dom.generateGroupsBtn.addEventListener('click', () => {
-            if (appState.teams.length === 0) return alert("Agrega parejas antes.");
-            if (appState.matches.length > 0 && !confirm("Esto reiniciará los partidos. ¿Continuar?")) return;
-
-            appState.matches = [];
-            const shuffledTeams = [...appState.teams].sort(() => 0.5 - Math.random());
-            shuffledTeams.forEach((team, index) => {
-                team.group = `Grupo ${String.fromCharCode(64 + (index % appState.tournament.groups) + 1)}`;
-            });
-
-            for (let i = 1; i <= appState.tournament.groups; i++) {
-                const groupName = `Grupo ${String.fromCharCode(64 + i)}`;
-                const teamsInGroup = appState.teams.filter(t => t.group === groupName);
-                for (let i = 0; i < teamsInGroup.length; i++) {
-                    for (let j = i + 1; j < teamsInGroup.length; j++) {
-                        appState.matches.push({ id: `m-${Date.now()}-${i}${j}`, group: groupName, team1Id: teamsInGroup[i].id, team2Id: teamsInGroup[j].id, score1: 0, score2: 0, court: 0, time: "00:00", completed: false });
-                    }
-                }
-            }
-            let courtCounter = 1; let time = new Date(); time.setHours(9, 0, 0, 0);
-            appState.matches.forEach(match => {
-                match.court = courtCounter;
-                match.time = time.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-                courtCounter++;
-                if (courtCounter > appState.tournament.courts) { courtCounter = 1; time.setMinutes(time.getMinutes() + 45); }
-            });
-            saveState(); renderAll(); alert('Grupos y partidos generados!');
-        });
-        
-        dom.adminMatchesContainer.addEventListener('submit', (e) => {
-            e.preventDefault();
-            if (!e.target.classList.contains('update-match-form')) return;
-            const matchId = e.target.dataset.id;
-            const match = appState.matches.find(m => m.id === matchId);
-            if (!match || match.completed) return;
-            const score1 = parseInt(e.target.elements.score1.value);
-            const score2 = parseInt(e.target.elements.score2.value);
-            if (isNaN(score1) || isNaN(score2)) return alert("Resultado inválido.");
-            match.score1 = score1; match.score2 = score2; match.completed = true;
-            saveState(); renderAll();
-        });
-        
-        dom.resetTournamentBtn.addEventListener('click', () => {
-            if (confirm('¿ESTÁS SEGURO? Se borrarán todas las parejas y partidos.')) {
-                appState.teams = []; appState.matches = [];
-                saveState(); renderAll(); alert('Torneo reiniciado.');
-            }
-        });
-
-        dom.adminLoginBtn.addEventListener('click', () => dom.loginModal.classList.remove('hidden'));
-        dom.closeModalBtn.addEventListener('click', () => dom.loginModal.classList.add('hidden'));
-        dom.logoutBtn.addEventListener('click', () => { appState.isAdmin = false; saveState(); renderAll(); });
+        dom.saveTournamentSettingsBtn.addEventListener('click', () => { appState.tournament.name = dom.tournamentNameInput.value; appState.tournament.date = dom.tournamentDateInput.value; appState.tournament.courts = parseInt(dom.courtCountInput.value); appState.tournament.groups = parseInt(dom.groupCountSelect.value); saveState(); renderAll(); alert('Configuración guardada!'); });
+        dom.addPlayerForm.addEventListener('submit', (e) => { e.preventDefault(); appState.teams.push({ id: `t-${Date.now()}`, player1: dom.player1NameInput.value, player2: dom.player2NameInput.value, name: dom.teamNameInput.value, group: dom.playerGroupSelect.value }); saveState(); renderAll(); dom.addPlayerForm.reset(); });
+        dom.playersListContainer.addEventListener('click', (e) => { if (e.target.classList.contains('delete-team-btn')) { const teamId = e.target.dataset.id; if (confirm('¿Seguro?')) { appState.teams = appState.teams.filter(t => t.id !== teamId); appState.matches = appState.matches.filter(m => m.team1Id !== teamId && m.team2Id !== teamId); saveState(); renderAll(); } } });
+        dom.generateGroupsBtn.addEventListener('click', () => { if (appState.teams.length === 0) return alert("Agrega parejas."); if (appState.matches.length > 0 && !confirm("Reiniciar partidos?")) return; appState.matches = []; const shuffledTeams = [...appState.teams].sort(() => 0.5 - Math.random()); shuffledTeams.forEach((team, index) => { team.group = `Grupo ${String.fromCharCode(64 + (index % appState.tournament.groups) + 1)}`; }); for (let i = 1; i <= appState.tournament.groups; i++) { const groupName = `Grupo ${String.fromCharCode(64 + i)}`; const teamsInGroup = appState.teams.filter(t => t.group === groupName); for (let i = 0; i < teamsInGroup.length; i++) { for (let j = i + 1; j < teamsInGroup.length; j++) { appState.matches.push({ id: `m-${Date.now()}-${i}${j}`, group: groupName, team1Id: teamsInGroup[i].id, team2Id: teamsInGroup[j].id, score1: 0, score2: 0, court: 0, time: "00:00", completed: false }); } } } let courtCounter = 1; let time = new Date(); time.setHours(9, 0, 0, 0); appState.matches.forEach(match => { match.court = courtCounter; match.time = time.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }); courtCounter++; if (courtCounter > appState.tournament.courts) { courtCounter = 1; time.setMinutes(time.getMinutes() + 45); } }); saveState(); renderAll(); alert('Generado!'); });
+        dom.adminMatchesContainer.addEventListener('submit', (e) => { e.preventDefault(); if (!e.target.classList.contains('update-match-form')) return; const matchId = e.target.dataset.id; const match = appState.matches.find(m => m.id === matchId); if (!match || match.completed) return; const score1 = parseInt(e.target.elements.score1.value); const score2 = parseInt(e.target.elements.score2.value); if (isNaN(score1) || isNaN(score2)) return alert("Resultado inválido."); match.score1 = score1; match.score2 = score2; match.completed = true; saveState(); renderAll(); });
+        dom.resetTournamentBtn.addEventListener('click', () => { if (confirm('¿SEGURO?')) { appState.teams = []; appState.matches = []; saveState(); renderAll(); alert('Torneo reiniciado.'); } });
         
         dom.loginForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const user = e.target.elements.username.value;
             const pass = e.target.elements.password.value;
-            if (user === 'admin' && pass === 'admin') {
-                appState.isAdmin = true;
-                dom.loginModal.classList.add('hidden');
+            if (user.toLowerCase() === 'admin' && pass === 'admin') {
+                globalState.currentUser = { name: 'Admin', role: 'Admin' };
+                loginModal.classList.add('hidden');
                 dom.loginError.classList.add('hidden');
-                saveState();
-                renderAll();
+                updateAuthUI();
+                renderAdminView();
             } else {
                 dom.loginError.classList.remove('hidden');
             }
@@ -904,9 +698,10 @@ document.addEventListener('DOMContentLoaded', function() {
         renderAll();
     }
 
+    // INICIALIZACIÓN
+    updateAuthUI(); // Llama a la función al cargar la página
     initializeTournamentModule();
 });
 </script>
 </body>
 </html>
-
