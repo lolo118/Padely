@@ -10,12 +10,12 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
-            --primary: #ef4444;
+            --primary: #ef4444; /* Rojo */
             --primary-dark: #dc2626;
-            --secondary: #3b82f6;
-            --dark: #0f172a;
-            --darker: #0c111c;
-            --glass: rgba(255, 255, 255, 0.05);
+            --secondary: #3b82f6; /* Azul */
+            --dark: #0f172a; /* Azul noche oscuro */
+            --darker: #0c111c; /* Azul noche más oscuro */
+            --glass: rgba(15, 23, 42, 0.6); /* Glass effect más oscuro */
             --glass-border: rgba(255, 255, 255, 0.1);
         }
         
@@ -29,11 +29,11 @@
             background: var(--glass);
             backdrop-filter: blur(10px);
             border: 1px solid var(--glass-border);
-            border-radius: 16px;
+            border-radius: 16px; /* Bordes más redondeados */
         }
         
         .gradient-text {
-            background: linear-gradient(90deg, #ef4444, #f97316);
+            background: linear-gradient(90deg, #ef4444, #f97316); /* Rojo a Naranja */
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -43,27 +43,22 @@
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
+            border-left: 3px solid transparent; /* Borde inicial transparente */
+            padding-left: calc(1rem - 3px); /* Ajustar padding por el borde */
         }
-        
-        .nav-link::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(239, 68, 68, 0.1), transparent);
-            transition: left 0.5s;
-        }
-        
-        .nav-link:hover::before {
-            left: 100%;
-        }
-        
+                
         .nav-link.active, .nav-link:hover {
-            background: rgba(239, 68, 68, 0.1);
+            background: rgba(239, 68, 68, 0.1); /* Fondo rojo sutil */
             color: white;
-            border-left: 3px solid var(--primary);
+            border-left-color: var(--primary); /* Borde rojo activo/hover */
+        }
+
+        /* Efecto hover sutil para la barra lateral */
+        #sidebar {
+             transition: box-shadow 0.3s ease;
+        }
+        #sidebar:hover {
+            box-shadow: 5px 0 15px rgba(0,0,0,0.2);
         }
         
         .page-content {
@@ -87,7 +82,7 @@
         }
         
         .btn-primary:hover {
-            transform: translateY(-2px);
+            transform: translateY(-2px) scale(1.02);
             box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
         }
         
@@ -98,8 +93,21 @@
         }
         
         .btn-secondary:hover {
-            transform: translateY(-2px);
+            transform: translateY(-2px) scale(1.02);
             box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+        }
+        
+        /* Botón Terciario (para acciones menos importantes) */
+        .btn-tertiary {
+            background-color: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: #cbd5e1; /* Gris claro */
+            transition: all 0.3s ease;
+        }
+        .btn-tertiary:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+            color: white;
         }
         
         .floating-action-btn {
@@ -122,7 +130,7 @@
         }
         
         .floating-action-btn:hover {
-            transform: scale(1.1) rotate(90deg);
+            transform: scale(1.1) rotate(135deg); /* Rotación más acentuada */
         }
         
         .tournament-card {
@@ -130,27 +138,24 @@
             position: relative;
             overflow: hidden;
         }
-        
-        .tournament-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary), var(--secondary));
-            transform: scaleX(0);
-            transform-origin: left;
-            transition: transform 0.3s ease;
-        }
-        
-        .tournament-card:hover::before {
-            transform: scaleX(1);
-        }
-        
+                
         .tournament-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Indicador sutil de hover en tarjetas de torneo */
+        .tournament-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 16px;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0);
+            transition: box-shadow 0.3s ease;
+            pointer-events: none; /* Para no interferir con clicks */
+        }
+        .tournament-card:hover::after {
+             box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
         }
         
         .role-card {
@@ -158,27 +163,17 @@
             position: relative;
             overflow: hidden;
         }
-        
-        .role-card::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary), var(--secondary));
-            transform: scaleX(0);
-            transform-origin: left;
-            transition: transform 0.3s ease;
-        }
-        
-        .role-card:hover::after {
-            transform: scaleX(1);
-        }
-        
+                
         .role-card:hover {
             transform: translateY(-5px);
             border-color: var(--primary);
+        }
+
+         /* Estilo mejorado para role-card seleccionada */
+        .role-card.selected {
+             border-color: var(--primary);
+             box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+             transform: translateY(-2px);
         }
         
         .progress-ring {
@@ -199,21 +194,22 @@
         }
         
         .pulse {
-            animation: pulse 2s infinite;
+            animation: pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
         }
         
         @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
         
         .stats-card {
             transition: all 0.3s ease;
+            border-top: 4px solid;
         }
         
         .stats-card:hover {
-            transform: translateY(-3px);
+            transform: translateY(-3px) scale(1.03);
+             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
         }
         
         .sidebar {
@@ -230,35 +226,15 @@
             background: var(--primary);
         }
         
-        /* Estilos para el cuestionario de torneos */
-        .tournament-step {
-            animation: slideInRight 0.4s ease-out;
-        }
-        
-        .tournament-type-card {
-            @apply glass-card p-4 rounded-xl border-2 border-gray-700 cursor-pointer transition-all duration-300;
-        }
-        
-        .tournament-type-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-        }
-        
-        .modality-option div, .level-option div, .age-option div, .team-option div, .schedule-option div {
-            transition: all 0.3s ease;
-        }
-        
-        .modality-option input:checked + div,
-        .level-option input:checked + div,
-        .age-option input:checked + div,
-        .team-option input:checked + div {
-            transform: scale(1.05);
-        }
-        
-        .schedule-option input:checked + div {
-            transform: scale(1.05);
-        }
-        
+        /* Estilos Wizard */
+        .wizard-step { display: none; animation: fadeIn 0.5s ease-out; }
+        .wizard-step.active { display: block; }
+        .wizard-progress-bar > div { transition: width 0.3s ease; }
+        .modality-card { transition: all 0.2s ease; cursor: pointer; }
+        .modality-card:hover { transform: translateY(-3px); border-color: var(--primary); }
+        .modality-card.selected { border-color: var(--primary); background-color: rgba(239, 68, 68, 0.1); box-shadow: 0 0 10px rgba(239, 68, 68, 0.2); }
+
+
         /* Custom scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #1f2937; }
@@ -273,57 +249,58 @@
 
         <!-- Barra de Navegación Lateral -->
         <aside id="sidebar" class="fixed inset-y-0 left-0 w-64 bg-gray-900/80 backdrop-blur-md p-4 flex flex-col h-screen transform -translate-x-full lg:translate-x-0 lg:static lg:flex-shrink-0 z-40 transition-transform duration-300 ease-in-out border-r border-gray-800">
-            <!-- Sección superior (scrollable) -->
-            <div class="flex-1 overflow-y-auto">
+             <!-- Sección superior (scrollable) -->
+            <div class="flex-1 overflow-y-auto mb-4 pr-2"> <!-- Adjusted margin-bottom and padding-right -->
                 <div class="text-center mb-10 pt-4">
                     <h1 class="text-3xl font-extrabold text-white tracking-tight gradient-text">Padely</h1>
                     <p class="text-gray-400 text-sm mt-2">Tu Mundo de Pádel</p>
                 </div>
-                <nav class="space-y-2">
-                    <a href="#" data-page="home" class="nav-link active flex items-center px-4 py-3 rounded-lg relative">
-                        <i class="fas fa-home w-6 text-center"></i>
-                        <span class="ml-3">Inicio</span>
+                <nav class="space-y-1"> <!-- Reduced space -->
+                    <a href="#" data-page="home" class="nav-link active flex items-center px-4 py-2.5 rounded-lg relative text-sm"> <!-- Adjusted padding and text size -->
+                        <i class="fas fa-home w-5 text-center mr-3"></i> <!-- Adjusted icon size and margin -->
+                        <span>Inicio</span>
                         <span class="notification-dot pulse"></span>
                     </a>
-                    <a href="#" data-page="tournaments" class="nav-link flex items-center px-4 py-3 rounded-lg">
-                        <i class="fas fa-trophy w-6 text-center"></i>
-                        <span class="ml-3">Torneos</span>
+                    <a href="#" data-page="tournaments" class="nav-link flex items-center px-4 py-2.5 rounded-lg text-sm">
+                        <i class="fas fa-trophy w-5 text-center mr-3"></i>
+                        <span>Torneos</span>
                     </a>
-                    <a href="#" data-page="bookings" class="nav-link flex items-center px-4 py-3 rounded-lg">
-                        <i class="fas fa-calendar-alt w-6 text-center"></i>
-                        <span class="ml-3">Turnos</span>
+                     <!-- Otros enlaces con padding y tamaño ajustado -->
+                     <a href="#" data-page="bookings" class="nav-link flex items-center px-4 py-2.5 rounded-lg text-sm">
+                        <i class="fas fa-calendar-alt w-5 text-center mr-3"></i>
+                        <span>Turnos</span>
                     </a>
-                    <a href="#" data-page="challenges" class="nav-link flex items-center px-4 py-3 rounded-lg">
-                        <i class="fas fa-fist-raised w-6 text-center"></i>
-                        <span class="ml-3">Desafíos</span>
+                    <a href="#" data-page="challenges" class="nav-link flex items-center px-4 py-2.5 rounded-lg text-sm">
+                        <i class="fas fa-fist-raised w-5 text-center mr-3"></i>
+                        <span>Desafíos</span>
                     </a>
-                    <a href="#" data-page="forum" class="nav-link flex items-center px-4 py-3 rounded-lg">
-                        <i class="fas fa-comments w-6 text-center"></i>
-                        <span class="ml-3">Foro</span>
+                    <a href="#" data-page="forum" class="nav-link flex items-center px-4 py-2.5 rounded-lg text-sm">
+                        <i class="fas fa-comments w-5 text-center mr-3"></i>
+                        <span>Foro</span>
                     </a>
-                    <a href="#" data-page="marketplace" class="nav-link flex items-center px-4 py-3 rounded-lg">
-                        <i class="fas fa-store w-6 text-center"></i>
-                        <span class="ml-3">Marketplace</span>
+                    <a href="#" data-page="marketplace" class="nav-link flex items-center px-4 py-2.5 rounded-lg text-sm">
+                        <i class="fas fa-store w-5 text-center mr-3"></i>
+                        <span>Marketplace</span>
                     </a>
                 </nav>
                 
-                <!-- Sección de estadísticas rápidas -->
                 <div class="mt-8 glass-card p-4 rounded-xl">
-                    <h3 class="text-sm font-semibold text-white mb-2">Tu Actividad</h3>
-                    <div class="flex justify-between text-xs">
-                        <div class="text-center">
-                            <div class="text-white font-bold">12</div>
-                            <div class="text-gray-400">Partidos</div>
+                    <h3 class="text-sm font-semibold text-white mb-3">Tu Actividad Reciente</h3>
+                    <div class="space-y-2 text-xs">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-400">Partidos Jugados:</span>
+                            <span class="text-white font-medium bg-gray-700 px-2 py-0.5 rounded">12</span>
                         </div>
-                        <div class="text-center">
-                            <div class="text-white font-bold">8</div>
-                            <div class="text-gray-400">Victorias</div>
+                         <div class="flex justify-between items-center">
+                            <span class="text-gray-400">Victorias:</span>
+                            <span class="text-green-400 font-medium bg-green-900/50 px-2 py-0.5 rounded">8</span>
                         </div>
-                        <div class="text-center">
-                            <div class="text-white font-bold">85%</div>
-                            <div class="text-gray-400">Efectividad</div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-400">Efectividad:</span>
+                            <span class="text-blue-400 font-medium bg-blue-900/50 px-2 py-0.5 rounded">67%</span>
                         </div>
                     </div>
+                     <button class="mt-3 w-full text-center text-xs text-red-400 hover:text-red-300 transition-colors">Ver estadísticas completas</button>
                 </div>
             </div>
             
@@ -331,39 +308,39 @@
             <div class="flex-shrink-0 pt-4 border-t border-gray-800">
                 <!-- Perfil de Usuario (Logueado) -->
                 <div id="user-profile" class="hidden items-center p-3 mb-3 glass-card rounded-xl">
-                    <div class="w-10 h-10 bg-gradient-to-r from-red-500 to-orange-500 rounded-full flex items-center justify-center text-white font-bold mr-3 shadow-lg">
+                     <div class="w-10 h-10 bg-gradient-to-r from-red-500 to-orange-500 rounded-full flex items-center justify-center text-white font-bold mr-3 shadow-lg flex-shrink-0">
                         <span id="user-initials">U</span>
                     </div>
-                    <div class="flex-1">
-                        <p class="font-bold text-white text-sm" id="user-name">Usuario</p>
-                        <p class="text-xs text-gray-400" id="user-role">Jugador</p>
+                    <div class="flex-1 overflow-hidden">
+                        <p class="font-bold text-white text-sm truncate" id="user-name">Usuario</p>
+                        <p class="text-xs text-gray-400 truncate" id="user-role">Jugador</p>
                     </div>
-                    <div class="relative">
-                        <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
-                    </div>
+                    <button class="ml-2 text-gray-400 hover:text-white transition-colors">
+                        <i class="fas fa-cog text-sm"></i>
+                    </button>
                 </div>
 
                 <!-- Botones de Acción -->
                 <div class="space-y-2">
-                    <button id="register-btn" class="w-full btn-primary text-white px-4 py-3 rounded-lg transition-all text-sm font-medium">
+                    <button id="register-btn" class="w-full btn-primary text-white px-4 py-2.5 rounded-lg transition-all text-sm font-medium flex items-center justify-center">
                         <i class="fas fa-user-plus mr-2"></i>Registrarse
                     </button>
-                    <button id="login-btn" class="w-full bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg transition-all text-sm font-medium">
+                    <button id="login-btn" class="w-full btn-tertiary px-4 py-2.5 rounded-lg transition-all text-sm font-medium flex items-center justify-center">
                         <i class="fas fa-sign-in-alt mr-2"></i>Iniciar Sesión
                     </button>
-                    <button id="logout-btn" class="hidden w-full bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg transition-all text-sm font-medium">
+                    <button id="logout-btn" class="hidden w-full btn-tertiary px-4 py-2.5 rounded-lg transition-all text-sm font-medium flex items-center justify-center">
                         <i class="fas fa-sign-out-alt mr-2"></i>Cerrar Sesión
                     </button>
                 </div>
-                <p class="text-gray-500 text-xs text-center pt-4">&copy; 2025 Padely. Todos los derechos reservados.</p>
+                <p class="text-gray-500 text-xs text-center pt-4">&copy; 2025 Padely.</p>
             </div>
         </aside>
 
         <!-- Contenido Principal -->
-        <main class="flex-1 overflow-y-auto p-4 md:p-8 pt-20 lg:pt-8">
-            <!-- Botón de Menú Móvil y Header -->
+        <main class="flex-1 overflow-y-auto p-4 md:p-8 pt-20 lg:pt-8 bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800">
+             <!-- Botón de Menú Móvil y Header -->
             <div class="lg:hidden fixed top-0 left-0 right-0 bg-gray-900/80 backdrop-blur-sm h-16 flex items-center px-4 z-20 border-b border-gray-800">
-                <button id="menu-toggle" class="text-white p-2 rounded-lg bg-gray-800/50">
+                <button id="menu-toggle" class="text-white p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors">
                     <i class="fas fa-bars text-xl"></i>
                 </button>
                 <h2 id="mobile-header-title" class="text-xl font-bold text-white ml-4">Inicio</h2>
@@ -372,36 +349,37 @@
             <!-- PAGINA: INICIO -->
             <div id="page-home" class="page-content">
                 <div class="flex flex-col md:flex-row md:items-center justify-between mb-8">
-                    <h2 class="text-4xl font-bold text-white mb-4 md:mb-0">Bienvenido a Padely</h2>
-                    <div class="flex items-center space-x-4">
+                    <h2 class="text-4xl font-bold text-white mb-4 md:mb-0">Bienvenido a <span class="gradient-text">Padely</span></h2>
+                     <div class="flex items-center space-x-4">
                         <div class="relative">
-                            <input type="text" placeholder="Buscar..." class="bg-gray-800/50 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 w-64">
+                            <input type="text" placeholder="Buscar..." class="glass-card bg-transparent border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 w-64 transition-all focus:border-red-500/50 focus:w-72">
                             <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
                         </div>
-                        <div class="bg-gray-800/50 p-2 rounded-lg border border-gray-700">
+                        <button class="glass-card bg-transparent p-2 rounded-lg border border-gray-700 hover:border-red-500/50 transition-colors relative">
                             <i class="fas fa-bell text-gray-300"></i>
-                        </div>
+                            <span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-gray-900 pulse"></span>
+                        </button>
                     </div>
                 </div>
                 
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div class="lg:col-span-2 space-y-8">
-                        <!-- Tarjetas de estadísticas -->
+                        <!-- Tarjetas de estadísticas - MEJORADAS -->
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div class="stats-card glass-card p-5 rounded-xl text-center">
-                                <div class="text-3xl font-bold text-white mb-2">24</div>
+                            <div class="stats-card glass-card p-5 rounded-xl text-center border-red-500">
+                                <i class="fas fa-trophy text-red-400 text-2xl mb-3"></i>
+                                <div class="text-3xl font-bold text-white mb-1">24</div>
                                 <div class="text-gray-400 text-sm">Torneos Activos</div>
-                                <div class="h-1 bg-gradient-to-r from-red-500 to-orange-500 rounded-full mt-3"></div>
                             </div>
-                            <div class="stats-card glass-card p-5 rounded-xl text-center">
-                                <div class="text-3xl font-bold text-white mb-2">156</div>
+                            <div class="stats-card glass-card p-5 rounded-xl text-center border-blue-500">
+                                <i class="fas fa-users text-blue-400 text-2xl mb-3"></i>
+                                <div class="text-3xl font-bold text-white mb-1">156</div>
                                 <div class="text-gray-400 text-sm">Jugadores en Línea</div>
-                                <div class="h-1 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full mt-3"></div>
                             </div>
-                            <div class="stats-card glass-card p-5 rounded-xl text-center">
-                                <div class="text-3xl font-bold text-white mb-2">8</div>
+                            <div class="stats-card glass-card p-5 rounded-xl text-center border-green-500">
+                                <i class="fas fa-calendar-check text-green-400 text-2xl mb-3"></i>
+                                <div class="text-3xl font-bold text-white mb-1">8</div>
                                 <div class="text-gray-400 text-sm">Canchas Disponibles</div>
-                                <div class="h-1 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full mt-3"></div>
                             </div>
                         </div>
                         
@@ -414,9 +392,10 @@
                                 <div class="md:col-span-2 tournament-card glass-card rounded-xl overflow-hidden shadow-lg transition-all duration-300">
                                     <div class="bg-gradient-to-r from-gray-800 to-gray-900 h-56 w-full flex items-center justify-center relative overflow-hidden">
                                         <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent z-10"></div>
-                                        <i class="fas fa-image text-5xl text-gray-600 z-0"></i>
+                                        <i class="fas fa-image text-5xl text-gray-600 z-0"></i> <!-- Placeholder -->
+                                        <!-- <img src="URL_IMAGEN_CANCHAS" class="absolute inset-0 w-full h-full object-cover z-0" alt="Nuevas canchas"> -->
                                         <div class="absolute bottom-4 left-6 z-20">
-                                            <span class="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full">Destacado</span>
+                                            <span class="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">Destacado</span>
                                         </div>
                                     </div>
                                     <div class="p-6">
@@ -424,8 +403,8 @@
                                         <p class="text-gray-400 mb-4">Estamos emocionados de anunciar la inauguración de nuestras 3 nuevas canchas panorámicas con tecnología de última generación.</p>
                                         <div class="flex justify-between items-center">
                                             <span class="text-gray-500 text-sm"><i class="far fa-clock mr-1"></i>Hace 2 días</span>
-                                            <a href="#" class="text-red-500 hover:text-red-400 font-semibold flex items-center">
-                                                Leer más <i class="fas fa-arrow-right ml-1 text-xs"></i>
+                                            <a href="#" class="text-red-500 hover:text-red-400 font-semibold flex items-center group">
+                                                Leer más <i class="fas fa-arrow-right ml-1 text-xs transform group-hover:translate-x-1 transition-transform"></i>
                                             </a>
                                         </div>
                                     </div>
@@ -440,8 +419,8 @@
                                             <p class="text-gray-400 text-sm">Mejora tu víbora y bandeja con nuestras nuevas clases grupales.</p>
                                         </div>
                                     </div>
-                                    <a href="#" class="text-red-500 hover:text-red-400 font-semibold text-sm flex items-center">
-                                        Inscríbete <i class="fas fa-arrow-right ml-1 text-xs"></i>
+                                    <a href="#" class="text-red-500 hover:text-red-400 font-semibold text-sm flex items-center group">
+                                        Inscríbete <i class="fas fa-arrow-right ml-1 text-xs transform group-hover:translate-x-1 transition-transform"></i>
                                     </a>
                                 </div>
                                 <div class="tournament-card glass-card rounded-xl p-6 shadow-lg transition-all duration-300">
@@ -454,8 +433,8 @@
                                             <p class="text-gray-400 text-sm">Anotate en la liga de verano y compite para ser el mejor del club.</p>
                                         </div>
                                     </div>
-                                    <a href="#" class="text-red-500 hover:text-red-400 font-semibold text-sm flex items-center">
-                                        Más Info <i class="fas fa-arrow-right ml-1 text-xs"></i>
+                                    <a href="#" class="text-red-500 hover:text-red-400 font-semibold text-sm flex items-center group">
+                                        Más Info <i class="fas fa-arrow-right ml-1 text-xs transform group-hover:translate-x-1 transition-transform"></i>
                                     </a>
                                 </div>
                             </div>
@@ -463,27 +442,27 @@
                         <div>
                             <h3 class="text-2xl font-semibold text-white mb-4">Torneos Activos</h3>
                             <div class="space-y-4">
-                                <div class="tournament-card glass-card rounded-xl p-5 flex justify-between items-center shadow-lg transition-all duration-300">
-                                    <div>
+                                <div class="tournament-card glass-card rounded-xl p-5 flex flex-col sm:flex-row justify-between sm:items-center shadow-lg transition-all duration-300">
+                                    <div class="mb-3 sm:mb-0">
                                         <p class="font-bold text-white">Torneo Americano 5ta Categoría</p>
                                         <p class="text-sm text-gray-400 flex items-center mt-1">
                                             <i class="fas fa-calendar-alt mr-2"></i>Finaliza en 3 días
-                                            <span class="ml-4 flex items-center"><i class="fas fa-users mr-1"></i> 24 parejas</span>
+                                            <span class="hidden sm:inline-flex items-center ml-4"><i class="fas fa-users mr-1"></i> 24/32 parejas</span>
                                         </p>
                                     </div>
-                                    <a href="#" class="btn-primary text-white px-4 py-2 rounded-lg transition-all text-sm font-semibold">
+                                    <a href="#" class="btn-primary text-white px-4 py-2 rounded-lg transition-all text-sm font-semibold w-full sm:w-auto text-center">
                                         Ver Cuadros
                                     </a>
                                 </div>
-                                <div class="tournament-card glass-card rounded-xl p-5 flex justify-between items-center shadow-lg transition-all duration-300">
-                                    <div>
+                                <div class="tournament-card glass-card rounded-xl p-5 flex flex-col sm:flex-row justify-between sm:items-center shadow-lg transition-all duration-300">
+                                    <div class="mb-3 sm:mb-0">
                                         <p class="font-bold text-white">Torneo Femenino C</p>
                                         <p class="text-sm text-gray-400 flex items-center mt-1">
                                             <i class="fas fa-calendar-alt mr-2"></i>Inscripciones abiertas
-                                            <span class="ml-4 flex items-center"><i class="fas fa-users mr-1"></i> 16 parejas</span>
+                                            <span class="hidden sm:inline-flex items-center ml-4"><i class="fas fa-users mr-1"></i> 8/16 parejas</span>
                                         </p>
                                     </div>
-                                    <a href="#" class="btn-secondary text-white px-4 py-2 rounded-lg transition-all text-sm font-semibold">
+                                    <a href="#" class="btn-secondary text-white px-4 py-2 rounded-lg transition-all text-sm font-semibold w-full sm:w-auto text-center">
                                         Inscribirse
                                     </a>
                                 </div>
@@ -492,23 +471,24 @@
                     </div>
                     <div class="lg:col-span-1 space-y-8">
                         <div class="glass-card rounded-xl p-6 shadow-lg">
-                            <h3 class="text-2xl font-semibold text-white mb-4 flex items-center">
+                            <h3 class="text-2xl font-semibold text-white mb-4 flex items-center justify-between">
                                 <span>Turnos Libres Hoy</span>
-                                <span class="ml-2 text-xs bg-green-500 text-white px-2 py-1 rounded-full">5 disponibles</span>
+                                <span class="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full">5</span>
                             </h3>
                             <div class="space-y-4">
-                                <div class="bg-gray-800/50 rounded-xl p-4 flex justify-between items-center border border-green-500/20">
+                                <div class="bg-gray-800/50 rounded-xl p-4 flex justify-between items-center border border-green-500/30 hover:border-green-500 transition-colors">
                                     <div>
                                         <p class="font-semibold text-white">Cancha 1 (Cristal)</p>
                                         <p class="text-sm text-green-400 flex items-center mt-1">
                                             <i class="fas fa-clock mr-1"></i> Ahora: 12:00 PM
                                         </p>
                                     </div>
-                                    <a href="#" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition-all">
+                                    <a href="#" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition-all shadow-md hover:shadow-lg">
                                         RESERVAR
                                     </a>
                                 </div>
-                                <div class="bg-gray-800/50 rounded-xl p-4 flex justify-between items-center">
+                                <!-- ... más turnos ... -->
+                                <div class="bg-gray-800/50 rounded-xl p-4 flex justify-between items-center border border-gray-700 hover:border-gray-600 transition-colors">
                                     <div>
                                         <p class="font-semibold text-white">Cancha 3 (Cemento)</p>
                                         <p class="text-sm text-gray-300 flex items-center mt-1">
@@ -519,20 +499,9 @@
                                         RESERVAR
                                     </a>
                                 </div>
-                                <div class="bg-gray-800/50 rounded-xl p-4 flex justify-between items-center">
-                                    <div>
-                                        <p class="font-semibold text-white">Cancha 2 (Panorámica)</p>
-                                        <p class="text-sm text-gray-300 flex items-center mt-1">
-                                            <i class="fas fa-clock mr-1"></i> Próximo: 15:00 PM
-                                        </p>
-                                    </div>
-                                    <a href="#" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-bold transition-all">
-                                        RESERVAR
-                                    </a>
-                                </div>
                             </div>
-                            <button class="w-full mt-6 btn-primary text-white py-3 rounded-lg transition-all font-medium">
-                                Ver todos los turnos
+                            <button class="w-full mt-6 btn-primary text-white py-3 rounded-lg transition-all font-medium flex items-center justify-center">
+                                <i class="fas fa-calendar-alt mr-2"></i>Ver todos los turnos
                             </button>
                         </div>
                         
@@ -543,117 +512,204 @@
                                 <div class="flex items-center">
                                     <i class="fas fa-sun text-yellow-400 text-3xl mr-4"></i>
                                     <div>
-                                        <p class="text-white font-bold">25°C</p>
+                                        <p class="text-white font-bold text-lg">25°C</p>
                                         <p class="text-gray-400 text-sm">Soleado</p>
                                     </div>
                                 </div>
                                 <div class="text-right">
-                                    <p class="text-white font-bold">Buenas</p>
+                                     <p class="text-green-400 font-bold text-lg">Buenas</p>
                                     <p class="text-gray-400 text-sm">Condiciones</p>
                                 </div>
                             </div>
                             <div class="mt-4 pt-4 border-t border-gray-800">
-                                <p class="text-gray-400 text-sm">Ideal para jugar al pádel. Viento suave y sin humedad.</p>
+                                <p class="text-gray-400 text-sm">Ideal para jugar al pádel hoy. Viento suave del NE.</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- PAGINA: TORNEOS -->
+             <!-- PAGINA: TORNEOS -->
             <div id="page-tournaments" class="page-content hidden">
-                <div class="flex flex-col md:flex-row md:items-center justify-between mb-8">
-                    <h2 class="text-4xl font-bold text-white mb-4 md:mb-0">Torneos</h2>
-                    <div class="flex space-x-4">
-                        <button class="bg-gray-800/50 hover:bg-gray-700 border border-gray-700 text-white px-4 py-2 rounded-lg transition-all text-sm font-medium">
-                            <i class="fas fa-filter mr-2"></i>Filtrar
-                        </button>
-                        <button id="create-tournament-btn" class="btn-primary text-white px-4 py-2 rounded-lg transition-all text-sm font-medium">
-                            <i class="fas fa-plus mr-2"></i>Nuevo Torneo
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                    <!-- Tarjetas de torneos con mejor diseño -->
-                    <div class="tournament-card glass-card rounded-xl p-5 shadow-lg transition-all duration-300">
-                        <div class="flex justify-between items-start mb-4">
-                            <div>
-                                <h3 class="font-bold text-white text-lg">Torneo Verano 2025</h3>
-                                <p class="text-gray-400 text-sm mt-1">Categoría A - Mixto</p>
-                            </div>
-                            <span class="bg-red-500/20 text-red-400 text-xs font-bold px-2 py-1 rounded-full">Activo</span>
+                 <!-- Vista de Lista de Torneos (Inicial) -->
+                 <div id="tournament-list-view">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between mb-8">
+                        <h2 class="text-4xl font-bold text-white mb-4 md:mb-0">Torneos</h2>
+                        <div class="flex space-x-4">
+                            <button class="btn-tertiary px-4 py-2 rounded-lg text-sm font-medium flex items-center">
+                                <i class="fas fa-filter mr-2"></i>Filtrar
+                            </button>
+                            <button id="create-tournament-btn" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center">
+                                <i class="fas fa-plus mr-2"></i>Nuevo Torneo
+                            </button>
                         </div>
-                        <div class="flex items-center text-gray-400 text-sm mb-4">
-                            <i class="fas fa-calendar-alt mr-2"></i>
-                            <span>15-30 Junio 2025</span>
-                        </div>
-                        <div class="flex justify-between items-center mb-4">
-                            <div class="text-center">
-                                <div class="text-white font-bold">24</div>
-                                <div class="text-gray-400 text-xs">Parejas</div>
-                            </div>
-                            <div class="text-center">
-                                <div class="text-white font-bold">8</div>
-                                <div class="text-gray-400 text-xs">Grupos</div>
-                            </div>
-                            <div class="text-center">
-                                <div class="text-white font-bold">56</div>
-                                <div class="text-gray-400 text-xs">Partidos</div>
-                            </div>
-                        </div>
-                        <div class="mb-4">
-                            <div class="flex justify-between text-sm text-gray-400 mb-1">
-                                <span>Progreso</span>
-                                <span>65%</span>
-                            </div>
-                            <div class="w-full bg-gray-700 rounded-full h-2">
-                                <div class="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full" style="width: 65%"></div>
-                            </div>
-                        </div>
-                        <button class="w-full bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg transition-all text-sm font-medium">
-                            Ver Detalles
-                        </button>
                     </div>
                     
-                    <!-- Más tarjetas de torneos... -->
-                </div>
-                
-                <!-- Sección de gráficos para torneos -->
-                <div class="glass-card rounded-xl p-6 shadow-lg mb-8">
-                    <h3 class="text-xl font-semibold text-white mb-4">Estadísticas de Torneos</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <canvas id="tournamentChart" height="250"></canvas>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                        <!-- Tarjetas de torneos -->
+                         <div class="tournament-card glass-card rounded-xl p-5 shadow-lg transition-all duration-300">
+                             <!-- Contenido tarjeta -->
+                             <div class="flex justify-between items-start mb-4">
+                                <div>
+                                    <h3 class="font-bold text-white text-lg">Torneo Verano 2025</h3>
+                                    <p class="text-gray-400 text-sm mt-1">Categoría A - Mixto</p>
+                                </div>
+                                <span class="bg-red-500/20 text-red-400 text-xs font-bold px-2 py-1 rounded-full">Activo</span>
+                            </div>
+                            <div class="flex items-center text-gray-400 text-sm mb-4">
+                                <i class="fas fa-calendar-alt mr-2"></i>
+                                <span>15-30 Junio 2025</span>
+                            </div>
+                            <!-- Resto del contenido -->
+                             <button class="mt-4 w-full btn-tertiary py-2 rounded-lg text-sm font-medium">Ver Detalles</button>
                         </div>
-                        <div class="flex flex-col justify-center">
-                            <div class="space-y-4">
-                                <div class="flex items-center">
-                                    <div class="w-4 h-4 bg-red-500 rounded-full mr-3"></div>
-                                    <div class="flex-1">
-                                        <div class="flex justify-between">
-                                            <span class="text-white">Torneos Activos</span>
-                                            <span class="text-white font-bold">8</span>
-                                        </div>
+                        <!-- Tarjeta para crear nuevo -->
+                         <div id="add-tournament-card" class="tournament-card glass-card rounded-xl p-5 shadow-lg transition-all duration-300 flex flex-col items-center justify-center text-center border-2 border-dashed border-gray-700 hover:border-red-500 cursor-pointer h-full min-h-[150px]">
+                             <i class="fas fa-plus-circle text-3xl text-gray-500 mb-2"></i>
+                             <p class="text-gray-400 text-sm font-medium">Crear Nuevo Torneo</p>
+                        </div>
+                    </div>
+                    
+                    <div class="glass-card rounded-xl p-6 shadow-lg mb-8">
+                        <h3 class="text-xl font-semibold text-white mb-4">Estadísticas</h3>
+                        <div><canvas id="tournamentChart" height="150"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- Asistente de Creación de Torneo (Oculto inicialmente) -->
+                <div id="create-tournament-wizard" class="hidden">
+                    <button id="back-to-list-btn" class="btn-tertiary px-4 py-2 rounded-lg text-sm font-medium mb-6 flex items-center">
+                        <i class="fas fa-arrow-left mr-2"></i>Volver a la lista
+                    </button>
+                    <div class="glass-card p-6 md:p-8 rounded-xl shadow-lg">
+                        <h2 class="text-3xl font-bold text-white mb-2">Crear Nuevo Torneo</h2>
+                        <p class="text-gray-400 mb-6">Sigue los pasos para configurar tu torneo.</p>
+
+                        <!-- Barra de Progreso -->
+                        <div class="mb-8">
+                            <div class="wizard-progress-bar bg-gray-700 rounded-full h-2 w-full overflow-hidden">
+                                <div id="wizard-progress" class="bg-gradient-to-r from-red-500 to-orange-500 h-2 rounded-full" style="width: 20%;"></div>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-400 mt-1">
+                                <span>Modalidad</span>
+                                <span>Detalles</span>
+                                <span>Formato</span>
+                                <span>Reglas</span>
+                                <span>Resumen</span>
+                            </div>
+                        </div>
+
+                        <!-- Pasos del Wizard -->
+                        <div id="wizard-steps-container">
+                            <!-- Paso 1: Modalidad - EXPANDIDO -->
+                            <div id="step-1" class="wizard-step active">
+                                <h3 class="text-xl font-semibold text-white mb-4">Paso 1: Elige la Modalidad</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div class="modality-card glass-card p-4 rounded-lg border border-gray-700" data-modality="americano">
+                                        <i class="fas fa-users text-2xl text-red-400 mb-2"></i>
+                                        <h4 class="font-semibold text-white">Americano</h4>
+                                        <p class="text-xs text-gray-400">Todos contra todos, ideal para torneos rápidos.</p>
+                                    </div>
+                                     <div class="modality-card glass-card p-4 rounded-lg border border-gray-700" data-modality="roundrobin">
+                                        <i class="fas fa-sitemap text-2xl text-blue-400 mb-2"></i>
+                                        <h4 class="font-semibold text-white">Round Robin + Playoff</h4>
+                                        <p class="text-xs text-gray-400">Fase de grupos y luego eliminatoria.</p>
+                                    </div>
+                                    <div class="modality-card glass-card p-4 rounded-lg border border-gray-700" data-modality="eliminatoria">
+                                        <i class="fas fa-trophy text-2xl text-yellow-400 mb-2"></i>
+                                        <h4 class="font-semibold text-white">Eliminatoria Directa</h4>
+                                        <p class="text-xs text-gray-400">Formato de copa, eliminación simple.</p>
+                                    </div>
+                                     <div class="modality-card glass-card p-4 rounded-lg border border-gray-700" data-modality="pozo">
+                                        <i class="fas fa-layer-group text-2xl text-green-400 mb-2"></i>
+                                        <h4 class="font-semibold text-white">Pozo / Rey de Pista</h4>
+                                        <p class="text-xs text-gray-400">Formato dinámico por canchas.</p>
+                                    </div>
+                                    <div class="modality-card glass-card p-4 rounded-lg border border-gray-700" data-modality="parejas">
+                                        <i class="fas fa-user-friends text-2xl text-purple-400 mb-2"></i>
+                                        <h4 class="font-semibold text-white">Por Parejas</h4>
+                                        <p class="text-xs text-gray-400">Inscripción por parejas predefinidas.</p>
+                                    </div>
+                                    <div class="modality-card glass-card p-4 rounded-lg border border-gray-700" data-modality="individual">
+                                        <i class="fas fa-user text-2xl text-indigo-400 mb-2"></i>
+                                        <h4 class="font-semibold text-white">Individual</h4>
+                                        <p class="text-xs text-gray-400">Jugadores individuales emparejados al azar.</p>
                                     </div>
                                 </div>
-                                <div class="flex items-center">
-                                    <div class="w-4 h-4 bg-blue-500 rounded-full mr-3"></div>
-                                    <div class="flex-1">
-                                        <div class="flex justify-between">
-                                            <span class="text-white">Torneos Finalizados</span>
-                                            <span class="text-white font-bold">24</span>
-                                        </div>
+                                <div class="mt-6 text-right">
+                                    <button class="wizard-next btn-primary text-white px-6 py-2 rounded-lg font-medium text-sm">Siguiente</button>
+                                </div>
+                            </div>
+
+                             <!-- Paso 2: Detalles Básicos - MEJORADO -->
+                            <div id="step-2" class="wizard-step">
+                                <h3 class="text-xl font-semibold text-white mb-4">Paso 2: Detalles Básicos</h3>
+                                <div class="space-y-4">
+                                    <div><label class="block text-sm mb-1 text-gray-400">Nombre del Torneo</label><input type="text" id="wizard-tournament-name" class="w-full p-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white"></div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div><label class="block text-sm mb-1 text-gray-400">Fecha de Inicio</label><input type="date" id="wizard-start-date" class="w-full p-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white"></div>
+                                        <div><label class="block text-sm mb-1 text-gray-400">Lugar / Club</label><input type="text" id="wizard-location" class="w-full p-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white"></div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm mb-1 text-gray-400">Categorías</label>
+                                        <select id="wizard-categories" class="w-full p-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white" multiple>
+                                            <option value="1era">1era</option>
+                                            <option value="2da">2da</option>
+                                            <option value="3ra">3ra</option>
+                                            <option value="4ta">4ta</option>
+                                            <option value="5ta" selected>5ta</option>
+                                            <option value="6ta">6ta</option>
+                                            <option value="7ma">7ma</option>
+                                            <option value="8va">8va</option>
+                                        </select>
+                                        <p class="text-xs text-gray-500 mt-1">Mantén presionada la tecla Ctrl para seleccionar múltiples categorías</p>
                                     </div>
                                 </div>
-                                <div class="flex items-center">
-                                    <div class="w-4 h-4 bg-green-500 rounded-full mr-3"></div>
-                                    <div class="flex-1">
-                                        <div class="flex justify-between">
-                                            <span class="text-white">Próximos Torneos</span>
-                                            <span class="text-white font-bold">5</span>
-                                        </div>
-                                    </div>
+                                <div class="mt-6 flex justify-between">
+                                    <button class="wizard-prev btn-tertiary px-6 py-2 rounded-lg font-medium text-sm">Anterior</button>
+                                    <button class="wizard-next btn-primary text-white px-6 py-2 rounded-lg font-medium text-sm">Siguiente</button>
+                                </div>
+                            </div>
+
+                             <!-- Paso 3: Formato -->
+                            <div id="step-3" class="wizard-step">
+                                <h3 class="text-xl font-semibold text-white mb-4">Paso 3: Formato del Torneo</h3>
+                                <p class="text-gray-400 mb-4">Define cómo se jugarán los partidos.</p>
+                                 <!-- Contenido dinámico según modalidad - Placeholder -->
+                                <div class="space-y-4 p-4 bg-gray-800/30 rounded-lg border border-dashed border-gray-700">
+                                    <p class="text-center text-gray-500">Opciones de formato aparecerán aquí según la modalidad elegida.</p>
+                                    <!-- Ejemplo: <label>Sets por partido:</label> <select>...</select> -->
+                                </div>
+                                <div class="mt-6 flex justify-between">
+                                    <button class="wizard-prev btn-tertiary px-6 py-2 rounded-lg font-medium text-sm">Anterior</button>
+                                    <button class="wizard-next btn-primary text-white px-6 py-2 rounded-lg font-medium text-sm">Siguiente</button>
+                                </div>
+                            </div>
+
+                             <!-- Paso 4: Reglas Adicionales -->
+                            <div id="step-4" class="wizard-step">
+                                <h3 class="text-xl font-semibold text-white mb-4">Paso 4: Reglas Adicionales</h3>
+                                 <div class="space-y-4">
+                                     <div><label class="block text-sm mb-1 text-gray-400">Precio Inscripción ($)</label><input type="number" id="wizard-price" class="w-full p-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white" placeholder="0 si es gratis"></div>
+                                      <div><label class="block text-sm mb-1 text-gray-400">Fecha Límite Inscripción</label><input type="date" id="wizard-deadline" class="w-full p-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white"></div>
+                                     <div><label class="block text-sm mb-1 text-gray-400">Reglas de Desempate (Opcional)</label><textarea id="wizard-tiebreak" rows="3" class="w-full p-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white" placeholder="Ej: Diferencia de juegos, enfrentamiento directo..."></textarea></div>
+                                 </div>
+                                <div class="mt-6 flex justify-between">
+                                    <button class="wizard-prev btn-tertiary px-6 py-2 rounded-lg font-medium text-sm">Anterior</button>
+                                    <button class="wizard-next btn-primary text-white px-6 py-2 rounded-lg font-medium text-sm">Siguiente</button>
+                                </div>
+                            </div>
+
+                             <!-- Paso 5: Resumen -->
+                            <div id="step-5" class="wizard-step">
+                                <h3 class="text-xl font-semibold text-white mb-4">Paso 5: Resumen y Confirmación</h3>
+                                <div id="wizard-summary" class="space-y-3 p-4 bg-gray-800/30 rounded-lg border border-gray-700">
+                                    <p class="text-center text-gray-500">Aquí se mostrará un resumen de la configuración.</p>
+                                     <!-- JS llenará esto -->
+                                </div>
+                                <div class="mt-6 flex justify-between">
+                                    <button class="wizard-prev btn-tertiary px-6 py-2 rounded-lg font-medium text-sm">Anterior</button>
+                                    <button id="wizard-finish" class="btn-secondary text-white px-6 py-2 rounded-lg font-medium text-sm">Confirmar y Crear Torneo</button>
                                 </div>
                             </div>
                         </div>
@@ -661,41 +717,12 @@
                 </div>
             </div>
 
-            <!-- PAGINAS EN CONSTRUCCION -->
-            <div id="page-bookings" class="page-content hidden">
-                <div class="text-center py-12">
-                    <i class="fas fa-calendar-alt text-6xl text-gray-600 mb-4"></i>
-                    <h2 class="text-4xl font-bold text-white mb-4">Reserva de Turnos</h2>
-                    <p class="text-lg text-gray-400 max-w-md mx-auto">Estamos trabajando en una experiencia de reserva mejorada. Muy pronto podrás reservar tus turnos de forma más rápida y sencilla.</p>
-                    <button class="btn-primary text-white px-6 py-3 rounded-lg mt-6 transition-all font-medium">
-                        <i class="fas fa-bell mr-2"></i>Notificarme cuando esté listo
-                    </button>
-                </div>
-            </div>
-            
-            <div id="page-challenges" class="page-content hidden">
-                <div class="text-center py-12">
-                    <i class="fas fa-fist-raised text-6xl text-gray-600 mb-4"></i>
-                    <h2 class="text-4xl font-bold text-white mb-4">Desafíos</h2>
-                    <p class="text-lg text-gray-400 max-w-md mx-auto">Próximamente podrás desafiar a otros jugadores y subir de ranking en nuestra comunidad.</p>
-                </div>
-            </div>
-            
-            <div id="page-forum" class="page-content hidden">
-                <div class="text-center py-12">
-                    <i class="fas fa-comments text-6xl text-gray-600 mb-4"></i>
-                    <h2 class="text-4xl font-bold text-white mb-4">Foro de la Comunidad</h2>
-                    <p class="text-lg text-gray-400 max-w-md mx-auto">Estamos construyendo un espacio para que compartas experiencias, consejos y conectes con otros amantes del pádel.</p>
-                </div>
-            </div>
-            
-            <div id="page-marketplace" class="page-content hidden">
-                <div class="text-center py-12">
-                    <i class="fas fa-store text-6xl text-gray-600 mb-4"></i>
-                    <h2 class="text-4xl font-bold text-white mb-4">Marketplace</h2>
-                    <p class="text-lg text-gray-400 max-w-md mx-auto">Próximamente podrás comprar y vender equipo de pádel, encontrar pareja de juego y mucho más.</p>
-                </div>
-            </div>
+
+            <!-- PAGINAS EN CONSTRUCCION (con mejor diseño) -->
+            <div id="page-bookings" class="page-content hidden"> <div class="text-center py-12"> <i class="fas fa-calendar-alt text-6xl text-gray-600 mb-4"></i> <h2 class="text-4xl font-bold text-white mb-4">Reserva de Turnos</h2> <p class="text-lg text-gray-400 max-w-md mx-auto">Estamos trabajando en una experiencia de reserva mejorada. Muy pronto podrás reservar tus turnos de forma más rápida y sencilla.</p> <button class="btn-primary text-white px-6 py-3 rounded-lg mt-6 transition-all font-medium"> <i class="fas fa-bell mr-2"></i>Notificarme</button> </div> </div>
+            <div id="page-challenges" class="page-content hidden"> <div class="text-center py-12"> <i class="fas fa-fist-raised text-6xl text-gray-600 mb-4"></i> <h2 class="text-4xl font-bold text-white mb-4">Desafíos</h2> <p class="text-lg text-gray-400 max-w-md mx-auto">Próximamente podrás desafiar a otros jugadores y subir de ranking en nuestra comunidad.</p> </div> </div>
+            <div id="page-forum" class="page-content hidden"> <div class="text-center py-12"> <i class="fas fa-comments text-6xl text-gray-600 mb-4"></i> <h2 class="text-4xl font-bold text-white mb-4">Foro de la Comunidad</h2> <p class="text-lg text-gray-400 max-w-md mx-auto">Estamos construyendo un espacio para que compartas experiencias, consejos y conectes con otros amantes del pádel.</p> </div> </div>
+            <div id="page-marketplace" class="page-content hidden"> <div class="text-center py-12"> <i class="fas fa-store text-6xl text-gray-600 mb-4"></i> <h2 class="text-4xl font-bold text-white mb-4">Marketplace</h2> <p class="text-lg text-gray-400 max-w-md mx-auto">Próximamente podrás comprar y vender equipo de pádel, encontrar pareja de juego y mucho más.</p> </div> </div>
         </main>
     </div>
 
@@ -704,553 +731,42 @@
         <i class="fas fa-plus"></i>
     </div>
 
-    <!-- MODAL DE LOGIN -->
+    <!-- MODAL DE LOGIN (mejorado) -->
     <div id="login-modal" class="modal-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
         <div class="glass-card border border-gray-700 rounded-xl shadow-2xl p-8 w-full max-w-sm relative transform transition-transform duration-300 scale-95">
-            <button class="close-modal-btn absolute top-4 right-4 text-gray-400 hover:text-white transition-colors p-1 rounded-full">
-                <i class="fas fa-times"></i>
-            </button>
-            <div class="text-center mb-2">
-                <h2 class="text-2xl font-bold text-white">Bienvenido de nuevo</h2>
-                <p class="text-gray-400 text-sm mt-2">Ingresa a tu cuenta para continuar</p>
-            </div>
+             <button class="close-modal-btn absolute top-4 right-4 text-gray-400 hover:text-white transition-colors p-1 rounded-full"><i class="fas fa-times"></i></button>
+            <div class="text-center mb-2"><h2 class="text-2xl font-bold text-white">Bienvenido de nuevo</h2><p class="text-gray-400 text-sm mt-2">Ingresa a tu cuenta</p></div>
             <form id="login-form" class="mt-6">
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-300 mb-2">Usuario o Email</label>
-                    <div class="relative">
-                        <i class="fas fa-user absolute left-3 top-3 text-gray-400"></i>
-                        <input type="text" id="username" name="username" class="w-full pl-10 pr-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all" placeholder="tu@email.com" required>
-                    </div>
-                </div>
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-300 mb-2">Contraseña</label>
-                    <div class="relative">
-                        <i class="fas fa-lock absolute left-3 top-3 text-gray-400"></i>
-                        <input type="password" id="password" name="password" class="w-full pl-10 pr-10 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all" placeholder="••••••••" required>
-                        <button type="button" class="absolute right-3 top-3 text-gray-400 hover:text-gray-300" id="toggle-password">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="flex items-center justify-between mb-6">
-                    <div class="flex items-center">
-                        <input type="checkbox" id="remember" class="w-4 h-4 bg-gray-800 border-gray-700 rounded text-red-500 focus:ring-red-500">
-                        <label for="remember" class="ml-2 text-sm text-gray-300">Recordarme</label>
-                    </div>
-                    <a href="#" class="text-sm text-red-500 hover:text-red-400 transition-colors">¿Olvidaste tu contraseña?</a>
-                </div>
-                <p id="login-error" class="text-red-500 text-sm text-center mb-4 hidden">Credenciales incorrectas. Intenta nuevamente.</p>
-                <button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center">
-                    <i class="fas fa-sign-in-alt mr-2"></i>Ingresar a mi cuenta
-                </button>
+                <div class="mb-4"><label class="block text-sm font-medium text-gray-300 mb-2">Usuario o Email</label><div class="relative"><i class="fas fa-user absolute left-3 top-3.5 text-gray-400"></i><input type="text" id="username" name="username" class="w-full pl-10 pr-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500/50" placeholder="tu@email.com" required></div></div>
+                <div class="mb-6"><label class="block text-sm font-medium text-gray-300 mb-2">Contraseña</label><div class="relative"><i class="fas fa-lock absolute left-3 top-3.5 text-gray-400"></i><input type="password" id="password" name="password" class="w-full pl-10 pr-10 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500/50" placeholder="••••••••" required><button type="button" class="absolute right-3 top-3.5 text-gray-400 hover:text-gray-300" id="toggle-password"><i class="fas fa-eye"></i></button></div></div>
+                <div class="flex items-center justify-between mb-6"><div class="flex items-center"><input type="checkbox" id="remember" class="w-4 h-4 bg-gray-800 border-gray-700 rounded text-red-500 focus:ring-red-500"><label for="remember" class="ml-2 text-sm text-gray-300">Recordarme</label></div><a href="#" class="text-sm text-red-500 hover:text-red-400">¿Olvidaste contraseña?</a></div>
+                <p id="login-error" class="text-red-500 text-sm text-center mb-4 hidden">Credenciales incorrectas.</p>
+                <button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg flex items-center justify-center"><i class="fas fa-sign-in-alt mr-2"></i>Ingresar</button>
             </form>
-            <div class="mt-6 text-center">
-                <p class="text-gray-400 text-sm">¿No tienes una cuenta? 
-                    <a href="#" class="text-red-500 hover:text-red-400 font-medium transition-colors" id="switch-to-register">Regístrate aquí</a>
-                </p>
-            </div>
+            <div class="mt-6 text-center"><p class="text-gray-400 text-sm">¿No tienes cuenta? <a href="#" class="text-red-500 hover:text-red-400 font-medium" id="switch-to-register">Regístrate aquí</a></p></div>
         </div>
     </div>
 
-    <!-- MODAL DE REGISTRO -->
+    <!-- MODAL DE REGISTRO (mejorado) -->
     <div id="register-modal" class="modal-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
         <div class="glass-card border border-gray-700 rounded-xl shadow-2xl p-8 w-full max-w-lg relative transform transition-transform duration-300 scale-95">
-            <button class="close-modal-btn absolute top-4 right-4 text-gray-400 hover:text-white transition-colors p-1 rounded-full">
-                <i class="fas fa-times"></i>
-            </button>
-            
+             <button class="close-modal-btn absolute top-4 right-4 text-gray-400 hover:text-white transition-colors p-1 rounded-full"><i class="fas fa-times"></i></button>
             <!-- Paso 1: Selección de Rol -->
             <div id="role-selection-step">
-                <div class="text-center mb-6">
-                    <h2 class="text-2xl font-bold text-white">Únete a Padely</h2>
-                    <p class="text-gray-400 mt-2">Elige tu tipo de perfil para comenzar</p>
-                </div>
+                <div class="text-center mb-6"><h2 class="text-2xl font-bold text-white">Únete a Padely</h2><p class="text-gray-400 mt-2">Elige tu tipo de perfil</p></div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div data-role="player" class="role-card cursor-pointer glass-card p-6 rounded-xl border-2 border-gray-700 text-center transition-all duration-300">
-                        <div class="bg-red-500/20 p-4 rounded-full inline-flex mb-4">
-                            <i class="fas fa-user text-2xl text-red-400"></i>
-                        </div>
-                        <h3 class="font-bold text-white text-lg">Jugador</h3>
-                        <p class="text-sm text-gray-400 mt-2">Para participar en torneos y desafíos.</p>
-                    </div>
-                    <div data-role="organizer" class="role-card cursor-pointer glass-card p-6 rounded-xl border-2 border-gray-700 text-center transition-all duration-300">
-                        <div class="bg-blue-500/20 p-4 rounded-full inline-flex mb-4">
-                            <i class="fas fa-trophy text-2xl text-blue-400"></i>
-                        </div>
-                        <h3 class="font-bold text-white text-lg">Organizador</h3>
-                        <p class="text-sm text-gray-400 mt-2">Para crear y gestionar tus propios torneos.</p>
-                    </div>
-                    <div data-role="club" class="role-card cursor-pointer glass-card p-6 rounded-xl border-2 border-gray-700 text-center transition-all duration-300">
-                        <div class="bg-green-500/20 p-4 rounded-full inline-flex mb-4">
-                            <i class="fas fa-shield-alt text-2xl text-green-400"></i>
-                        </div>
-                        <h3 class="font-bold text-white text-lg">Dueño de Club</h3>
-                        <p class="text-sm text-gray-400 mt-2">Para administrar canchas y turnos.</p>
-                    </div>
+                    <div data-role="player" class="role-card cursor-pointer glass-card p-6 rounded-xl border-2 border-gray-700 text-center"><div class="bg-red-500/20 p-4 rounded-full inline-flex mb-4"><i class="fas fa-user text-2xl text-red-400"></i></div><h3 class="font-bold text-white text-lg">Jugador</h3><p class="text-sm text-gray-400 mt-2">Participa en torneos y desafíos.</p></div>
+                    <div data-role="organizer" class="role-card cursor-pointer glass-card p-6 rounded-xl border-2 border-gray-700 text-center"><div class="bg-blue-500/20 p-4 rounded-full inline-flex mb-4"><i class="fas fa-trophy text-2xl text-blue-400"></i></div><h3 class="font-bold text-white text-lg">Organizador</h3><p class="text-sm text-gray-400 mt-2">Crea y gestiona torneos.</p></div>
+                    <div data-role="club" class="role-card cursor-pointer glass-card p-6 rounded-xl border-2 border-gray-700 text-center"><div class="bg-green-500/20 p-4 rounded-full inline-flex mb-4"><i class="fas fa-shield-alt text-2xl text-green-400"></i></div><h3 class="font-bold text-white text-lg">Dueño de Club</h3><p class="text-sm text-gray-400 mt-2">Administra canchas y turnos.</p></div>
                 </div>
             </div>
-
             <!-- Paso 2: Formularios -->
             <div id="form-steps" class="hidden">
-                <button class="back-to-roles text-gray-400 hover:text-white transition-colors mb-6 flex items-center">
-                    <i class="fas fa-arrow-left mr-2"></i>Volver a elegir rol
-                </button>
-                
-                <!-- Formulario para Jugador -->
-                <form id="register-form-player" class="register-form hidden space-y-4">
-                    <h2 class="text-2xl font-bold text-white mb-2">Registro de Jugador</h2>
-                    <p class="text-gray-400 text-sm mb-6">Completa tus datos para crear tu cuenta de jugador</p>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Nombre</label>
-                            <input type="text" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all" required>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Apellido</label>
-                            <input type="text" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all" required>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Email</label>
-                        <input type="email" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all" required>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Contraseña</label>
-                        <input type="password" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all" required>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Nivel de Juego</label>
-                        <select class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all">
-                            <option>Iniciación</option>
-                            <option>Intermedio</option>
-                            <option>Avanzado</option>
-                            <option>Competitivo</option>
-                        </select>
-                    </div>
-                    
-                    <button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg transition-all mt-4">
-                        Crear Cuenta de Jugador
-                    </button>
-                </form>
-                
-                <!-- Formularios para Organizador y Club -->
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL DE CREACIÓN DE TORNEO - CUESTIONARIO -->
-    <div id="create-tournament-modal" class="modal-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
-        <div class="glass-card border border-gray-700 rounded-xl shadow-2xl w-full max-w-2xl relative max-h-[90vh] overflow-hidden">
-            <button class="close-modal-btn absolute top-4 right-4 text-gray-400 hover:text-white transition-colors p-2 rounded-full z-10">
-                <i class="fas fa-times text-xl"></i>
-            </button>
-            
-            <!-- Barra de progreso -->
-            <div class="h-1 bg-gray-700">
-                <div id="tournament-progress-bar" class="h-full bg-gradient-to-r from-red-500 to-orange-500 transition-all duration-500" style="width: 0%"></div>
-            </div>
-            
-            <div class="p-8 overflow-y-auto" style="max-height: calc(90vh - 4rem)">
-                <!-- Paso 1: Tipo de Torneo -->
-                <div id="tournament-step-1" class="tournament-step">
-                    <div class="text-center mb-8">
-                        <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <i class="fas fa-trophy text-2xl text-red-400"></i>
-                        </div>
-                        <h2 class="text-2xl font-bold text-white">Crear Nuevo Torneo</h2>
-                        <p class="text-gray-400 mt-2">Elige el tipo de torneo que quieres organizar</p>
-                    </div>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                        <div class="tournament-type-card" data-type="american">
-                            <div class="bg-blue-500/10 p-4 rounded-lg mb-3">
-                                <i class="fas fa-users text-3xl text-blue-400"></i>
-                            </div>
-                            <h3 class="font-bold text-white text-lg mb-2">Torneo Americano</h3>
-                            <p class="text-gray-400 text-sm">Perfecto para grupos grandes. Todos juegan con todos en rotación.</p>
-                            <div class="mt-3 text-xs text-gray-500">
-                                <span class="inline-block bg-gray-700 px-2 py-1 rounded mr-2">8-32 jugadores</span>
-                                <span class="inline-block bg-gray-700 px-2 py-1 rounded">4+ horas</span>
-                            </div>
-                        </div>
-                        
-                        <div class="tournament-type-card" data-type="elimination">
-                            <div class="bg-red-500/10 p-4 rounded-lg mb-3">
-                                <i class="fas fa-chess-board text-3xl text-red-400"></i>
-                            </div>
-                            <h3 class="font-bold text-white text-lg mb-2">Eliminación Directa</h3>
-                            <p class="text-gray-400 text-sm">Clásico formato de playoff. Pierdes y quedas fuera.</p>
-                            <div class="mt-3 text-xs text-gray-500">
-                                <span class="inline-block bg-gray-700 px-2 py-1 rounded mr-2">8-16 parejas</span>
-                                <span class="inline-block bg-gray-700 px-2 py-1 rounded">2-3 horas</span>
-                            </div>
-                        </div>
-                        
-                        <div class="tournament-type-card" data-type="league">
-                            <div class="bg-green-500/10 p-4 rounded-lg mb-3">
-                                <i class="fas fa-table text-3xl text-green-400"></i>
-                            </div>
-                            <h3 class="font-bold text-white text-lg mb-2">Liga por Grupos</h3>
-                            <p class="text-gray-400 text-sm">Grupos fase regular + playoffs. Máxima competitividad.</p>
-                            <div class="mt-3 text-xs text-gray-500">
-                                <span class="inline-block bg-gray-700 px-2 py-1 rounded mr-2">12-24 parejas</span>
-                                <span class="inline-block bg-gray-700 px-2 py-1 rounded">Varias semanas</span>
-                            </div>
-                        </div>
-                        
-                        <div class="tournament-type-card" data-type="custom">
-                            <div class="bg-purple-500/10 p-4 rounded-lg mb-3">
-                                <i class="fas fa-cogs text-3xl text-purple-400"></i>
-                            </div>
-                            <h3 class="font-bold text-white text-lg mb-2">Personalizado</h3>
-                            <p class="text-gray-400 text-sm">Configura cada detalle a tu medida y necesidades.</p>
-                            <div class="mt-3 text-xs text-gray-500">
-                                <span class="inline-block bg-gray-700 px-2 py-1 rounded mr-2">Flexible</span>
-                                <span class="inline-block bg-gray-700 px-2 py-1 rounded">Total control</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="flex justify-end">
-                        <button class="next-step-btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-all font-medium">
-                            Siguiente <i class="fas fa-arrow-right ml-2"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Paso 2: Modalidad y Categoría -->
-                <div id="tournament-step-2" class="tournament-step hidden">
-                    <div class="text-center mb-8">
-                        <div class="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <i class="fas fa-venus-mars text-2xl text-blue-400"></i>
-                        </div>
-                        <h2 class="text-2xl font-bold text-white">Modalidad y Categoría</h2>
-                        <p class="text-gray-400 mt-2">Define las características principales del torneo</p>
-                    </div>
-                    
-                    <div class="space-y-6">
-                        <div>
-                            <h3 class="text-lg font-semibold text-white mb-3">Modalidad</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <label class="modality-option">
-                                    <input type="radio" name="modality" value="masculino" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-4 text-center cursor-pointer transition-all hover:border-blue-500">
-                                        <i class="fas fa-mars text-2xl text-blue-400 mb-2"></i>
-                                        <p class="font-medium text-white">Masculino</p>
-                                    </div>
-                                </label>
-                                <label class="modality-option">
-                                    <input type="radio" name="modality" value="femenino" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-4 text-center cursor-pointer transition-all hover:border-pink-500">
-                                        <i class="fas fa-venus text-2xl text-pink-400 mb-2"></i>
-                                        <p class="font-medium text-white">Femenino</p>
-                                    </div>
-                                </label>
-                                <label class="modality-option">
-                                    <input type="radio" name="modality" value="mixto" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-4 text-center cursor-pointer transition-all hover:border-purple-500">
-                                        <i class="fas fa-venus-mars text-2xl text-purple-400 mb-2"></i>
-                                        <p class="font-medium text-white">Mixto</p>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <h3 class="text-lg font-semibold text-white mb-3">Nivel de Juego</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                                <label class="level-option">
-                                    <input type="radio" name="level" value="iniciacion" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-green-500">
-                                        <div class="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-2">
-                                            <span class="text-green-400 font-bold">I</span>
-                                        </div>
-                                        <p class="font-medium text-white text-sm">Iniciación</p>
-                                    </div>
-                                </label>
-                                <label class="level-option">
-                                    <input type="radio" name="level" value="intermedio" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-yellow-500">
-                                        <div class="w-8 h-8 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-2">
-                                            <span class="text-yellow-400 font-bold">II</span>
-                                        </div>
-                                        <p class="font-medium text-white text-sm">Intermedio</p>
-                                    </div>
-                                </label>
-                                <label class="level-option">
-                                    <input type="radio" name="level" value="avanzado" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-orange-500">
-                                        <div class="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-2">
-                                            <span class="text-orange-400 font-bold">III</span>
-                                        </div>
-                                        <p class="font-medium text-white text-sm">Avanzado</p>
-                                    </div>
-                                </label>
-                                <label class="level-option">
-                                    <input type="radio" name="level" value="competitivo" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-red-500">
-                                        <div class="w-8 h-8 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-2">
-                                            <span class="text-red-400 font-bold">IV</span>
-                                        </div>
-                                        <p class="font-medium text-white text-sm">Competitivo</p>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <h3 class="text-lg font-semibold text-white mb-3">Categoría de Edad</h3>
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <label class="age-option">
-                                    <input type="radio" name="ageCategory" value="open" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-blue-500">
-                                        <p class="font-medium text-white text-sm">Open</p>
-                                        <p class="text-gray-400 text-xs">Sin límite</p>
-                                    </div>
-                                </label>
-                                <label class="age-option">
-                                    <input type="radio" name="ageCategory" value="sub19" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-green-500">
-                                        <p class="font-medium text-white text-sm">Sub-19</p>
-                                        <p class="text-gray-400 text-xs">Hasta 19 años</p>
-                                    </div>
-                                </label>
-                                <label class="age-option">
-                                    <input type="radio" name="ageCategory" value="veteranos" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-purple-500">
-                                        <p class="font-medium text-white text-sm">+35</p>
-                                        <p class="text-gray-400 text-xs">Veteranos</p>
-                                    </div>
-                                </label>
-                                <label class="age-option">
-                                    <input type="radio" name="ageCategory" value="senior" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-orange-500">
-                                        <p class="font-medium text-white text-sm">+45</p>
-                                        <p class="text-gray-400 text-xs">Senior</p>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="flex justify-between mt-8">
-                        <button class="prev-step-btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-all font-medium">
-                            <i class="fas fa-arrow-left mr-2"></i> Anterior
-                        </button>
-                        <button class="next-step-btn bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-all font-medium">
-                            Siguiente <i class="fas fa-arrow-right ml-2"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Paso 3: Configuración de Participantes -->
-                <div id="tournament-step-3" class="tournament-step hidden">
-                    <div class="text-center mb-8">
-                        <div class="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <i class="fas fa-users text-2xl text-green-400"></i>
-                        </div>
-                        <h2 class="text-2xl font-bold text-white">Participantes</h2>
-                        <p class="text-gray-400 mt-2">Configura el número de participantes y formato</p>
-                    </div>
-                    
-                    <div class="space-y-6">
-                        <div>
-                            <label class="block text-lg font-semibold text-white mb-3">Número de Parejas</label>
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <label class="team-option">
-                                    <input type="radio" name="teamCount" value="8" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-4 text-center cursor-pointer transition-all hover:border-blue-500">
-                                        <p class="text-2xl font-bold text-white">8</p>
-                                        <p class="text-gray-400 text-xs">Parejas</p>
-                                    </div>
-                                </label>
-                                <label class="team-option">
-                                    <input type="radio" name="teamCount" value="12" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-4 text-center cursor-pointer transition-all hover:border-blue-500">
-                                        <p class="text-2xl font-bold text-white">12</p>
-                                        <p class="text-gray-400 text-xs">Parejas</p>
-                                    </div>
-                                </label>
-                                <label class="team-option">
-                                    <input type="radio" name="teamCount" value="16" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-4 text-center cursor-pointer transition-all hover:border-blue-500">
-                                        <p class="text-2xl font-bold text-white">16</p>
-                                        <p class="text-gray-400 text-xs">Parejas</p>
-                                    </div>
-                                </label>
-                                <label class="team-option">
-                                    <input type="radio" name="teamCount" value="custom" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-4 text-center cursor-pointer transition-all hover:border-purple-500">
-                                        <p class="text-2xl font-bold text-white">#</p>
-                                        <p class="text-gray-400 text-xs">Personalizado</p>
-                                    </div>
-                                </label>
-                            </div>
-                            
-                            <div id="custom-team-count" class="hidden mt-4">
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Número exacto de parejas</label>
-                                <input type="number" min="4" max="32" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50" placeholder="Ej: 20">
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-lg font-semibold text-white mb-3">Formato de Inscripción</label>
-                            <div class="space-y-3">
-                                <label class="flex items-center space-x-3 cursor-pointer">
-                                    <input type="radio" name="registrationType" value="open" class="text-blue-500 focus:ring-blue-500">
-                                    <div>
-                                        <p class="font-medium text-white">Inscripción Abierta</p>
-                                        <p class="text-gray-400 text-sm">Cualquier pareja puede inscribirse hasta completar cupos</p>
-                                    </div>
-                                </label>
-                                <label class="flex items-center space-x-3 cursor-pointer">
-                                    <input type="radio" name="registrationType" value="invitation" class="text-blue-500 focus:ring-blue-500">
-                                    <div>
-                                        <p class="font-medium text-white">Por Invitación</p>
-                                        <p class="text-gray-400 text-sm">Solo las parejas invitadas pueden participar</p>
-                                    </div>
-                                </label>
-                                <label class="flex items-center space-x-3 cursor-pointer">
-                                    <input type="radio" name="registrationType" value="qualification" class="text-blue-500 focus:ring-blue-500">
-                                    <div>
-                                        <p class="font-medium text-white">Con Clasificación</p>
-                                        <p class="text-gray-400 text-sm">Fase previa de clasificación para determinar participantes</p>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="flex justify-between mt-8">
-                        <button class="prev-step-btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-all font-medium">
-                            <i class="fas fa-arrow-left mr-2"></i> Anterior
-                        </button>
-                        <button class="next-step-btn bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-all font-medium">
-                            Siguiente <i class="fas fa-arrow-right ml-2"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Paso 4: Fechas y Horarios -->
-                <div id="tournament-step-4" class="tournament-step hidden">
-                    <div class="text-center mb-8">
-                        <div class="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <i class="fas fa-calendar-alt text-2xl text-purple-400"></i>
-                        </div>
-                        <h2 class="text-2xl font-bold text-white">Fechas y Horarios</h2>
-                        <p class="text-gray-400 mt-2">Programa la duración del torneo</p>
-                    </div>
-                    
-                    <div class="space-y-6">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Fecha de Inicio</label>
-                                <input type="date" id="startDate" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Fecha de Fin</label>
-                                <input type="date" id="endDate" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50">
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-lg font-semibold text-white mb-3">Horarios Preferidos</label>
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <label class="schedule-option">
-                                    <input type="checkbox" name="schedule" value="morning" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-yellow-500">
-                                        <i class="fas fa-sun text-yellow-400 text-xl mb-2"></i>
-                                        <p class="font-medium text-white text-sm">Mañana</p>
-                                        <p class="text-gray-400 text-xs">8:00 - 12:00</p>
-                                    </div>
-                                </label>
-                                <label class="schedule-option">
-                                    <input type="checkbox" name="schedule" value="afternoon" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-orange-500">
-                                        <i class="fas fa-cloud-sun text-orange-400 text-xl mb-2"></i>
-                                        <p class="font-medium text-white text-sm">Tarde</p>
-                                        <p class="text-gray-400 text-xs">12:00 - 18:00</p>
-                                    </div>
-                                </label>
-                                <label class="schedule-option">
-                                    <input type="checkbox" name="schedule" value="evening" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-blue-500">
-                                        <i class="fas fa-moon text-blue-400 text-xl mb-2"></i>
-                                        <p class="font-medium text-white text-sm">Noche</p>
-                                        <p class="text-gray-400 text-xs">18:00 - 22:00</p>
-                                    </div>
-                                </label>
-                                <label class="schedule-option">
-                                    <input type="checkbox" name="schedule" value="weekend" class="hidden">
-                                    <div class="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-3 text-center cursor-pointer transition-all hover:border-green-500">
-                                        <i class="fas fa-calendar-day text-green-400 text-xl mb-2"></i>
-                                        <p class="font-medium text-white text-sm">Fin de Semana</p>
-                                        <p class="text-gray-400 text-xs">Sáb/Dom</p>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-lg font-semibold text-white mb-3">Duración Estimada</label>
-                            <div class="bg-gray-800/50 rounded-lg p-4">
-                                <div id="duration-estimate" class="text-center">
-                                    <p class="text-2xl font-bold text-white">-</p>
-                                    <p class="text-gray-400 text-sm">Basado en tu configuración</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="flex justify-between mt-8">
-                        <button class="prev-step-btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-all font-medium">
-                            <i class="fas fa-arrow-left mr-2"></i> Anterior
-                        </button>
-                        <button class="next-step-btn bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-all font-medium">
-                            Siguiente <i class="fas fa-arrow-right ml-2"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Paso 5: Resumen y Confirmación -->
-                <div id="tournament-step-5" class="tournament-step hidden">
-                    <div class="text-center mb-8">
-                        <div class="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <i class="fas fa-check-circle text-2xl text-green-400"></i>
-                        </div>
-                        <h2 class="text-2xl font-bold text-white">Resumen del Torneo</h2>
-                        <p class="text-gray-400 mt-2">Revisa la configuración antes de crear el torneo</p>
-                    </div>
-                    
-                    <div class="glass-card rounded-xl p-6 mb-6">
-                        <div id="tournament-summary" class="space-y-4">
-                            <!-- El resumen se llenará dinámicamente -->
-                        </div>
-                    </div>
-                    
-                    <div class="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 mb-6">
-                        <div class="flex items-start">
-                            <i class="fas fa-exclamation-triangle text-yellow-400 mt-1 mr-3"></i>
-                            <div>
-                                <p class="text-yellow-300 font-medium">¡Atención!</p>
-                                <p class="text-yellow-200 text-sm">Una vez creado el torneo, no podrás modificar su formato básico. Revisa cuidadosamente la configuración.</p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="flex justify-between">
-                        <button class="prev-step-btn bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-all font-medium">
-                            <i class="fas fa-arrow-left mr-2"></i> Anterior
-                        </button>
-                        <button id="create-tournament-final" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg transition-all font-medium flex items-center">
-                            <i class="fas fa-plus-circle mr-2"></i> Crear Torneo
-                        </button>
-                    </div>
-                </div>
+                 <button class="back-to-roles text-gray-400 hover:text-white transition-colors mb-6 flex items-center"><i class="fas fa-arrow-left mr-2"></i>Volver</button>
+                <form id="register-form-player" class="register-form hidden space-y-4"><h2 class="text-2xl font-bold text-white mb-6">Registro de Jugador</h2><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label class="block text-sm mb-2">Nombre</label><input type="text" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required></div><div><label class="block text-sm mb-2">Apellido</label><input type="text" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required></div></div><div><label class="block text-sm mb-2">Email</label><input type="email" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required></div><div><label class="block text-sm mb-2">Contraseña</label><input type="password" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required></div><div><label class="block text-sm mb-2">Nivel</label><select class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white"><option>Iniciación</option><option>Intermedio</option><option>Avanzado</option><option>Competitivo</option></select></div><button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg mt-4">Crear Cuenta</button></form>
+                 <!-- Formularios Organizador y Club (similares) -->
+                 <form id="register-form-organizer" class="register-form hidden space-y-4"><h2 class="text-2xl font-bold text-white mb-6">Registro Organizador</h2> <!-- Campos --> <button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg mt-4">Crear Cuenta</button></form>
+                 <form id="register-form-club" class="register-form hidden space-y-4"><h2 class="text-2xl font-bold text-white mb-6">Registro Club</h2> <!-- Campos --> <button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg mt-4">Crear Cuenta</button></form>
             </div>
         </div>
     </div>
@@ -1262,7 +778,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // ESTADO GLOBAL DE LA APLICACIÓN
     // =================================================================================
     let globalState = {
-        currentUser: null
+        currentUser: null,
+        currentWizardData: {} // Para almacenar datos del wizard de creación de torneo
     };
 
     // =================================================================================
@@ -1281,7 +798,6 @@ document.addEventListener('DOMContentLoaded', function() {
         sidebar.classList.toggle('-translate-x-full');
         menuOverlay.classList.toggle('hidden');
     };
-    
     menuToggle.addEventListener('click', toggleMenu);
     menuOverlay.addEventListener('click', toggleMenu);
 
@@ -1290,78 +806,81 @@ document.addEventListener('DOMContentLoaded', function() {
         link.addEventListener('click', (e) => {
             e.preventDefault();
             const pageId = link.dataset.page;
-            const pageTitle = link.querySelector('span').textContent;
-
-            // Ocultar todas las páginas
+            // Corregido: Seleccionar el span principal, ignorando el de notificación si existe
+            const pageTitleSpan = link.querySelector('span:not(.notification-dot)');
+            const pageTitle = pageTitleSpan ? pageTitleSpan.textContent : 'Padely'; // Usar default title si span no found
+            
             pages.forEach(page => page.classList.add('hidden'));
-            
-            // Mostrar la página seleccionada con animación
             const targetPage = document.getElementById(`page-${pageId}`);
-            targetPage.classList.remove('hidden');
-            
-            // Actualizar navegación activa
+            if (targetPage) { // Verificar si la página existe
+                targetPage.classList.remove('hidden');
+            } else {
+                console.error(`Page with ID 'page-${pageId}' not found.`);
+                document.getElementById('page-home').classList.remove('hidden'); // Fallback a home
+            }
             navLinks.forEach(nav => nav.classList.remove('active'));
             link.classList.add('active');
             
-            // Actualizar título móvil
-            mobileHeaderTitle.textContent = pageTitle;
+             // Verificar si mobileHeaderTitle existe antes de modificarlo
+            if(mobileHeaderTitle) {
+                 mobileHeaderTitle.textContent = pageTitle;
+            } else {
+                console.error("Element with ID 'mobile-header-title' not found.");
+            }
 
-            // Cerrar menú en móvil
             if (window.innerWidth < 1024) toggleMenu();
+
+            if (pageId === 'tournaments') {
+                showTournamentListView(); 
+            }
         });
     });
     
     // --- Botón de acción rápida ---
     quickActionBtn.addEventListener('click', () => {
-        document.getElementById('register-modal').classList.remove('hidden');
+        registerModal.classList.remove('hidden');
+        setTimeout(() => { registerModal.querySelector('.glass-card').classList.remove('scale-95'); }, 10);
     });
     
     // --- Lógica de Modales ---
     const loginModal = document.getElementById('login-modal');
     const registerModal = document.getElementById('register-modal');
-    const createTournamentModal = document.getElementById('create-tournament-modal');
     
     document.getElementById('login-btn').addEventListener('click', () => {
         loginModal.classList.remove('hidden');
-        setTimeout(() => {
-            loginModal.querySelector('.glass-card').classList.remove('scale-95');
-        }, 10);
+        setTimeout(() => { loginModal.querySelector('.glass-card').classList.remove('scale-95'); }, 10);
     });
     
     document.getElementById('register-btn').addEventListener('click', () => {
         registerModal.classList.remove('hidden');
-        setTimeout(() => {
-            registerModal.querySelector('.glass-card').classList.remove('scale-95');
-        }, 10);
+        setTimeout(() => { registerModal.querySelector('.glass-card').classList.remove('scale-95'); }, 10);
     });
     
     document.getElementById('switch-to-register').addEventListener('click', (e) => {
         e.preventDefault();
-        loginModal.classList.add('hidden');
+        loginModal.querySelector('.glass-card').classList.add('scale-95');
+        setTimeout(() => { loginModal.classList.add('hidden'); }, 300);
         registerModal.classList.remove('hidden');
-        setTimeout(() => {
-            registerModal.querySelector('.glass-card').classList.remove('scale-95');
-        }, 10);
+        setTimeout(() => { registerModal.querySelector('.glass-card').classList.remove('scale-95'); }, 10);
     });
     
     document.querySelectorAll('.close-modal-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const modal = btn.closest('.modal-overlay');
-            modal.querySelector('.glass-card').classList.add('scale-95');
-            setTimeout(() => {
-                modal.classList.add('hidden');
-            }, 300);
+            if (modal) { // Asegurarse que el modal existe
+                const card = modal.querySelector('.glass-card');
+                if (card) card.classList.add('scale-95');
+                setTimeout(() => { modal.classList.add('hidden'); }, 300);
+            }
         });
     });
 
-    // Cerrar modal al hacer clic fuera del contenido
     document.querySelectorAll('.modal-overlay').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
-                modal.querySelector('.glass-card').classList.add('scale-95');
-                setTimeout(() => {
-                    modal.classList.add('hidden');
-                }, 300);
+                const card = modal.querySelector('.glass-card');
+                 if (card) card.classList.add('scale-95');
+                setTimeout(() => { modal.classList.add('hidden'); }, 300);
             }
         });
     });
@@ -1371,29 +890,54 @@ document.addEventListener('DOMContentLoaded', function() {
     const formSteps = document.getElementById('form-steps');
     const backToRolesBtn = document.querySelector('.back-to-roles');
     
-    roleSelectionStep.querySelectorAll('.role-card').forEach(card => {
-        card.addEventListener('click', () => {
-            const role = card.dataset.role;
-            roleSelectionStep.classList.add('hidden');
-            formSteps.classList.remove('hidden');
-            document.querySelectorAll('.register-form').forEach(form => form.classList.add('hidden'));
-            document.getElementById(`register-form-${role}`).classList.remove('hidden');
+    if (roleSelectionStep) { // Check if roleSelectionStep exists
+        roleSelectionStep.querySelectorAll('.role-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const role = card.dataset.role;
+                roleSelectionStep.classList.add('hidden');
+                if (formSteps) formSteps.classList.remove('hidden'); // Check if formSteps exists
+                document.querySelectorAll('.register-form').forEach(form => form.classList.add('hidden'));
+                const targetForm = document.getElementById(`register-form-${role}`);
+                 if (targetForm) targetForm.classList.remove('hidden');
+            });
         });
-    });
+    }
 
-    backToRolesBtn.addEventListener('click', () => {
-        formSteps.classList.add('hidden');
-        roleSelectionStep.classList.remove('hidden');
-    });
+     if(backToRolesBtn) { // Verificar si el botón existe
+        backToRolesBtn.addEventListener('click', () => {
+            if (formSteps) formSteps.classList.add('hidden');
+            if (roleSelectionStep) roleSelectionStep.classList.remove('hidden');
+        });
+     }
+
+    // Resetear modal de registro al cerrar
+     const registerCloseBtn = document.querySelector('#register-modal .close-modal-btn');
+     if (registerCloseBtn) {
+         registerCloseBtn.addEventListener('click', () => {
+             setTimeout(() => {
+                if (formSteps) formSteps.classList.add('hidden');
+                if (roleSelectionStep) roleSelectionStep.classList.remove('hidden');
+                 // Limpiar formularios si es necesario aquí
+             }, 300);
+        });
+     }
 
     // --- Mostrar/ocultar contraseña ---
-    document.getElementById('toggle-password').addEventListener('click', function() {
-        const passwordInput = document.getElementById('password');
-        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-        passwordInput.setAttribute('type', type);
-        this.querySelector('i').classList.toggle('fa-eye');
-        this.querySelector('i').classList.toggle('fa-eye-slash');
-    });
+    const togglePassword = document.getElementById('toggle-password');
+    if (togglePassword) {
+        togglePassword.addEventListener('click', function() {
+            const passwordInput = document.getElementById('password');
+            if (passwordInput) { // Verificar si el input existe
+                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                passwordInput.setAttribute('type', type);
+                const icon = this.querySelector('i');
+                if (icon) {
+                    icon.classList.toggle('fa-eye');
+                    icon.classList.toggle('fa-eye-slash');
+                }
+            }
+        });
+    }
 
     // --- Lógica de Autenticación UI ---
     const userProfile = document.getElementById('user-profile');
@@ -1406,474 +950,203 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateAuthUI() {
         if (globalState.currentUser) {
-            userProfile.classList.remove('hidden');
-            userProfile.classList.add('flex');
-            registerBtn.classList.add('hidden');
-            loginBtn.classList.add('hidden');
-            logoutBtn.classList.remove('hidden');
+            if(userProfile) userProfile.classList.replace('hidden', 'flex'); // Usar replace para más seguridad
+            if(registerBtn) registerBtn.classList.add('hidden');
+            if(loginBtn) loginBtn.classList.add('hidden');
+            if(logoutBtn) logoutBtn.classList.remove('hidden');
 
-            userNameEl.textContent = globalState.currentUser.name;
-            userRoleEl.textContent = globalState.currentUser.role;
-            userInitials.textContent = globalState.currentUser.name.charAt(0);
+            if(userNameEl) userNameEl.textContent = globalState.currentUser.name;
+            if(userRoleEl) userRoleEl.textContent = globalState.currentUser.role;
+            if(userInitials) {
+                const nameParts = globalState.currentUser.name.split(' ');
+                let initials = nameParts.length > 0 ? nameParts[0].charAt(0) : '?'; // Handle empty name
+                if (nameParts.length > 1) {
+                    initials += nameParts[nameParts.length - 1].charAt(0);
+                }
+                userInitials.textContent = initials.toUpperCase();
+            }
         } else {
-            userProfile.classList.add('hidden');
-            userProfile.classList.remove('flex');
-            registerBtn.classList.remove('hidden');
-            loginBtn.classList.remove('hidden');
-            logoutBtn.classList.add('hidden');
+            if(userProfile) userProfile.classList.replace('flex', 'hidden');
+            if(registerBtn) registerBtn.classList.remove('hidden');
+            if(loginBtn) loginBtn.classList.remove('hidden');
+            if(logoutBtn) logoutBtn.classList.add('hidden');
         }
     }
     
-    logoutBtn.addEventListener('click', () => {
-        globalState.currentUser = null;
-        updateAuthUI();
-    });
+    if(logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            globalState.currentUser = null;
+            updateAuthUI();
+            // Podríamos querer recargar o resetear estados de otras secciones aquí
+            // Por ahora, si estamos en la sección de torneos, la recargamos para quitar admin view si estaba activa
+             const tournamentPage = document.getElementById('page-tournaments');
+             if (tournamentPage && !tournamentPage.classList.contains('hidden')) {
+                 showTournamentListView(); // Vuelve a la lista
+             }
+        });
+    }
+
 
     // --- Inicialización de gráficos ---
     function initializeCharts() {
-        // Gráfico de torneos
-        const tournamentCtx = document.getElementById('tournamentChart').getContext('2d');
-        new Chart(tournamentCtx, {
-            type: 'doughnut',
-            data: {
-                labels: ['Activos', 'Finalizados', 'Próximos'],
-                datasets: [{
-                    data: [8, 24, 5],
-                    backgroundColor: [
-                        '#ef4444',
-                        '#3b82f6',
-                        '#10b981'
-                    ],
-                    borderWidth: 0,
-                    hoverOffset: 10
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            color: '#d1d5db',
-                            padding: 20,
-                            usePointStyle: true,
-                            font: {
-                                family: 'Inter'
-                            }
-                        }
-                    }
-                },
-                cutout: '70%'
-            }
+        const tournamentCtx = document.getElementById('tournamentChart')?.getContext('2d');
+        if (!tournamentCtx) return; 
+        
+        // Destruir gráfico anterior si existe para evitar problemas de redibujado
+        if (window.padelyTournamentChart instanceof Chart) {
+            window.padelyTournamentChart.destroy();
+        }
+
+        window.padelyTournamentChart = new Chart(tournamentCtx, { // Guardar referencia en window
+            type: 'doughnut', data: { labels: ['Activos', 'Finalizados', 'Próximos'], datasets: [{ data: [8, 24, 5], backgroundColor: ['#ef4444', '#3b82f6', '#10b981'], borderWidth: 0, hoverOffset: 10 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#d1d5db', padding: 20, usePointStyle: true, font: { family: 'Inter' } } } }, cutout: '70%' }
         });
     }
 
     // --- Simulación de login ---
-    document.getElementById('login-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-        const errorElement = document.getElementById('login-error');
-        
-        // Simulación de autenticación
-        if (username && password) {
-            // Login exitoso
-            globalState.currentUser = {
-                name: username,
-                role: 'Jugador'
-            };
-            updateAuthUI();
+     const loginForm = document.getElementById('login-form');
+     if (loginForm) {
+         loginForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const usernameInput = document.getElementById('username');
+            const passwordInput = document.getElementById('password');
+            const errorElement = document.getElementById('login-error');
             
-            // Cerrar modal con animación
-            loginModal.querySelector('.glass-card').classList.add('scale-95');
-            setTimeout(() => {
-                loginModal.classList.add('hidden');
-            }, 300);
-        } else {
-            // Mostrar error
-            errorElement.classList.remove('hidden');
-            setTimeout(() => {
-                errorElement.classList.add('hidden');
-            }, 3000);
-        }
-    });
+            const username = usernameInput ? usernameInput.value : '';
+            const password = passwordInput ? passwordInput.value : '';
 
-    // =================================================================================
-    // SISTEMA DE CREACIÓN DE TORNEO - CUESTIONARIO
-    // =================================================================================
-    function initializeTournamentCreation() {
-        const tournamentSteps = document.querySelectorAll('.tournament-step');
-        const progressBar = document.getElementById('tournament-progress-bar');
-        let currentStep = 1;
-        let tournamentData = {};
-
-        // Abrir modal de creación de torneo
-        document.getElementById('create-tournament-btn').addEventListener('click', function() {
-            createTournamentModal.classList.remove('hidden');
-            resetTournamentCreation();
-        });
-
-        // Navegación entre pasos
-        document.querySelectorAll('.next-step-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                if (validateStep(currentStep)) {
-                    saveStepData(currentStep);
-                    currentStep++;
-                    showStep(currentStep);
-                    updateProgressBar();
-                }
-            });
-        });
-
-        document.querySelectorAll('.prev-step-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                currentStep--;
-                showStep(currentStep);
-                updateProgressBar();
-            });
-        });
-
-        // Selección de tipo de torneo
-        document.querySelectorAll('.tournament-type-card').forEach(card => {
-            card.addEventListener('click', function() {
-                document.querySelectorAll('.tournament-type-card').forEach(c => {
-                    c.classList.remove('border-blue-500', 'bg-blue-500/10');
-                });
-                this.classList.add('border-blue-500', 'bg-blue-500/10');
-                tournamentData.type = this.dataset.type;
-            });
-        });
-
-        // Selección de modalidad
-        document.querySelectorAll('.modality-option').forEach(option => {
-            option.addEventListener('click', function() {
-                document.querySelectorAll('.modality-option').forEach(o => {
-                    o.querySelector('div').classList.remove('border-blue-500', 'border-pink-500', 'border-purple-500', 'bg-blue-500/10', 'bg-pink-500/10', 'bg-purple-500/10');
-                });
-                const input = this.querySelector('input');
-                input.checked = true;
-                const div = this.querySelector('div');
-                if (input.value === 'masculino') {
-                    div.classList.add('border-blue-500', 'bg-blue-500/10');
-                } else if (input.value === 'femenino') {
-                    div.classList.add('border-pink-500', 'bg-pink-500/10');
-                } else {
-                    div.classList.add('border-purple-500', 'bg-purple-500/10');
-                }
-            });
-        });
-
-        // Selección de nivel
-        document.querySelectorAll('.level-option').forEach(option => {
-            option.addEventListener('click', function() {
-                document.querySelectorAll('.level-option').forEach(o => {
-                    o.querySelector('div').classList.remove('border-green-500', 'border-yellow-500', 'border-orange-500', 'border-red-500', 'bg-green-500/10', 'bg-yellow-500/10', 'bg-orange-500/10', 'bg-red-500/10');
-                });
-                const input = this.querySelector('input');
-                input.checked = true;
-                const div = this.querySelector('div');
-                const colorMap = {
-                    'iniciacion': ['border-green-500', 'bg-green-500/10'],
-                    'intermedio': ['border-yellow-500', 'bg-yellow-500/10'],
-                    'avanzado': ['border-orange-500', 'bg-orange-500/10'],
-                    'competitivo': ['border-red-500', 'bg-red-500/10']
-                };
-                div.classList.add(...colorMap[input.value]);
-            });
-        });
-
-        // Selección de categoría de edad
-        document.querySelectorAll('.age-option').forEach(option => {
-            option.addEventListener('click', function() {
-                document.querySelectorAll('.age-option').forEach(o => {
-                    o.querySelector('div').classList.remove('border-blue-500', 'border-green-500', 'border-purple-500', 'border-orange-500', 'bg-blue-500/10', 'bg-green-500/10', 'bg-purple-500/10', 'bg-orange-500/10');
-                });
-                const input = this.querySelector('input');
-                input.checked = true;
-                const div = this.querySelector('div');
-                div.classList.add('border-blue-500', 'bg-blue-500/10');
-            });
-        });
-
-        // Selección de número de equipos
-        document.querySelectorAll('.team-option').forEach(option => {
-            option.addEventListener('click', function() {
-                document.querySelectorAll('.team-option').forEach(o => {
-                    o.querySelector('div').classList.remove('border-blue-500', 'border-purple-500', 'bg-blue-500/10', 'bg-purple-500/10');
-                });
-                const input = this.querySelector('input');
-                input.checked = true;
-                const div = this.querySelector('div');
-                
-                if (input.value === 'custom') {
-                    div.classList.add('border-purple-500', 'bg-purple-500/10');
-                    document.getElementById('custom-team-count').classList.remove('hidden');
-                } else {
-                    div.classList.add('border-blue-500', 'bg-blue-500/10');
-                    document.getElementById('custom-team-count').classList.add('hidden');
-                }
-            });
-        });
-
-        // Selección de horarios
-        document.querySelectorAll('.schedule-option').forEach(option => {
-            option.addEventListener('click', function() {
-                const input = this.querySelector('input');
-                input.checked = !input.checked;
-                const div = this.querySelector('div');
-                
-                if (input.checked) {
-                    const colorMap = {
-                        'morning': ['border-yellow-500', 'bg-yellow-500/10'],
-                        'afternoon': ['border-orange-500', 'bg-orange-500/10'],
-                        'evening': ['border-blue-500', 'bg-blue-500/10'],
-                        'weekend': ['border-green-500', 'bg-green-500/10']
-                    };
-                    div.classList.add(...colorMap[input.value]);
-                } else {
-                    div.classList.remove('border-yellow-500', 'border-orange-500', 'border-blue-500', 'border-green-500', 'bg-yellow-500/10', 'bg-orange-500/10', 'bg-blue-500/10', 'bg-green-500/10');
-                }
-            });
-        });
-
-        // Crear torneo final
-        document.getElementById('create-tournament-final').addEventListener('click', function() {
-            saveStepData(currentStep);
-            if (validateStep(currentStep)) {
-                createTournament();
-            }
-        });
-
-        function showStep(step) {
-            tournamentSteps.forEach(s => s.classList.add('hidden'));
-            document.getElementById(`tournament-step-${step}`).classList.remove('hidden');
-        }
-
-        function updateProgressBar() {
-            const progress = ((currentStep - 1) / (tournamentSteps.length - 1)) * 100;
-            progressBar.style.width = `${progress}%`;
-        }
-
-        function validateStep(step) {
-            switch(step) {
-                case 1:
-                    if (!tournamentData.type) {
-                        showError('Por favor selecciona un tipo de torneo');
-                        return false;
-                    }
-                    return true;
-                case 2:
-                    const modality = document.querySelector('input[name="modality"]:checked');
-                    const level = document.querySelector('input[name="level"]:checked');
-                    const ageCategory = document.querySelector('input[name="ageCategory"]:checked');
-                    
-                    if (!modality || !level || !ageCategory) {
-                        showError('Por favor completa todas las opciones de modalidad y categoría');
-                        return false;
-                    }
-                    return true;
-                case 3:
-                    const teamCount = document.querySelector('input[name="teamCount"]:checked');
-                    const registrationType = document.querySelector('input[name="registrationType"]:checked');
-                    
-                    if (!teamCount || !registrationType) {
-                        showError('Por favor completa la configuración de participantes');
-                        return false;
-                    }
-                    
-                    if (teamCount.value === 'custom') {
-                        const customCount = document.querySelector('#custom-team-count input');
-                        if (!customCount.value || customCount.value < 4) {
-                            showError('El número de parejas debe ser al menos 4');
-                            return false;
-                        }
-                    }
-                    return true;
-                case 4:
-                    const startDate = document.getElementById('startDate').value;
-                    const endDate = document.getElementById('endDate').value;
-                    const schedules = document.querySelectorAll('input[name="schedule"]:checked');
-                    
-                    if (!startDate || !endDate) {
-                        showError('Por favor selecciona las fechas de inicio y fin');
-                        return false;
-                    }
-                    
-                    if (schedules.length === 0) {
-                        showError('Por favor selecciona al menos un horario preferido');
-                        return false;
-                    }
-                    return true;
-                case 5:
-                    return true;
-                default:
-                    return true;
-            }
-        }
-
-        function saveStepData(step) {
-            switch(step) {
-                case 1:
-                    // Ya se guarda en el evento click
-                    break;
-                case 2:
-                    tournamentData.modality = document.querySelector('input[name="modality"]:checked').value;
-                    tournamentData.level = document.querySelector('input[name="level"]:checked').value;
-                    tournamentData.ageCategory = document.querySelector('input[name="ageCategory"]:checked').value;
-                    break;
-                case 3:
-                    tournamentData.teamCount = document.querySelector('input[name="teamCount"]:checked').value;
-                    if (tournamentData.teamCount === 'custom') {
-                        tournamentData.customTeamCount = document.querySelector('#custom-team-count input').value;
-                    }
-                    tournamentData.registrationType = document.querySelector('input[name="registrationType"]:checked').value;
-                    break;
-                case 4:
-                    tournamentData.startDate = document.getElementById('startDate').value;
-                    tournamentData.endDate = document.getElementById('endDate').value;
-                    tournamentData.schedules = Array.from(document.querySelectorAll('input[name="schedule"]:checked')).map(input => input.value);
-                    updateDurationEstimate();
-                    updateSummary();
-                    break;
-            }
-        }
-
-        function updateDurationEstimate() {
-            const durationElement = document.getElementById('duration-estimate');
-            let duration = '1 día';
-            
-            if (tournamentData.type === 'league') {
-                const teamCount = tournamentData.teamCount === 'custom' ? tournamentData.customTeamCount : tournamentData.teamCount;
-                if (teamCount >= 16) duration = '3-4 semanas';
-                else if (teamCount >= 12) duration = '2-3 semanas';
-                else duration = '1-2 semanas';
-            } else if (tournamentData.type === 'american') {
-                duration = '1 día completo';
+            if (username && password) {
+                globalState.currentUser = { name: username, role: 'Jugador' }; // Simular rol
+                updateAuthUI();
+                const card = loginModal.querySelector('.glass-card');
+                 if(card) card.classList.add('scale-95');
+                setTimeout(() => { loginModal.classList.add('hidden'); }, 300);
             } else {
-                duration = '1-2 días';
+                 if (errorElement) errorElement.classList.remove('hidden');
+                setTimeout(() => { if (errorElement) errorElement.classList.add('hidden'); }, 3000);
             }
-            
-            durationElement.querySelector('p:first-child').textContent = duration;
-        }
+        });
+     }
 
-        function updateSummary() {
-            const summaryElement = document.getElementById('tournament-summary');
-            const typeNames = {
-                'american': 'Torneo Americano',
-                'elimination': 'Eliminación Directa',
-                'league': 'Liga por Grupos',
-                'custom': 'Personalizado'
-            };
-            
-            const modalityNames = {
-                'masculino': 'Masculino',
-                'femenino': 'Femenino',
-                'mixto': 'Mixto'
-            };
-            
-            const levelNames = {
-                'iniciacion': 'Iniciación',
-                'intermedio': 'Intermedio',
-                'avanzado': 'Avanzado',
-                'competitivo': 'Competitivo'
-            };
+     // =================================================================================
+    // 3. MÓDULO DE CREACIÓN DE TORNEOS (WIZARD)
+    // =================================================================================
+    const tournamentListPage = document.getElementById('tournament-list-view');
+    const createTournamentWizard = document.getElementById('create-tournament-wizard');
+    const createTournamentBtn = document.getElementById('create-tournament-btn');
+    const addTournamentCardBtn = document.getElementById('add-tournament-card'); // Botón alternativo
+    const backToListBtn = document.getElementById('back-to-list-btn');
+    const wizardSteps = createTournamentWizard?.querySelectorAll('.wizard-step');
+    const progressBar = document.getElementById('wizard-progress');
+    const modalityCards = createTournamentWizard?.querySelectorAll('.modality-card');
+    let currentStep = 1;
+    const totalSteps = wizardSteps ? wizardSteps.length : 0;
 
-            const teamCount = tournamentData.teamCount === 'custom' ? tournamentData.customTeamCount : tournamentData.teamCount;
-
-            summaryElement.innerHTML = `
-                <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                    <span class="text-gray-400">Tipo de Torneo:</span>
-                    <span class="font-semibold text-white">${typeNames[tournamentData.type]}</span>
-                </div>
-                <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                    <span class="text-gray-400">Modalidad:</span>
-                    <span class="font-semibold text-white">${modalityNames[tournamentData.modality]}</span>
-                </div>
-                <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                    <span class="text-gray-400">Nivel:</span>
-                    <span class="font-semibold text-white">${levelNames[tournamentData.level]}</span>
-                </div>
-                <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                    <span class="text-gray-400">Parejas:</span>
-                    <span class="font-semibold text-white">${teamCount} parejas</span>
-                </div>
-                <div class="flex justify-between items-center py-2 border-b border-gray-700">
-                    <span class="text-gray-400">Fechas:</span>
-                    <span class="font-semibold text-white">${formatDate(tournamentData.startDate)} - ${formatDate(tournamentData.endDate)}</span>
-                </div>
-                <div class="flex justify-between items-center py-2">
-                    <span class="text-gray-400">Horarios:</span>
-                    <span class="font-semibold text-white">${tournamentData.schedules.join(', ')}</span>
-                </div>
-            `;
-        }
-
-        function formatDate(dateString) {
-            const options = { day: 'numeric', month: 'short' };
-            return new Date(dateString).toLocaleDateString('es-ES', options);
-        }
-
-        function createTournament() {
-            // Aquí iría la lógica para crear el torneo en el backend
-            console.log('Creando torneo con datos:', tournamentData);
-            
-            // Simulación de creación exitosa
-            showSuccess('¡Torneo creado exitosamente!');
-            createTournamentModal.classList.add('hidden');
-            
-            // Redirigir a la página del torneo creado
-            setTimeout(() => {
-                document.querySelector('[data-page="tournaments"]').click();
-            }, 2000);
-        }
-
-        function showError(message) {
-            alert(message);
-        }
-
-        function showSuccess(message) {
-            alert(message);
-        }
-
-        function resetTournamentCreation() {
-            currentStep = 1;
-            tournamentData = {};
-            showStep(currentStep);
-            updateProgressBar();
-            
-            // Resetear todas las selecciones
-            document.querySelectorAll('.tournament-type-card, .modality-option, .level-option, .age-option, .team-option, .schedule-option').forEach(el => {
-                el.querySelector('div').classList.remove(
-                    'border-blue-500', 'border-pink-500', 'border-purple-500', 'border-green-500', 
-                    'border-yellow-500', 'border-orange-500', 'border-red-500',
-                    'bg-blue-500/10', 'bg-pink-500/10', 'bg-purple-500/10', 'bg-green-500/10',
-                    'bg-yellow-500/10', 'bg-orange-500/10', 'bg-red-500/10'
-                );
-            });
-            
-            document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(input => {
-                input.checked = false;
-            });
-            
-            document.getElementById('custom-team-count').classList.add('hidden');
-            document.getElementById('startDate').value = '';
-            document.getElementById('endDate').value = '';
+    function showWizardStep(stepNumber) {
+         if (!wizardSteps || wizardSteps.length === 0 || stepNumber < 1 || stepNumber > totalSteps) return; // Salir si no hay pasos o número inválido
+        wizardSteps.forEach(step => step.classList.remove('active'));
+        const nextStep = document.getElementById(`step-${stepNumber}`);
+        if (nextStep) {
+            nextStep.classList.add('active');
+            currentStep = stepNumber;
+            const progressPercentage = (currentStep / totalSteps) * 100;
+             if(progressBar) progressBar.style.width = `${progressPercentage}%`;
         }
     }
+
+    function showTournamentListView() {
+         // Asegurarse de que los gráficos se inicializan si la vista de lista está activa
+         if(tournamentListPage) {
+             tournamentListPage.style.display = 'block'; // Usar block o el display original
+             initializeCharts(); // Llamar a inicializar gráficos aquí
+         }
+         if(createTournamentWizard) createTournamentWizard.style.display = 'none';
+    }
+
+    function showCreateTournamentWizard() {
+         if(tournamentListPage) tournamentListPage.style.display = 'none';
+         if(createTournamentWizard) {
+             createTournamentWizard.style.display = 'block';
+             currentStep = 1;
+             globalState.currentWizardData = {};
+             showWizardStep(currentStep);
+             if(modalityCards) modalityCards.forEach(card => card.classList.remove('selected'));
+             createTournamentWizard.scrollIntoView({ behavior: 'smooth' });
+         }
+    }
+
+    // Event Listeners del Wizard (con verificaciones)
+    if(createTournamentBtn) createTournamentBtn.addEventListener('click', showCreateTournamentWizard);
+    if(addTournamentCardBtn) addTournamentCardBtn.addEventListener('click', showCreateTournamentWizard); // Añadir listener a la tarjeta
+    if(backToListBtn) backToListBtn.addEventListener('click', showTournamentListView);
+
+    if(createTournamentWizard) {
+        createTournamentWizard.querySelectorAll('.wizard-next').forEach(button => {
+            button.addEventListener('click', () => {
+                 if (currentStep < totalSteps) {
+                     const currentStepElement = document.getElementById(`step-${currentStep}`);
+                     if (currentStepElement) {
+                        // Validación simple (ejemplo: asegurar que se seleccionó modalidad en paso 1)
+                        if (currentStep === 1 && !globalState.currentWizardData.modality) {
+                            alert("Por favor, selecciona una modalidad.");
+                            return; // No avanzar
+                        }
+                        
+                        const inputs = currentStepElement.querySelectorAll('input, select, textarea');
+                        inputs.forEach(input => {
+                             if(input.id) globalState.currentWizardData[input.id.replace('wizard-', '')] = input.value;
+                         });
+                         console.log("Datos guardados:", globalState.currentWizardData); 
+                     }
+                     showWizardStep(currentStep + 1);
+                 }
+            });
+        });
+
+        createTournamentWizard.querySelectorAll('.wizard-prev').forEach(button => {
+            button.addEventListener('click', () => {
+                 if (currentStep > 1) {
+                     showWizardStep(currentStep - 1);
+                 }
+            });
+        });
+        
+         if (modalityCards) {
+             modalityCards.forEach(card => {
+                card.addEventListener('click', () => {
+                    modalityCards.forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+                    globalState.currentWizardData.modality = card.dataset.modality;
+                    console.log("Modalidad:", globalState.currentWizardData.modality);
+                });
+            });
+         }
+
+        const finishBtn = document.getElementById('wizard-finish');
+         if (finishBtn) {
+             finishBtn.addEventListener('click', () => {
+                const lastStepElement = document.getElementById(`step-${currentStep}`);
+                 if (lastStepElement) {
+                    const inputs = lastStepElement.querySelectorAll('input, select, textarea');
+                    inputs.forEach(input => {
+                         if(input.id) globalState.currentWizardData[input.id.replace('wizard-', '')] = input.value;
+                     });
+                 }
+                console.log("Creando torneo:", globalState.currentWizardData);
+                alert(`Torneo "${globalState.currentWizardData['tournament-name'] || 'Sin Nombre'}" creado (sim.). Modalidad: ${globalState.currentWizardData.modality}`);
+                showTournamentListView(); 
+            });
+         }
+    }
+
 
     // =================================================================================
     // INICIALIZACIÓN
     // =================================================================================
     updateAuthUI();
-    initializeCharts();
-    initializeTournamentCreation();
-    
-    // Simular datos de usuario para demostración
-    setTimeout(() => {
-        // globalState.currentUser = { name: 'Alex García', role: 'Jugador Avanzado' };
-        // updateAuthUI();
-    }, 1000);
+    // initializeCharts(); // Mover la inicialización a showTournamentListView
+    showTournamentListView(); // Asegurar que la vista inicial de torneos sea la lista
+
 });
 </script>
 </body>
