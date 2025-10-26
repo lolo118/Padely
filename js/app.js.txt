@@ -623,7 +623,5 @@ document.addEventListener('DOMContentLoaded', function() {
     showTournamentListView(); // Asegurar que la vista inicial de torneos sea la lista
 
 });
-</script>
-</body>
-</html>
+// **NO INCLUIR LAS ETIQUETAS HTML AL FINAL**
 
