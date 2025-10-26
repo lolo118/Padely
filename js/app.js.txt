@@ -1,49 +1,45 @@
-// Importar funciones de Firebase (Correcto - Mantener al inicio)
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"; // Asegúrate que la versión sea la más reciente si Firebase te dio otra
+// Importar funciones de Firebase (Versión actualizada a 12.4.0)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js"; 
 import {
     getAuth,
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     signOut,
     onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import {
     getFirestore,
-    collection, // Needed for collection reference
-    addDoc,     // Needed to add new documents
+    collection, 
+    addDoc,     
     getDocs,
     onSnapshot,
     query,
     where,
     doc,
-    setDoc,
+    setDoc, 
     deleteDoc
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-// (Si Firebase te dio una versión más nueva como 12.4.0 en el snippet, actualiza las URLs de arriba también)
-
+} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', function() {
 
     // =================================================================================
-    // CONFIGURACIÓN E INICIALIZACIÓN DE FIREBASE (Corregido)
+    // CONFIGURACIÓN E INICIALIZACIÓN DE FIREBASE 
     // =================================================================================
-    // Your web app's Firebase configuration (Pega tu configuración aquí)
     const firebaseConfig = {
-      apiKey: "AIzaSyB4l7csqMhgXFJFQYsikA2z1zCWlkMGv_c", // Asegúrate que esta sea tu clave real
+      apiKey: "AIzaSyB4l7csqMhgXFJFQYsikA2z1zCWlkMGv_c", // Tus claves
       authDomain: "padely-fecf8.firebaseapp.com",
       projectId: "padely-fecf8",
-      storageBucket: "padely-fecf8.appspot.com", // Corregido: suele terminar en .appspot.com
+      storageBucket: "padely-fecf8.appspot.com", 
       messagingSenderId: "627231948848",
       appId: "1:627231948848:web:3ad20bb779b0e4fad2adf5",
-      measurementId: "G-R6JD3V4KD9" // Opcional para Analytics
+      measurementId: "G-R6JD3V4KD9" 
     };
 
     // Initialize Firebase
     const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app); // Referencia a Authentication
-    const db = getFirestore(app); // Referencia a Firestore
-    // const analytics = getAnalytics(app); // Descomenta si necesitas Analytics
-
+    const auth = getAuth(app); 
+    const db = getFirestore(app); 
+    
     console.log("Firebase inicializado correctamente.");
 
     // =================================================================================
@@ -148,8 +144,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('login-btn').addEventListener('click', () => openModal(loginModal));
     document.getElementById('register-btn').addEventListener('click', () => openModal(registerModal));
-    document.getElementById('create-tournament-btn').addEventListener('click', () => openModal(wizardModal)); 
-    document.getElementById('add-tournament-card').addEventListener('click', () => openModal(wizardModal)); 
+    // Null check for tournament buttons
+    const createBtn = document.getElementById('create-tournament-btn');
+    if (createBtn) createBtn.addEventListener('click', () => openModal(wizardModal)); 
+    const addCardBtn = document.getElementById('add-tournament-card');
+    if (addCardBtn) addCardBtn.addEventListener('click', () => openModal(wizardModal)); 
 
     document.querySelectorAll('.close-modal-btn, #close-wizard-btn').forEach(btn => { 
         btn.addEventListener('click', () => {
