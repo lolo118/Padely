@@ -687,7 +687,7 @@
                                         </div>
                                          <div>
                                             <label class="block text-sm mb-1 text-gray-400">Lugar / Club</label>
-                                            <input type="text" id="wizard-location" class.w-full p-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-green-500/50 focus:ring-green-500/20 focus:ring-1 transition">
+                                            <input type="text" id="wizard-location" class="w-full p-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-green-500/50 focus:ring-green-500/20 focus:ring-1 transition">
                                         </div>
                                         
                                          <div>
@@ -743,7 +743,7 @@
                                                 <select id="format-sets-best-of" class="w-full p-2.5 bg-gray-900 border border-gray-700 rounded-lg text-white">
                                                     <option value="1">1 Set (Quick Match)</option>
                                                     <option value="3" selected>3 Sets (Estándar)</option>
-                                                    <option value="5">5 Sets (Finales/Liga)</option>
+                                                    <option value."5">5 Sets (Finales/Liga)</option>
                                                     <option value="pro">Pro-Set (Ej. 8 Juegos)</option>
                                                 </select>
                                             </div>
@@ -838,7 +838,7 @@
                                      <div class="space-y-4">
                                          <div><label class="block text-sm mb-1 text-gray-400">Precio Inscripción ($)</label><input type="number" id="wizard-price" class="w-full p-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-green-500/50 focus:ring-green-500/20 focus:ring-1 transition" placeholder="0 si es gratis"></div>
                                           <div><label class="block text-sm mb-1 text-gray-400">Fecha Límite Inscripción</label><input type="date" id="wizard-deadline" class="w-full p-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white appearance-none focus:border-green-500/50 focus:ring-green-500/20 focus:ring-1 transition"></div>
-                                         <div><label class="block text-sm mb-1 text-gray-400">Reglas de Desempate (Opcional)</label><textarea id="wizard-tiebreak" rows="3" class="w-full p-2.5 bg-gray-800/5Same-origin border border-gray-700 rounded-lg text-white focus:border-green-500/50 focus:ring-green-500/20 focus:ring-1 transition" placeholder="Ej: Diferencia de juegos, enfrentamiento directo..."></textarea></div>
+                                         <div><label class="block text-sm mb-1 text-gray-400">Reglas de Desempate (Opcional)</label><textarea id="wizard-tiebreak" rows="3" class="w-full p-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-green-500/50 focus:ring-green-500/20 focus:ring-1 transition" placeholder="Ej: Diferencia de juegos, enfrentamiento directo..."></textarea></div>
                                      </div>
                                 </div>
     
@@ -895,14 +895,14 @@
                 <div id="role-selection-step">
                     <div class="text-center mb-6"><h2 class="text-2xl font-bold text-white">Únete a Padely</h2><p class="text-gray-400 mt-2">Elige tu tipo de perfil</p></div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div data-role="player" class="role-card cursor-pointer glass-card p-6 rounded-xl border-2 border-gray-700 text-center"><div class="bg-red-500/20 p-4 rounded-full inline-flex mb-4"><i class="fas fa-user text-2xl text-red-400"></i></div><h3 classs="font-bold text-white text-lg">Jugador</h3><p class="text-sm text-gray-400 mt-2">Participa en torneos y desafíos.</p></div>
+                        <div data-role="player" class="role-card cursor-pointer glass-card p-6 rounded-xl border-2 border-gray-700 text-center"><div class="bg-red-500/20 p-4 rounded-full inline-flex mb-4"><i class="fas fa-user text-2xl text-red-400"></i></div><h3 class="font-bold text-white text-lg">Jugador</h3><p class="text-sm text-gray-400 mt-2">Participa en torneos y desafíos.</p></div>
                         <div data-role="organizer" class="role-card cursor-pointer glass-card p-6 rounded-xl border-2 border-gray-700 text-center"><div class="bg-blue-500/20 p-4 rounded-full inline-flex mb-4"><i class="fas fa-trophy text-2xl text-blue-400"></i></div><h3 class="font-bold text-white text-lg">Organizador</h3><p class="text-sm text-gray-400 mt-2">Crea y gestiona torneos.</p></div>
                         <div data-role="club" class="role-card cursor-pointer glass-card p-6 rounded-xl border-2 border-gray-700 text-center"><div class="bg-green-500/20 p-4 rounded-full inline-flex mb-4"><i class="fas fa-shield-alt text-2xl text-green-400"></i></div><h3 class="font-bold text-white text-lg">Dueño de Club</h3><p class="text-sm text-gray-400 mt-2">Administra canchas y turnos.</p></div>
                     </div>
                 </div>
                 <div id="form-steps" class="hidden">
                      <button class="back-to-roles text-gray-400 hover:text-white transition-colors mb-6 flex items-center"><i class="fas fa-arrow-left mr-2"></i>Volver</button>
-                    <form id="register-form-player" class="register-form hidden space-y-4"><h2 class="text-2xl font-bold text-white mb-6">Registro de Jugador</h2><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label class="block text-sm mb-2">Nombre</label><input type="text" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required></div><div><label class="block text-sm mb-2">Apellido</label><input type="text" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required></div></div><div><label class="block text-sm mb-2">Email</label><input type="email" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required></div><div><label class="block text-sm mb-2">Contraseña</label><input type="password" class="w-full px-4 py-3 bg-gray-800/5Next-origin border border-gray-700 rounded-lg text-white" required></div><div><label class="block text-sm mb-2">Nivel</label><select class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white"><option>Iniciación</option><option>Intermedio</option><option>Avanzado</option><option>Competitivo</option></select></div><button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg mt-4">Crear Cuenta</button></form>
+                    <form id="register-form-player" class="register-form hidden space-y-4"><h2 class="text-2xl font-bold text-white mb-6">Registro de Jugador</h2><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label class="block text-sm mb-2">Nombre</label><input type="text" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required></div><div><label class="block text-sm mb-2">Apellido</label><input type="text" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required></div></div><div><label class="block text-sm mb-2">Email</label><input type="email" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required></div><div><label class="block text-sm mb-2">Contraseña</label><input type="password" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required></div><div><label class="block text-sm mb-2">Nivel</label><select class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white"><option>Iniciación</option><option>Intermedio</option><option>Avanzado</option><option>Competitivo</option></select></div><button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg mt-4">Crear Cuenta</button></form>
                      <form id="register-form-organizer" class="register-form hidden space-y-4"><h2 class="text-2xl font-bold text-white mb-6">Registro Organizador</h2> <button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg mt-4">Crear Cuenta</button></form>
                      <form id="register-form-club" class="register-form hidden space-y-4"><h2 class="text-2xl font-bold text-white mb-6">Registro Club</h2> <button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg mt-4">Crear Cuenta</button></form>
                 </div>
@@ -912,7 +912,7 @@
         <script type="module" src="https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js"></script>
         <script type="module" src="https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js"></script>
     
-        <script src="app.js" type="module"></script>
+        <script src="js/app.js" type="module"></script>
     
     </body>
     </html>
