@@ -300,13 +300,10 @@
 </head>
 <body class="text-gray-300">
     <div class="relative min-h-screen lg:flex">
-        <!-- Overlay para menú móvil -->
         <div id="menu-overlay" class="fixed inset-0 bg-black/60 z-30 hidden lg:hidden"></div>
 
-        <!-- Barra de Navegación Lateral -->
         <aside id="sidebar" class="fixed inset-y-0 left-0 w-64 bg-gray-900/80 backdrop-blur-md p-4 flex flex-col h-screen transform -translate-x-full lg:translate-x-0 lg:static lg:flex-shrink-0 z-40 transition-transform duration-300 ease-in-out border-r border-gray-800">
-             <!-- Sección superior (scrollable) -->
-            <div class="flex-1 overflow-y-auto mb-4 pr-2"> 
+             <div class="flex-1 overflow-y-auto mb-4 pr-2"> 
                 <div class="text-center mb-10 pt-4">
                     <h1 class="text-3xl font-extrabold text-white tracking-tight gradient-text">Padely</h1>
                     <p class="text-gray-400 text-sm mt-2">Tu Mundo de Pádel</p>
@@ -359,9 +356,7 @@
                 </div>
             </div>
             
-            <!-- Sección inferior (fija) -->
             <div class="flex-shrink-0 pt-4 border-t border-gray-800">
-                <!-- Perfil de Usuario (Logueado) -->
                 <div id="user-profile" class="hidden items-center p-3 mb-3 glass-card rounded-xl">
                      <div class="w-10 h-10 bg-gradient-to-r from-red-500 to-orange-500 rounded-full flex items-center justify-center text-white font-bold mr-3 shadow-lg flex-shrink-0">
                         <span id="user-initials">U</span>
@@ -375,7 +370,6 @@
                     </button>
                 </div>
 
-                <!-- Botones de Acción -->
                 <div class="space-y-2">
                     <button id="register-btn" class="w-full btn-primary text-white px-4 py-2.5 rounded-lg transition-all text-sm font-medium flex items-center justify-center">
                         <i class="fas fa-user-plus mr-2"></i>Registrarse
@@ -391,17 +385,14 @@
             </div>
         </aside>
 
-        <!-- Contenido Principal -->
         <main class="flex-1 overflow-y-auto p-4 md:p-8 pt-20 lg:pt-8 bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800">
-             <!-- Botón de Menú Móvil y Header -->
-            <div class="lg:hidden fixed top-0 left-0 right-0 bg-gray-900/80 backdrop-blur-sm h-16 flex items-center px-4 z-20 border-b border-gray-800">
+             <div class="lg:hidden fixed top-0 left-0 right-0 bg-gray-900/80 backdrop-blur-sm h-16 flex items-center px-4 z-20 border-b border-gray-800">
                 <button id="menu-toggle" class="text-white p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors">
                     <i class="fas fa-bars text-xl"></i>
                 </button>
                 <h2 id="mobile-header-title" class="text-xl font-bold text-white ml-4">Inicio</h2>
             </div>
             
-            <!-- PAGINA: INICIO -->
             <div id="page-home" class="page-content">
                 <div class="flex flex-col md:flex-row md:items-center justify-between mb-8">
                     <h2 class="text-4xl font-bold text-white mb-4 md:mb-0">Bienvenido a <span class="gradient-text">Padely</span></h2>
@@ -419,7 +410,6 @@
                 
                  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div class="lg:col-span-2 space-y-8">
-                        <!-- Tarjetas de estadísticas -->
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div class="stats-card glass-card p-5 rounded-xl text-center border-t-4 border-red-500">
                                 <i class="fas fa-trophy text-red-400 text-2xl mb-3"></i>
@@ -447,9 +437,7 @@
                                 <div class="md:col-span-2 tournament-card glass-card rounded-xl overflow-hidden shadow-lg transition-all duration-300">
                                     <div class="bg-gradient-to-r from-gray-800 to-gray-900 h-56 w-full flex items-center justify-center relative overflow-hidden">
                                         <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent z-10"></div>
-                                        <i class="fas fa-image text-5xl text-gray-600 z-0"></i> <!-- Placeholder -->
-                                        <!-- <img src="URL_IMAGEN_CANCHAS" class="absolute inset-0 w-full h-full object-cover z-0" alt="Nuevas canchas"> -->
-                                        <div class="absolute bottom-4 left-6 z-20">
+                                        <i class="fas fa-image text-5xl text-gray-600 z-0"></i> <div class="absolute bottom-4 left-6 z-20">
                                             <span class="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">Destacado</span>
                                         </div>
                                     </div>
@@ -542,7 +530,6 @@
                                         RESERVAR
                                     </a>
                                 </div>
-                                <!-- ... más turnos ... -->
                                 <div class="bg-gray-800/50 rounded-xl p-4 flex justify-between items-center border border-gray-700 hover:border-gray-600 transition-colors">
                                     <div>
                                         <p class="font-semibold text-white">Cancha 3 (Cemento)</p>
@@ -560,7 +547,6 @@
                             </button>
                         </div>
                         
-                        <!-- Widget de clima -->
                         <div class="glass-card rounded-xl p-6 shadow-lg">
                             <h3 class="text-xl font-semibold text-white mb-4">Condiciones para Jugar</h3>
                             <div class="flex items-center justify-between">
@@ -584,9 +570,7 @@
                 </div>
             </div>
     
-             <!-- PAGINA: TORNEOS -->
-            <div id="page-tournaments" class="page-content hidden">
-                 <!-- Vista de Lista de Torneos (Inicial) -->
+             <div id="page-tournaments" class="page-content hidden">
                  <div id="tournament-list-view">
                     <div class="flex flex-col md:flex-row md:items-center justify-between mb-8">
                         <h2 class="text-4xl font-bold text-white mb-4 md:mb-0">Torneos</h2>
@@ -601,9 +585,7 @@
                     </div>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                        <!-- Tarjetas de torneos -->
-                         <div class="tournament-card glass-card rounded-xl p-5 shadow-lg transition-all duration-300">
-                             <!-- Contenido tarjeta -->
+                        <div class="tournament-card glass-card rounded-xl p-5 shadow-lg transition-all duration-300">
                              <div class="flex justify-between items-start mb-4">
                                 <div>
                                     <h3 class="font-bold text-white text-lg">Torneo Verano 2025</h3>
@@ -615,11 +597,9 @@
                                 <i class="fas fa-calendar-alt mr-2"></i>
                                 <span>15-30 Junio 2025</span>
                             </div>
-                            <!-- Resto del contenido -->
-                             <button class="mt-4 w-full btn-tertiary py-2 rounded-lg text-sm font-medium">Ver Detalles</button>
+                            <button class="mt-4 w-full btn-tertiary py-2 rounded-lg text-sm font-medium">Ver Detalles</button>
                         </div>
-                        <!-- Tarjeta para crear nuevo -->
-                         <div id="add-tournament-card" class="tournament-card glass-card rounded-xl p-5 shadow-lg transition-all duration-300 flex flex-col items-center justify-center text-center border-2 border-dashed border-gray-700 hover:border-red-500 cursor-pointer h-full min-h-[150px]">
+                        <div id="add-tournament-card" class="tournament-card glass-card rounded-xl p-5 shadow-lg transition-all duration-300 flex flex-col items-center justify-center text-center border-2 border-dashed border-gray-700 hover:border-red-500 cursor-pointer h-full min-h-[150px]">
                              <i class="fas fa-plus-circle text-3xl text-gray-500 mb-2"></i>
                              <p class="text-gray-400 text-sm font-medium">Crear Nuevo Torneo</p>
                         </div>
@@ -631,7 +611,6 @@
                     </div>
                 </div>
     
-                <!-- Asistente de Creación de Torneo Modal -->
                 <div id="create-tournament-wizard" class="wizard-overlay fixed inset-0 flex items-center justify-center p-4 hidden z-50">
                      <div class="glass-card p-6 md:p-8 rounded-xl shadow-lg w-full max-w-3xl max-h-[90vh] flex flex-col">
                         <div class="flex justify-between items-center mb-4">
@@ -640,11 +619,9 @@
                         </div>
                         <p class="text-gray-400 mb-6 text-sm">Sigue los pasos para configurar tu torneo.</p>
     
-                        <!-- Barra de Progreso -->
                         <div class="mb-8">
                             <div class="wizard-progress-bar bg-gray-700 rounded-full h-2 w-full overflow-hidden">
-                                <div id="wizard-progress" class="bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 h-2 rounded-full" style="width: 0%;"></div> <!-- Corregido: width inicial 0% -->
-                            </div>
+                                <div id="wizard-progress" class="bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 h-2 rounded-full" style="width: 0%;"></div> </div>
                             <div class="flex justify-between text-xs text-gray-400 mt-2 px-1">
                                 <span>Modalidad</span>
                                 <span>Detalles</span>
@@ -654,9 +631,7 @@
                             </div>
                         </div>
     
-                        <!-- Pasos del Wizard (scrollable) -->
                         <div id="wizard-steps-container" class="flex-1 overflow-y-auto pr-2">
-                            <!-- Paso 1: Modalidad -->
                             <div id="step-1" class="wizard-step active">
                                 <h3 class="text-xl font-semibold text-white mb-4">Paso 1: Elige la Modalidad</h3>
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -693,8 +668,7 @@
                                 </div>
                             </div>
     
-                                 <!-- Paso 2: Detalles Básicos -->
-                                <div id="step-2" class="wizard-step">
+                                 <div id="step-2" class="wizard-step">
                                     <h3 class="text-xl font-semibold text-white mb-4">Paso 2: Detalles Básicos</h3>
                                     <div class="space-y-4">
                                         <div>
@@ -738,7 +712,6 @@
                                         <div>
                                             <label class="block text-sm mb-2 text-gray-400">Categorías Disponibles <span class="text-red-500">*</span></label>
                                             <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-48 overflow-y-auto p-3 bg-gray-800/30 rounded-lg border border-gray-700">
-                                                <!-- Categorías Numeradas -->
                                                 <div class="category-item"><input type="checkbox" id="cat-1ra" value="1ra" class="category-checkbox"><label for="cat-1ra">1ra</label></div>
                                                 <div class="category-item"><input type="checkbox" id="cat-2da" value="2da" class="category-checkbox"><label for="cat-2da">2da</label></div>
                                                 <div class="category-item"><input type="checkbox" id="cat-3ra" value="3ra" class="category-checkbox"><label for="cat-3ra">3ra</label></div>
@@ -747,7 +720,6 @@
                                                 <div class="category-item"><input type="checkbox" id="cat-6ta" value="6ta" class="category-checkbox"><label for="cat-6ta">6ta</label></div>
                                                 <div class="category-item"><input type="checkbox" id="cat-7ma" value="7ma" class="category-checkbox"><label for="cat-7ma">7ma</label></div>
                                                 <div class="category-item"><input type="checkbox" id="cat-8va" value="8va" class="category-checkbox"><label for="cat-8va">8va</label></div>
-                                                <!-- Categorías Suma (Impares de 3 a 15) -->
                                                 <div class="category-item"><input type="checkbox" id="cat-s3" value="Suma 3" class="category-checkbox"><label for="cat-s3">Suma 3</label></div>
                                                 <div class="category-item"><input type="checkbox" id="cat-s5" value="Suma 5" class="category-checkbox"><label for="cat-s5">Suma 5</label></div>
                                                 <div class="category-item"><input type="checkbox" id="cat-s7" value="Suma 7" class="category-checkbox"><label for="cat-s7">Suma 7</label></div>
@@ -760,13 +732,11 @@
                                     </div>
                                 </div>
     
-                                 <!-- Paso 3: Formato -->
-                                <div id="step-3" class="wizard-step">
+                                 <div id="step-3" class="wizard-step">
                                     <h3 class="text-xl font-semibold text-white mb-4">Paso 3: Formato del Torneo (<span id="selected-modality-label" class="text-green-400"></span>)</h3>
                                     <p class="text-gray-400 mb-4">Define cómo se jugarán los partidos.</p>
                                     
                                     <div id="format-options-container" class="space-y-4 p-4 bg-gray-800/30 rounded-lg border border-gray-700 min-h-[200px]">
-                                        <!-- Opciones Comunes de Juego (visibles siempre) -->
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-gray-700 pb-4 mb-4">
                                             <div>
                                                 <label class="block text-sm mb-1 text-gray-400">Sets por Partido (Mejor de)</label>
@@ -791,7 +761,6 @@
                                             </div>
                                         </div>
     
-                                        <!-- Opciones Específicas por Modalidad (Contenido Dinámico) -->
                                         <div data-modality-options="americano" class="hidden space-y-3">
                                             <h4 class="font-semibold text-white mb-2 text-lg">Reglas de Mini Torneo (Americano)</h4>
                                             <div>
@@ -861,11 +830,11 @@
                                         </div>
     
                                         <p id="no-options-placeholder" class="text-center text-gray-500">Selecciona una modalidad en el Paso 1 para ver las opciones.</p>
+
                                     </div>
                                 </div>
     
-                                 <!-- Paso 4: Reglas Adicionales -->
-                                <div id="step-4" class="wizard-step">
+                                 <div id="step-4" class="wizard-step">
                                     <h3 class="text-xl font-semibold text-white mb-4">Paso 4: Reglas Adicionales</h3>
                                      <div class="space-y-4">
                                          <div><label class="block text-sm mb-1 text-gray-400">Precio Inscripción ($)</label><input type="number" id="wizard-price" class="w-full p-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-green-500/50 focus:ring-green-500/20 focus:ring-1 transition" placeholder="0 si es gratis"></div>
@@ -874,18 +843,15 @@
                                      </div>
                                 </div>
     
-                                 <!-- Paso 5: Resumen -->
-                                <div id="step-5" class="wizard-step">
+                                 <div id="step-5" class="wizard-step">
                                     <h3 class="text-xl font-semibold text-white mb-4">Paso 5: Resumen y Confirmación</h3>
                                     <div id="wizard-summary" class="space-y-3 p-4 bg-gray-800/30 rounded-lg border border-gray-700 text-sm">
-                                        <!-- JS llenará esto -->
                                         <p class="text-center text-gray-500">Revisa la configuración de tu torneo.</p>
                                     </div>
                                 </div>
                             </div>
     
-                             <!-- Botones de Navegación del Wizard -->
-                            <div class="mt-8 pt-6 border-t border-gray-700 flex justify-between items-center">
+                             <div class="mt-8 pt-6 border-t border-gray-700 flex justify-between items-center">
                                 <button class="wizard-prev btn-tertiary px-6 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>Anterior</button>
                                 <div>
                                     <span id="current-step-indicator" class="text-xs text-gray-400 mr-4">Paso 1 / 5</span>
@@ -898,7 +864,6 @@
                 </div>
     
     
-                <!-- PAGINAS EN CONSTRUCCION (con mejor diseño) -->
                 <div id="page-bookings" class="page-content hidden"> <div class="text-center py-12"> <i class="fas fa-calendar-alt text-6xl text-gray-600 mb-4"></i> <h2 class="text-4xl font-bold text-white mb-4">Reserva de Turnos</h2> <p class="text-lg text-gray-400 max-w-md mx-auto">Estamos trabajando en una experiencia de reserva mejorada. Muy pronto podrás reservar tus turnos de forma más rápida y sencilla.</p> <button class="btn-primary text-white px-6 py-3 rounded-lg mt-6 transition-all font-medium"> <i class="fas fa-bell mr-2"></i>Notificarme</button> </div> </div>
                 <div id="page-challenges" class="page-content hidden"> <div class="text-center py-12"> <i class="fas fa-fist-raised text-6xl text-gray-600 mb-4"></i> <h2 class="text-4xl font-bold text-white mb-4">Desafíos</h2> <p class="text-lg text-gray-400 max-w-md mx-auto">Próximamente podrás desafiar a otros jugadores y subir de ranking en nuestra comunidad.</p> </div> </div>
                 <div id="page-forum" class="page-content hidden"> <div class="text-center py-12"> <i class="fas fa-comments text-6xl text-gray-600 mb-4"></i> <h2 class="text-4xl font-bold text-white mb-4">Foro de la Comunidad</h2> <p class="text-lg text-gray-400 max-w-md mx-auto">Estamos construyendo un espacio para que compartas experiencias, consejos y conectes con otros amantes del pádel.</p> </div> </div>
@@ -906,12 +871,10 @@
             </main>
         </div>
     
-        <!-- Botón flotante para acciones rápidas -->
         <div class="floating-action-btn" id="quick-action-btn">
             <i class="fas fa-plus"></i>
         </div>
     
-        <!-- MODAL DE LOGIN (mejorado) -->
         <div id="login-modal" class="modal-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
             <div class="glass-card border border-gray-700 rounded-xl shadow-2xl p-8 w-full max-w-sm relative transform transition-transform duration-300 scale-95">
                  <button class="close-modal-btn absolute top-4 right-4 text-gray-400 hover:text-white transition-colors p-1 rounded-full"><i class="fas fa-times"></i></button>
@@ -927,11 +890,9 @@
             </div>
         </div>
     
-        <!-- MODAL DE REGISTRO (mejorado) -->
         <div id="register-modal" class="modal-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
             <div class="glass-card border border-gray-700 rounded-xl shadow-2xl p-8 w-full max-w-lg relative transform transition-transform duration-300 scale-95">
                  <button class="close-modal-btn absolute top-4 right-4 text-gray-400 hover:text-white transition-colors p-1 rounded-full"><i class="fas fa-times"></i></button>
-                <!-- Paso 1: Selección de Rol -->
                 <div id="role-selection-step">
                     <div class="text-center mb-6"><h2 class="text-2xl font-bold text-white">Únete a Padely</h2><p class="text-gray-400 mt-2">Elige tu tipo de perfil</p></div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -940,27 +901,19 @@
                         <div data-role="club" class="role-card cursor-pointer glass-card p-6 rounded-xl border-2 border-gray-700 text-center"><div class="bg-green-500/20 p-4 rounded-full inline-flex mb-4"><i class="fas fa-shield-alt text-2xl text-green-400"></i></div><h3 class="font-bold text-white text-lg">Dueño de Club</h3><p class="text-sm text-gray-400 mt-2">Administra canchas y turnos.</p></div>
                     </div>
                 </div>
-                <!-- Paso 2: Formularios -->
                 <div id="form-steps" class="hidden">
                      <button class="back-to-roles text-gray-400 hover:text-white transition-colors mb-6 flex items-center"><i class="fas fa-arrow-left mr-2"></i>Volver</button>
                     <form id="register-form-player" class="register-form hidden space-y-4"><h2 class="text-2xl font-bold text-white mb-6">Registro de Jugador</h2><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label class="block text-sm mb-2">Nombre</label><input type="text" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required></div><div><label class="block text-sm mb-2">Apellido</label><input type="text" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required></div></div><div><label class="block text-sm mb-2">Email</label><input type="email" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required></div><div><label class="block text-sm mb-2">Contraseña</label><input type="password" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required></div><div><label class="block text-sm mb-2">Nivel</label><select class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white"><option>Iniciación</option><option>Intermedio</option><option>Avanzado</option><option>Competitivo</option></select></div><button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg mt-4">Crear Cuenta</button></form>
-                     <!-- Formularios Organizador y Club (similares) -->
-                     <form id="register-form-organizer" class="register-form hidden space-y-4"><h2 class="text-2xl font-bold text-white mb-6">Registro Organizador</h2> <!-- Campos --> <button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg mt-4">Crear Cuenta</button></form>
-                     <form id="register-form-club" class="register-form hidden space-y-4"><h2 class="text-2xl font-bold text-white mb-6">Registro Club</h2> <!-- Campos --> <button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg mt-4">Crear Cuenta</button></form>
+                     <form id="register-form-organizer" class="register-form hidden space-y-4"><h2 class="text-2xl font-bold text-white mb-6">Registro Organizador</h2> <button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg mt-4">Crear Cuenta</button></form>
+                     <form id="register-form-club" class="register-form hidden space-y-4"><h2 class="text-2xl font-bold text-white mb-6">Registro Club</h2> <button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg mt-4">Crear Cuenta</button></form>
                 </div>
             </div>
         </div>
-        <!-- Firebase App (Obligatorio) -->
         <script type="module" src="https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js"></script> 
-        <!-- Firebase Authentication -->
         <script type="module" src="https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js"></script>
-        <!-- Firebase Firestore -->
         <script type="module" src="https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js"></script>
     
-        <!-- Tu archivo de lógica principal -->
-        <script src="js/app.js" type="module"></script>
+        <script src="app.js" type="module"></script>
     
     </body>
     </html>
-    
-
