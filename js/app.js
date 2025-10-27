@@ -100,8 +100,114 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     // --- FIN DE FUNCIONES RE-INSERTADAS ---
     
+    // --- Inicialización de gráficos (MOVED UP) ---
+    function initializeCharts() {
+        console.log("Initializing charts...");
+        const tournamentCtx = document.getElementById('tournamentChart')?.getContext('2d');
+        if (!tournamentCtx) {
+             console.warn("tournamentChart canvas NOT FOUND.");
+             return;
+        }
+        console.log("tournamentChart canvas found.");
+
+        if (window.padelyTournamentChart instanceof Chart) {
+            window.padelyTournamentChart.destroy();
+        }
+
+        try {
+            window.padelyTournamentChart = new Chart(tournamentCtx, {
+                type: 'doughnut', data: { labels: ['Activos', 'Finalizados', 'Próximos'], datasets: [{ data: [8, 24, 5], backgroundColor: ['#ef4444', '#3b82f6', '#10b981'], borderWidth: 0, hoverOffset: 10 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#d1d5db', padding: 20, usePointStyle: true, font: { family: 'Inter' } } } }, cutout: '70%' }
+            });
+            console.log("Chart initialized successfully.");
+        } catch (error) {
+            console.error("ERROR initializing Chart.js:", error);
+        }
+     }
+
     // =================================================================================
-    // 3. MÓDULO DE CREACIÓN DE TORNEOS (WIZARD) - ¡MOVIDO ARRIBA!
+    // 2. NAVEGACIÓN DE PÁGINAS Y MENÚ MÓVIL (NEW)
+    // =================================================================================
+    const navLinks = document.querySelectorAll('.nav-link');
+    const pageContents = document.querySelectorAll('.page-content');
+    const mobileHeaderTitle = document.getElementById('mobile-header-title');
+    const menuToggle = document.getElementById('menu-toggle');
+    const sidebar = document.getElementById('sidebar');
+    const menuOverlay = document.getElementById('menu-overlay');
+
+    function showPage(pageId) {
+        // Ocultar todas las páginas
+        pageContents.forEach(page => {
+            page.classList.add('hidden');
+        });
+
+        // Mostrar la página solicitada
+        const activePage = document.getElementById(`page-${pageId}`);
+        if (activePage) {
+            activePage.classList.remove('hidden');
+            console.log(`Showing page: page-${pageId}`);
+        } else {
+            console.warn(`Page not found: page-${pageId}`);
+        }
+
+        // Actualizar el estado activo en la navegación
+        let activeLinkTitle = 'Inicio';
+        navLinks.forEach(link => {
+            if (link.dataset.page === pageId) {
+                link.classList.add('active');
+                activeLinkTitle = link.querySelector('span').textContent;
+            } else {
+                link.classList.remove('active');
+            }
+        });
+
+        // Actualizar título en móvil
+        if (mobileHeaderTitle) {
+            mobileHeaderTitle.textContent = activeLinkTitle;
+        }
+        
+        // Si vamos a la página de torneos, inicializar los gráficos
+        if (pageId === 'tournaments') {
+            initializeCharts();
+        }
+    }
+
+    // --- Listeners de Navegación ---
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const pageId = link.dataset.page;
+            if (pageId) {
+                showPage(pageId);
+                // Ocultar menú móvil si está abierto
+                if (sidebar.classList.contains('translate-x-0')) {
+                    sidebar.classList.add('-translate-x-full');
+                    sidebar.classList.remove('translate-x-0');
+                    menuOverlay.classList.add('hidden');
+                }
+            }
+        });
+    });
+
+    // --- Lógica de Menú Móvil ---
+    if (menuToggle) {
+        menuToggle.addEventListener('click', () => {
+            sidebar.classList.remove('-translate-x-full');
+            sidebar.classList.add('translate-x-0');
+            menuOverlay.classList.remove('hidden');
+        });
+    }
+
+    if (menuOverlay) {
+        menuOverlay.addEventListener('click', () => {
+            sidebar.classList.add('-translate-x-full');
+            sidebar.classList.remove('translate-x-0');
+            menuOverlay.classList.add('hidden');
+        });
+    }
+
+    // =================================================================================
+    // 3. MÓDULO DE CREACIÓN DE TORNEOS (WIZARD)
     // =================================================================================
     console.log("Setting up tournament wizard module...");
     const wizardModal = document.getElementById('create-tournament-wizard');
@@ -161,12 +267,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function showTournamentListView() {
-         if(tournamentListPage) {
-              console.log("Showing tournament list view, initializing charts...");
-             initializeCharts();
-         } else { console.error("tournamentListPage NOT FOUND");}
-    }
+    // (REMOVED showTournamentListView function as it's replaced by showPage)
 
     function collectWizardStepData(step) {
         const stepElement = document.getElementById(`step-${step}`);
@@ -343,7 +444,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     // =================================================================================
-    // 1. NAVEGACIÓN Y LÓGICA DE UI GENERAL (Continuación)
+    // 4. LÓGICA DE UI GENERAL (Continuación)
     // =================================================================================
     console.log("Setting up UI listeners (Part 2)...");
 
@@ -469,32 +570,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if(logoutBtn) { /* ... (código existente sin cambios) ... */ }
 
-    // --- Inicialización de gráficos ---
-    function initializeCharts() {
-        console.log("Initializing charts...");
-        // CORREGIDO: getContext('2d')
-        const tournamentCtx = document.getElementById('tournamentChart')?.getContext('2d');
-        if (!tournamentCtx) {
-             console.warn("tournamentChart canvas NOT FOUND.");
-             return;
-        }
-        console.log("tournamentChart canvas found.");
-
-        if (window.padelyTournamentChart instanceof Chart) {
-            window.padelyTournamentChart.destroy();
-        }
-
-        try {
-            window.padelyTournamentChart = new Chart(tournamentCtx, {
-                type: 'doughnut', data: { labels: ['Activos', 'Finalizados', 'Próximos'], datasets: [{ data: [8, 24, 5], backgroundColor: ['#ef4444', '#3b82f6', '#10b981'], borderWidth: 0, hoverOffset: 10 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#d1d5db', padding: 20, usePointStyle: true, font: { family: 'Inter' } } } }, cutout: '70%' }
-            });
-            console.log("Chart initialized successfully.");
-        } catch (error) {
-            console.error("ERROR initializing Chart.js:", error);
-        }
-     }
-
     // --- Simulación de login (Reemplazar con Firebase Auth) ---
      const loginForm = document.getElementById('login-form');
      if (loginForm) {
@@ -508,7 +583,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // =================================================================================
     console.log("Running final initializations...");
     updateAuthUI();
-    showTournamentListView();
+    showPage('home'); // <-- CORRECTED: Show home page by default
     console.log("App initialization complete.");
 
 }); // <-- CIERRE FINAL DEL DOMContentLoaded
