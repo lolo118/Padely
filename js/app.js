@@ -306,7 +306,46 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log("Setting up UI listeners (Part 2)...");
 
     // --- Lógica de Modales (General) ---
-    // (openModal y closeModal ya están definidas arriba)
+    // ¡¡¡FUNCIONES RE-INSERTADAS AQUÍ!!!
+    const loginModal = document.getElementById('login-modal');
+    const registerModal = document.getElementById('register-modal');
+    // const wizardModal = document.getElementById('create-tournament-wizard'); // Ya definido arriba
+
+    function openModal(modal) {
+        if (!modal) {
+             console.error("Attempted to open a null modal");
+             return;
+        }
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            const card = modal.querySelector('.glass-card');
+            if (card) card.classList.remove('scale-95');
+        }, 10);
+
+         if (modal.id === 'create-tournament-wizard') {
+            currentStep = 1;
+            globalState.currentWizardData = {};
+            showWizardStep(currentStep);
+            const modalityCardsForReset = wizardModal?.querySelectorAll('.modality-card'); // Use specific modal var
+            if(modalityCardsForReset) modalityCardsForReset.forEach(card => card.classList.remove('selected'));
+             modal.querySelectorAll('input[type="text"], input[type="number"], input[type="date"], input[type="datetime-local"], textarea').forEach(input => input.value = '');
+             modal.querySelectorAll('input[type="checkbox"], input[type="radio"]').forEach(input => input.checked = false);
+             modal.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
+             updateFormatOptionsVisibility();
+        }
+    }
+
+    function closeModal(modal) {
+         if (!modal) {
+             console.error("Attempted to close a null modal");
+             return;
+         }
+         const card = modal.querySelector('.glass-card');
+         if (card) card.classList.add('scale-95');
+         setTimeout(() => { modal.classList.add('hidden'); }, 300);
+    }
+    // --- FIN DE FUNCIONES RE-INSERTADAS ---
+
 
     const loginBtnEl = document.getElementById('login-btn');
     if (loginBtnEl) {
