@@ -4,6 +4,8 @@ import { saveTournament, loadTournaments } from './tournaments.js';
 import { openModal, closeModal, showPage } from './ui.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+  let selectedRole = 'player'; // Variable para guardar el rol seleccionado
+
   // Page navigation
   document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
@@ -15,13 +17,61 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Modal interactions
   document.getElementById('login-btn').addEventListener('click', () => openModal('login-modal'));
-  document.getElementById('register-btn').addEventListener('click', () => openModal('register-modal'));
+  document.getElementById('register-btn').addEventListener('click', () => {
+    // Resetea el modal de registro al paso 1 al abrir
+    document.getElementById('role-selection-step').classList.remove('hidden');
+    document.getElementById('form-steps').classList.add('hidden');
+    document.querySelectorAll('.register-form').forEach(form => form.classList.add('hidden'));
+    openModal('register-modal');
+  });
   document.querySelectorAll('.close-modal-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const modalId = e.currentTarget.closest('.modal-overlay').id;
       closeModal(modalId);
     });
   });
+
+  // --- NUEVA LÓGICA DE REGISTRO (Paso 1) ---
+
+  // Manejar selección de rol en el modal de registro
+  document.querySelectorAll('.role-card').forEach(card => {
+    card.addEventListener('click', (e) => {
+      selectedRole = e.currentTarget.dataset.role; // 'player', 'organizer', 'club'
+      
+      // Ocultar todas las tarjetas y resaltar la seleccionada (opcional pero bueno)
+      document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
+      e.currentTarget.classList.add('selected');
+
+      // Ocultar paso 1 (selección de rol)
+      document.getElementById('role-selection-step').classList.add('hidden');
+
+      // Mostrar el formulario correspondiente al rol
+      const formId = `register-form-${selectedRole}`;
+      const formToShow = document.getElementById(formId);
+      
+      if (formToShow) {
+        // Ocultar todos los formularios primero
+        document.querySelectorAll('.register-form').forEach(form => form.classList.add('hidden'));
+        // Mostrar el formulario correcto
+        formToShow.classList.remove('hidden');
+        // Mostrar el contenedor de pasos de formulario
+        document.getElementById('form-steps').classList.remove('hidden');
+      } else {
+        console.warn(`No se encontró el formulario: ${formId}. Implementación pendiente.`);
+        // Por ahora, si hacen clic en organizador o club, volvemos al paso 1
+        document.getElementById('role-selection-step').classList.remove('hidden');
+      }
+    });
+  });
+
+  // Manejar botón "Volver" en el registro
+  document.querySelector('.back-to-roles').addEventListener('click', () => {
+    document.getElementById('form-steps').classList.add('hidden');
+    document.getElementById('role-selection-step').classList.remove('hidden');
+    document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
+  });
+
+  // --- FIN NUEVA LÓGICA DE REGISTRO ---
 
   // Tournament creation
   const createTournamentBtn = document.getElementById('create-tournament-btn');
@@ -51,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const email = e.target.username.value;
+      const email = e.target.username.value; // El formulario de login usa 'username'
       const password = e.target.password.value;
       try {
         await loginUser(email, password);
@@ -63,21 +113,43 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // --- LISTENER DE REGISTRO ACTUALIZADO (Paso 1) ---
   const registerForm = document.getElementById('register-form-player');
   if (registerForm) {
     registerForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      
+      // Capturamos todos los datos del formulario (gracias a los 'name' en HTML)
       const email = e.target.email.value;
       const password = e.target.password.value;
+      const nombre = e.target.nombre.value;
+      const apellido = e.target.apellido.value;
+      const nivel = e.target.nivel.value;
+
+      // Creamos el objeto de datos adicionales
+      const additionalData = {
+        name: nombre,
+        lastName: apellido,
+        level: nivel,
+        role: selectedRole // 'player' (definido al hacer clic en la tarjeta)
+      };
+
       try {
-        await registerUser(email, password);
+        // Llamamos a la nueva función de registro
+        await registerUser(email, password, additionalData);
         closeModal('register-modal');
+        console.log("¡Usuario jugador registrado con éxito!");
       } catch (error) {
         console.error("Error registering: ", error);
         // Display error message to the user
       }
     });
   }
+  
+  // (Aquí irían los listeners para 'register-form-organizer' y 'register-form-club' cuando los activemos)
+
+  // --- FIN LISTENER DE REGISTRO ACTUALIZADO ---
+
 
   // Logout button
   const logoutBtn = document.getElementById('logout-btn');
