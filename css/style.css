@@ -1,0 +1,287 @@
+:root {
+            --primary: #ef4444; /* Rojo */
+            --primary-dark: #dc2626;
+            --secondary: #3b82f6; /* Azul */
+            --success: #22c55e; /* Verde (Nuevo) */
+            --dark: #0f172a; /* Azul noche oscuro */
+            --darker: #0c111c; /* Azul noche más oscuro */
+            --glass: rgba(15, 23, 42, 0.6); /* Glass effect más oscuro */
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, var(--darker) 0%, var(--dark) 100%);
+            min-height: 100vh;
+        }
+
+        .glass-card {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px; /* Bordes más redondeados */
+        }
+
+        .gradient-text {
+            background: linear-gradient(90deg, #ef4444, #f97316); /* Rojo a Naranja */
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nav-link {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            border-left: 3px solid transparent; /* Borde inicial transparente */
+            padding-left: calc(1rem - 3px); /* Ajustar padding por el borde */
+        }
+
+        .nav-link.active, .nav-link:hover {
+            background: rgba(34, 197, 94, 0.1); /* Fondo verde sutil */
+            color: white;
+            border-left-color: var(--success); /* Borde verde activo/hover */
+        }
+
+        /* Efecto hover sutil para la barra lateral */
+        #sidebar {
+             transition: box-shadow 0.3s ease;
+        }
+        #sidebar:hover {
+            box-shadow: 5px 0 15px rgba(0,0,0,0.2);
+        }
+
+        .page-content {
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(20px); }
+            to { transform: translateX(0); }
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, var(--secondary) 0%, #2563eb 100%);
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+        }
+
+        /* Botón Terciario (para acciones menos importantes) */
+        .btn-tertiary {
+            background-color: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: #cbd5e1; /* Gris claro */
+            transition: all 0.3s ease;
+        }
+        .btn-tertiary:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .floating-action-btn {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+            z-index: 100;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .floating-action-btn:hover {
+            transform: scale(1.1) rotate(135deg); /* Rotación más acentuada */
+        }
+
+        .tournament-card {
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tournament-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Indicador sutil de hover en tarjetas de torneo */
+        .tournament-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 16px;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0);
+            transition: box-shadow 0.3s ease;
+            pointer-events: none; /* Para no interferir con clicks */
+        }
+        .tournament-card:hover::after {
+             box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+        }
+
+        .role-card {
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .role-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+        }
+
+         /* Estilo mejorado para role-card seleccionada */
+        .role-card.selected {
+             border-color: var(--primary);
+             box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+             transform: translateY(-2px);
+        }
+
+        .progress-ring {
+            transform: rotate(-90deg);
+        }
+
+        .progress-ring-circle {
+            transition: stroke-dashoffset 0.5s ease;
+        }
+
+        .match-card {
+            transition: all 0.3s ease;
+        }
+
+        .match-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .pulse {
+            animation: pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .stats-card {
+            transition: all 0.3s ease;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-3px) scale(1.03);
+             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .sidebar {
+            transition: all 0.3s ease;
+        }
+
+        .notification-dot {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--primary);
+        }
+
+        /* Estilos Wizard */
+        .wizard-overlay { background-color: rgba(12, 17, 28, 0.8); backdrop-filter: blur(5px); }
+        .wizard-step { display: none; animation: fadeIn 0.5s ease-out; }
+        .wizard-step.active { display: block; }
+        .wizard-progress-bar > div { transition: width 0.3s ease; }
+        .modality-card { transition: all 0.2s ease; cursor: pointer; }
+        .modality-card:hover { transform: translateY(-3px); border-color: var(--success); } /* Verde al hover */
+        .modality-card.selected { border-color: var(--success); background-color: rgba(34, 197, 94, 0.1); box-shadow: 0 0 10px rgba(34, 197, 94, 0.2); } /* Verde al seleccionar */
+
+        .form-checkbox:checked + label { border-color: var(--success); background-color: rgba(34, 197, 94, 0.1); color: white; } /* Verde al seleccionar */
+        .form-checkbox + label { transition: all 0.2s ease; cursor: pointer; }
+
+        /* Fix Checkbox Appearance - hide default box, style label */
+        .category-checkbox, input[name="branch"] {
+            /* Keep hidden but ensure label works */
+             appearance: none;
+             position: absolute;
+             width: 1px;
+             height: 1px;
+             opacity: 0;
+        }
+
+        /* Style label for category checkboxes */
+        .category-checkbox + label {
+            display: block;
+            border: 1px solid var(--glass-border);
+            background-color: var(--glass);
+            border-radius: 0.375rem; /* rounded-md */
+            padding: 0.5rem;
+            text-align: center;
+            font-size: 0.75rem; /* text-xs */
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .category-checkbox + label:hover {
+             border-color: rgba(255, 255, 255, 0.3);
+        }
+        .category-checkbox:checked + label {
+             border-color: var(--success);
+             background-color: rgba(34, 197, 94, 0.15); /* Slightly darker green bg */
+             color: white;
+             font-weight: 500;
+        }
+
+        /* Style labels for branch checkboxes */
+        input[name="branch"] + span {
+             padding: 0.5rem 0.8rem; /* More padding */
+             border: 1px solid var(--glass-border);
+             background-color: var(--glass);
+             border-radius: 0.375rem; /* rounded-md */
+             transition: all 0.3s ease;
+             cursor: pointer;
+             display: inline-block; /* Make span behave like a block for padding */
+        }
+        input[name="branch"] + span:hover {
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+         input[name="branch"]:checked + span {
+             border-color: var(--success);
+             background-color: rgba(34, 197, 94, 0.15);
+             color: white;
+             font-weight: 500;
+         }
+
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }

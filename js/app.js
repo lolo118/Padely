@@ -1,589 +1,165 @@
-// Importar funciones de Firebase (Versión actualizada a 12.4.0)
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-import {
-    getAuth,
-    createUserWithEmailAndPassword,
-    signInWithEmailAndPassword,
-    signOut,
-    onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-import {
-    getFirestore,
-    collection,
-    addDoc,
-    getDocs,
-    onSnapshot,
-    query,
-    where,
-    doc,
-    setDoc,
-    deleteDoc
-} from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+import { app, auth, db } from './firebase.js';
+import { registerUser, loginUser, logoutUser, onAuthStateChanged } from './auth.js';
+import { saveTournament, loadTournaments } from './tournaments.js';
+import { openModal, closeModal, showPage } from './ui.js';
 
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded, initializing app...');
-
-    // =================================================================================
-    // CONFIGURACIÓN E INICIALIZACIÓN DE FIREBASE
-    // =================================================================================
-    const firebaseConfig = {
-      apiKey: "AIzaSy...YOUR_KEY_HERE...", // Tus claves (REDACTED FOR SECURITY)
-      authDomain: "padely-fecf8.firebaseapp.com",
-      projectId: "padely-fecf8",
-      storageBucket: "padely-fecf8.appspot.com",
-      messagingSenderId: "627231948848",
-      appId: "1:627231948848:web:3ad20bb779b0e4fad2adf5",
-      measurementId: "G-R6JD3V4KD9"
-    };
-
-    let app, auth, db;
-
-    try {
-        // Initialize Firebase
-        app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        db = getFirestore(app);
-        console.log("Firebase inicializado correctamente.");
-    } catch (error) {
-        console.error("ERROR inicializando Firebase:", error);
-        alert("No se pudo conectar con Firebase. Algunas funciones pueden no estar disponibles.");
-        return; // Detener si Firebase falla
-    }
-
-    // =================================================================================
-    // ESTADO GLOBAL DE LA APLICACIÓN
-    // =================================================================================
-    let globalState = {
-        currentUser: null,
-        currentWizardData: {}
-    };
-
-    // =================================================================================
-    // FUNCIONES GLOBALES DE UI (MODALES) - MOVED HERE
-    // =================================================================================
-    const loginModal = document.getElementById('login-modal');
-    const registerModal = document.getElementById('register-modal');
-    // const wizardModal = document.getElementById('create-tournament-wizard'); // Ya definido arriba
-
-    function openModal(modal) {
-        if (!modal) {
-             console.error("Attempted to open a null modal");
-             return;
-        }
-        modal.classList.remove('hidden');
-        setTimeout(() => {
-            const card = modal.querySelector('.glass-card');
-            if (card) card.classList.remove('scale-95');
-        }, 10);
-
-         if (modal.id === 'create-tournament-wizard') {
-            currentStep = 1;
-            globalState.currentWizardData = {};
-            showWizardStep(currentStep);
-            const modalityCardsForReset = wizardModal?.querySelectorAll('.modality-card'); // Use specific modal var
-            if(modalityCardsForReset) modalityCardsForReset.forEach(card => card.classList.remove('selected'));
-             modal.querySelectorAll('input[type="text"], input[type="number"], input[type="date"], input[type="datetime-local"], textarea').forEach(input => input.value = '');
-             modal.querySelectorAll('input[type="checkbox"], input[type="radio"]').forEach(input => input.checked = false);
-             modal.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
-             updateFormatOptionsVisibility();
-        }
-    }
-
-    function closeModal(modal) {
-         if (!modal) {
-             console.error("Attempted to close a null modal");
-             return;
-         }
-         const card = modal.querySelector('.glass-card');
-         if (card) card.classList.add('scale-95');
-         setTimeout(() => { modal.classList.add('hidden'); }, 300);
-    }
-    // --- FIN DE FUNCIONES RE-INSERTADAS ---
-    
-    // --- Inicialización de gráficos (MOVED UP) ---
-    function initializeCharts() {
-        console.log("Initializing charts...");
-        const tournamentCtx = document.getElementById('tournamentChart')?.getContext('2d');
-        if (!tournamentCtx) {
-             console.warn("tournamentChart canvas NOT FOUND.");
-             return;
-        }
-        console.log("tournamentChart canvas found.");
-
-        if (window.padelyTournamentChart instanceof Chart) {
-            window.padelyTournamentChart.destroy();
-        }
-
-        try {
-            window.padelyTournamentChart = new Chart(tournamentCtx, {
-                type: 'doughnut', data: { labels: ['Activos', 'Finalizados', 'Próximos'], datasets: [{ data: [8, 24, 5], backgroundColor: ['#ef4444', '#3b82f6', '#10b981'], borderWidth: 0, hoverOffset: 10 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#d1d5db', padding: 20, usePointStyle: true, font: { family: 'Inter' } } } }, cutout: '70%' }
-            });
-            console.log("Chart initialized successfully.");
-        } catch (error) {
-            console.error("ERROR initializing Chart.js:", error);
-        }
-     }
-
-    // =================================================================================
-    // 2. NAVEGACIÓN DE PÁGINAS Y MENÚ MÓVIL (NEW)
-    // =================================================================================
-    const navLinks = document.querySelectorAll('.nav-link');
-    const pageContents = document.querySelectorAll('.page-content');
-    const mobileHeaderTitle = document.getElementById('mobile-header-title');
-    const menuToggle = document.getElementById('menu-toggle');
-    const sidebar = document.getElementById('sidebar');
-    const menuOverlay = document.getElementById('menu-overlay');
-
-    function showPage(pageId) {
-        // Ocultar todas las páginas
-        pageContents.forEach(page => {
-            page.classList.add('hidden');
-        });
-
-        // Mostrar la página solicitada
-        const activePage = document.getElementById(`page-${pageId}`);
-        if (activePage) {
-            activePage.classList.remove('hidden');
-            console.log(`Showing page: page-${pageId}`);
-        } else {
-            console.warn(`Page not found: page-${pageId}`);
-        }
-
-        // Actualizar el estado activo en la navegación
-        let activeLinkTitle = 'Inicio';
-        navLinks.forEach(link => {
-            if (link.dataset.page === pageId) {
-                link.classList.add('active');
-                activeLinkTitle = link.querySelector('span').textContent;
-            } else {
-                link.classList.remove('active');
-            }
-        });
-
-        // Actualizar título en móvil
-        if (mobileHeaderTitle) {
-            mobileHeaderTitle.textContent = activeLinkTitle;
-        }
-        
-        // Si vamos a la página de torneos, inicializar los gráficos
-        if (pageId === 'tournaments') {
-            initializeCharts();
-        }
-    }
-
-    // --- Listeners de Navegación ---
-    navLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const pageId = link.dataset.page;
-            if (pageId) {
-                showPage(pageId);
-                // Ocultar menú móvil si está abierto
-                if (sidebar.classList.contains('translate-x-0')) {
-                    sidebar.classList.add('-translate-x-full');
-                    sidebar.classList.remove('translate-x-0');
-                    menuOverlay.classList.add('hidden');
-                }
-            }
-        });
+document.addEventListener('DOMContentLoaded', () => {
+  // Page navigation
+  document.querySelectorAll('.nav-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const pageId = e.currentTarget.dataset.page;
+      showPage(pageId);
     });
+  });
 
-    // --- Lógica de Menú Móvil ---
-    if (menuToggle) {
-        menuToggle.addEventListener('click', () => {
-            sidebar.classList.remove('-translate-x-full');
-            sidebar.classList.add('translate-x-0');
-            menuOverlay.classList.remove('hidden');
-        });
-    }
-
-    if (menuOverlay) {
-        menuOverlay.addEventListener('click', () => {
-            sidebar.classList.add('-translate-x-full');
-            sidebar.classList.remove('translate-x-0');
-            menuOverlay.classList.add('hidden');
-        });
-    }
-
-    // =================================================================================
-    // 3. MÓDULO DE CREACIÓN DE TORNEOS (WIZARD)
-    // =================================================================================
-    console.log("Setting up tournament wizard module...");
-    const wizardModal = document.getElementById('create-tournament-wizard');
-    const tournamentListPage = document.getElementById('tournament-list-view');
-    const wizardSteps = wizardModal?.querySelectorAll('.wizard-step');
-    const progressBar = document.getElementById('wizard-progress');
-    const modalityCards = wizardModal?.querySelectorAll('.modality-card');
-    let currentStep = 1;
-    const totalSteps = wizardSteps ? wizardSteps.length : 0;
-    const currentStepIndicator = document.getElementById('current-step-indicator');
-    const wizardPrevBtn = wizardModal?.querySelector('.wizard-prev');
-    const wizardNextBtn = wizardModal?.querySelector('.wizard-next');
-    const wizardFinishBtn = document.getElementById('wizard-finish');
-    
-    console.log("Wizard elements:", { wizardModal, wizardSteps, wizardPrevBtn, wizardNextBtn, wizardFinishBtn });
-
-    // --- Funciones del Wizard (Definidas ANTES de ser llamadas) ---
-
-    function updateFormatOptionsVisibility() {
-         const container = document.getElementById('format-options-container');
-         if (!container) return;
-         const modality = globalState.currentWizardData.modality;
-         const placeholder = document.getElementById('no-options-placeholder');
-         
-         container.querySelectorAll('[data-modality-options]').forEach(el => el.classList.add('hidden'));
-         
-         if (modality) {
-             const optionsDiv = container.querySelector(`[data-modality-options="${modality}"]`);
-             if (optionsDiv) {
-                 optionsDiv.classList.remove('hidden');
-                 if (placeholder) placeholder.classList.add('hidden');
-             } else {
-                  if (placeholder) placeholder.classList.remove('hidden'); 
-             }
-         } else {
-             if (placeholder) placeholder.classList.remove('hidden'); 
-         }
-    }
-
-    function showWizardStep(stepNumber) {
-         if (!wizardSteps || wizardSteps.length === 0 || stepNumber < 1 || stepNumber > totalSteps) return; 
-        wizardSteps.forEach(step => step.classList.remove('active'));
-        const nextStep = document.getElementById(`step-${stepNumber}`);
-        if (nextStep) {
-            nextStep.classList.add('active');
-            currentStep = stepNumber;
-            const progressPercentage = ((currentStep -1) / (totalSteps -1)) * 100; 
-             if(progressBar) progressBar.style.width = `${progressPercentage}%`;
-             if(currentStepIndicator) currentStepIndicator.textContent = `Paso ${currentStep} / ${totalSteps}`;
-
-             if(wizardPrevBtn) wizardPrevBtn.disabled = currentStep === 1;
-             if(wizardNextBtn) wizardNextBtn.classList.toggle('hidden', currentStep === totalSteps);
-             if(wizardFinishBtn) wizardFinishBtn.classList.toggle('hidden', currentStep !== totalSteps);
-
-             if (currentStep === 3) updateFormatOptionsVisibility();
-             if (currentStep === 5) generateWizardSummary();
-        }
-    }
-
-    // (REMOVED showTournamentListView function as it's replaced by showPage)
-
-    function collectWizardStepData(step) {
-        const stepElement = document.getElementById(`step-${step}`);
-        if (!stepElement) return;
-
-        if (step === 2) { // Detalles Básicos
-             globalState.currentWizardData['tournament-name'] = document.getElementById('wizard-tournament-name')?.value || '';
-             globalState.currentWizardData['start-datetime'] = document.getElementById('wizard-start-datetime')?.value || '';
-             globalState.currentWizardData['end-datetime'] = document.getElementById('wizard-end-datetime')?.value || '';
-             globalState.currentWizardData['location'] = document.getElementById('wizard-location')?.value || '';
-             globalState.currentWizardData['branches'] = Array.from(document.querySelectorAll('input[name="branch"]:checked')).map(cb => cb.value); // Recolectar ramas
-             globalState.currentWizardData['categories'] = Array.from(document.querySelectorAll('.category-checkbox:checked')).map(cb => cb.value);
-        } else if (step === 3) { // Formato
-            globalState.currentWizardData['format-sets-best-of'] = document.getElementById('format-sets-best-of')?.value || '';
-            globalState.currentWizardData['format-tiebreak'] = document.getElementById('format-tiebreak')?.value || '';
-            globalState.currentWizardData['format-punto-oro'] = document.getElementById('format-punto-oro')?.checked || false;
-            const modality = globalState.currentWizardData.modality;
-            if (modality === 'americano') {
-                globalState.currentWizardData['format-americano-duration'] = document.getElementById('format-americano-duration')?.value || '15';
-                globalState.currentWizardData['format-americano-teams-per-court'] = document.getElementById('format-americano-teams-per-court')?.value || '4';
-            } else if (modality === 'roundrobin') {
-                globalState.currentWizardData['format-rr-teams-per-group'] = document.getElementById('format-rr-teams-per-group')?.value || '4';
-                globalState.currentWizardData['format-rr-teams-qualify'] = document.getElementById('format-rr-teams-qualify')?.value || '2';
-            } else if (modality === 'liga') {
-                globalState.currentWizardData['format-liga-win-points'] = document.getElementById('format-liga-win-points')?.value || '3';
-                globalState.currentWizardData['format-liga-draw-points'] = document.getElementById('format-liga-draw-points')?.value || '1';
-                globalState.currentWizardData['format-liga-loss-points'] = document.getElementById('format-liga-loss-points')?.value || '0';
-            } else if (modality === 'eliminatoria') {
-                globalState.currentWizardData['eliminatoria-consuelo'] = document.getElementById('eliminatoria-consuelo')?.checked || false;
-            } else if (modality === 'pozo') {
-                 globalState.currentWizardData['format-pozo-courts'] = document.getElementById('format-pozo-courts')?.value || '4';
-            }
-        } else if (step === 4) { // Reglas Adicionales
-             globalState.currentWizardData['price'] = document.getElementById('wizard-price')?.value || '0';
-             globalState.currentWizardData['deadline'] = document.getElementById('wizard-deadline')?.value || '';
-             globalState.currentWizardData['tiebreak'] = document.getElementById('wizard-tiebreak')?.value || '';
-        }
-    }
-
-     function generateWizardSummary() {
-         const summaryContainer = document.getElementById('wizard-summary');
-         if (!summaryContainer) return;
-         collectWizardStepData(4);
-         collectWizardStepData(3);
-         summaryContainer.innerHTML = '';
-         const data = globalState.currentWizardData;
-         let summaryHtml = '<ul class="space-y-2 text-gray-300">';
-         const getModalityName = () => {
-             const card = document.querySelector(`.modality-card[data-modality="${data.modality}"] h4`);
-             return card ? card.textContent : data.modality;
-         }
-         const formatTime = (isoString) => isoString ? new Date(isoString).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short'}) : 'N/A';
-         const formatDate = (isoString) => isoString ? new Date(isoString + 'T00:00:00').toLocaleDateString('es-AR') : 'N/A';
-         const getBoolLabel = (value) => value ? '<span class="text-green-400">Sí</span>' : '<span class="text-red-400">No</span>';
-         summaryHtml += `<li class="font-bold text-white border-b border-gray-700 pb-2">I. Configuración General:</li>`;
-         if (data.modality) summaryHtml += `<li class="ml-4">Modalidad: <span class="text-green-400 font-medium">${getModalityName()}</span></li>`;
-         if (data['tournament-name']) summaryHtml += `<li class="ml-4">Nombre: ${data['tournament-name']}</li>`;
-         if (data['start-datetime']) summaryHtml += `<li class="ml-4">Inicio: ${formatTime(data['start-datetime'])}</li>`;
-         if (data['end-datetime']) summaryHtml += `<li class="ml-4">Fin: ${formatTime(data['end-datetime'])}</li>`;
-         if (data.location) summaryHtml += `<li class="ml-4">Lugar: ${data.location}</li>`;
-         if (data.branches && data.branches.length > 0) summaryHtml += `<li class="ml-4">Ramas: ${data.branches.map(b => b.charAt(0).toUpperCase() + b.slice(1)).join(', ')}</li>`;
-         if (data.categories && data.categories.length > 0) summaryHtml += `<li class="ml-4">Categorías: ${data.categories.join(', ')}</li>`;
-         summaryHtml += `<li class="font-bold text-white border-b border-gray-700 py-2 mt-4">II. Formato de Partido:</li>`;
-         summaryHtml += `<li class="ml-4">Sets/Partido: ${data['format-sets-best-of']}</li>`;
-         summaryHtml += `<li class="ml-4">Tie-break: ${data['format-tiebreak']}</li>`;
-         summaryHtml += `<li class="ml-4">Punto de Oro: ${getBoolLabel(data['format-punto-oro'])}</li>`;
-         summaryHtml += `<li class="font-bold text-white border-b border-gray-700 py-2 mt-4">III. Reglas Específicas (${getModalityName()}):</li>`;
-         if (data.modality === 'americano') {
-            summaryHtml += `<li class="ml-4">Duración Ronda: ${data['format-americano-duration']} min.</li>`;
-            summaryHtml += `<li class="ml-4">Parejas/Cancha: ${data['format-americano-teams-per-court']}</li>`;
-         } else if (data.modality === 'roundrobin') {
-            summaryHtml += `<li class="ml-4">Equipos/Grupo: ${data['format-rr-teams-per-group']}</li>`;
-            summaryHtml += `<li class="ml-4">Clasifican: ${data['format-rr-teams-qualify']}</li>`;
-         } else if (data.modality === 'liga') {
-            summaryHtml += `<li class="ml-4">Puntos (V/E/D): ${data['format-liga-win-points']} / ${data['format-liga-draw-points']} / ${data['format-liga-loss-points']}</li>`;
-         } else if (data.modality === 'eliminatoria') {
-            summaryHtml += `<li class="ml-4">Torneo Consuelo: ${getBoolLabel(data['eliminatoria-consuelo'])}</li>`;
-         } else if (data.modality === 'pozo') {
-            summaryHtml += `<li class="ml-4">Máx. Canchas: ${data['format-pozo-courts']}</li>`;
-         } else {
-             summaryHtml += `<li class="ml-4 text-gray-500">N/A</li>`;
-         }
-         summaryHtml += `<li class="font-bold text-white border-b border-gray-700 py-2 mt-4">IV. Inscripción y Otros:</li>`;
-         summaryHtml += `<li class="ml-4">Precio: ${data.price === '0' || !data.price ? 'Gratis' : `$${data.price}`}</li>`;
-         summaryHtml += `<li class="ml-4">Cierre Inscripción: ${formatDate(data.deadline)}</li>`;
-         if (data.tiebreak) summaryHtml += `<li class="ml-4">Desempate: ${data.tiebreak}</li>`;
-         summaryHtml += '</ul>';
-         summaryContainer.innerHTML = summaryHtml;
-     }
-
-     async function saveTournamentToFirestore() {
-        collectWizardStepData(4);
-        collectWizardStepData(3);
-        const tournamentData = { ...globalState.currentWizardData };
-        tournamentData.createdAt = new Date().toISOString();
-        try {
-            const tournamentsCol = collection(db, "tournaments");
-            const docRef = await addDoc(tournamentsCol, tournamentData);
-            console.log("Torneo guardado con ID: ", docRef.id);
-            alert(`¡Torneo "${tournamentData['tournament-name'] || 'Sin Nombre'}" creado y guardado!`);
-            closeModal(wizardModal);
-            // loadTournamentsFromFirestore(); // Implementar después
-        } catch (error) {
-            console.error("Error al guardar torneo: ", error);
-            alert("Error al guardar. Inténtalo de nuevo.");
-        }
-     }
-     
-    // --- Lógica de Listeners del Wizard (Ahora después de definir las funciones) ---
-    if(wizardModal) {
-        if(wizardNextBtn) {
-             console.log("wizardNextBtn found, adding listener.");
-             wizardNextBtn.addEventListener('click', () => {
-                 if (currentStep < totalSteps) {
-                     const currentStepElement = document.getElementById(`step-${currentStep}`);
-                     if (currentStepElement) {
-                        // --- VALIDACIONES ---
-                        if (currentStep === 1 && !globalState.currentWizardData.modality) {
-                            alert("Por favor, selecciona una modalidad."); return;
-                        }
-                        if (currentStep === 2) {
-                            const nameInput = document.getElementById('wizard-tournament-name');
-                            const startInput = document.getElementById('wizard-start-datetime');
-                            const branchCheckboxes = document.querySelectorAll('input[name="branch"]:checked');
-                            const categoryCheckboxes = document.querySelectorAll('.category-checkbox:checked');
-
-                            if (!nameInput?.value) { alert("Por favor, ingresa el nombre del torneo."); return; }
-                            if (!startInput?.value) { alert("Por favor, selecciona la fecha y hora de inicio."); return; }
-                            if (branchCheckboxes.length === 0) { alert("Por favor, selecciona al menos una rama."); return; }
-                            if (categoryCheckboxes.length === 0) { alert("Por favor, selecciona al menos una categoría."); return; }
-                        }
-                        collectWizardStepData(currentStep);
-                     }
-                     showWizardStep(currentStep + 1);
-                 }
-            });
-        } else { console.error("wizardNextBtn NOT FOUND in wizard modal"); }
-
-        if(wizardPrevBtn) {
-             console.log("wizardPrevBtn found, adding listener.");
-             wizardPrevBtn.addEventListener('click', () => {
-                 if (currentStep > 1) {
-                     showWizardStep(currentStep - 1);
-                 }
-            });
-        } else { console.error("wizardPrevBtn NOT FOUND in wizard modal"); }
-
-         if (modalityCards && modalityCards.length > 0) {
-             console.log(`Found ${modalityCards.length} modality cards, adding listeners.`);
-             modalityCards.forEach(card => {
-                card.addEventListener('click', () => {
-                    modalityCards.forEach(c => c.classList.remove('selected'));
-                    card.classList.add('selected');
-                    globalState.currentWizardData.modality = card.dataset.modality;
-                     const modalityLabel = document.getElementById('selected-modality-label');
-                     if(modalityLabel) {
-                         const h4 = card.querySelector('h4');
-                         modalityLabel.textContent = h4 ? h4.textContent : '';
-                     }
-                });
-            });
-         } else { console.error("No modality cards found in wizard modal!"); }
-
-        const finishBtn = document.getElementById('wizard-finish');
-         if (finishBtn) {
-              console.log("wizardFinishBtn found, adding listener.");
-             finishBtn.addEventListener('click', async () => {
-                await saveTournamentToFirestore();
-            });
-         } else { console.error("wizardFinishBtn NOT FOUND in wizard modal"); }
-    } else {
-         console.error("Wizard Modal (create-tournament-wizard) NOT FOUND!");
-    }
-
-
-    // =================================================================================
-    // 4. LÓGICA DE UI GENERAL (Continuación)
-    // =================================================================================
-    console.log("Setting up UI listeners (Part 2)...");
-
-    // --- Lógica de Modales (General) ---
-    // (Funciones openModal y closeModal movidas arriba)
-
-
-    const loginBtnEl = document.getElementById('login-btn');
-    if (loginBtnEl) {
-         console.log("loginBtnEl found, adding listener.");
-         loginBtnEl.addEventListener('click', () => { console.log("Login button clicked."); openModal(loginModal); });
-    } else { console.error("loginBtnEl NOT FOUND"); }
-
-    const registerBtnEl = document.getElementById('register-btn');
-    if (registerBtnEl) {
-         console.log("registerBtnEl found, adding listener.");
-         registerBtnEl.addEventListener('click', () => { console.log("Register button clicked."); openModal(registerModal); });
-    } else { console.error("registerBtnEl NOT FOUND"); }
-
-    const createBtn = document.getElementById('create-tournament-btn');
-    if (createBtn) {
-         console.log("createBtn found, adding listener.");
-         createBtn.addEventListener('click', () => { console.log("Create tournament button clicked."); openModal(wizardModal); });
-    } else { console.warn("create-tournament-btn NOT FOUND (expected if not on tournaments page)"); }
-
-    const addCardBtn = document.getElementById('add-tournament-card');
-    if (addCardBtn) {
-        console.log("addCardBtn found, adding listener.");
-        addCardBtn.addEventListener('click', () => { console.log("Add tournament card clicked."); openModal(wizardModal); });
-    } else { console.warn("add-tournament-card NOT FOUND (expected if not on tournaments page)"); }
-
-    document.querySelectorAll('.close-modal-btn, #close-wizard-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const modal = btn.closest('.modal-overlay, #create-tournament-wizard');
-            console.log("Close button clicked for modal:", modal?.id);
-            closeModal(modal);
-        });
+  // Modal interactions
+  document.getElementById('login-btn').addEventListener('click', () => openModal('login-modal'));
+  document.getElementById('register-btn').addEventListener('click', () => openModal('register-modal'));
+  document.querySelectorAll('.close-modal-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const modalId = e.currentTarget.closest('.modal-overlay').id;
+      closeModal(modalId);
     });
+  });
 
-    document.querySelectorAll('.modal-overlay, #create-tournament-wizard').forEach(modal => {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                 console.log("Overlay clicked for modal:", modal.id);
-                closeModal(modal);
-            }
-        });
+  // Tournament creation
+  const createTournamentBtn = document.getElementById('create-tournament-btn');
+  if (createTournamentBtn) {
+    createTournamentBtn.addEventListener('click', () => openModal('create-tournament-wizard'));
+  }
+
+  const wizardFinishBtn = document.getElementById('wizard-finish');
+  if (wizardFinishBtn) {
+    wizardFinishBtn.addEventListener('click', async () => {
+      const tournamentData = {
+        name: document.getElementById('wizard-tournament-name').value,
+        // Collect other data from the wizard
+      };
+      try {
+        await saveTournament(tournamentData);
+        closeModal('create-tournament-wizard');
+        // Optionally, refresh the tournament list
+      } catch (error) {
+        console.error("Error saving tournament: ", error);
+      }
     });
+  }
 
-    const switchToRegisterBtn = document.getElementById('switch-to-register');
-    if (switchToRegisterBtn) {
-        console.log("switchToRegisterBtn found, adding listener.");
-        switchToRegisterBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            console.log("Switch to register clicked.");
-            closeModal(loginModal);
-            openModal(registerModal);
-        });
-    } else { console.error("switch-to-register NOT FOUND"); }
+  // Authentication forms
+  const loginForm = document.getElementById('login-form');
+  if (loginForm) {
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = e.target.username.value;
+      const password = e.target.password.value;
+      try {
+        await loginUser(email, password);
+        closeModal('login-modal');
+      } catch (error) {
+        console.error("Error logging in: ", error);
+        // Display error message to the user
+      }
+    });
+  }
 
-    // --- Lógica del Modal de Registro por Roles ---
-    const roleSelectionStep = document.getElementById('role-selection-step');
-    const formSteps = document.getElementById('form-steps');
-    const backToRolesBtn = document.querySelector('.back-to-roles');
+  const registerForm = document.getElementById('register-form-player');
+  if (registerForm) {
+    registerForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = e.target.email.value;
+      const password = e.target.password.value;
+      try {
+        await registerUser(email, password);
+        closeModal('register-modal');
+      } catch (error) {
+        console.error("Error registering: ", error);
+        // Display error message to the user
+      }
+    });
+  }
 
-    if (roleSelectionStep && formSteps) {
-        roleSelectionStep.querySelectorAll('.role-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const role = card.dataset.role;
-                roleSelectionStep.classList.add('hidden');
-                formSteps.classList.remove('hidden');
-                document.querySelectorAll('.register-form').forEach(form => form.classList.add('hidden'));
-                const targetForm = document.getElementById(`register-form-${role}`);
-                 if (targetForm) targetForm.classList.remove('hidden');
-            });
-        });
-     } else { console.error("Role selection or form steps container not found in register modal."); }
+  // Logout button
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      try {
+        await logoutUser();
+      } catch (error) {
+        console.error("Error logging out: ", error);
+      }
+    });
+  }
 
-
-     if(backToRolesBtn) {
-        backToRolesBtn.addEventListener('click', () => {
-            if (formSteps) formSteps.classList.add('hidden');
-            if (roleSelectionStep) roleSelectionStep.classList.remove('hidden');
-        });
-     } else { console.warn("Back to roles button not found in register modal."); }
-
-     const registerCloseBtn = document.querySelector('#register-modal .close-modal-btn');
-     if (registerCloseBtn) {
-         registerCloseBtn.addEventListener('click', () => {
-             setTimeout(() => {
-                if (formSteps) formSteps.classList.add('hidden');
-                if (roleSelectionStep) roleSelectionStep.classList.remove('hidden');
-             }, 300);
-        });
-     }
-
-    // --- Mostrar/ocultar contraseña ---
-    const togglePassword = document.getElementById('toggle-password');
-    if (togglePassword) {
-        togglePassword.addEventListener('click', function() {
-            const passwordInput = document.getElementById('password');
-            if (passwordInput) {
-                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-                passwordInput.setAttribute('type', type);
-                const icon = this.querySelector('i');
-                if (icon) {
-                    icon.classList.toggle('fa-eye');
-                    icon.classList.toggle('fa-eye-slash');
-                }
-            }
-        });
-     }
-
-    // --- Lógica de Autenticación UI ---
+  // Listen for authentication state changes
+  onAuthStateChanged((user) => {
+    if (user) {
+      loadAndRenderTournaments();
+    }
     const userProfile = document.getElementById('user-profile');
-    const userInitials = document.getElementById('user-initials');
-    const userNameEl = document.getElementById('user-name');
-    const userRoleEl = document.getElementById('user-role');
     const registerBtn = document.getElementById('register-btn');
-    const loginBtn = document.getElementById('login-btn'); // Renombrado para consistencia
+    const loginBtn = document.getElementById('login-btn');
     const logoutBtn = document.getElementById('logout-btn');
 
-    function updateAuthUI() { /* ... (código existente sin cambios) ... */ }
+    if (user) {
+      // User is signed in
+      userProfile.classList.remove('hidden');
+      registerBtn.classList.add('hidden');
+      loginBtn.classList.add('hidden');
+      logoutBtn.classList.remove('hidden');
 
-    if(logoutBtn) { /* ... (código existente sin cambios) ... */ }
+      // Update user profile information
+      document.getElementById('user-name').textContent = user.email;
+      document.getElementById('user-initials').textContent = user.email.charAt(0).toUpperCase();
+    } else {
+      // User is signed out
+      userProfile.classList.add('hidden');
+      registerBtn.classList.remove('hidden');
+      loginBtn.classList.remove('hidden');
+      logoutBtn.classList.add('hidden');
+    }
+  });
 
-    // --- Simulación de login (Reemplazar con Firebase Auth) ---
-     const loginForm = document.getElementById('login-form');
-     if (loginForm) {
-          console.log("loginForm found, adding listener.");
-          loginForm.addEventListener('submit', function(e) { /* ... (código existente sin cambios) ... */ });
-     } else { console.error("loginForm NOT FOUND"); }
-      
+  const createTournamentCard = (tournament) => {
+    const card = document.createElement('div');
+    card.className = 'tournament-card glass-card rounded-xl p-5 shadow-lg transition-all duration-300';
+    card.innerHTML = `
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <h3 class="font-bold text-white text-lg">${tournament.name}</h3>
+          <p class="text-gray-400 text-sm mt-1">${tournament.category || 'Categoría no especificada'}</p>
+        </div>
+        <span class="bg-red-500/20 text-red-400 text-xs font-bold px-2 py-1 rounded-full">Activo</span>
+      </div>
+      <div class="flex items-center text-gray-400 text-sm mb-4">
+        <i class="fas fa-calendar-alt mr-2"></i>
+        <span>${tournament.date || 'Fecha no especificada'}</span>
+      </div>
+      <button class="mt-4 w-full btn-tertiary py-2 rounded-lg text-sm font-medium">Ver Detalles</button>
+    `;
+    return card;
+  };
 
-    // =================================================================================
-    // INICIALIZACIÓN FINAL
-    // =================================================================================
-    console.log("Running final initializations...");
-    updateAuthUI();
-    showPage('home'); // <-- CORRECTED: Show home page by default
-    console.log("App initialization complete.");
+  const loadAndRenderTournaments = async () => {
+    const tournamentsGrid = document.querySelector('#page-tournaments .grid');
+    if (tournamentsGrid) {
+      // Clear existing tournaments except for the "add" card
+      tournamentsGrid.innerHTML = '';
+      const addTournamentCard = document.getElementById('add-tournament-card');
+      if (addTournamentCard) {
+        tournamentsGrid.appendChild(addTournamentCard);
+      }
 
-}); // <-- CIERRE FINAL DEL DOMContentLoaded
+      try {
+        const querySnapshot = await loadTournaments();
+        querySnapshot.forEach((doc) => {
+          const tournament = doc.data();
+          const card = createTournamentCard(tournament);
+          tournamentsGrid.insertBefore(card, addTournamentCard);
+        });
+      } catch (error) {
+        console.error("Error loading tournaments: ", error);
+      }
+    }
+  };
+});
