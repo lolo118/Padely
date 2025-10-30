@@ -1,12 +1,16 @@
 import { app, auth, db } from './firebase.js';
+// Importamos getDoc y doc para leer datos de Firestore
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js"; 
 import { registerUser, loginUser, logoutUser, onAuthStateChanged } from './auth.js';
 import { saveTournament, loadTournaments } from './tournaments.js';
 import { openModal, closeModal, showPage } from './ui.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-  let selectedRole = 'player'; // Variable para guardar el rol seleccionado
+  let selectedRole = 'player';
+  let currentUserData = null; // Estado global para guardar los datos del usuario logueado
 
-  // Page navigation
+  // --- NAVEGACIÓN Y MODALES ---
+  
   document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
@@ -15,15 +19,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Modal interactions
   document.getElementById('login-btn').addEventListener('click', () => openModal('login-modal'));
+
   document.getElementById('register-btn').addEventListener('click', () => {
-    // Resetea el modal de registro al paso 1 al abrir
     document.getElementById('role-selection-step').classList.remove('hidden');
     document.getElementById('form-steps').classList.add('hidden');
     document.querySelectorAll('.register-form').forEach(form => form.classList.add('hidden'));
+    document.getElementById('register-prompt-message').classList.add('hidden'); 
     openModal('register-modal');
   });
+
+  // Listener para los botones de cerrar de Login y Registro
   document.querySelectorAll('.close-modal-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const modalId = e.currentTarget.closest('.modal-overlay').id;
@@ -31,52 +37,72 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // --- NUEVA LÓGICA DE REGISTRO (Paso 1) ---
+  // AÑADIDO: Listener específico para el botón de cerrar del WIZARD
+  const closeWizardBtn = document.getElementById('close-wizard-btn');
+  if (closeWizardBtn) {
+    closeWizardBtn.addEventListener('click', () => {
+      closeModal('create-tournament-wizard');
+    });
+  }
 
-  // Manejar selección de rol en el modal de registro
+  // --- LÓGICA DE REGISTRO ---
   document.querySelectorAll('.role-card').forEach(card => {
     card.addEventListener('click', (e) => {
-      selectedRole = e.currentTarget.dataset.role; // 'player', 'organizer', 'club'
-      
-      // Ocultar todas las tarjetas y resaltar la seleccionada (opcional pero bueno)
+      selectedRole = e.currentTarget.dataset.role;
       document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
       e.currentTarget.classList.add('selected');
-
-      // Ocultar paso 1 (selección de rol)
       document.getElementById('role-selection-step').classList.add('hidden');
-
-      // Mostrar el formulario correspondiente al rol
       const formId = `register-form-${selectedRole}`;
       const formToShow = document.getElementById(formId);
       
       if (formToShow) {
-        // Ocultar todos los formularios primero
         document.querySelectorAll('.register-form').forEach(form => form.classList.add('hidden'));
-        // Mostrar el formulario correcto
         formToShow.classList.remove('hidden');
-        // Mostrar el contenedor de pasos de formulario
         document.getElementById('form-steps').classList.remove('hidden');
       } else {
         console.warn(`No se encontró el formulario: ${formId}. Implementación pendiente.`);
-        // Por ahora, si hacen clic en organizador o club, volvemos al paso 1
         document.getElementById('role-selection-step').classList.remove('hidden');
       }
     });
   });
 
-  // Manejar botón "Volver" en el registro
   document.querySelector('.back-to-roles').addEventListener('click', () => {
     document.getElementById('form-steps').classList.add('hidden');
     document.getElementById('role-selection-step').classList.remove('hidden');
     document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
   });
 
-  // --- FIN NUEVA LÓGICA DE REGISTRO ---
+  // --- CREACIÓN DE TORNEOS (MODIFICADO) ---
 
-  // Tournament creation
+  const checkTournamentCreationAccess = () => {
+    if (currentUserData && (currentUserData.role === 'organizer' || currentUserData.role === 'club')) {
+      return true;
+    }
+    return false;
+  };
+
   const createTournamentBtn = document.getElementById('create-tournament-btn');
   if (createTournamentBtn) {
-    createTournamentBtn.addEventListener('click', () => openModal('create-tournament-wizard'));
+    createTournamentBtn.addEventListener('click', () => {
+      if (checkTournamentCreationAccess()) {
+        openModal('create-tournament-wizard');
+      } else {
+        document.getElementById('register-prompt-message').classList.remove('hidden');
+        openModal('register-modal');
+      }
+    });
+  }
+
+  const addTournamentCard = document.getElementById('add-tournament-card');
+  if (addTournamentCard) {
+    addTournamentCard.addEventListener('click', () => {
+      if (checkTournamentCreationAccess()) {
+        openModal('create-tournament-wizard');
+      } else {
+        document.getElementById('register-prompt-message').classList.remove('hidden');
+        openModal('register-modal');
+      }
+    });
   }
 
   const wizardFinishBtn = document.getElementById('wizard-finish');
@@ -84,74 +110,56 @@ document.addEventListener('DOMContentLoaded', () => {
     wizardFinishBtn.addEventListener('click', async () => {
       const tournamentData = {
         name: document.getElementById('wizard-tournament-name').value,
-        // Collect other data from the wizard
       };
       try {
         await saveTournament(tournamentData);
         closeModal('create-tournament-wizard');
-        // Optionally, refresh the tournament list
       } catch (error) {
         console.error("Error saving tournament: ", error);
       }
     });
   }
 
-  // Authentication forms
+  // --- FORMULARIOS DE AUTENTICACIÓN ---
   const loginForm = document.getElementById('login-form');
   if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const email = e.target.username.value; // El formulario de login usa 'username'
+      const email = e.target.username.value;
       const password = e.target.password.value;
       try {
         await loginUser(email, password);
         closeModal('login-modal');
       } catch (error) {
         console.error("Error logging in: ", error);
-        // Display error message to the user
       }
     });
   }
 
-  // --- LISTENER DE REGISTRO ACTUALIZADO (Paso 1) ---
   const registerForm = document.getElementById('register-form-player');
   if (registerForm) {
     registerForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      
-      // Capturamos todos los datos del formulario (gracias a los 'name' en HTML)
       const email = e.target.email.value;
       const password = e.target.password.value;
       const nombre = e.target.nombre.value;
       const apellido = e.target.apellido.value;
       const nivel = e.target.nivel.value;
-
-      // Creamos el objeto de datos adicionales
       const additionalData = {
         name: nombre,
         lastName: apellido,
         level: nivel,
-        role: selectedRole // 'player' (definido al hacer clic en la tarjeta)
+        role: selectedRole
       };
-
       try {
-        // Llamamos a la nueva función de registro
         await registerUser(email, password, additionalData);
         closeModal('register-modal');
-        console.log("¡Usuario jugador registrado con éxito!");
       } catch (error) {
         console.error("Error registering: ", error);
-        // Display error message to the user
       }
     });
   }
   
-  // (Aquí irían los listeners para 'register-form-organizer' y 'register-form-club' cuando los activemos)
-
-  // --- FIN LISTENER DE REGISTRO ACTUALIZADO ---
-
-
-  // Logout button
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
@@ -163,28 +171,44 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Listen for authentication state changes
-  onAuthStateChanged((user) => {
-    if (user) {
-      loadAndRenderTournaments();
-    }
+  // --- ESTADO DE AUTENTICACIÓN ---
+  onAuthStateChanged(async (user) => {
     const userProfile = document.getElementById('user-profile');
     const registerBtn = document.getElementById('register-btn');
     const loginBtn = document.getElementById('login-btn');
     const logoutBtn = document.getElementById('logout-btn');
 
     if (user) {
-      // User is signed in
-      userProfile.classList.remove('hidden');
-      registerBtn.classList.add('hidden');
-      loginBtn.classList.add('hidden');
-      logoutBtn.classList.remove('hidden');
+      try {
+        const userDocRef = doc(db, "users", user.uid);
+        const userDoc = await getDoc(userDocRef);
 
-      // Update user profile information
-      document.getElementById('user-name').textContent = user.email;
-      document.getElementById('user-initials').textContent = user.email.charAt(0).toUpperCase();
+        if (userDoc.exists()) {
+          currentUserData = { uid: user.uid, ...userDoc.data() };
+        } else {
+          console.warn("Usuario autenticado pero sin datos en Firestore.");
+          currentUserData = { uid: user.uid, email: user.email, role: 'player' };
+        }
+
+        userProfile.classList.remove('hidden');
+        registerBtn.classList.add('hidden');
+        loginBtn.classList.add('hidden');
+        logoutBtn.classList.remove('hidden');
+
+        document.getElementById('user-name').textContent = currentUserData.name || currentUserData.email;
+        document.getElementById('user-initials').textContent = (currentUserData.name || currentUserData.email).charAt(0).toUpperCase();
+        document.getElementById('user-role').textContent = currentUserData.role ? (currentUserData.role.charAt(0).toUpperCase() + currentUserData.role.slice(1)) : 'Jugador';
+
+        loadAndRenderTournaments();
+
+      } catch (error) {
+        console.error("Error al obtener datos de usuario:", error);
+        currentUserData = null;
+      }
+      
     } else {
-      // User is signed out
+      currentUserData = null; 
+
       userProfile.classList.add('hidden');
       registerBtn.classList.remove('hidden');
       loginBtn.classList.remove('hidden');
@@ -192,6 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // --- Carga de Torneos (Funciones Helper) ---
   const createTournamentCard = (tournament) => {
     const card = document.createElement('div');
     card.className = 'tournament-card glass-card rounded-xl p-5 shadow-lg transition-all duration-300';
@@ -215,7 +240,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadAndRenderTournaments = async () => {
     const tournamentsGrid = document.querySelector('#page-tournaments .grid');
     if (tournamentsGrid) {
-      // Clear existing tournaments except for the "add" card
       tournamentsGrid.innerHTML = '';
       const addTournamentCard = document.getElementById('add-tournament-card');
       if (addTournamentCard) {
