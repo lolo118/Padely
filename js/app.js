@@ -7,7 +7,7 @@ import { openModal, closeModal, showPage } from './ui.js';
 document.addEventListener('DOMContentLoaded', () => {
   let selectedRole = 'player';
   let currentUserData = null; 
-  let selectedModality = ''; // Variable para guardar la modalidad del wizard
+  let selectedModality = ''; 
 
   // --- NAVEGACIÓN Y MODALES ---
   
@@ -72,18 +72,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- CREACIÓN DE TORNEOS ---
 
-  // AÑADIDO: Lógica simple del Wizard (guardar modalidad y navegar)
   document.querySelectorAll('.modality-card').forEach(card => {
     card.addEventListener('click', e => {
       selectedModality = e.currentTarget.dataset.modality;
       document.querySelectorAll('.modality-card').forEach(c => c.classList.remove('selected'));
       e.currentTarget.classList.add('selected');
-      // Podríamos añadir más lógica aquí, por ahora solo guardamos la variable
     });
   });
-  // (Aquí iría la lógica de los botones "Siguiente" y "Anterior" del wizard,
-  // pero por ahora nos enfocamos en el botón "Finalizar")
-
 
   const checkTournamentCreationAccess = () => {
     if (currentUserData && (currentUserData.role === 'organizer' || currentUserData.role === 'club')) {
@@ -116,54 +111,42 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ***** INICIO DE LA MODIFICACIÓN (Paso 5) *****
   const wizardFinishBtn = document.getElementById('wizard-finish');
   if (wizardFinishBtn) {
     wizardFinishBtn.addEventListener('click', async () => {
       
-      // 1. Recopilar Ramas (checkboxes)
       const branches = [];
       document.querySelectorAll('input[name="branch"]:checked').forEach(checkbox => {
         branches.push(checkbox.value);
       });
 
-      // 2. Recopilar Categorías (checkboxes)
       const categories = [];
       document.querySelectorAll('.category-checkbox:checked').forEach(checkbox => {
         categories.push(checkbox.value);
       });
 
-      // 3. Crear el objeto de datos completo
       const tournamentData = {
-        // Datos del Creador
         organizerId: currentUserData.uid,
         organizerName: currentUserData.name || currentUserData.email,
-        
-        // Datos del Wizard
         name: document.getElementById('wizard-tournament-name').value,
-        modality: selectedModality, // Variable guardada al hacer clic
+        modality: selectedModality, 
         startDate: document.getElementById('wizard-start-datetime').value,
         endDate: document.getElementById('wizard-end-datetime').value,
         location: document.getElementById('wizard-location').value,
-        branches: branches, // Array de ramas
-        categories: categories, // Array de categorías
+        branches: branches, 
+        categories: categories, 
         price: document.getElementById('wizard-price').value || 0,
         registrationDeadline: document.getElementById('wizard-deadline').value,
-        
-        // Datos de Formato (Ejemplo, puedes expandir esto)
         sets: document.getElementById('format-sets-best-of').value,
         tiebreak: document.getElementById('format-tiebreak').value,
         goldenPoint: document.getElementById('format-punto-oro').checked,
-
-        // Metadatos
         createdAt: new Date(),
-        status: 'Activo' // O 'Próximamente'
+        status: 'Activo' 
       };
 
       try {
         await saveTournament(tournamentData);
         closeModal('create-tournament-wizard');
-        // ÉXITO: Recargamos la lista de torneos para ver el nuevo
         await loadAndRenderTournaments(); 
         console.log("Torneo guardado con éxito:", tournamentData);
       } catch (error) {
@@ -171,7 +154,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-  // ***** FIN DE LA MODIFICACIÓN (Paso 5) *****
 
 
   // --- FORMULARIOS DE AUTENTICACIÓN ---
@@ -190,29 +172,87 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  const registerForm = document.getElementById('register-form-player');
-  if (registerForm) {
-    registerForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
+  // ***** INICIO DE LA MODIFICACIÓN *****
+  
+  // Listener para JUGADOR (ya existía)
+  const registerFormPlayer = document.getElementById('register-form-player');
+  if (registerFormPlayer) {
+    registerFormPlayer.addEventListener('submit', async (e) => {
+      e.preventDefault(); // <-- Esto previene la recarga
+      
       const email = e.target.email.value;
       const password = e.target.password.value;
       const nombre = e.target.nombre.value;
       const apellido = e.target.apellido.value;
       const nivel = e.target.nivel.value;
+      
       const additionalData = {
-        name: nombre,
-        lastName: apellido,
+        name: `${nombre} ${apellido}`,
         level: nivel,
-        role: selectedRole
+        role: selectedRole // 'player'
       };
+      
       try {
         await registerUser(email, password, additionalData);
         closeModal('register-modal');
       } catch (error) {
-        console.error("Error registering: ", error);
+        console.error("Error registering player: ", error);
       }
     });
   }
+  
+  // Listener para ORGANIZADOR (NUEVO)
+  const registerFormOrganizer = document.getElementById('register-form-organizer');
+  if (registerFormOrganizer) {
+    registerFormOrganizer.addEventListener('submit', async (e) => {
+      e.preventDefault(); // <-- Esto previene la recarga
+      
+      const email = e.target.email.value;
+      const password = e.target.password.value;
+      const orgName = e.target.orgName.value; // 'orgName' viene del HTML
+      
+      const additionalData = {
+        name: orgName, // Guardamos el nombre de la organización
+        role: selectedRole // 'organizer'
+      };
+      
+      try {
+        await registerUser(email, password, additionalData);
+        closeModal('register-modal');
+      } catch (error) {
+        console.error("Error registering organizer: ", error);
+      }
+    });
+  }
+  
+  // Listener para CLUB (NUEVO)
+  const registerFormClub = document.getElementById('register-form-club');
+  if (registerFormClub) {
+    registerFormClub.addEventListener('submit', async (e) => {
+      e.preventDefault(); // <-- Esto previene la recarga
+      
+      const email = e.target.email.value;
+      const password = e.target.password.value;
+      const clubName = e.target.clubName.value; // 'clubName' viene del HTML
+      const address = e.target.address.value; // 'address' viene del HTML
+      
+      const additionalData = {
+        name: clubName, // Guardamos el nombre del club
+        address: address, // Guardamos la dirección
+        role: selectedRole // 'club'
+      };
+      
+      try {
+        await registerUser(email, password, additionalData);
+        closeModal('register-modal');
+      } catch (error) {
+        console.error("Error registering club: ", error);
+      }
+    });
+  }
+  
+  // ***** FIN DE LA MODIFICACIÓN *****
+
   
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) {
@@ -271,25 +311,20 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Carga de Torneos (Funciones Helper) ---
-
-  // ***** INICIO DE LA MODIFICACIÓN (Paso 6 - Adelanto) *****
-  // Actualizamos la tarjeta para que muestre los datos reales
   const createTournamentCard = (tournament) => {
     const card = document.createElement('div');
     card.className = 'tournament-card glass-card rounded-xl p-5 shadow-lg transition-all duration-300';
     
-    // Formatear la fecha (opcional pero recomendado)
     let displayDate = 'Fecha no especificada';
     if (tournament.startDate) {
       try {
         const date = new Date(tournament.startDate);
         displayDate = date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
       } catch(e) {
-        displayDate = tournament.startDate; // fallback
+        displayDate = tournament.startDate; 
       }
     }
 
-    // Unir categorías
     const categoriesText = tournament.categories && tournament.categories.length > 0 
       ? tournament.categories.join(' - ') 
       : 'Categorías no especificadas';
@@ -314,31 +349,26 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     return card;
   };
-  // ***** FIN DE LA MODIFICACIÓN (Paso 6 - Adelanto) *****
-
 
   const loadAndRenderTournaments = async () => {
     const tournamentsGrid = document.querySelector('#page-tournaments .grid');
     if (tournamentsGrid) {
-      // Limpiamos la grilla
       const addCard = document.getElementById('add-tournament-card');
-      tournamentsGrid.innerHTML = ''; // Borra todo
+      tournamentsGrid.innerHTML = ''; 
       if (addCard) {
-        tournamentsGrid.appendChild(addCard); // Vuelve a añadir la tarjeta de "crear"
+        tournamentsGrid.appendChild(addCard); 
       }
 
       try {
         const querySnapshot = await loadTournaments();
         if (querySnapshot.empty) {
           console.log("No se encontraron torneos.");
-          // (Opcional: mostrar un mensaje de "No hay torneos")
           return;
         }
 
         querySnapshot.forEach((doc) => {
           const tournament = doc.data();
           const card = createTournamentCard(tournament);
-          // Insertamos la nueva tarjeta *antes* de la tarjeta de "añadir"
           if (addCard) {
             tournamentsGrid.insertBefore(card, addCard);
           } else {
