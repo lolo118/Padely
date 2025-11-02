@@ -47,6 +47,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.role-card').forEach(card => {
     card.addEventListener('click', (e) => {
       selectedRole = e.currentTarget.dataset.role;
+      // Actualizamos el título del rol en el HTML (para "Dueño de Club" vs "Club")
+      if (selectedRole === 'club') {
+        e.currentTarget.querySelector('h3').textContent = 'Club';
+      }
+      
       document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
       e.currentTarget.classList.add('selected');
       document.getElementById('role-selection-step').classList.add('hidden');
@@ -156,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
 
-  // --- FORMULARIOS DE AUTENTICACIÓN ---
+  // --- FORMULARIOS DE AUTENTICACIÓN (MODIFICADOS) ---
   const loginForm = document.getElementById('login-form');
   if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
@@ -172,13 +177,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ***** INICIO DE LA MODIFICACIÓN *****
-  
-  // Listener para JUGADOR (ya existía)
+  // Listener para JUGADOR
   const registerFormPlayer = document.getElementById('register-form-player');
   if (registerFormPlayer) {
     registerFormPlayer.addEventListener('submit', async (e) => {
-      e.preventDefault(); // <-- Esto previene la recarga
+      e.preventDefault(); 
       
       const email = e.target.email.value;
       const password = e.target.password.value;
@@ -187,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const nivel = e.target.nivel.value;
       
       const additionalData = {
-        name: `${nombre} ${apellido}`,
+        name: `${nombre} ${apellido}`, // Nombre completo
         level: nivel,
         role: selectedRole // 'player'
       };
@@ -201,18 +204,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
-  // Listener para ORGANIZADOR (NUEVO)
+  // Listener para ORGANIZADOR
   const registerFormOrganizer = document.getElementById('register-form-organizer');
   if (registerFormOrganizer) {
     registerFormOrganizer.addEventListener('submit', async (e) => {
-      e.preventDefault(); // <-- Esto previene la recarga
+      e.preventDefault(); 
       
       const email = e.target.email.value;
       const password = e.target.password.value;
-      const orgName = e.target.orgName.value; // 'orgName' viene del HTML
+      const orgName = e.target.orgName.value;
+      const contactName = e.target.contactName.value; // NUEVO
+      const phone = e.target.phone.value; // NUEVO
       
       const additionalData = {
-        name: orgName, // Guardamos el nombre de la organización
+        name: orgName, // Nombre de la organización
+        contactName: contactName, // Nombre de la persona
+        phone: phone,
         role: selectedRole // 'organizer'
       };
       
@@ -225,20 +232,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
-  // Listener para CLUB (NUEVO)
+  // Listener para CLUB
   const registerFormClub = document.getElementById('register-form-club');
   if (registerFormClub) {
     registerFormClub.addEventListener('submit', async (e) => {
-      e.preventDefault(); // <-- Esto previene la recarga
+      e.preventDefault(); 
       
       const email = e.target.email.value;
       const password = e.target.password.value;
-      const clubName = e.target.clubName.value; // 'clubName' viene del HTML
-      const address = e.target.address.value; // 'address' viene del HTML
+      const clubName = e.target.clubName.value;
+      const address = e.target.address.value;
+      const city = e.target.city.value; // NUEVO
+      const phone = e.target.phone.value; // NUEVO
       
       const additionalData = {
-        name: clubName, // Guardamos el nombre del club
-        address: address, // Guardamos la dirección
+        name: clubName, // Nombre del club
+        address: address,
+        city: city,
+        phone: phone,
         role: selectedRole // 'club'
       };
       
@@ -251,9 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
-  // ***** FIN DE LA MODIFICACIÓN *****
-
-  
+  // Botón de Logout
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
@@ -291,7 +300,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('user-name').textContent = currentUserData.name || currentUserData.email;
         document.getElementById('user-initials').textContent = (currentUserData.name || currentUserData.email).charAt(0).toUpperCase();
-        document.getElementById('user-role').textContent = currentUserData.role ? (currentUserData.role.charAt(0).toUpperCase() + currentUserData.role.slice(1)) : 'Jugador';
+        
+        // Capitalizar el rol
+        const role = currentUserData.role || 'player';
+        document.getElementById('user-role').textContent = role.charAt(0).toUpperCase() + role.slice(1);
 
         loadAndRenderTournaments();
 
