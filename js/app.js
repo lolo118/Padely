@@ -8,27 +8,21 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedRole = 'player';
   let currentUserData = null; 
   let selectedModality = ''; 
-  let currentWizardStep = 1; // Variable para el estado del wizard
+  let currentWizardStep = 1; 
 
   // --- NAVEGACIÓN Y MODALES ---
   
-  // (CORREGIDO - Error 3: Feedback de Navegación)
   document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
-      
-      // Quitar 'active' de todos los links
       document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-      // Añadir 'active' solo al clickeado
       e.currentTarget.classList.add('active');
-      
       const pageId = e.currentTarget.dataset.page;
       showPage(pageId);
     });
   });
 
   document.getElementById('login-btn').addEventListener('click', () => {
-    // Limpiar errores de login al abrir
     document.getElementById('login-error').classList.add('hidden');
     openModal('login-modal');
   });
@@ -38,7 +32,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('form-steps').classList.add('hidden');
     document.querySelectorAll('.register-form').forEach(form => form.classList.add('hidden'));
     document.getElementById('register-prompt-message').classList.add('hidden'); 
-    // Limpiar errores de registro al abrir
     document.getElementById('register-error').classList.add('hidden');
     openModal('register-modal');
   });
@@ -54,6 +47,39 @@ document.addEventListener('DOMContentLoaded', () => {
   if (closeWizardBtn) {
     closeWizardBtn.addEventListener('click', () => {
       closeModal('create-tournament-wizard');
+      resetWizardForm(); // (UX Mejora 5: Reseteo del Wizard)
+    });
+  }
+  
+  // (UX Mejora 2: Cierre de Modales por Overlay)
+  document.querySelectorAll('.modal-overlay').forEach(modal => {
+    modal.addEventListener('click', (e) => {
+        // Si se hace clic en el fondo (el overlay mismo) y no en un hijo (el card)
+        if (e.target === e.currentTarget) {
+            const modalId = e.currentTarget.dataset.modalId;
+            closeModal(modalId);
+            if (modalId === 'create-tournament-wizard') {
+                resetWizardForm(); // (UX Mejora 5: Reseteo del Wizard)
+            }
+        }
+    });
+  });
+
+  // (UX Mejora 1: Botón de Ver Contraseña)
+  const togglePasswordBtn = document.getElementById('toggle-password');
+  if (togglePasswordBtn) {
+    togglePasswordBtn.addEventListener('click', () => {
+        const passwordInput = document.getElementById('password');
+        const icon = togglePasswordBtn.querySelector('i');
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        } else {
+            passwordInput.type = 'password';
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        }
     });
   }
 
@@ -64,19 +90,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (selectedRole === 'club') {
         e.currentTarget.querySelector('h3').textContent = 'Club';
       }
-      
       document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
       e.currentTarget.classList.add('selected');
       document.getElementById('role-selection-step').classList.add('hidden');
       const formId = `register-form-${selectedRole}`;
       const formToShow = document.getElementById(formId);
-      
       if (formToShow) {
         document.querySelectorAll('.register-form').forEach(form => form.classList.add('hidden'));
         formToShow.classList.remove('hidden');
         document.getElementById('form-steps').classList.remove('hidden');
       } else {
-        console.warn(`No se encontró el formulario: ${formId}. Implementación pendiente.`);
         document.getElementById('role-selection-step').classList.remove('hidden');
       }
     });
@@ -90,63 +113,65 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- CREACIÓN DE TORNEOS ---
 
-  // (CORREGIDO - Error 1: Lógica del Wizard)
+  // (UX Mejora 5: Reseteo del Wizard)
+  const resetWizardForm = () => {
+    // Limpiar inputs de texto y fecha
+    document.getElementById('wizard-tournament-name').value = '';
+    document.getElementById('wizard-start-datetime').value = '';
+    document.getElementById('wizard-end-datetime').value = '';
+    document.getElementById('wizard-location').value = '';
+    document.getElementById('wizard-price').value = '';
+    document.getElementById('wizard-deadline').value = '';
+    document.getElementById('wizard-tiebreak').value = '';
+    
+    // Desmarcar checkboxes de ramas
+    document.querySelectorAll('input[name="branch"]:checked').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    // Desmarcar checkboxes de categorías
+    document.querySelectorAll('.category-checkbox:checked').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    
+    // Resetear selects
+    document.getElementById('format-sets-best-of').value = '3';
+    document.getElementById('format-tiebreak').value = 'normal';
+    document.getElementById('format-punto-oro').checked = true;
+    
+    // Desmarcar tarjetas de modalidad
+    document.querySelectorAll('.modality-card').forEach(c => c.classList.remove('selected'));
+    selectedModality = '';
+
+    // Volver al primer paso
+    updateWizardStep(1);
+  };
+
   const updateWizardStep = (newStep) => {
     currentWizardStep = newStep;
-
-    // Ocultar todos los pasos
     document.querySelectorAll('.wizard-step').forEach(step => step.classList.remove('active'));
-    // Mostrar el paso actual
     const activeStep = document.getElementById(`step-${newStep}`);
-    if (activeStep) {
-      activeStep.classList.add('active');
-    }
-
-    // Actualizar barra de progreso
+    if (activeStep) { activeStep.classList.add('active'); }
     const progressBar = document.getElementById('wizard-progress');
-    const progressPercentage = (newStep - 1) * 25; // 0, 25, 50, 75, 100
+    const progressPercentage = (newStep - 1) * 25; 
     progressBar.style.width = `${progressPercentage}%`;
-
-    // Actualizar indicador de texto
     document.getElementById('current-step-indicator').textContent = `Paso ${newStep} / 5`;
-
-    // Controlar visibilidad de botones
     const prevBtn = document.querySelector('.wizard-prev');
     const nextBtn = document.querySelector('.wizard-next');
     const finishBtn = document.getElementById('wizard-finish');
-
-    if (newStep === 1) {
-      prevBtn.disabled = true;
-    } else {
-      prevBtn.disabled = false;
-    }
-
-    if (newStep === 5) {
-      nextBtn.classList.add('hidden');
-      finishBtn.classList.remove('hidden');
-    } else {
-      nextBtn.classList.remove('hidden');
-      finishBtn.classList.add('hidden');
-    }
+    prevBtn.disabled = (newStep === 1);
+    nextBtn.classList.toggle('hidden', newStep === 5);
+    finishBtn.classList.toggle('hidden', newStep !== 5);
   };
 
-  // Listeners para botones del wizard
   document.querySelector('.wizard-next').addEventListener('click', () => {
-    if (currentWizardStep < 5) {
-      updateWizardStep(currentWizardStep + 1);
-    }
+    if (currentWizardStep < 5) { updateWizardStep(currentWizardStep + 1); }
   });
-
   document.querySelector('.wizard-prev').addEventListener('click', () => {
-    if (currentWizardStep > 1) {
-      updateWizardStep(currentWizardStep - 1);
-    }
+    if (currentWizardStep > 1) { updateWizardStep(currentWizardStep - 1); }
   });
   
-  // Resetea el wizard al abrirlo
   const openTournamentWizard = () => {
-    updateWizardStep(1); // Ir al paso 1
-    // (Opcional: aquí iría la lógica de limpiar el formulario)
+    resetWizardForm(); // (UX Mejora 5: Reseteo del Wizard)
     openModal('create-tournament-wizard');
   };
 
@@ -159,17 +184,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   const checkTournamentCreationAccess = () => {
-    if (currentUserData && (currentUserData.role === 'organizer' || currentUserData.role === 'club')) {
-      return true;
-    }
-    return false;
+    return currentUserData && (currentUserData.role === 'organizer' || currentUserData.role === 'club');
   };
 
   const createTournamentBtn = document.getElementById('create-tournament-btn');
   if (createTournamentBtn) {
     createTournamentBtn.addEventListener('click', () => {
       if (checkTournamentCreationAccess()) {
-        openTournamentWizard(); // Usar la nueva función
+        openTournamentWizard();
       } else {
         document.getElementById('register-prompt-message').classList.remove('hidden');
         document.getElementById('register-error').classList.add('hidden');
@@ -182,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (addTournamentCard) {
     addTournamentCard.addEventListener('click', () => {
       if (checkTournamentCreationAccess()) {
-        openTournamentWizard(); // Usar la nueva función
+        openTournamentWizard();
       } else {
         document.getElementById('register-prompt-message').classList.remove('hidden');
         document.getElementById('register-error').classList.add('hidden');
@@ -194,15 +216,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const wizardFinishBtn = document.getElementById('wizard-finish');
   if (wizardFinishBtn) {
     wizardFinishBtn.addEventListener('click', async () => {
-      // (Lógica de guardar torneo sin cambios)
+      toggleButtonSpinner(wizardFinishBtn, true); // (UX Mejora 4: Prevenir Doble Clic)
+      
       const branches = [];
-      document.querySelectorAll('input[name="branch"]:checked').forEach(checkbox => {
-        branches.push(checkbox.value);
-      });
+      document.querySelectorAll('input[name="branch"]:checked').forEach(checkbox => { branches.push(checkbox.value); });
       const categories = [];
-      document.querySelectorAll('.category-checkbox:checked').forEach(checkbox => {
-        categories.push(checkbox.value);
-      });
+      document.querySelectorAll('.category-checkbox:checked').forEach(checkbox => { categories.push(checkbox.value); });
       const tournamentData = {
         organizerId: currentUserData.uid,
         organizerName: currentUserData.name || currentUserData.email,
@@ -211,15 +230,13 @@ document.addEventListener('DOMContentLoaded', () => {
         startDate: document.getElementById('wizard-start-datetime').value,
         endDate: document.getElementById('wizard-end-datetime').value,
         location: document.getElementById('wizard-location').value,
-        branches: branches, 
-        categories: categories, 
+        branches: branches, categories: categories, 
         price: document.getElementById('wizard-price').value || 0,
         registrationDeadline: document.getElementById('wizard-deadline').value,
         sets: document.getElementById('format-sets-best-of').value,
         tiebreak: document.getElementById('format-tiebreak').value,
         goldenPoint: document.getElementById('format-punto-oro').checked,
-        createdAt: new Date(),
-        status: 'Activo' 
+        createdAt: new Date(), status: 'Activo' 
       };
       try {
         await saveTournament(tournamentData);
@@ -227,19 +244,37 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadAndRenderTournaments(); 
       } catch (error) {
         console.error("Error saving tournament: ", error);
+        // (Aquí podríamos mostrar un error de guardado)
+      } finally {
+        toggleButtonSpinner(wizardFinishBtn, false); // (UX Mejora 4: Prevenir Doble Clic)
       }
     });
   }
 
   // --- FORMULARIOS DE AUTENTICACIÓN ---
 
-  // (CORREGIDO - Error 2: Feedback de Errores)
+  // (UX Mejora 4: Helper de Spinner)
+  const toggleButtonSpinner = (button, show) => {
+    const spinner = button.querySelector('.spinner');
+    const text = button.querySelector('.button-text');
+    if (show) {
+      button.disabled = true;
+      spinner.classList.remove('hidden');
+      if (text) text.classList.add('hidden');
+    } else {
+      button.disabled = false;
+      spinner.classList.add('hidden');
+      if (text) text.classList.remove('hidden');
+    }
+  };
+
   const showAuthError = (error, elementId) => {
     const errorElement = document.getElementById(elementId);
     let message = 'Ocurrió un error. Inténtalo de nuevo.';
     switch (error.code) {
       case 'auth/user-not-found':
       case 'auth/wrong-password':
+      case 'auth/invalid-credential':
         message = 'Email o contraseña incorrectos.';
         break;
       case 'auth/invalid-email':
@@ -260,14 +295,18 @@ document.addEventListener('DOMContentLoaded', () => {
   if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      document.getElementById('login-error').classList.add('hidden'); // Ocultar error previo
+      const submitButton = e.submitter; // Captura el botón
+      toggleButtonSpinner(submitButton, true); // (UX Mejora 4)
+      document.getElementById('login-error').classList.add('hidden');
       const email = e.target.username.value;
       const password = e.target.password.value;
       try {
         await loginUser(email, password);
         closeModal('login-modal');
       } catch (error) {
-        showAuthError(error, 'login-error'); // Mostrar error
+        showAuthError(error, 'login-error');
+      } finally {
+        toggleButtonSpinner(submitButton, false); // (UX Mejora 4)
       }
     });
   }
@@ -277,7 +316,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (registerFormPlayer) {
     registerFormPlayer.addEventListener('submit', async (e) => {
       e.preventDefault(); 
-      document.getElementById('register-error').classList.add('hidden'); // Ocultar error previo
+      const submitButton = e.submitter;
+      toggleButtonSpinner(submitButton, true); // (UX Mejora 4)
+      document.getElementById('register-error').classList.add('hidden');
       const email = e.target.email.value;
       const password = e.target.password.value;
       const nombre = e.target.nombre.value;
@@ -288,7 +329,9 @@ document.addEventListener('DOMContentLoaded', () => {
         await registerUser(email, password, additionalData);
         closeModal('register-modal');
       } catch (error) {
-        showAuthError(error, 'register-error'); // Mostrar error
+        showAuthError(error, 'register-error');
+      } finally {
+        toggleButtonSpinner(submitButton, false); // (UX Mejora 4)
       }
     });
   }
@@ -298,7 +341,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (registerFormOrganizer) {
     registerFormOrganizer.addEventListener('submit', async (e) => {
       e.preventDefault(); 
-      document.getElementById('register-error').classList.add('hidden'); // Ocultar error previo
+      const submitButton = e.submitter;
+      toggleButtonSpinner(submitButton, true); // (UX Mejora 4)
+      document.getElementById('register-error').classList.add('hidden');
       const email = e.target.email.value;
       const password = e.target.password.value;
       const orgName = e.target.orgName.value;
@@ -309,7 +354,9 @@ document.addEventListener('DOMContentLoaded', () => {
         await registerUser(email, password, additionalData);
         closeModal('register-modal');
       } catch (error) {
-        showAuthError(error, 'register-error'); // Mostrar error
+        showAuthError(error, 'register-error');
+      } finally {
+        toggleButtonSpinner(submitButton, false); // (UX Mejora 4)
       }
     });
   }
@@ -319,7 +366,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (registerFormClub) {
     registerFormClub.addEventListener('submit', async (e) => {
       e.preventDefault(); 
-      document.getElementById('register-error').classList.add('hidden'); // Ocultar error previo
+      const submitButton = e.submitter;
+      toggleButtonSpinner(submitButton, true); // (UX Mejora 4)
+      document.getElementById('register-error').classList.add('hidden');
       const email = e.target.email.value;
       const password = e.target.password.value;
       const clubName = e.target.clubName.value;
@@ -331,25 +380,24 @@ document.addEventListener('DOMContentLoaded', () => {
         await registerUser(email, password, additionalData);
         closeModal('register-modal');
       } catch (error) {
-        showAuthError(error, 'register-error'); // Mostrar error
+        showAuthError(error, 'register-error');
+      } finally {
+        toggleButtonSpinner(submitButton, false); // (UX Mejora 4)
       }
     });
   }
   
-  // Botón de Logout
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
-      try {
-        await logoutUser();
-      } catch (error) {
-        console.error("Error logging out: ", error);
-      }
+      try { await logoutUser(); } 
+      catch (error) { console.error("Error logging out: ", error); }
     });
   }
 
   // --- ESTADO DE AUTENTICACIÓN ---
   onAuthStateChanged(async (user) => {
+    // (Lógica sin cambios)
     const userProfile = document.getElementById('user-profile');
     const registerBtn = document.getElementById('register-btn');
     const loginBtn = document.getElementById('login-btn');
@@ -422,15 +470,21 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const loadAndRenderTournaments = async () => {
-    // (Función sin cambios)
     const tournamentsGrid = document.querySelector('#page-tournaments .grid');
+    const loader = document.getElementById('tournament-loader'); // (UX Mejora 3)
+    
     if (tournamentsGrid) {
       const addCard = document.getElementById('add-tournament-card');
       tournamentsGrid.innerHTML = ''; 
       if (addCard) { tournamentsGrid.appendChild(addCard); }
+
+      loader.classList.remove('hidden'); // (UX Mejora 3: Mostrar loader)
+
       try {
         const querySnapshot = await loadTournaments();
-        if (querySnapshot.empty) { return; }
+        if (querySnapshot.empty) { 
+          console.log("No se encontraron torneos.");
+        }
         querySnapshot.forEach((doc) => {
           const tournament = doc.data();
           const card = createTournamentCard(tournament);
@@ -442,6 +496,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       } catch (error) {
         console.error("Error loading tournaments: ", error);
+      } finally {
+        loader.classList.add('hidden'); // (UX Mejora 3: Ocultar loader)
       }
     }
   };
