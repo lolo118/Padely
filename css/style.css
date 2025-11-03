@@ -285,3 +285,32 @@
         ::-webkit-scrollbar-track { background: #1f2937; }
         ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+        /* ***** INICIO DE LA MODIFICACIÓN (UX) ***** */
+        
+        /* Spinner para botones */
+        .spinner {
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            display: inline-block; /* Para que aparezca dentro del botón */
+        }
+        
+        /* Loader para la página de torneos */
+        .loader {
+            width: 3rem;
+            height: 3rem;
+            border: 4px solid var(--glass-border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto; /* Centrado */
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        /* ***** FIN DE LA MODIFICACIÓN (UX) ***** */
