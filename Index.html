@@ -437,7 +437,7 @@
                                                 <div class="category-item"><input type="checkbox" id="cat-3ra" value="3ra" class="category-checkbox"><label for="cat-3ra">3ra</label></div>
                                                 <div class="category-item"><input type="checkbox" id="cat-4ta" value="4ta" class="category-checkbox"><label for="cat-4ta">4ta</label></div>
                                                 <div class="category-item"><input type="checkbox" id="cat-5ta" value="5ta" class="category-checkbox"><label for="cat-5ta">5ta</label></div>
-                                                <div class="category-item"><input type="checkbox" id="cat-6ta" value="6ta" class="category-checkbox"><label for="cat-6ta">6ta</label></div>
+                                                <div class="category-item"><input type="checkbox"id="cat-6ta" value="6ta" class="category-checkbox"><label for="cat-6ta">6ta</label></div>
                                                 <div class="category-item"><input type="checkbox" id="cat-7ma" value="7ma" class="category-checkbox"><label for="cat-7ma">7ma</label></div>
                                                 <div class="category-item"><input type="checkbox" id="cat-8va" value="8va" class="category-checkbox"><label for="cat-8va">8va</label></div>
                                                 <div class="category-item"><input type="checkbox" id="cat-s3" value="Suma 3" class="category-checkbox"><label for="cat-s3">Suma 3</label></div>
@@ -617,17 +617,17 @@
     
         <div id="register-modal" data-modal-id="register-modal" class="modal-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
         <div class="glass-card border border-gray-700 rounded-xl shadow-2xl p-8 w-full max-w-lg relative transform transition-transform duration-300 scale-95">
-                 <button class="close-modal-btn absolute top-4 right-4 text-gray-400 hover:text-white transition-colors p-1 rounded-full"><i class="fas fa-times"></i></button>
-                
+                 <button class="close-modal-btn absolute top-6 right-6 text-gray-400 hover:text-white transition-colors p-1 rounded-full"><i class="fas fa-times"></i></button>
                  <div id="register-prompt-message" 
                       class="hidden text-sm text-yellow-300 bg-yellow-900/50 border border-yellow-700 p-3 rounded-lg mb-6 text-center">
                       Solo los perfiles de "Organizador" o "Club" pueden crear torneos. Por favor, regístrate con el rol adecuado.
-                 </div>
+                      </div>
+                 
                  <p id="register-error" class="hidden text-red-500 text-sm text-center mb-4"></p>
 
                 <div id="role-selection-step">
                     <div class="text-center mb-6">
-                        <h2 class="text-2xl font-bold text-white">Regístrate para empezar a disfrutar</h2>
+                        <h2 class="text-2xl font-bold text-white">Regístrate para empezar</h2>
                         <p class="text-gray-400 mt-2">Primero, elige tu tipo de perfil</p>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -639,7 +639,7 @@
                         <div data-role="organizer" class="role-card cursor-pointer glass-card p-6 rounded-xl border-2 border-gray-700 text-center">
                             <div class="bg-blue-500/20 p-4 rounded-full inline-flex mb-4"><i class="fas fa-trophy text-2xl text-blue-400"></i></div>
                             <h3 class="font-bold text-white text-lg">Organizador</h3>
-                            <p class="text-sm text-gray-400 mt-2">Organiza torneos abiertos, administra inscripciones y carga resultados.</p>
+                            <p class="text-sm text-gray-400 mt-2">Crea y gestiona torneos (ej. "Torneos Pepito", Ligas, etc).</p>
                         </div>
                         <div data-role="club" class="role-card cursor-pointer glass-card p-6 rounded-xl border-2 border-gray-700 text-center">
                             <div class="bg-green-500/20 p-4 rounded-full inline-flex mb-4"><i class="fas fa-shield-alt text-2xl text-green-400"></i></div>
@@ -649,118 +649,4 @@
                         </div>
                 </div>
                 <div id="form-steps" class="hidden">
-                     <button class="back-to-roles text-gray-400 hover:text-white transition-colors mb-6 mt-8 flex items-center"><i class="fas fa-arrow-left mr-2"></i>Volver</button>
-                     <form id="register-form-player" class="register-form hidden space-y-4">
-                        <h2 class="text-2xl font-bold text-white mb-6">Registro de Jugador</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm mb-2">Nombre</label>
-                                <input type="text" name="nombre" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required>
-                            </div>
-                            <div>
-                                <label class="block text-sm mb-2">Apellido</label>
-                                <input type="text" name="apellido" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-sm mb-2">Email</label>
-                            <input type="email" name="email" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required>
-                        </div>
-                        <div>
-                            <label class="block text-sm mb-2">Contraseña</label>
-                            <input type="password" name="password" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required>
-                        </div>
-                        <div>
-                            <label class="block text-sm mb-2">Nivel</label>
-                            <select name="nivel" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white">
-                                <option>Iniciación</option>
-                                <option>Intermedio</option>
-                                <option>Avanzado</option>
-                                <option>Competitivo</option>
-                            </select>
-                        </div>
-                        <button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg mt-4 relative flex items-center justify-center">
-                            <span class="spinner hidden"></span>
-                            <span class="button-text">Crear Cuenta</span>
-                        </button>
-                        </form>
-                     
-                     <form id="register-form-organizer" class="register-form hidden space-y-4">
-                        <h2 class="text-2xl font-bold text-white mb-6">Registro de Organizador</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm mb-2">Nombre de Organización</label>
-                                <input type="text" name="orgName" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required>
-                            </div>
-                             <div>
-                                <label class="block text-sm mb-2">Nombre de Contacto</label>
-                                <input type="text" name="contactName" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm mb-2">Email</label>
-                                <input type="email" name="email" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required>
-                            </div>
-                            <div>
-                                <label class="block text-sm mb-2">Teléfono</label>
-                                <input type="tel" name="phone" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-sm mb-2">Contraseña</label>
-                            <input type="password" name="password" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required>
-                        </div>
-                        <button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg mt-4 relative flex items-center justify-center">
-                            <span class="spinner hidden"></span>
-                            <span class="button-text">Crear Cuenta</span>
-                        </button>
-                        </form>
-                     
-                     <form id="register-form-club" class="register-form hidden space-y-4">
-                        <h2 class="text-2xl font-bold text-white mb-6">Registro de Club</h2>
-                         <div>
-                            <label class="block text-sm mb-2">Nombre del Club</label>
-                            <input type="text" name="clubName" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm mb-2">Dirección</label>
-                                <input type="text" name="address" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required>
-                            </div>
-                            <div>
-                                <label class="block text-sm mb-2">Ciudad</label>
-                                <input type="text" name="city" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm mb-2">Email de Contacto</Olabel>
-                                <input type="email" name="email" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required>
-                            </div>
-                            <div>
-                                <label class="block text-sm mb-2">Teléfono de Reservas</label>
-                                <input type="tel" name="phone" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-sm mb-2">Contraseña</label>
-                            <input type="password" name="password" class="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white" required>
-                        </div>
-                        <button type="submit" class="w-full btn-primary text-white font-bold py-3 rounded-lg mt-4 relative flex items-center justify-center">
-                            <span class="spinner hidden"></span>
-                            <span class="button-text">Crear Cuenta</span>
-                        </button>
-                        </form>
-                     
-                     </div>
-            </div>
-        </div>
-        <script type="module" src="https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js"></script> 
-        <script type="module" src="https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js"></script>
-        <script type="module" src="https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js"></script>
-    
-        <script src="js/app.js" type="module"></script>
-    
-    </body>
-    </html>
+                     <button class...
