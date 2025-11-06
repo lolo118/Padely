@@ -1,4 +1,4 @@
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged as firebaseOnAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import { auth } from './firebase.js';
 
 // Function to handle user registration
@@ -18,7 +18,7 @@ const logoutUser = () => {
 
 // Function to get the current user's authentication state
 const onAuthStateChanged = (callback) => {
-  return onAuthStateChanged(auth, callback);
+  return firebaseOnAuthStateChanged(auth, callback);
 };
 
 export { registerUser, loginUser, logoutUser, onAuthStateChanged };

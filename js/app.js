@@ -32,16 +32,71 @@ document.addEventListener('DOMContentLoaded', () => {
   const wizardFinishBtn = document.getElementById('wizard-finish');
   if (wizardFinishBtn) {
     wizardFinishBtn.addEventListener('click', async () => {
-      const tournamentData = {
-        name: document.getElementById('wizard-tournament-name').value,
-        // Collect other data from the wizard
+      // Helper function to get checked values from a group of checkboxes
+      const getCheckedValues = (selector) => {
+        return Array.from(document.querySelectorAll(selector))
+          .filter(checkbox => checkbox.checked)
+          .map(checkbox => checkbox.value);
       };
+
+      // Collect data from the wizard
+      const tournamentData = {
+        // Step 1: Modality
+        modality: document.querySelector('.modality-card.border-green-500')?.dataset.modality,
+
+        // Step 2: Details
+        name: document.getElementById('wizard-tournament-name').value,
+        startDate: document.getElementById('wizard-start-datetime').value,
+        endDate: document.getElementById('wizard-end-datetime').value,
+        location: document.getElementById('wizard-location').value,
+        branches: getCheckedValues('input[name="branch"]:checked'),
+        categories: getCheckedValues('.category-checkbox:checked'),
+
+        // Step 3: Format
+        format: {
+          sets: document.getElementById('format-sets-best-of').value,
+          tiebreak: document.getElementById('format-tiebreak').value,
+          goldenPoint: document.getElementById('format-punto-oro').checked,
+          // Modality-specific options
+          americano: {
+            duration: document.getElementById('format-americano-duration').value,
+            teamsPerCourt: document.getElementById('format-americano-teams-per-court').value,
+          },
+          roundrobin: {
+            teamsPerGroup: document.getElementById('format-rr-teams-per-group').value,
+            teamsQualify: document.getElementById('format-rr-teams-qualify').value,
+          },
+          liga: {
+            winPoints: document.getElementById('format-liga-win-points').value,
+            drawPoints: document.getElementById('format-liga-draw-points').value,
+            lossPoints: document.getElementById('format-liga-loss-points').value,
+          },
+          eliminatoria: {
+            consuelo: document.getElementById('eliminatoria-consuelo').checked,
+          },
+          pozo: {
+              courts: document.getElementById('format-pozo-courts').value
+          }
+        },
+
+        // Step 4: Rules
+        price: document.getElementById('wizard-price').value,
+        deadline: document.getElementById('wizard-deadline').value,
+        tiebreakRules: document.getElementById('wizard-tiebreak').value,
+
+        // Metadata
+        createdAt: new Date(),
+        status: 'pending' // Or 'active' depending on the desired initial state
+      };
+
       try {
         await saveTournament(tournamentData);
         closeModal('create-tournament-wizard');
-        // Optionally, refresh the tournament list
+        loadAndRenderTournaments(); // Refresh the tournament list
+        // TODO: Reset wizard form
       } catch (error) {
         console.error("Error saving tournament: ", error);
+        // TODO: Display error to user in the wizard
       }
     });
   }
@@ -49,35 +104,66 @@ document.addEventListener('DOMContentLoaded', () => {
   // Authentication forms
   const loginForm = document.getElementById('login-form');
   if (loginForm) {
+    const loginError = document.getElementById('login-error');
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = e.target.username.value;
       const password = e.target.password.value;
+      loginError.classList.add('hidden'); // Hide previous errors
+
       try {
         await loginUser(email, password);
         closeModal('login-modal');
       } catch (error) {
         console.error("Error logging in: ", error);
-        // Display error message to the user
+        loginError.textContent = getFirebaseAuthErrorMessage(error);
+        loginError.classList.remove('hidden');
       }
     });
   }
 
+  // Note: This only handles the player registration form for now.
+  // A more robust solution would handle all registration forms.
   const registerForm = document.getElementById('register-form-player');
   if (registerForm) {
+    // It's good practice to have a dedicated error element for registration
+    // For now, we'll alert, but a dedicated element is better UI.
     registerForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      // This assumes the register form has inputs with these names
       const email = e.target.email.value;
       const password = e.target.password.value;
+
       try {
         await registerUser(email, password);
         closeModal('register-modal');
       } catch (error) {
         console.error("Error registering: ", error);
-        // Display error message to the user
+        alert(`Registration failed: ${getFirebaseAuthErrorMessage(error)}`);
       }
     });
   }
+
+  // A helper function to translate Firebase auth error codes into user-friendly messages.
+  const getFirebaseAuthErrorMessage = (error) => {
+    switch (error.code) {
+      case 'auth/invalid-email':
+        return 'Por favor, introduce una dirección de correo electrónico válida.';
+      case 'auth/user-disabled':
+        return 'Esta cuenta de usuario ha sido deshabilitada.';
+      case 'auth/user-not-found':
+      case 'auth/wrong-password':
+        return 'Correo electrónico o contraseña incorrectos. Por favor, inténtalo de nuevo.';
+      case 'auth/email-already-in-use':
+        return 'Esta dirección de correo electrónico ya está en uso por otra cuenta.';
+      case 'auth/weak-password':
+        return 'La contraseña es demasiado débil. Debe tener al menos 6 caracteres.';
+      case 'auth/operation-not-allowed':
+         return 'El inicio de sesión con correo electrónico y contraseña no está habilitado.';
+      default:
+        return 'Ha ocurrido un error inesperado. Por favor, inténtalo de nuevo más tarde.';
+    }
+  };
 
   // Logout button
   const logoutBtn = document.getElementById('logout-btn');
@@ -143,19 +229,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadAndRenderTournaments = async () => {
     const tournamentsGrid = document.querySelector('#page-tournaments .grid');
     if (tournamentsGrid) {
-      // Clear existing tournaments except for the "add" card
-      tournamentsGrid.innerHTML = '';
       const addTournamentCard = document.getElementById('add-tournament-card');
-      if (addTournamentCard) {
-        tournamentsGrid.appendChild(addTournamentCard);
-      }
+
+      // Clear only the dynamically loaded tournament cards
+      const existingCards = tournamentsGrid.querySelectorAll('.tournament-card:not(#add-tournament-card)');
+      existingCards.forEach(card => card.remove());
 
       try {
         const querySnapshot = await loadTournaments();
         querySnapshot.forEach((doc) => {
           const tournament = doc.data();
           const card = createTournamentCard(tournament);
-          tournamentsGrid.insertBefore(card, addTournamentCard);
+          // Insert the new card before the "add" card
+          if (addTournamentCard) {
+            tournamentsGrid.insertBefore(card, addTournamentCard);
+          } else {
+            tournamentsGrid.appendChild(card);
+          }
         });
       } catch (error) {
         console.error("Error loading tournaments: ", error);
