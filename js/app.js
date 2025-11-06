@@ -47,22 +47,25 @@ document.addEventListener('DOMContentLoaded', () => {
   if (closeWizardBtn) {
     closeWizardBtn.addEventListener('click', () => {
       closeModal('create-tournament-wizard');
-      resetWizardForm();
+      resetWizardForm(); // (UX Mejora 5: Reseteo del Wizard)
     });
   }
   
+  // (UX Mejora 2: Cierre de Modales por Overlay)
   document.querySelectorAll('.modal-overlay').forEach(modal => {
     modal.addEventListener('click', (e) => {
+        // Si se hace clic en el fondo (el overlay mismo) y no en un hijo (el card)
         if (e.target === e.currentTarget) {
             const modalId = e.currentTarget.dataset.modalId;
             closeModal(modalId);
             if (modalId === 'create-tournament-wizard') {
-                resetWizardForm();
+                resetWizardForm(); // (UX Mejora 5: Reseteo del Wizard)
             }
         }
     });
   });
 
+  // (UX Mejora 1: Botón de Ver Contraseña)
   const togglePasswordBtn = document.getElementById('toggle-password');
   if (togglePasswordBtn) {
     togglePasswordBtn.addEventListener('click', () => {
@@ -110,7 +113,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- CREACIÓN DE TORNEOS ---
 
+  // (UX Mejora 5: Reseteo del Wizard)
   const resetWizardForm = () => {
+    // Limpiar inputs de texto y fecha
     document.getElementById('wizard-tournament-name').value = '';
     document.getElementById('wizard-start-datetime').value = '';
     document.getElementById('wizard-end-datetime').value = '';
@@ -118,76 +123,30 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('wizard-price').value = '';
     document.getElementById('wizard-deadline').value = '';
     document.getElementById('wizard-tiebreak').value = '';
-    document.querySelectorAll('input[name="branch"]:checked').forEach(checkbox => { checkbox.checked = false; });
-    document.querySelectorAll('.category-checkbox:checked').forEach(checkbox => { checkbox.checked = false; });
+    
+    // Desmarcar checkboxes de ramas
+    document.querySelectorAll('input[name="branch"]:checked').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    // Desmarcar checkboxes de categorías
+    document.querySelectorAll('.category-checkbox:checked').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    
+    // Resetear selects
     document.getElementById('format-sets-best-of').value = '3';
     document.getElementById('format-tiebreak').value = 'normal';
     document.getElementById('format-punto-oro').checked = true;
+    
+    // Desmarcar tarjetas de modalidad
     document.querySelectorAll('.modality-card').forEach(c => c.classList.remove('selected'));
     selectedModality = '';
+
+    // Volver al primer paso
     updateWizardStep(1);
   };
 
-  // (CORREGIDO - Bug 2: Resumen del Wizard)
-  const generateWizardSummary = () => {
-    const summaryContainer = document.getElementById('wizard-summary');
-    
-    // Función helper para formatear datos
-    const getData = (id, defaultValue = 'No especificado') => {
-        const value = document.getElementById(id).value;
-        return value || defaultValue;
-    };
-    // Función helper para checkboxes
-    const getCheckedData = (selector, joiner = ', ') => {
-        const items = Array.from(document.querySelectorAll(selector))
-                           .map(cb => cb.value);
-        return items.length ? items.join(joiner) : 'No especificadas';
-    };
-    // Función helper para formatear fecha
-    const formatDate = (dateString) => {
-        if (!dateString) return 'No especificada';
-        try {
-            const date = new Date(dateString);
-            return date.toLocaleString('es-AR', { dateStyle: 'long', timeStyle: 'short' }) + ' hs';
-        } catch (e) {
-            return dateString;
-        }
-    };
-
-    // Recopilar todos los datos
-    const data = {
-        name: getData('wizard-tournament-name'),
-        modality: selectedModality ? (selectedModality.charAt(0).toUpperCase() + selectedModality.slice(1)) : 'No especificada',
-        startDate: formatDate(getData('wizard-start-datetime', null)),
-        location: getData('wizard-location'),
-        branches: getCheckedData('input[name="branch"]:checked'),
-        categories: getCheckedData('.category-checkbox:checked'),
-        price: getData('wizard-price', 'Gratis'),
-        deadline: formatDate(getData('wizard-deadline', null)),
-        sets: document.getElementById('format-sets-best-of').options[document.getElementById('format-sets-best-of').selectedIndex].text,
-        tiebreak: document.getElementById('format-tiebreak').options[document.getElementById('format-tiebreak').selectedIndex].text,
-        goldenPoint: document.getElementById('format-punto-oro').checked ? 'Sí' : 'No'
-    };
-
-    // Generar HTML del Resumen
-    summaryContainer.innerHTML = `
-        <div class="space-y-3">
-            <h4 class="text-lg font-semibold text-white">${data.name}</h4>
-            <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                <div><strong class="text-gray-400">Modalidad:</strong> ${data.modality}</div>
-                <div><strong class="text-gray-400">Lugar:</strong> ${data.location}</div>
-                <div><strong class="text-gray-400">Inicio:</strong> ${data.startDate}</div>
-                <div><strong class="text-gray-400">Inscripción:</strong> $${data.price}</div>
-                <div class="col-span-2"><strong class="text-gray-400">Ramas:</strong> ${data.branches}</div>
-                <div class="col-span-2"><strong class="text-gray-400">Categorías:</strong> ${data.categories}</div>
-                <div class="col-span-2 pt-2 border-t border-gray-700 mt-2"><strong class="text-gray-400">Formato:</strong> ${data.sets}, ${data.tiebreak}, Punto de Oro: ${data.goldenPoint}.</div>
-            </div>
-        </div>
-    `;
-  };
-
   const updateWizardStep = (newStep) => {
-    // (CORREGIDO - Bug 2: Llamar a la función de resumen)
     if (newStep === 5) {
         generateWizardSummary();
     }
@@ -208,6 +167,56 @@ document.addEventListener('DOMContentLoaded', () => {
     finishBtn.classList.toggle('hidden', newStep !== 5);
   };
 
+  // (Función de resumen del Wizard - añadida en el paso anterior)
+  const generateWizardSummary = () => {
+    const summaryContainer = document.getElementById('wizard-summary');
+    const getData = (id, defaultValue = 'No especificado') => {
+        const value = document.getElementById(id).value;
+        return value || defaultValue;
+    };
+    const getCheckedData = (selector, joiner = ', ') => {
+        const items = Array.from(document.querySelectorAll(selector))
+                           .map(cb => cb.value);
+        return items.length ? items.join(joiner) : 'No especificadas';
+    };
+    const formatDate = (dateString) => {
+        if (!dateString) return 'No especificada';
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleString('es-AR', { dateStyle: 'long', timeStyle: 'short' }) + ' hs';
+        } catch (e) {
+            return dateString;
+        }
+    };
+    const data = {
+        name: getData('wizard-tournament-name'),
+        modality: selectedModality ? (selectedModality.charAt(0).toUpperCase() + selectedModality.slice(1)) : 'No especificada',
+        startDate: formatDate(getData('wizard-start-datetime', null)),
+        location: getData('wizard-location'),
+        branches: getCheckedData('input[name="branch"]:checked'),
+        categories: getCheckedData('.category-checkbox:checked'),
+        price: getData('wizard-price', 'Gratis'),
+        deadline: formatDate(getData('wizard-deadline', null)),
+        sets: document.getElementById('format-sets-best-of').options[document.getElementById('format-sets-best-of').selectedIndex].text,
+        tiebreak: document.getElementById('format-tiebreak').options[document.getElementById('format-tiebreak').selectedIndex].text,
+        goldenPoint: document.getElementById('format-punto-oro').checked ? 'Sí' : 'No'
+    };
+    summaryContainer.innerHTML = `
+        <div class="space-y-3">
+            <h4 class="text-lg font-semibold text-white">${data.name}</h4>
+            <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                <div><strong class="text-gray-400">Modalidad:</strong> ${data.modality}</div>
+                <div><strong class="text-gray-400">Lugar:</strong> ${data.location}</div>
+                <div><strong class="text-gray-400">Inicio:</strong> ${data.startDate}</div>
+                <div><strong class="text-gray-400">Inscripción:</strong> $${data.price}</div>
+                <div class="col-span-2"><strong class="text-gray-400">Ramas:</strong> ${data.branches}</div>
+                <div class="col-span-2"><strong class="text-gray-400">Categorías:</strong> ${data.categories}</div>
+                <div class="col-span-2 pt-2 border-t border-gray-700 mt-2"><strong class="text-gray-400">Formato:</strong> ${data.sets}, ${data.tiebreak}, Punto de Oro: ${data.goldenPoint}.</div>
+            </div>
+        </div>
+    `;
+  };
+
   document.querySelector('.wizard-next').addEventListener('click', () => {
     if (currentWizardStep < 5) { updateWizardStep(currentWizardStep + 1); }
   });
@@ -220,33 +229,22 @@ document.addEventListener('DOMContentLoaded', () => {
     openModal('create-tournament-wizard');
   };
 
-  // (CORREGIDO - Bug 1: Opciones de Modalidad)
   document.querySelectorAll('.modality-card').forEach(card => {
     card.addEventListener('click', e => {
       selectedModality = e.currentTarget.dataset.modality;
       const modalityName = e.currentTarget.querySelector('h4').textContent;
-
-      // Resaltar tarjeta seleccionada
       document.querySelectorAll('.modality-card').forEach(c => c.classList.remove('selected'));
       e.currentTarget.classList.add('selected');
-
-      // Actualizar etiqueta en Paso 3
       document.getElementById('selected-modality-label').textContent = modalityName;
-
-      // Ocultar todas las opciones de formato
       document.querySelectorAll('[data-modality-options]').forEach(opt => {
         opt.classList.add('hidden');
       });
-
-      // Mostrar las opciones de la modalidad seleccionada
       const optionsToShow = document.querySelector(`[data-modality-options="${selectedModality}"]`);
       const placeholder = document.getElementById('no-options-placeholder');
-      
       if (optionsToShow) {
         optionsToShow.classList.remove('hidden');
         placeholder.classList.add('hidden');
       } else {
-        // Si no hay opciones específicas (ej. Personalizado), mostrar placeholder
         placeholder.classList.remove('hidden');
       }
     });
@@ -285,7 +283,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const wizardFinishBtn = document.getElementById('wizard-finish');
   if (wizardFinishBtn) {
     wizardFinishBtn.addEventListener('click', async () => {
-      toggleButtonSpinner(wizardFinishBtn, true); 
+      toggleButtonSpinner(wizardFinishBtn, true); // (UX Mejora 4)
+      
       const branches = [];
       document.querySelectorAll('input[name="branch"]:checked').forEach(checkbox => { branches.push(checkbox.value); });
       const categories = [];
@@ -313,13 +312,14 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         console.error("Error saving tournament: ", error);
       } finally {
-        toggleButtonSpinner(wizardFinishBtn, false); 
+        toggleButtonSpinner(wizardFinishBtn, false); // (UX Mejora 4)
       }
     });
   }
 
   // --- FORMULARIOS DE AUTENTICACIÓN ---
 
+  // (UX Mejora 4: Helper de Spinner)
   const toggleButtonSpinner = (button, show) => {
     const spinner = button.querySelector('.spinner');
     const text = button.querySelector('.button-text');
@@ -362,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const submitButton = e.submitter; 
-      toggleButtonSpinner(submitButton, true); 
+      toggleButtonSpinner(submitButton, true); // (UX Mejora 4)
       document.getElementById('login-error').classList.add('hidden');
       const email = e.target.username.value;
       const password = e.target.password.value;
@@ -372,7 +372,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         showAuthError(error, 'login-error');
       } finally {
-        toggleButtonSpinner(submitButton, false); 
+        toggleButtonSpinner(submitButton, false); // (UX Mejora 4)
       }
     });
   }
@@ -382,7 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
     registerFormPlayer.addEventListener('submit', async (e) => {
       e.preventDefault(); 
       const submitButton = e.submitter;
-      toggleButtonSpinner(submitButton, true); 
+      toggleButtonSpinner(submitButton, true); // (UX Mejora 4)
       document.getElementById('register-error').classList.add('hidden');
       const email = e.target.email.value;
       const password = e.target.password.value;
@@ -396,7 +396,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         showAuthError(error, 'register-error');
       } finally {
-        toggleButtonSpinner(submitButton, false); 
+        toggleButtonSpinner(submitButton, false); // (UX Mejora 4)
       }
     });
   }
@@ -406,7 +406,7 @@ document.addEventListener('DOMContentLoaded', () => {
     registerFormOrganizer.addEventListener('submit', async (e) => {
       e.preventDefault(); 
       const submitButton = e.submitter;
-      toggleButtonSpinner(submitButton, true); 
+      toggleButtonSpinner(submitButton, true); // (UX Mejora 4)
       document.getElementById('register-error').classList.add('hidden');
       const email = e.target.email.value;
       const password = e.target.password.value;
@@ -420,7 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         showAuthError(error, 'register-error');
       } finally {
-        toggleButtonSpinner(submitButton, false); 
+        toggleButtonSpinner(submitButton, false); // (UX Mejora 4)
       }
     });
   }
@@ -430,7 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
     registerFormClub.addEventListener('submit', async (e) => {
       e.preventDefault(); 
       const submitButton = e.submitter;
-      toggleButtonSpinner(submitButton, true); 
+      toggleButtonSpinner(submitButton, true); // (UX Mejora 4)
       document.getElementById('register-error').classList.add('hidden');
       const email = e.target.email.value;
       const password = e.target.password.value;
@@ -445,7 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         showAuthError(error, 'register-error');
       } finally {
-        toggleButtonSpinner(submitButton, false); 
+        toggleButtonSpinner(submitButton, false); // (UX Mejora 4)
       }
     });
   }
@@ -532,13 +532,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const loadAndRenderTournaments = async () => {
     const tournamentsGrid = document.querySelector('#page-tournaments .grid');
-    const loader = document.getElementById('tournament-loader'); 
+    const loader = document.getElementById('tournament-loader'); // (UX Mejora 3)
     
     if (tournamentsGrid) {
       const addCard = document.getElementById('add-tournament-card');
       tournamentsGrid.innerHTML = ''; 
       if (addCard) { tournamentsGrid.appendChild(addCard); }
-      loader.classList.remove('hidden'); 
+
+      loader.classList.remove('hidden'); // (UX Mejora 3: Mostrar loader)
+
       try {
         const querySnapshot = await loadTournaments();
         if (querySnapshot.empty) { 
@@ -556,7 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         console.error("Error loading tournaments: ", error);
       } finally {
-        loader.classList.add('hidden'); 
+        loader.classList.add('hidden'); // (UX Mejora 3: Ocultar loader)
       }
     }
   };
