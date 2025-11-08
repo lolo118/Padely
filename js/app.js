@@ -10,17 +10,54 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedModality = ''; 
   let currentWizardStep = 1; 
 
+  // --- DEFINICIONES DE ELEMENTOS GLOBALES ---
+  const sidebar = document.getElementById('sidebar');
+  const menuOverlay = document.getElementById('menu-overlay');
+  const menuToggleBtn = document.getElementById('menu-toggle');
+
+  // --- FUNCIÓN PARA CERRAR MENÚ MÓVIL ---
+  const closeMenu = () => {
+    if (sidebar && menuOverlay) {
+        sidebar.classList.add('-translate-x-full');
+        sidebar.classList.remove('translate-x-0');
+        menuOverlay.classList.add('hidden');
+    }
+  };
+
   // --- NAVEGACIÓN Y MODALES ---
   
   document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
+      // Resalta el link activo
       document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
       e.currentTarget.classList.add('active');
+      
+      // Muestra la página
       const pageId = e.currentTarget.dataset.page;
       showPage(pageId);
+
+      // (CORREGIDO) Cierra el menú móvil si está abierto
+      if (!menuOverlay.classList.contains('hidden')) {
+        closeMenu();
+      }
     });
   });
+
+  // ***** INICIO DE LA MODIFICACIÓN (Arreglo Menú Móvil) *****
+  // --- LÓGICA DEL MENÚ MÓVIL ---
+  if (menuToggleBtn && sidebar && menuOverlay) {
+    // 1. Abrir el menú
+    menuToggleBtn.addEventListener('click', () => {
+        sidebar.classList.remove('-translate-x-full');
+        sidebar.classList.add('translate-x-0');
+        menuOverlay.classList.remove('hidden');
+    });
+
+    // 2. Cerrar al hacer clic en el overlay
+    menuOverlay.addEventListener('click', closeMenu);
+  }
+  // ***** FIN DE LA MODIFICACIÓN *****
 
   document.getElementById('login-btn').addEventListener('click', () => {
     document.getElementById('login-error').classList.add('hidden');
@@ -47,25 +84,22 @@ document.addEventListener('DOMContentLoaded', () => {
   if (closeWizardBtn) {
     closeWizardBtn.addEventListener('click', () => {
       closeModal('create-tournament-wizard');
-      resetWizardForm(); // (UX Mejora 5: Reseteo del Wizard)
+      resetWizardForm();
     });
   }
   
-  // (UX Mejora 2: Cierre de Modales por Overlay)
   document.querySelectorAll('.modal-overlay').forEach(modal => {
     modal.addEventListener('click', (e) => {
-        // Si se hace clic en el fondo (el overlay mismo) y no en un hijo (el card)
         if (e.target === e.currentTarget) {
             const modalId = e.currentTarget.dataset.modalId;
             closeModal(modalId);
             if (modalId === 'create-tournament-wizard') {
-                resetWizardForm(); // (UX Mejora 5: Reseteo del Wizard)
+                resetWizardForm();
             }
         }
     });
   });
 
-  // (UX Mejora 1: Botón de Ver Contraseña)
   const togglePasswordBtn = document.getElementById('toggle-password');
   if (togglePasswordBtn) {
     togglePasswordBtn.addEventListener('click', () => {
@@ -113,9 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- CREACIÓN DE TORNEOS ---
 
-  // (UX Mejora 5: Reseteo del Wizard)
   const resetWizardForm = () => {
-    // Limpiar inputs de texto y fecha
     document.getElementById('wizard-tournament-name').value = '';
     document.getElementById('wizard-start-datetime').value = '';
     document.getElementById('wizard-end-datetime').value = '';
@@ -123,51 +155,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('wizard-price').value = '';
     document.getElementById('wizard-deadline').value = '';
     document.getElementById('wizard-tiebreak').value = '';
-    
-    // Desmarcar checkboxes de ramas
-    document.querySelectorAll('input[name="branch"]:checked').forEach(checkbox => {
-        checkbox.checked = false;
-    });
-    // Desmarcar checkboxes de categorías
-    document.querySelectorAll('.category-checkbox:checked').forEach(checkbox => {
-        checkbox.checked = false;
-    });
-    
-    // Resetear selects
+    document.querySelectorAll('input[name="branch"]:checked').forEach(checkbox => { checkbox.checked = false; });
+    document.querySelectorAll('.category-checkbox:checked').forEach(checkbox => { checkbox.checked = false; });
     document.getElementById('format-sets-best-of').value = '3';
     document.getElementById('format-tiebreak').value = 'normal';
     document.getElementById('format-punto-oro').checked = true;
-    
-    // Desmarcar tarjetas de modalidad
     document.querySelectorAll('.modality-card').forEach(c => c.classList.remove('selected'));
     selectedModality = '';
-
-    // Volver al primer paso
     updateWizardStep(1);
   };
 
-  const updateWizardStep = (newStep) => {
-    if (newStep === 5) {
-        generateWizardSummary();
-    }
-
-    currentWizardStep = newStep;
-    document.querySelectorAll('.wizard-step').forEach(step => step.classList.remove('active'));
-    const activeStep = document.getElementById(`step-${newStep}`);
-    if (activeStep) { activeStep.classList.add('active'); }
-    const progressBar = document.getElementById('wizard-progress');
-    const progressPercentage = (newStep - 1) * 25; 
-    progressBar.style.width = `${progressPercentage}%`;
-    document.getElementById('current-step-indicator').textContent = `Paso ${newStep} / 5`;
-    const prevBtn = document.querySelector('.wizard-prev');
-    const nextBtn = document.querySelector('.wizard-next');
-    const finishBtn = document.getElementById('wizard-finish');
-    prevBtn.disabled = (newStep === 1);
-    nextBtn.classList.toggle('hidden', newStep === 5);
-    finishBtn.classList.toggle('hidden', newStep !== 5);
-  };
-
-  // (Función de resumen del Wizard - añadida en el paso anterior)
   const generateWizardSummary = () => {
     const summaryContainer = document.getElementById('wizard-summary');
     const getData = (id, defaultValue = 'No especificado') => {
@@ -215,6 +212,26 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         </div>
     `;
+  };
+
+  const updateWizardStep = (newStep) => {
+    if (newStep === 5) {
+        generateWizardSummary();
+    }
+    currentWizardStep = newStep;
+    document.querySelectorAll('.wizard-step').forEach(step => step.classList.remove('active'));
+    const activeStep = document.getElementById(`step-${newStep}`);
+    if (activeStep) { activeStep.classList.add('active'); }
+    const progressBar = document.getElementById('wizard-progress');
+    const progressPercentage = (newStep - 1) * 25; 
+    progressBar.style.width = `${progressPercentage}%`;
+    document.getElementById('current-step-indicator').textContent = `Paso ${newStep} / 5`;
+    const prevBtn = document.querySelector('.wizard-prev');
+    const nextBtn = document.querySelector('.wizard-next');
+    const finishBtn = document.getElementById('wizard-finish');
+    prevBtn.disabled = (newStep === 1);
+    nextBtn.classList.toggle('hidden', newStep === 5);
+    finishBtn.classList.toggle('hidden', newStep !== 5);
   };
 
   document.querySelector('.wizard-next').addEventListener('click', () => {
@@ -283,8 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const wizardFinishBtn = document.getElementById('wizard-finish');
   if (wizardFinishBtn) {
     wizardFinishBtn.addEventListener('click', async () => {
-      toggleButtonSpinner(wizardFinishBtn, true); // (UX Mejora 4)
-      
+      toggleButtonSpinner(wizardFinishBtn, true); 
       const branches = [];
       document.querySelectorAll('input[name="branch"]:checked').forEach(checkbox => { branches.push(checkbox.value); });
       const categories = [];
@@ -312,14 +328,13 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         console.error("Error saving tournament: ", error);
       } finally {
-        toggleButtonSpinner(wizardFinishBtn, false); // (UX Mejora 4)
+        toggleButtonSpinner(wizardFinishBtn, false); 
       }
     });
   }
 
   // --- FORMULARIOS DE AUTENTICACIÓN ---
 
-  // (UX Mejora 4: Helper de Spinner)
   const toggleButtonSpinner = (button, show) => {
     const spinner = button.querySelector('.spinner');
     const text = button.querySelector('.button-text');
@@ -362,7 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const submitButton = e.submitter; 
-      toggleButtonSpinner(submitButton, true); // (UX Mejora 4)
+      toggleButtonSpinner(submitButton, true); 
       document.getElementById('login-error').classList.add('hidden');
       const email = e.target.username.value;
       const password = e.target.password.value;
@@ -372,7 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         showAuthError(error, 'login-error');
       } finally {
-        toggleButtonSpinner(submitButton, false); // (UX Mejora 4)
+        toggleButtonSpinner(submitButton, false); 
       }
     });
   }
@@ -382,7 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
     registerFormPlayer.addEventListener('submit', async (e) => {
       e.preventDefault(); 
       const submitButton = e.submitter;
-      toggleButtonSpinner(submitButton, true); // (UX Mejora 4)
+      toggleButtonSpinner(submitButton, true); 
       document.getElementById('register-error').classList.add('hidden');
       const email = e.target.email.value;
       const password = e.target.password.value;
@@ -396,7 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         showAuthError(error, 'register-error');
       } finally {
-        toggleButtonSpinner(submitButton, false); // (UX Mejora 4)
+        toggleButtonSpinner(submitButton, false); 
       }
     });
   }
@@ -406,7 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
     registerFormOrganizer.addEventListener('submit', async (e) => {
       e.preventDefault(); 
       const submitButton = e.submitter;
-      toggleButtonSpinner(submitButton, true); // (UX Mejora 4)
+      toggleButtonSpinner(submitButton, true); 
       document.getElementById('register-error').classList.add('hidden');
       const email = e.target.email.value;
       const password = e.target.password.value;
@@ -420,7 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         showAuthError(error, 'register-error');
       } finally {
-        toggleButtonSpinner(submitButton, false); // (UX Mejora 4)
+        toggleButtonSpinner(submitButton, false); 
       }
     });
   }
@@ -430,7 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
     registerFormClub.addEventListener('submit', async (e) => {
       e.preventDefault(); 
       const submitButton = e.submitter;
-      toggleButtonSpinner(submitButton, true); // (UX Mejora 4)
+      toggleButtonSpinner(submitButton, true); 
       document.getElementById('register-error').classList.add('hidden');
       const email = e.target.email.value;
       const password = e.target.password.value;
@@ -445,7 +460,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         showAuthError(error, 'register-error');
       } finally {
-        toggleButtonSpinner(submitButton, false); // (UX Mejora 4)
+        toggleButtonSpinner(submitButton, false); 
       }
     });
   }
@@ -532,15 +547,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const loadAndRenderTournaments = async () => {
     const tournamentsGrid = document.querySelector('#page-tournaments .grid');
-    const loader = document.getElementById('tournament-loader'); // (UX Mejora 3)
+    const loader = document.getElementById('tournament-loader'); 
     
     if (tournamentsGrid) {
       const addCard = document.getElementById('add-tournament-card');
       tournamentsGrid.innerHTML = ''; 
       if (addCard) { tournamentsGrid.appendChild(addCard); }
-
-      loader.classList.remove('hidden'); // (UX Mejora 3: Mostrar loader)
-
+      loader.classList.remove('hidden'); 
       try {
         const querySnapshot = await loadTournaments();
         if (querySnapshot.empty) { 
@@ -558,7 +571,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         console.error("Error loading tournaments: ", error);
       } finally {
-        loader.classList.add('hidden'); // (UX Mejora 3: Ocultar loader)
+        loader.classList.add('hidden'); 
       }
     }
   };
