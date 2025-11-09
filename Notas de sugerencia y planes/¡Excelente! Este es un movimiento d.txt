@@ -1,0 +1,58 @@
+¡Excelente! Este es un movimiento de nivel profesional. Has traído dos análisis de alta calidad. El primero (Review A) se enfoca en una refactorización de arquitectura (State Manager, Servicios), mientras que el segundo (Review B) se enfoca más en correcciones puntuales y seguridad (Reglas de Firestore, validación).
+
+Ambos son correctos y se complementan perfectamente.
+
+Como pediste, he combinado ambas revisiones, he eliminado duplicados y he descartado los puntos que considero de baja prioridad por ahora (como el refactor de CSS o el lazy loading, ya que nuestro `style.css` es pequeño y tenemos pocas imágenes).
+
+Aquí tienes el **Plan de Acción Unificado y Priorizado**, listo para ejecutar.
+
+---
+
+### Plan de Acción Unificado
+
+#### Prioridad 0: Seguridad Crítica (Inmediato)
+* **Acción:** Configurar las **Reglas de Seguridad de Firestore**.
+* **Por qué:** (Detectado en Review B). Esta es la tarea más urgente. Ahora mismo, tu base de datos está abierta (`allow read, write: if true;` o similar). Debemos implementar reglas para que, por ejemplo, solo los usuarios autenticados puedan escribir, y que un usuario solo pueda modificar *su propio* perfil, no el de otros.
+
+#### Prioridad 1: Refactorización de Arquitectura (La Gran Tarea)
+* **Acción:** Desacoplar `app.js` en módulos, tal como sugieren ambas revisiones.
+* **Por qué:** `app.js` es un archivo "monolítico" que hace todo. Separarlo hará que el código sea mantenible, escalable y fácil de depurar.
+* **Nuevos Archivos a Crear:**
+    1.  **`state-manager.js`:** (De Review A) Un objeto simple para manejar el estado global (`currentUserData`, `torneos`, `paginaActual`) y notificar a otros módulos cuando algo cambia.
+    2.  **`validators.js`:** (De Review A y B) Un archivo solo para funciones de validación (ej. `isValidEmail(email)`, `isValidPassword(pass)`, `validateTournamentData(data)`).
+    3.  **`auth-service.js`:** Moveremos toda la lógica de `auth.js` (login, register, logout, onAuthStateChanged) a este "servicio", que interactuará con Firebase y el `state-manager`.
+    4.  **`tournament-service.js`:** Moveremos la lógica de `tournaments.js` (`saveTournament`, `loadTournaments`) aquí.
+    5.  **`ui-manager.js`:** (De Review A) Moveremos toda la lógica del DOM (`openModal`, `closeModal`, `showPage`, `toggleButtonSpinner`, `showAuthError`, etc.) a este archivo.
+* **Archivos a Modificar:**
+    * `app.js` se convertirá en un archivo "principal" muy pequeño, que solo inicializa los servicios y coordina.
+    * `auth.js`, `tournaments.js`, `ui.js` serán modificados para encajar en esta nueva arquitectura.
+
+#### Prioridad 2: Implementación de Validación y Seguridad
+* **Acción:** Usar nuestro nuevo `validators.js` para validar *cada* formulario antes de enviarlo a Firebase.
+* **Por qué:** (Detectado en Review A y B). Actualmente, confiamos en el `required` del HTML. Necesitamos validación real (ej. "la contraseña debe tener 6+ caracteres", "la fecha no puede ser en el pasado").
+* **Tareas Específicas:**
+    1.  Añadir un campo "Confirmar Contraseña" a los 3 formularios de registro en `Index.html`.
+    2.  Implementar la lógica de validación en `auth-service.js` (para login/registro) y `tournament-service.js` (para el wizard) usando `validators.js`.
+    3.  Añadir sanitización simple (ej. `.trim()`) a los inputs para evitar espacios vacíos.
+
+#### Prioridad 3: HTML Semántico y Accesibilidad (A11y)
+* **Acción:** Reemplazar los `div` de los modales por la etiqueta `<dialog>` y añadir atributos ARIA.
+* **Por qué:** (Detectado en Review A y B). Esto mejora enormemente la accesibilidad para lectores de pantalla y es una práctica moderna de HTML.
+* **Tareas Específicas:**
+    1.  Modificar `Index.html` para cambiar `<div id="login-modal" ...>` por `<dialog id="login-modal" ...>`.
+    2.  Añadir los `aria-label` y `aria-labelledby` sugeridos en los modales y botones.
+    3.  Reestructurar el `Index.html` para usar etiquetas semánticas como `<nav>`, `<main>` y `<section>` donde corresponda.
+
+#### Prioridad 4: Mejoras Menores de Código
+* **Acción:** Usar `serverTimestamp()` de Firestore para los campos `createdAt`.
+* **Por qué:** (Detectado en Review B). Es más fiable que usar `new Date()` en el cliente, ya que toma la hora del servidor y evita problemas de zona horaria.
+
+---
+
+**Conclusión:**
+
+Este plan combinado es sólido. La **Prioridad 0 (Reglas de Firestore)** es un deber de seguridad inmediato. La **Prioridad 1 (Refactorización de JS)** es la tarea más grande y más importante que desbloqueará todo lo demás.
+
+Mi recomendación es empezar por la **Prioridad 0 (Seguridad)**, que es rápido, y luego dedicar toda nuestra atención a la **Prioridad 1 (Refactorización)**.
+
+¿Estás de acuerdo con este plan? ¿Comenzamos con la **Prioridad 0: Configurar las Reglas de Firestore**?
