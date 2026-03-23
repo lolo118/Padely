@@ -6,18 +6,55 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from "firebase/auth";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, addDoc, collection } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 
-export const registerUser = async (email, password, nombre) => {
+export const registerUser = async (email, password, datos) => {
   const { user } = await createUserWithEmailAndPassword(auth, email, password);
+
   await setDoc(doc(db, "users", user.uid), {
     uid: user.uid,
-    nombre,
+    nombre: datos.nombre,
     email,
-    role: "jugador",
+    role: [datos.tipo],
+    provincia: datos.provincia || "",
+    nacimiento: datos.nacimiento || "",
+    genero: datos.genero || "",
+    nivel: datos.nivel || "",
     createdAt: new Date(),
   });
+
+  if (datos.tipo === "organizador") {
+    try {
+      const docRef = await addDoc(collection(db, "organizers"), {
+        ownerUid: user.uid,
+        nombre: datos.entidad,
+        telefono: datos.telefono || "",
+        email: email,
+        instagram: "",
+        facebook: "",
+        website: "",
+        logo: "",
+        status: "activo",
+        createdAt: new Date(),
+      });
+    } catch (err) {
+      console.error("error creando organizador:", err);
+    }
+  }
+
+  if (datos.tipo === "club") {
+    await addDoc(collection(db, "clubs"), {
+      ownerUid: user.uid,
+      nombre: datos.entidad,
+      direccion: datos.direccion || "",
+      ciudad: datos.ciudad || "",
+      telefono: datos.telefono || "",
+      logo: "",
+      createdAt: new Date(),
+    });
+  }
+
   return user;
 };
 
@@ -34,7 +71,7 @@ export const loginWithGoogle = async () => {
       uid: user.uid,
       nombre: user.displayName,
       email: user.email,
-      role: "jugador",
+      role: ["jugador"],
       createdAt: new Date(),
     });
   }
@@ -44,3 +81,9 @@ export const loginWithGoogle = async () => {
 export const logoutUser = () => signOut(auth);
 
 export const onAuthChange = (callback) => onAuthStateChanged(auth, callback);
+
+export const getUserData = async (uid) => {
+  const snap = await getDoc(doc(db, "users", uid));
+  if (!snap.exists()) return null;
+  return snap.data();
+};
