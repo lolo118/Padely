@@ -10,6 +10,8 @@ import {
 
 import TabGrupos from "./TabGrupos";
 
+import TabBracket from "./TabBracket";
+
 const estadoBadge = {
   inscripcion: "bg-blue-100 text-blue-700",
   en_curso: "bg-green-100 text-green-700",
@@ -362,13 +364,7 @@ export default function DetalleTorneo() {
 
       {tab === "Grupos" && <TabGrupos torneoId={id} torneo={torneo} />}
 
-      {tab === "Bracket" && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-center py-12">
-          <div className="text-4xl mb-3">🏆</div>
-          <p className="text-gray-500 font-medium">Bracket eliminatorio</p>
-          <p className="text-gray-400 text-sm mt-1">Próximamente</p>
-        </div>
-      )}
+      {tab === "Bracket" && <TabBracket torneoId={id} torneo={torneo} />}
     </div>
   );
 }

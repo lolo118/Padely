@@ -59,6 +59,7 @@ export const getParejas = async (torneoId) => {
 export const eliminarPareja = async (torneoId, parejaId) => {
   await deleteDoc(doc(db, "tournaments", torneoId, "pairs", parejaId));
 };
+
 export const guardarGrupos = async (torneoId, grupos) => {
   const snap = await getDocs(collection(db, "tournaments", torneoId, "groups"));
   const deletePromises = snap.docs.map((d) =>
@@ -83,4 +84,18 @@ export const getGrupos = async (torneoId) => {
 
 export const actualizarGrupo = async (torneoId, grupoId, datos) => {
   await updateDoc(doc(db, "tournaments", torneoId, "groups", grupoId), datos);
+};
+
+// ✅ Modificadas: almacenan el bracket como JSON string
+export const guardarBracket = async (torneoId, bracket) => {
+  const ref = doc(db, "tournaments", torneoId);
+  await updateDoc(ref, { bracketJson: JSON.stringify(bracket) });
+};
+
+export const getBracket = async (torneoId) => {
+  const snap = await getDoc(doc(db, "tournaments", torneoId));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  if (data.bracketJson) return JSON.parse(data.bracketJson);
+  return null;
 };
