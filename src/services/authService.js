@@ -26,7 +26,7 @@ export const registerUser = async (email, password, datos) => {
 
   if (datos.tipo === "organizador") {
     try {
-      const docRef = await addDoc(collection(db, "organizers"), {
+      await addDoc(collection(db, "organizers"), {
         ownerUid: user.uid,
         nombre: datos.entidad,
         telefono: datos.telefono || "",

@@ -16,6 +16,8 @@ import Marketplace from "./pages/Marketplace";
 import Perfil from "./pages/Perfil";
 
 import AdminTorneos from "./pages/admin/Torneos";
+import CrearTorneo from "./pages/admin/CrearTorneo";
+import DetalleTorneo from "./pages/admin/DetalleTorneo";
 import AdminCanchas from "./pages/admin/Canchas";
 import AdminEstadisticas from "./pages/admin/Estadisticas";
 import AdminConfiguracion from "./pages/admin/Configuracion";
@@ -75,6 +77,8 @@ export default function App() {
         >
           <Route index element={<Navigate to="/admin/torneos" />} />
           <Route path="torneos" element={<AdminTorneos />} />
+          <Route path="torneos/nuevo" element={<CrearTorneo />} />
+          <Route path="torneos/:id" element={<DetalleTorneo />} />
           <Route path="canchas" element={<AdminCanchas />} />
           <Route path="estadisticas" element={<AdminEstadisticas />} />
           <Route path="configuracion" element={<AdminConfiguracion />} />

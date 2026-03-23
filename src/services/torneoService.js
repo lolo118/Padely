@@ -1,0 +1,43 @@
+import {
+  collection,
+  addDoc,
+  getDocs,
+  getDoc,
+  doc,
+  updateDoc,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+} from "firebase/firestore";
+import { db } from "../lib/firebase";
+
+export const crearTorneo = async (datos, userId) => {
+  const ref = await addDoc(collection(db, "tournaments"), {
+    ...datos,
+    organizerId: userId,
+    status: "inscripcion",
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+};
+
+export const getTorneosByOrganizer = async (userId) => {
+  const q = query(
+    collection(db, "tournaments"),
+    where("organizerId", "==", userId),
+    orderBy("createdAt", "desc"),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const getTorneoById = async (id) => {
+  const snap = await getDoc(doc(db, "tournaments", id));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() };
+};
+
+export const actualizarTorneo = async (id, datos) => {
+  await updateDoc(doc(db, "tournaments", id), datos);
+};
