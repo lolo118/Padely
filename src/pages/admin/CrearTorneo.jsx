@@ -9,6 +9,58 @@ const selectClass =
   "border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full bg-white";
 const labelClass = "text-xs font-semibold text-gray-500 mb-1 block";
 
+const provinciasArgentina = [
+  "Buenos Aires",
+  "CABA",
+  "Catamarca",
+  "Chaco",
+  "Chubut",
+  "Córdoba",
+  "Corrientes",
+  "Entre Ríos",
+  "Formosa",
+  "Jujuy",
+  "La Pampa",
+  "La Rioja",
+  "Mendoza",
+  "Misiones",
+  "Neuquén",
+  "Río Negro",
+  "Salta",
+  "San Juan",
+  "San Luis",
+  "Santa Cruz",
+  "Santa Fe",
+  "Santiago del Estero",
+  "Tierra del Fuego",
+  "Tucumán",
+];
+
+const categoriasGenero = [
+  { value: "masculino", label: "Masculino" },
+  { value: "femenino", label: "Femenino" },
+  { value: "mixto", label: "Mixto" },
+];
+
+const categoriasNivel = [
+  "8va",
+  "Suma 15",
+  "7ma",
+  "Suma 13",
+  "6ta",
+  "Suma 11",
+  "5ta",
+  "Suma 9",
+  "4ta",
+  "Suma 7",
+  "3era",
+  "Suma 5",
+  "2da",
+  "Suma 3",
+  "1era",
+  "Libre",
+];
+
 export default function CrearTorneo() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
@@ -18,11 +70,14 @@ export default function CrearTorneo() {
   const [form, setForm] = useState({
     nombre: "",
     formato: "mini",
-    categoria: "masculino",
-    nivel: "principiante",
+    categoriaGenero: [],
+    categoriasConfig: {},
     maxParejas: 8,
     inscripcion: 0,
     sede: "",
+    direccionSede: "",
+    instagramSede: "",
+    facebookSede: "",
     ciudad: "",
     provincia: "",
     fechaInicio: "",
@@ -32,6 +87,10 @@ export default function CrearTorneo() {
     gamesPorSet: 6,
     superTiebreak: false,
     inscripcionAbierta: true,
+    reglamento: "",
+    instagramOrganizador: "",
+    facebookOrganizador: "",
+    whatsappOrganizador: "",
   });
 
   const set = (field) => (e) => {
@@ -40,9 +99,60 @@ export default function CrearTorneo() {
     setForm({ ...form, [field]: val });
   };
 
+  const toggleGenero = (genero) => {
+    const current = form.categoriaGenero;
+    let updated;
+    if (current.includes(genero)) {
+      updated = current.filter((g) => g !== genero);
+      const newConfig = { ...form.categoriasConfig };
+      delete newConfig[genero];
+      setForm({
+        ...form,
+        categoriaGenero: updated,
+        categoriasConfig: newConfig,
+      });
+    } else {
+      if (current.length >= 3) return;
+      updated = [...current, genero];
+      setForm({
+        ...form,
+        categoriaGenero: updated,
+        categoriasConfig: { ...form.categoriasConfig, [genero]: [] },
+      });
+    }
+  };
+
+  const toggleNivel = (genero, nivel) => {
+    const current = form.categoriasConfig[genero] || [];
+    let updated;
+    if (current.includes(nivel)) {
+      updated = current.filter((n) => n !== nivel);
+    } else {
+      updated = [...current, nivel];
+    }
+    setForm({
+      ...form,
+      categoriasConfig: { ...form.categoriasConfig, [genero]: updated },
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
+    if (form.categoriaGenero.length === 0) {
+      setError("Seleccioná al menos una categoría género.");
+      return;
+    }
+
+    const algunNivelVacio = form.categoriaGenero.some(
+      (g) => !form.categoriasConfig[g] || form.categoriasConfig[g].length === 0,
+    );
+    if (algunNivelVacio) {
+      setError("Seleccioná al menos una categoría nivel para cada género.");
+      return;
+    }
+
     setLoading(true);
     try {
       const id = await crearTorneo(form, user.uid);
@@ -72,6 +182,7 @@ export default function CrearTorneo() {
       )}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+        {/* Información general */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <h2 className="font-semibold text-gray-700 mb-4">
             Información general
@@ -98,36 +209,57 @@ export default function CrearTorneo() {
                 className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
               />
             </div>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className={labelClass}>Categoría</label>
-                <select
-                  value={form.categoria}
-                  onChange={set("categoria")}
-                  className={selectClass}
-                >
-                  <option value="masculino">Masculino</option>
-                  <option value="femenino">Femenino</option>
-                  <option value="mixto">Mixto</option>
-                </select>
-              </div>
-              <div className="flex-1">
-                <label className={labelClass}>Nivel</label>
-                <select
-                  value={form.nivel}
-                  onChange={set("nivel")}
-                  className={selectClass}
-                >
-                  <option value="principiante">Principiante</option>
-                  <option value="intermedio">Intermedio</option>
-                  <option value="avanzado">Avanzado</option>
-                  <option value="todas">Todas</option>
-                </select>
+
+            {/* Categoría Género */}
+            <div>
+              <label className={labelClass}>Categoría Género (hasta 3)</label>
+              <div className="flex gap-2">
+                {categoriasGenero.map((cat) => (
+                  <button
+                    key={cat.value}
+                    type="button"
+                    onClick={() => toggleGenero(cat.value)}
+                    className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                      form.categoriaGenero.includes(cat.value)
+                        ? "bg-green-600 text-white"
+                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
               </div>
             </div>
+
+            {/* Categoría Nivel por cada género seleccionado */}
+            {form.categoriaGenero.map((genero) => (
+              <div key={genero}>
+                <label className={labelClass}>
+                  Categoría Nivel —{" "}
+                  {genero.charAt(0).toUpperCase() + genero.slice(1)}
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {categoriasNivel.map((nivel) => (
+                    <button
+                      key={nivel}
+                      type="button"
+                      onClick={() => toggleNivel(genero, nivel)}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                        (form.categoriasConfig[genero] || []).includes(nivel)
+                          ? "bg-green-600 text-white"
+                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                      }`}
+                    >
+                      {nivel}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
+        {/* Formato */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <h2 className="font-semibold text-gray-700 mb-4">Formato</h2>
           <div className="flex flex-col gap-3">
@@ -204,22 +336,21 @@ export default function CrearTorneo() {
           </div>
         </div>
 
+        {/* Participantes */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <h2 className="font-semibold text-gray-700 mb-4">Participantes</h2>
           <div className="flex gap-3">
             <div className="flex-1">
               <label className={labelClass}>Máximo de parejas</label>
-              <select
+              <input
+                type="number"
+                min="4"
+                max="256"
+                placeholder="Ej: 32"
                 value={form.maxParejas}
                 onChange={set("maxParejas")}
-                className={selectClass}
-              >
-                <option value={8}>8 parejas</option>
-                <option value={16}>16 parejas</option>
-                <option value={32}>32 parejas</option>
-                <option value={48}>48 parejas</option>
-                <option value={64}>64 parejas</option>
-              </select>
+                className={inputClass}
+              />
             </div>
             <div className="flex-1">
               <label className={labelClass}>Costo de inscripción ($)</label>
@@ -235,6 +366,7 @@ export default function CrearTorneo() {
           </div>
         </div>
 
+        {/* Sede y fechas */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <h2 className="font-semibold text-gray-700 mb-4">Sede y fechas</h2>
           <div className="flex flex-col gap-3">
@@ -248,6 +380,38 @@ export default function CrearTorneo() {
                 className={inputClass}
                 required
               />
+            </div>
+            <div>
+              <label className={labelClass}>Dirección física</label>
+              <input
+                type="text"
+                placeholder="Ej: Av. Belgrano 1234"
+                value={form.direccionSede}
+                onChange={set("direccionSede")}
+                className={inputClass}
+              />
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className={labelClass}>Instagram de la sede</label>
+                <input
+                  type="text"
+                  placeholder="@clubnautico"
+                  value={form.instagramSede}
+                  onChange={set("instagramSede")}
+                  className={inputClass}
+                />
+              </div>
+              <div className="flex-1">
+                <label className={labelClass}>Facebook de la sede</label>
+                <input
+                  type="text"
+                  placeholder="facebook.com/clubnautico"
+                  value={form.facebookSede}
+                  onChange={set("facebookSede")}
+                  className={inputClass}
+                />
+              </div>
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
@@ -263,14 +427,19 @@ export default function CrearTorneo() {
               </div>
               <div className="flex-1">
                 <label className={labelClass}>Provincia</label>
-                <input
-                  type="text"
-                  placeholder="Provincia"
+                <select
                   value={form.provincia}
                   onChange={set("provincia")}
-                  className={inputClass}
+                  className={selectClass}
                   required
-                />
+                >
+                  <option value="">Seleccionar provincia</option>
+                  {provinciasArgentina.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="flex gap-3">
@@ -294,6 +463,64 @@ export default function CrearTorneo() {
                   required
                 />
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Reglamento */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <h2 className="font-semibold text-gray-700 mb-4">Reglamento</h2>
+          <div>
+            <label className={labelClass}>
+              Reglas especiales del torneo (opcional)
+            </label>
+            <textarea
+              placeholder={
+                "Ej:\n- 15 minutos de tolerancia\n- Pareja que no sea de la categoría será eliminada sin devolución de inscripción\n- Se juega con pelotas nuevas provistas por la organización"
+              }
+              value={form.reglamento}
+              onChange={set("reglamento")}
+              rows={5}
+              className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
+            />
+          </div>
+        </div>
+
+        {/* Redes sociales del organizador */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <h2 className="font-semibold text-gray-700 mb-4">
+            Redes del organizador
+          </h2>
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className={labelClass}>Instagram</label>
+              <input
+                type="text"
+                placeholder="@toppadeltorneos"
+                value={form.instagramOrganizador}
+                onChange={set("instagramOrganizador")}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Facebook</label>
+              <input
+                type="text"
+                placeholder="facebook.com/toppadeltorneos"
+                value={form.facebookOrganizador}
+                onChange={set("facebookOrganizador")}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>WhatsApp de contacto</label>
+              <input
+                type="text"
+                placeholder="Ej: +54 385 1234567"
+                value={form.whatsappOrganizador}
+                onChange={set("whatsappOrganizador")}
+                className={inputClass}
+              />
             </div>
           </div>
         </div>
