@@ -147,9 +147,9 @@ export default function DetalleTorneo() {
     try {
       const {
         id: _,
-        createdAt,
-        status,
-        organizerId,
+        createdAt: _ca,
+        status: _st,
+        organizerId: _oi,
         ...datosActualizar
       } = editForm;
       await actualizarTorneo(id, datosActualizar);
