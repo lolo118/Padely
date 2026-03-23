@@ -59,3 +59,28 @@ export const getParejas = async (torneoId) => {
 export const eliminarPareja = async (torneoId, parejaId) => {
   await deleteDoc(doc(db, "tournaments", torneoId, "pairs", parejaId));
 };
+export const guardarGrupos = async (torneoId, grupos) => {
+  const snap = await getDocs(collection(db, "tournaments", torneoId, "groups"));
+  const deletePromises = snap.docs.map((d) =>
+    deleteDoc(doc(db, "tournaments", torneoId, "groups", d.id)),
+  );
+  await Promise.all(deletePromises);
+
+  const createPromises = grupos.map((grupo) =>
+    addDoc(collection(db, "tournaments", torneoId, "groups"), {
+      ...grupo,
+      createdAt: serverTimestamp(),
+    }),
+  );
+  const refs = await Promise.all(createPromises);
+  return refs.map((r) => r.id);
+};
+
+export const getGrupos = async (torneoId) => {
+  const snap = await getDocs(collection(db, "tournaments", torneoId, "groups"));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const actualizarGrupo = async (torneoId, grupoId, datos) => {
+  await updateDoc(doc(db, "tournaments", torneoId, "groups", grupoId), datos);
+};
