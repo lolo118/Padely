@@ -20,12 +20,25 @@ function generarPartidos(parejas) {
   return partidos;
 }
 
+// ✅ Función formatResultado modificada
+function formatResultado(resultado) {
+  return resultado.sets
+    .map((s) => {
+      let txt = `${s.g1}-${s.g2}`;
+      if (s.tb1 !== undefined && s.tb2 !== undefined) {
+        txt += ` (TB: ${s.tb1}-${s.tb2})`;
+      }
+      return txt;
+    })
+    .join(" / ");
+}
+
 function calcularTabla(grupo) {
   const stats = {};
   grupo.parejas.forEach((p) => {
     stats[p.id] = {
       id: p.id,
-      nombre: `${p.jugador1} / ${p.jugador2}`,
+      nombre: p.nombrePareja || `${p.jugador1} / ${p.jugador2}`,
       pj: 0,
       pg: 0,
       pp: 0,
@@ -49,10 +62,22 @@ function calcularTabla(grupo) {
       gamesP2 = 0;
 
     resultado.sets.forEach((set) => {
-      gamesP1 += set.g1;
-      gamesP2 += set.g2;
-      if (set.g1 > set.g2) setsP1++;
-      else if (set.g2 > set.g1) setsP2++;
+      let g1 = set.g1;
+      let g2 = set.g2;
+
+      // Tie break ganado cuenta como 1 game extra para el ganador
+      if (set.tb1 !== undefined || set.tb2 !== undefined) {
+        if ((set.tb1 ?? 0) > (set.tb2 ?? 0)) {
+          g1 += 1;
+        } else if ((set.tb2 ?? 0) > (set.tb1 ?? 0)) {
+          g2 += 1;
+        }
+      }
+
+      gamesP1 += g1;
+      gamesP2 += g2;
+      if (g1 > g2) setsP1++;
+      else if (g2 > g1) setsP2++;
     });
 
     s1.pj++;
@@ -86,7 +111,6 @@ function calcularTabla(grupo) {
   });
 }
 
-// ✅ Versión corregida: sin useEffect, sin estado sinAsignar duplicado
 function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm }) {
   const cantGrupos = Math.ceil(parejas.length / parejasXGrupo);
   const [gruposManuales, setGruposManuales] = useState(
@@ -136,7 +160,7 @@ function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm }) {
                 className="flex items-center justify-between bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2"
               >
                 <span className="text-sm text-gray-700">
-                  {p.jugador1} / {p.jugador2}
+                  {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
                 </span>
                 <div className="flex gap-1">
                   {gruposManuales.map((g, gi) => (
@@ -173,7 +197,7 @@ function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm }) {
                   className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2"
                 >
                   <span className="text-sm text-gray-700">
-                    {p.jugador1} / {p.jugador2}
+                    {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
                   </span>
                   <button
                     onClick={() => desasignar(p, gi)}
@@ -210,6 +234,7 @@ export default function TabGrupos({ torneoId, torneo }) {
   const [gruposGenerados, setGruposGenerados] = useState(false);
   const [editandoResultado, setEditandoResultado] = useState(null);
   const [setsInput, setSetsInput] = useState([]);
+  const [tiebreakInput, setTiebreakInput] = useState([]);
 
   useEffect(() => {
     const cargar = async () => {
@@ -266,13 +291,22 @@ export default function TabGrupos({ torneoId, torneo }) {
     const cantSets = torneo.sets || 1;
     const setsExistentes = partido.resultado?.sets || [];
     const sets = [];
+    const tbs = [];
     for (let i = 0; i < cantSets; i++) {
       sets.push({
         g1: setsExistentes[i]?.g1 || 0,
         g2: setsExistentes[i]?.g2 || 0,
       });
+      tbs.push({
+        activo:
+          setsExistentes[i]?.tb1 !== undefined ||
+          setsExistentes[i]?.tb2 !== undefined,
+        tb1: setsExistentes[i]?.tb1 || 0,
+        tb2: setsExistentes[i]?.tb2 || 0,
+      });
     }
     setSetsInput(sets);
+    setTiebreakInput(tbs);
     setEditandoResultado({ grupoIdx, partidoIdx });
   };
 
@@ -281,18 +315,26 @@ export default function TabGrupos({ torneoId, torneo }) {
     const nuevosGrupos = [...grupos];
     const grupo = { ...nuevosGrupos[grupoIdx] };
     const partidos = [...grupo.partidos];
+
+    const setsConTb = setsInput.map((set, i) => {
+      const resultado = { g1: set.g1, g2: set.g2 };
+      if (tiebreakInput[i]?.activo) {
+        resultado.tb1 = tiebreakInput[i].tb1;
+        resultado.tb2 = tiebreakInput[i].tb2;
+      }
+      return resultado;
+    });
+
     partidos[partidoIdx] = {
       ...partidos[partidoIdx],
-      resultado: { sets: setsInput },
+      resultado: { sets: setsConTb },
     };
     grupo.partidos = partidos;
     nuevosGrupos[grupoIdx] = grupo;
 
     if (grupo.id) {
       try {
-        await actualizarGrupo(torneoId, grupo.id, {
-          partidos: partidos,
-        });
+        await actualizarGrupo(torneoId, grupo.id, { partidos });
       } catch (err) {
         console.error("Error al guardar resultado:", err);
       }
@@ -301,6 +343,7 @@ export default function TabGrupos({ torneoId, torneo }) {
     setGrupos(nuevosGrupos);
     setEditandoResultado(null);
     setSetsInput([]);
+    setTiebreakInput([]);
   };
 
   if (loading) {
@@ -324,13 +367,15 @@ export default function TabGrupos({ torneoId, torneo }) {
     );
   }
 
+  const partido = editandoResultado
+    ? grupos[editandoResultado.grupoIdx].partidos[editandoResultado.partidoIdx]
+    : null;
+
   return (
     <div className="flex flex-col gap-4">
-      {/* Configuración de grupos - solo si no se generaron todavía */}
       {!gruposGenerados && (
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
           <h2 className="font-semibold text-gray-700 mb-3">Generar grupos</h2>
-
           <div className="flex flex-col gap-3">
             <div>
               <label className="text-sm text-gray-500 block mb-1">
@@ -349,7 +394,6 @@ export default function TabGrupos({ torneoId, torneo }) {
                 ))}
               </select>
             </div>
-
             <div>
               <label className="text-sm text-gray-500 block mb-1">Modo</label>
               <div className="flex gap-2">
@@ -375,7 +419,6 @@ export default function TabGrupos({ torneoId, torneo }) {
                 </button>
               </div>
             </div>
-
             {modoGeneracion === "aleatorio" && (
               <button
                 onClick={generarGruposAleatorio}
@@ -384,7 +427,6 @@ export default function TabGrupos({ torneoId, torneo }) {
                 Generar grupos aleatorios
               </button>
             )}
-
             {modoGeneracion === "manual" && (
               <ManualGroupBuilder
                 parejas={parejas}
@@ -402,7 +444,6 @@ export default function TabGrupos({ torneoId, torneo }) {
         </div>
       )}
 
-      {/* Preview de grupos antes de guardar */}
       {grupos.length > 0 && !gruposGenerados && (
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-3">
@@ -437,7 +478,7 @@ export default function TabGrupos({ torneoId, torneo }) {
                     key={pi}
                     className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2"
                   >
-                    {p.jugador1} / {p.jugador2}
+                    {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
                   </div>
                 ))}
               </div>
@@ -446,7 +487,6 @@ export default function TabGrupos({ torneoId, torneo }) {
         </div>
       )}
 
-      {/* Grupos confirmados con tablas y partidos */}
       {gruposGenerados &&
         grupos.map((grupo, gi) => {
           const tabla = calcularTabla(grupo);
@@ -458,8 +498,6 @@ export default function TabGrupos({ torneoId, torneo }) {
               <h2 className="font-semibold text-gray-700 mb-3">
                 {grupo.nombre}
               </h2>
-
-              {/* Tabla de posiciones */}
               <div className="overflow-x-auto mb-4">
                 <table className="w-full text-sm">
                   <thead>
@@ -479,9 +517,7 @@ export default function TabGrupos({ torneoId, torneo }) {
                     {tabla.map((row, ri) => (
                       <tr
                         key={row.id}
-                        className={`border-b border-gray-50 ${
-                          ri < 2 ? "bg-green-50" : ""
-                        }`}
+                        className={`border-b border-gray-50 ${ri < 2 ? "bg-green-50" : ""}`}
                       >
                         <td className="py-2 pr-2 font-bold text-gray-400">
                           {ri + 1}
@@ -505,34 +541,45 @@ export default function TabGrupos({ torneoId, torneo }) {
                   </tbody>
                 </table>
               </div>
-
-              {/* Partidos */}
               <h3 className="text-sm font-semibold text-gray-500 mb-2">
                 Partidos
               </h3>
               <div className="flex flex-col gap-2">
-                {(grupo.partidos || []).map((partido, pi) => (
+                {(grupo.partidos || []).map((p, pi) => (
                   <div
                     key={pi}
                     className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3"
                   >
                     <div className="flex-1">
                       <p className="text-sm font-medium text-gray-700">
-                        {partido.pareja1.jugador1} / {partido.pareja1.jugador2}
+                        {p.pareja1.nombrePareja ||
+                          `${p.pareja1.jugador1} / ${p.pareja1.jugador2}`}
                       </p>
                       <p className="text-xs text-gray-400">vs</p>
                       <p className="text-sm font-medium text-gray-700">
-                        {partido.pareja2.jugador1} / {partido.pareja2.jugador2}
+                        {p.pareja2.nombrePareja ||
+                          `${p.pareja2.jugador1} / ${p.pareja2.jugador2}`}
                       </p>
                     </div>
                     <div>
-                      {partido.resultado ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-gray-700">
-                            {partido.resultado.sets
-                              .map((s) => `${s.g1}-${s.g2}`)
-                              .join(" / ")}
-                          </span>
+                      {/* ✅ Bloque modificado: sets como badges individuales */}
+                      {p.resultado ? (
+                        <div className="flex flex-col items-end gap-1">
+                          <div className="flex flex-wrap gap-1 justify-end">
+                            {p.resultado.sets.map((s, si) => (
+                              <span
+                                key={si}
+                                className="text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-lg px-2 py-0.5"
+                              >
+                                {s.g1}-{s.g2}
+                                {s.tb1 !== undefined && s.tb2 !== undefined && (
+                                  <span className="text-xs font-normal text-orange-500 ml-1">
+                                    TB {s.tb1}-{s.tb2}
+                                  </span>
+                                )}
+                              </span>
+                            ))}
+                          </div>
                           <button
                             onClick={() => abrirEditarResultado(gi, pi)}
                             className="text-xs text-green-600 hover:underline"
@@ -557,89 +604,131 @@ export default function TabGrupos({ torneoId, torneo }) {
         })}
 
       {/* Modal cargar resultado */}
-      {editandoResultado && (
+      {editandoResultado && partido && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm mx-4">
             <h3 className="font-semibold text-gray-700 mb-2">
               Cargar resultado
             </h3>
-            {editandoResultado && (
-              <div className="mb-4 text-sm">
-                <p className="font-medium text-gray-700">
-                  {
-                    grupos[editandoResultado.grupoIdx].partidos[
-                      editandoResultado.partidoIdx
-                    ].pareja1.jugador1
-                  }
-                  {" / "}
-                  {
-                    grupos[editandoResultado.grupoIdx].partidos[
-                      editandoResultado.partidoIdx
-                    ].pareja1.jugador2
-                  }
-                </p>
-                <p className="text-gray-400 text-xs">vs</p>
-                <p className="font-medium text-gray-700">
-                  {
-                    grupos[editandoResultado.grupoIdx].partidos[
-                      editandoResultado.partidoIdx
-                    ].pareja2.jugador1
-                  }
-                  {" / "}
-                  {
-                    grupos[editandoResultado.grupoIdx].partidos[
-                      editandoResultado.partidoIdx
-                    ].pareja2.jugador2
-                  }
-                </p>
-              </div>
-            )}
+            <div className="mb-4 text-sm">
+              <p className="font-medium text-gray-700">
+                {partido.pareja1.nombrePareja ||
+                  `${partido.pareja1.jugador1} / ${partido.pareja1.jugador2}`}
+              </p>
+              <p className="text-gray-400 text-xs">vs</p>
+              <p className="font-medium text-gray-700">
+                {partido.pareja2.nombrePareja ||
+                  `${partido.pareja2.jugador1} / ${partido.pareja2.jugador2}`}
+              </p>
+            </div>
             <div className="flex flex-col gap-3">
-              {/* Encabezado con nombres */}
               <div className="flex items-center gap-3">
                 <span className="w-12"></span>
                 <span className="w-16 text-xs text-center text-green-600 font-semibold truncate">
-                  {editandoResultado &&
-                    grupos[editandoResultado.grupoIdx].partidos[
-                      editandoResultado.partidoIdx
-                    ].pareja1.jugador1}
+                  {partido.pareja1.jugador1?.split(" ").pop() ||
+                    partido.pareja1.jugador1}
                 </span>
                 <span></span>
                 <span className="w-16 text-xs text-center text-green-600 font-semibold truncate">
-                  {editandoResultado &&
-                    grupos[editandoResultado.grupoIdx].partidos[
-                      editandoResultado.partidoIdx
-                    ].pareja2.jugador1}
+                  {partido.pareja2.jugador1?.split(" ").pop() ||
+                    partido.pareja2.jugador1}
                 </span>
               </div>
               {setsInput.map((set, si) => (
-                <div key={si} className="flex items-center gap-3">
-                  <span className="text-sm text-gray-400 w-12">
-                    Set {si + 1}
-                  </span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={set.g1}
-                    onChange={(e) => {
-                      const nuevo = [...setsInput];
-                      nuevo[si] = { ...nuevo[si], g1: Number(e.target.value) };
-                      setSetsInput(nuevo);
-                    }}
-                    className="w-16 border border-gray-200 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                  <span className="text-gray-400">-</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={set.g2}
-                    onChange={(e) => {
-                      const nuevo = [...setsInput];
-                      nuevo[si] = { ...nuevo[si], g2: Number(e.target.value) };
-                      setSetsInput(nuevo);
-                    }}
-                    className="w-16 border border-gray-200 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
+                <div key={si}>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-400 w-12">
+                      Set {si + 1}
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={set.g1}
+                      onChange={(e) => {
+                        const nuevo = [...setsInput];
+                        nuevo[si] = {
+                          ...nuevo[si],
+                          g1: Number(e.target.value),
+                        };
+                        setSetsInput(nuevo);
+                      }}
+                      className="w-16 border border-gray-200 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                    <span className="text-gray-400">-</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={set.g2}
+                      onChange={(e) => {
+                        const nuevo = [...setsInput];
+                        nuevo[si] = {
+                          ...nuevo[si],
+                          g2: Number(e.target.value),
+                        };
+                        setSetsInput(nuevo);
+                      }}
+                      className="w-16 border border-gray-200 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                  {/* Toggle tie break */}
+                  <div className="ml-12 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nuevo = [...tiebreakInput];
+                        nuevo[si] = {
+                          ...nuevo[si],
+                          activo: !nuevo[si].activo,
+                          tb1: 0,
+                          tb2: 0,
+                        };
+                        setTiebreakInput(nuevo);
+                      }}
+                      className={`text-xs font-semibold transition ${
+                        tiebreakInput[si]?.activo
+                          ? "text-orange-600"
+                          : "text-gray-400 hover:text-gray-600"
+                      }`}
+                    >
+                      {tiebreakInput[si]?.activo
+                        ? "✓ Tie break"
+                        : "+ Tie break"}
+                    </button>
+                    {tiebreakInput[si]?.activo && (
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-xs text-orange-500 w-12">TB</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={tiebreakInput[si].tb1}
+                          onChange={(e) => {
+                            const nuevo = [...tiebreakInput];
+                            nuevo[si] = {
+                              ...nuevo[si],
+                              tb1: Number(e.target.value),
+                            };
+                            setTiebreakInput(nuevo);
+                          }}
+                          className="w-16 border border-orange-200 rounded-lg px-3 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        />
+                        <span className="text-gray-400">-</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={tiebreakInput[si].tb2}
+                          onChange={(e) => {
+                            const nuevo = [...tiebreakInput];
+                            nuevo[si] = {
+                              ...nuevo[si],
+                              tb2: Number(e.target.value),
+                            };
+                            setTiebreakInput(nuevo);
+                          }}
+                          className="w-16 border border-orange-200 rounded-lg px-3 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -648,6 +737,7 @@ export default function TabGrupos({ torneoId, torneo }) {
                 onClick={() => {
                   setEditandoResultado(null);
                   setSetsInput([]);
+                  setTiebreakInput([]);
                 }}
                 className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
               >
@@ -664,7 +754,6 @@ export default function TabGrupos({ torneoId, torneo }) {
         </div>
       )}
 
-      {/* Botón para regenerar grupos */}
       {gruposGenerados && (
         <button
           onClick={() => {
