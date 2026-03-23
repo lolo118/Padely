@@ -5,6 +5,7 @@ import {
   getDoc,
   doc,
   updateDoc,
+  deleteDoc,
   query,
   where,
   orderBy,
@@ -40,4 +41,21 @@ export const getTorneoById = async (id) => {
 
 export const actualizarTorneo = async (id, datos) => {
   await updateDoc(doc(db, "tournaments", id), datos);
+};
+
+export const agregarPareja = async (torneoId, pareja) => {
+  const ref = await addDoc(collection(db, "tournaments", torneoId, "pairs"), {
+    ...pareja,
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+};
+
+export const getParejas = async (torneoId) => {
+  const snap = await getDocs(collection(db, "tournaments", torneoId, "pairs"));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const eliminarPareja = async (torneoId, parejaId) => {
+  await deleteDoc(doc(db, "tournaments", torneoId, "pairs", parejaId));
 };

@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getTorneoById, actualizarTorneo } from "../../services/torneoService";
+import {
+  getTorneoById,
+  actualizarTorneo,
+  agregarPareja,
+  getParejas,
+  eliminarPareja,
+} from "../../services/torneoService";
 
 const estadoBadge = {
   inscripcion: "bg-blue-100 text-blue-700",
@@ -32,15 +38,72 @@ export default function DetalleTorneo() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("Info");
 
+  // Estado para parejas
+  const [parejas, setParejas] = useState([]);
+  const [jugador1, setJugador1] = useState("");
+  const [jugador2, setJugador2] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
   useEffect(() => {
     getTorneoById(id)
       .then(setTorneo)
       .finally(() => setLoading(false));
   }, [id]);
 
+  // Cargar parejas cuando se abre la pestaña
+  useEffect(() => {
+    if (tab !== "Parejas" || !id) return;
+
+    let cancelled = false;
+    const cargarParejas = async () => {
+      try {
+        const data = await getParejas(id);
+        if (!cancelled) setParejas(data);
+      } catch (err) {
+        console.error("Error al cargar parejas:", err);
+      }
+    };
+    cargarParejas();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, id]);
+
   const cambiarEstado = async (nuevoEstado) => {
     await actualizarTorneo(id, { status: nuevoEstado });
     setTorneo({ ...torneo, status: nuevoEstado });
+  };
+
+  const handleAgregarPareja = async (e) => {
+    e.preventDefault();
+    if (!jugador1.trim() || !jugador2.trim()) return;
+    setGuardando(true);
+    try {
+      const nuevaId = await agregarPareja(id, {
+        jugador1: jugador1.trim(),
+        jugador2: jugador2.trim(),
+      });
+      setParejas([
+        ...parejas,
+        { id: nuevaId, jugador1: jugador1.trim(), jugador2: jugador2.trim() },
+      ]);
+      setJugador1("");
+      setJugador2("");
+    } catch (err) {
+      console.error("Error al agregar pareja:", err);
+    }
+    setGuardando(false);
+  };
+
+  const handleEliminarPareja = async (parejaId) => {
+    if (!window.confirm("¿Eliminar esta pareja?")) return;
+    try {
+      await eliminarPareja(id, parejaId);
+      setParejas(parejas.filter((p) => p.id !== parejaId));
+    } catch (err) {
+      console.error("Error al eliminar pareja:", err);
+    }
   };
 
   if (loading)
@@ -52,6 +115,8 @@ export default function DetalleTorneo() {
         Torneo no encontrado
       </div>
     );
+
+  const cuposDisponibles = torneo.maxParejas - parejas.length;
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -193,10 +258,103 @@ export default function DetalleTorneo() {
       )}
 
       {tab === "Parejas" && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-center py-12">
-          <div className="text-4xl mb-3">👥</div>
-          <p className="text-gray-500 font-medium">Gestión de parejas</p>
-          <p className="text-gray-400 text-sm mt-1">Próximamente</p>
+        <div className="flex flex-col gap-4">
+          {/* Contador de cupos */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-700">
+                  Parejas inscriptas
+                </h2>
+                <p className="text-sm text-gray-400 mt-1">
+                  {parejas.length} de {torneo.maxParejas} parejas
+                </p>
+              </div>
+              <div
+                className={`text-2xl font-bold ${
+                  cuposDisponibles > 0 ? "text-green-600" : "text-red-500"
+                }`}
+              >
+                {cuposDisponibles > 0
+                  ? `${cuposDisponibles} cupos`
+                  : "Completo"}
+              </div>
+            </div>
+          </div>
+
+          {/* Formulario agregar pareja */}
+          {cuposDisponibles > 0 && (
+            <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+              <h2 className="font-semibold text-gray-700 mb-3">
+                Agregar pareja
+              </h2>
+              <form
+                onSubmit={handleAgregarPareja}
+                className="flex flex-col gap-3"
+              >
+                <input
+                  type="text"
+                  placeholder="Nombre jugador 1"
+                  value={jugador1}
+                  onChange={(e) => setJugador1(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Nombre jugador 2"
+                  value={jugador2}
+                  onChange={(e) => setJugador2(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+                <button
+                  type="submit"
+                  disabled={guardando || !jugador1.trim() || !jugador2.trim()}
+                  className="bg-green-600 text-white font-semibold py-2 rounded-xl hover:bg-green-700 transition disabled:opacity-50"
+                >
+                  {guardando ? "Agregando..." : "Agregar pareja"}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* Lista de parejas */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <h2 className="font-semibold text-gray-700 mb-3">
+              Lista de parejas
+            </h2>
+            {parejas.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-4">
+                No hay parejas inscriptas todavía
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {parejas.map((p, index) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-bold text-gray-400 w-6">
+                        {index + 1}
+                      </span>
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">
+                          {p.jugador1}
+                        </p>
+                        <p className="text-sm text-gray-500">{p.jugador2}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleEliminarPareja(p.id)}
+                      className="text-red-400 hover:text-red-600 text-sm font-semibold transition"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
