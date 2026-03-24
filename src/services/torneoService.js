@@ -152,3 +152,19 @@ export const getInscripcionesByJugador = async (userId) => {
 
   return resultados;
 };
+
+export const getTorneosPublicos = async () => {
+  const q = query(
+    collection(db, "tournaments"),
+    where("inscripcionAbierta", "==", true),
+    orderBy("createdAt", "desc"),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const getTodosLosTorneos = async () => {
+  const q = query(collection(db, "tournaments"), orderBy("createdAt", "desc"));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};

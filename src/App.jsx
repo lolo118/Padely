@@ -11,6 +11,7 @@ import ClubLayout from "./components/layouts/ClubLayout";
 
 import Hub from "./pages/Hub";
 import Torneos from "./pages/Torneos";
+import DetalleTorneoPublico from "./pages/DetalleTorneoPublico"; // ✅ Import agregado
 import Noticias from "./pages/Noticias";
 import Marketplace from "./pages/Marketplace";
 import Perfil from "./pages/Perfil";
@@ -62,6 +63,8 @@ export default function App() {
           <Route index element={<Navigate to="/hub" />} />
           <Route path="hub" element={<Hub />} />
           <Route path="torneos" element={<Torneos />} />
+          <Route path="torneos/:id" element={<DetalleTorneoPublico />} />{" "}
+          {/* ✅ Ruta agregada */}
           <Route path="noticias" element={<Noticias />} />
           <Route path="marketplace" element={<Marketplace />} />
           <Route path="perfil" element={<Perfil />} />
