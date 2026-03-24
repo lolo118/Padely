@@ -1,15 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  getTorneoById,
-  actualizarTorneo,
-  agregarPareja,
-  getParejas,
-  eliminarPareja,
-} from "../../services/torneoService";
+import { getTorneoById, actualizarTorneo } from "../../services/torneoService";
 
 import TabGrupos from "./TabGrupos";
 import TabBracket from "./TabBracket";
+import TabParejas from "./TabParejas"; // ✅ Import agregado
 
 const estadoBadge = {
   inscripcion: "bg-blue-100 text-blue-700",
@@ -96,36 +91,11 @@ export default function DetalleTorneo() {
   const [editForm, setEditForm] = useState(null);
   const [guardandoEdit, setGuardandoEdit] = useState(false);
 
-  // Estado para parejas
-  const [parejas, setParejas] = useState([]);
-  const [nombre1, setNombre1] = useState("");
-  const [apellido1, setApellido1] = useState("");
-  const [nombre2, setNombre2] = useState("");
-  const [apellido2, setApellido2] = useState("");
-  const [guardando, setGuardando] = useState(false);
-
   useEffect(() => {
     getTorneoById(id)
       .then(setTorneo)
       .finally(() => setLoading(false));
   }, [id]);
-
-  useEffect(() => {
-    if (tab !== "Parejas" || !id) return;
-    let cancelled = false;
-    const cargarParejas = async () => {
-      try {
-        const data = await getParejas(id);
-        if (!cancelled) setParejas(data);
-      } catch (err) {
-        console.error("Error al cargar parejas:", err);
-      }
-    };
-    cargarParejas();
-    return () => {
-      cancelled = true;
-    };
-  }, [tab, id]);
 
   const cambiarEstado = async (nuevoEstado) => {
     await actualizarTorneo(id, { status: nuevoEstado });
@@ -211,43 +181,6 @@ export default function DetalleTorneo() {
     });
   };
 
-  const handleAgregarPareja = async (e) => {
-    e.preventDefault();
-    if (!apellido1.trim() || !apellido2.trim()) return;
-    setGuardando(true);
-    try {
-      const jugador1 = `${nombre1.trim()} ${apellido1.trim()}`.trim();
-      const jugador2 = `${nombre2.trim()} ${apellido2.trim()}`.trim();
-      const nombrePareja = `${apellido1.trim()}-${apellido2.trim()}`;
-      const nuevaId = await agregarPareja(id, {
-        jugador1,
-        jugador2,
-        nombrePareja,
-      });
-      setParejas([
-        ...parejas,
-        { id: nuevaId, jugador1, jugador2, nombrePareja },
-      ]);
-      setNombre1("");
-      setApellido1("");
-      setNombre2("");
-      setApellido2("");
-    } catch (err) {
-      console.error("Error al agregar pareja:", err);
-    }
-    setGuardando(false);
-  };
-
-  const handleEliminarPareja = async (parejaId) => {
-    if (!window.confirm("¿Eliminar esta pareja?")) return;
-    try {
-      await eliminarPareja(id, parejaId);
-      setParejas(parejas.filter((p) => p.id !== parejaId));
-    } catch (err) {
-      console.error("Error al eliminar pareja:", err);
-    }
-  };
-
   if (loading)
     return <div className="text-center text-gray-400 py-12">Cargando...</div>;
 
@@ -257,8 +190,6 @@ export default function DetalleTorneo() {
         Torneo no encontrado
       </div>
     );
-
-  const cuposDisponibles = torneo.maxParejas - parejas.length;
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -799,136 +730,8 @@ export default function DetalleTorneo() {
         </div>
       )}
 
-      {tab === "Parejas" && (
-        <div className="flex flex-col gap-4">
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="font-semibold text-gray-700">
-                  Parejas inscriptas
-                </h2>
-                <p className="text-sm text-gray-400 mt-1">
-                  {parejas.length} de {torneo.maxParejas} parejas
-                </p>
-              </div>
-              <div
-                className={`text-2xl font-bold ${
-                  cuposDisponibles > 0 ? "text-green-600" : "text-red-500"
-                }`}
-              >
-                {cuposDisponibles > 0
-                  ? `${cuposDisponibles} cupos`
-                  : "Completo"}
-              </div>
-            </div>
-          </div>
-
-          {cuposDisponibles > 0 && (
-            <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-              <h2 className="font-semibold text-gray-700 mb-3">
-                Agregar pareja
-              </h2>
-              <form
-                onSubmit={handleAgregarPareja}
-                className="flex flex-col gap-3"
-              >
-                <p className="text-xs text-gray-400">Jugador 1</p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Nombre"
-                    value={nombre1}
-                    onChange={(e) => setNombre1(e.target.value)}
-                    className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Apellido"
-                    value={apellido1}
-                    onChange={(e) => setApellido1(e.target.value)}
-                    className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                    required
-                  />
-                </div>
-                <p className="text-xs text-gray-400">Jugador 2</p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Nombre"
-                    value={nombre2}
-                    onChange={(e) => setNombre2(e.target.value)}
-                    className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Apellido"
-                    value={apellido2}
-                    onChange={(e) => setApellido2(e.target.value)}
-                    className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                    required
-                  />
-                </div>
-                {apellido1.trim() && apellido2.trim() && (
-                  <p className="text-xs text-gray-500">
-                    Nombre de pareja:{" "}
-                    <span className="font-semibold">
-                      {apellido1.trim()}-{apellido2.trim()}
-                    </span>
-                  </p>
-                )}
-                <button
-                  type="submit"
-                  disabled={guardando || !apellido1.trim() || !apellido2.trim()}
-                  className="bg-green-600 text-white font-semibold py-2 rounded-xl hover:bg-green-700 transition disabled:opacity-50"
-                >
-                  {guardando ? "Agregando..." : "Agregar pareja"}
-                </button>
-              </form>
-            </div>
-          )}
-
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-            <h2 className="font-semibold text-gray-700 mb-3">
-              Lista de parejas
-            </h2>
-            {parejas.length === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-4">
-                No hay parejas inscriptas todavía
-              </p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {parejas.map((p, index) => (
-                  <div
-                    key={p.id}
-                    className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-gray-400 w-6">
-                        {index + 1}
-                      </span>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-700">
-                          {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {p.jugador1} — {p.jugador2}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleEliminarPareja(p.id)}
-                      className="text-red-400 hover:text-red-600 text-sm font-semibold transition"
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
+      {/* ✅ Tab de parejas reemplazado por el componente independiente */}
+      {tab === "Parejas" && <TabParejas torneoId={id} torneo={torneo} />}
       {tab === "Grupos" && <TabGrupos torneoId={id} torneo={torneo} />}
       {tab === "Bracket" && <TabBracket torneoId={id} torneo={torneo} />}
     </div>

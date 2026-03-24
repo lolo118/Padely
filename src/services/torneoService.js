@@ -99,3 +99,56 @@ export const getBracket = async (torneoId) => {
   if (data.bracketJson) return JSON.parse(data.bracketJson);
   return null;
 };
+export const crearSolicitudInscripcion = async (torneoId, solicitud) => {
+  const ref = await addDoc(
+    collection(db, "tournaments", torneoId, "inscripciones"),
+    {
+      ...solicitud,
+      status: "esperando_companero",
+      createdAt: serverTimestamp(),
+    },
+  );
+  return ref.id;
+};
+
+export const getInscripciones = async (torneoId) => {
+  const snap = await getDocs(
+    collection(db, "tournaments", torneoId, "inscripciones"),
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const actualizarInscripcion = async (torneoId, inscripcionId, datos) => {
+  await updateDoc(
+    doc(db, "tournaments", torneoId, "inscripciones", inscripcionId),
+    datos,
+  );
+};
+
+export const getInscripcionesByJugador = async (userId) => {
+  const q = query(
+    collection(db, "tournaments"),
+    where("inscripcionAbierta", "==", true),
+  );
+  const snap = await getDocs(q);
+  const resultados = [];
+
+  for (const torneoDoc of snap.docs) {
+    const inscSnap = await getDocs(
+      collection(db, "tournaments", torneoDoc.id, "inscripciones"),
+    );
+    inscSnap.docs.forEach((d) => {
+      const data = d.data();
+      if (data.jugador1Uid === userId || data.jugador2Uid === userId) {
+        resultados.push({
+          id: d.id,
+          torneoId: torneoDoc.id,
+          torneoNombre: torneoDoc.data().nombre,
+          ...data,
+        });
+      }
+    });
+  }
+
+  return resultados;
+};
