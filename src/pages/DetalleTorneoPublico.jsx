@@ -62,6 +62,7 @@ export default function DetalleTorneoPublico() {
   const [whatsapp2, setWhatsapp2] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [inscripcionEnviada, setInscripcionEnviada] = useState(false);
+  const [linkInvitacion, setLinkInvitacion] = useState("");
 
   useEffect(() => {
     const cargar = async () => {
@@ -95,13 +96,14 @@ export default function DetalleTorneoPublico() {
       )
     : false;
 
+  // ✅ handleInscripcion modificada
   const handleInscripcion = async (e) => {
     e.preventDefault();
     if (!apellido1.trim() || !apellido2.trim()) return;
     if (!email2.trim() && !whatsapp2.trim()) return;
     setEnviando(true);
     try {
-      await crearSolicitudInscripcion(id, {
+      const inscId = await crearSolicitudInscripcion(id, {
         nombre1: nombre1.trim(),
         apellido1: apellido1.trim(),
         email1: email1.trim() || user?.email || "",
@@ -113,6 +115,8 @@ export default function DetalleTorneoPublico() {
         whatsapp2: whatsapp2.trim(),
         jugador2Uid: null,
       });
+      const link = `${window.location.origin}/invitacion/${id}/${inscId}`;
+      setLinkInvitacion(link);
       setInscripcionEnviada(true);
       setMostrarFormInsc(false);
     } catch (err) {
@@ -169,13 +173,42 @@ export default function DetalleTorneoPublico() {
           </button>
         )}
 
+      {/* ✅ Nuevo bloque de solicitud enviada */}
       {inscripcionEnviada && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4 text-center">
-          <p className="text-green-700 font-semibold">Solicitud enviada</p>
-          <p className="text-green-600 text-sm mt-1">
-            Se envió una invitación a tu compañero/a. Una vez que acepte y se
-            procese el pago, el organizador revisará tu inscripción.
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+          <p className="text-green-700 font-semibold text-center">
+            Solicitud creada
           </p>
+          <p className="text-green-600 text-sm mt-1 text-center">
+            Enviá este link a tu compañero/a para que acepte la invitación:
+          </p>
+          <div className="mt-3 bg-white border border-green-300 rounded-lg p-3 text-sm text-gray-700 break-all">
+            {linkInvitacion}
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(linkInvitacion);
+              }}
+              className="flex-1 px-3 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition"
+            >
+              Copiar link
+            </button>
+            {whatsapp2.trim() && (
+              <a
+                href={`https://wa.me/${whatsapp2
+                  .trim()
+                  .replace(/\D/g, "")}?text=${encodeURIComponent(
+                  `¡Hola! Te invité a jugar como pareja en el torneo "${torneo.nombre}". Aceptá la invitación acá: ${linkInvitacion}`,
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 px-3 py-2 bg-green-500 text-white rounded-xl text-sm font-semibold hover:bg-green-600 transition text-center"
+              >
+                Enviar por WhatsApp
+              </a>
+            )}
+          </div>
         </div>
       )}
 

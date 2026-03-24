@@ -22,6 +22,7 @@ import DetalleTorneo from "./pages/admin/DetalleTorneo";
 import AdminCanchas from "./pages/admin/Canchas";
 import AdminEstadisticas from "./pages/admin/Estadisticas";
 import AdminConfiguracion from "./pages/admin/Configuracion";
+import AceptarInvitacion from "./pages/AceptarInvitacion";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuthStore();
@@ -51,6 +52,11 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+
+        <Route
+          path="invitacion/:torneoId/:inscripcionId"
+          element={<AceptarInvitacion />}
+        />
 
         <Route
           path="/"

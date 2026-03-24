@@ -150,8 +150,16 @@ export default function TabParejas({ torneoId, torneo }) {
   }
 
   const cuposDisponibles = torneo.maxParejas - parejas.length;
-  const pendientes = inscripciones.filter(
-    (i) => i.status !== "confirmada" && i.status !== "rechazada",
+
+  // ✅ Clasificación por estado
+  const esperandoCompanero = inscripciones.filter(
+    (i) => i.status === "esperando_companero",
+  );
+  const pendientesAprobacion = inscripciones.filter(
+    (i) => i.status === "pendiente_aprobacion",
+  );
+  const pendientesPago = inscripciones.filter(
+    (i) => i.status === "pendiente_pago",
   );
   const procesadas = inscripciones.filter(
     (i) => i.status === "confirmada" || i.status === "rechazada",
@@ -178,14 +186,14 @@ export default function TabParejas({ torneoId, torneo }) {
         </div>
       </div>
 
-      {/* Solicitudes pendientes */}
-      {pendientes.length > 0 && (
+      {/* Pendientes de aprobación - PRIORIDAD */}
+      {pendientesAprobacion.length > 0 && (
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-orange-200">
           <h2 className="font-semibold text-orange-700 mb-3">
-            Solicitudes de inscripción ({pendientes.length})
+            Pendientes de aprobación ({pendientesAprobacion.length})
           </h2>
           <div className="flex flex-col gap-3">
-            {pendientes.map((insc) => (
+            {pendientesAprobacion.map((insc) => (
               <div
                 key={insc.id}
                 className="bg-orange-50 rounded-xl px-4 py-3 border border-orange-100"
@@ -208,63 +216,113 @@ export default function TabParejas({ torneoId, torneo }) {
                       </p>
                     )}
                   </div>
-                  <span
-                    className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                      inscripcionBadge[insc.status]
-                    }`}
-                  >
-                    {inscripcionLabel[insc.status]}
+                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-700">
+                    Pago ✓
                   </span>
                 </div>
-
-                {insc.status === "pendiente_aprobacion" && (
+                {rechazandoId === insc.id ? (
                   <div className="flex flex-col gap-2">
-                    {rechazandoId === insc.id ? (
-                      <div className="flex flex-col gap-2">
-                        <input
-                          type="text"
-                          placeholder="Motivo del rechazo..."
-                          value={motivoRechazo}
-                          onChange={(e) => setMotivoRechazo(e.target.value)}
-                          className="w-full border border-red-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setRechazandoId(null);
-                              setMotivoRechazo("");
-                            }}
-                            className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            onClick={() => rechazarInscripcion(insc.id)}
-                            disabled={!motivoRechazo.trim()}
-                            className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition disabled:opacity-50"
-                          >
-                            Confirmar rechazo
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => confirmarInscripcion(insc)}
-                          className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition"
-                        >
-                          Confirmar
-                        </button>
-                        <button
-                          onClick={() => setRechazandoId(insc.id)}
-                          className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-red-100 text-red-600 hover:bg-red-200 transition"
-                        >
-                          Rechazar
-                        </button>
-                      </div>
-                    )}
+                    <input
+                      type="text"
+                      placeholder="Motivo del rechazo..."
+                      value={motivoRechazo}
+                      onChange={(e) => setMotivoRechazo(e.target.value)}
+                      className="w-full border border-red-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setRechazandoId(null);
+                          setMotivoRechazo("");
+                        }}
+                        className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => rechazarInscripcion(insc.id)}
+                        disabled={!motivoRechazo.trim()}
+                        className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition disabled:opacity-50"
+                      >
+                        Confirmar rechazo
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => confirmarInscripcion(insc)}
+                      className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition"
+                    >
+                      Confirmar inscripción
+                    </button>
+                    <button
+                      onClick={() => setRechazandoId(insc.id)}
+                      className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-red-100 text-red-600 hover:bg-red-200 transition"
+                    >
+                      Rechazar
+                    </button>
                   </div>
                 )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Esperando compañero */}
+      {esperandoCompanero.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-200">
+          <h2 className="font-semibold text-gray-500 mb-3">
+            Esperando confirmación del compañero ({esperandoCompanero.length})
+          </h2>
+          <div className="flex flex-col gap-2">
+            {esperandoCompanero.map((insc) => (
+              <div
+                key={insc.id}
+                className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3"
+              >
+                <div>
+                  <p className="text-sm font-medium text-gray-700">
+                    {insc.apellido1}-{insc.apellido2}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {insc.nombre1} {insc.apellido1} — esperando a {insc.nombre2}{" "}
+                    {insc.apellido2}
+                  </p>
+                </div>
+                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-500">
+                  Esperando
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pendientes de pago */}
+      {pendientesPago.length > 0 && (
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-yellow-200">
+          <h2 className="font-semibold text-yellow-700 mb-3">
+            Pendientes de pago ({pendientesPago.length})
+          </h2>
+          <div className="flex flex-col gap-2">
+            {pendientesPago.map((insc) => (
+              <div
+                key={insc.id}
+                className="flex items-center justify-between bg-yellow-50 rounded-xl px-4 py-3"
+              >
+                <div>
+                  <p className="text-sm font-medium text-gray-700">
+                    {insc.apellido1}-{insc.apellido2}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Ambos confirmados, esperando pago
+                  </p>
+                </div>
+                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">
+                  Sin pago
+                </span>
               </div>
             ))}
           </div>
