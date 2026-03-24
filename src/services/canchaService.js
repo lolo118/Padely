@@ -104,3 +104,26 @@ export const getClubByOwner = async (userId) => {
   const d = snap.docs[0];
   return { id: d.id, ...d.data() };
 };
+// --- TURNOS FIJOS ---
+
+export const crearTurnoFijo = async (clubId, turnoFijo) => {
+  const ref = await addDoc(collection(db, "clubs", clubId, "turnosFijos"), {
+    ...turnoFijo,
+    status: "activo",
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+};
+
+export const getTurnosFijos = async (clubId) => {
+  const snap = await getDocs(collection(db, "clubs", clubId, "turnosFijos"));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const actualizarTurnoFijo = async (clubId, turnoFijoId, datos) => {
+  await updateDoc(doc(db, "clubs", clubId, "turnosFijos", turnoFijoId), datos);
+};
+
+export const eliminarTurnoFijo = async (clubId, turnoFijoId) => {
+  await deleteDoc(doc(db, "clubs", clubId, "turnosFijos", turnoFijoId));
+};
