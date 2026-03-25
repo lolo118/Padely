@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useState } from "react";
 
 const navItems = [
+  { to: "/admin", label: "Dashboard", icon: "🏠" },
   { to: "/admin/torneos", label: "Torneos", icon: "🏆" },
   { to: "/admin/canchas", label: "Canchas", icon: "⊞" },
   { to: "/admin/estadisticas", label: "Estadísticas", icon: "📊" },
@@ -38,6 +39,7 @@ export default function ClubLayout() {
             <NavLink
               key={item.to}
               to={item.to}
+              end={item.to === "/admin"}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-3 text-sm transition ${

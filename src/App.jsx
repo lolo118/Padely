@@ -22,6 +22,7 @@ import DetalleTorneo from "./pages/admin/DetalleTorneo";
 import AdminCanchas from "./pages/admin/Canchas";
 import AdminEstadisticas from "./pages/admin/Estadisticas";
 import AdminConfiguracion from "./pages/admin/Configuracion";
+import Dashboard from "./pages/admin/Dashboard";
 import AceptarInvitacion from "./pages/AceptarInvitacion";
 
 function ProtectedRoute({ children }) {
@@ -84,7 +85,7 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="/admin/torneos" />} />
+          <Route index element={<Dashboard />} />
           <Route path="torneos" element={<AdminTorneos />} />
           <Route path="torneos/nuevo" element={<CrearTorneo />} />
           <Route path="torneos/:id" element={<DetalleTorneo />} />
