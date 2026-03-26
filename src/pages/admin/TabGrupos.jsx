@@ -14,23 +14,48 @@ function generarPartidos(parejas) {
         pareja1: parejas[i],
         pareja2: parejas[j],
         resultado: null,
+        hora: "",
+        cancha: "",
       });
     }
   }
   return partidos;
 }
 
-// ✅ Función formatResultado modificada
-function formatResultado(resultado) {
-  return resultado.sets
-    .map((s) => {
-      let txt = `${s.g1}-${s.g2}`;
-      if (s.tb1 !== undefined && s.tb2 !== undefined) {
-        txt += ` (TB: ${s.tb1}-${s.tb2})`;
-      }
-      return txt;
-    })
-    .join(" / ");
+function getGanador(resultado) {
+  if (!resultado) return null;
+  let setsP1 = 0,
+    setsP2 = 0;
+  resultado.sets.forEach((s) => {
+    let g1 = s.g1,
+      g2 = s.g2;
+    if (s.tb1 !== undefined || s.tb2 !== undefined) {
+      if ((s.tb1 ?? 0) > (s.tb2 ?? 0)) g1 += 1;
+      else if ((s.tb2 ?? 0) > (s.tb1 ?? 0)) g2 += 1;
+    }
+    if (g1 > g2) setsP1++;
+    else if (g2 > g1) setsP2++;
+  });
+  return setsP1 > setsP2 ? 1 : setsP2 > setsP1 ? 2 : null;
+}
+
+function setsNecesarios(resultado, totalSets) {
+  if (!resultado || totalSets <= 1) return totalSets;
+  let setsP1 = 0,
+    setsP2 = 0;
+  const setsParaGanar = Math.ceil(totalSets / 2);
+  for (const s of resultado.sets) {
+    let g1 = s.g1,
+      g2 = s.g2;
+    if (s.tb1 !== undefined || s.tb2 !== undefined) {
+      if ((s.tb1 ?? 0) > (s.tb2 ?? 0)) g1 += 1;
+      else if ((s.tb2 ?? 0) > (s.tb1 ?? 0)) g2 += 1;
+    }
+    if (g1 > g2) setsP1++;
+    else if (g2 > g1) setsP2++;
+    if (setsP1 >= setsParaGanar || setsP2 >= setsParaGanar) break;
+  }
+  return setsP1 + setsP2;
 }
 
 function calcularTabla(grupo) {
@@ -51,29 +76,21 @@ function calcularTabla(grupo) {
 
   (grupo.partidos || []).forEach((m) => {
     if (!m.resultado) return;
-    const { pareja1, pareja2, resultado } = m;
-    const s1 = stats[pareja1.id];
-    const s2 = stats[pareja2.id];
+    const s1 = stats[m.pareja1.id];
+    const s2 = stats[m.pareja2.id];
     if (!s1 || !s2) return;
 
     let setsP1 = 0,
       setsP2 = 0,
       gamesP1 = 0,
       gamesP2 = 0;
-
-    resultado.sets.forEach((set) => {
-      let g1 = set.g1;
-      let g2 = set.g2;
-
-      // Tie break ganado cuenta como 1 game extra para el ganador
+    m.resultado.sets.forEach((set) => {
+      let g1 = set.g1,
+        g2 = set.g2;
       if (set.tb1 !== undefined || set.tb2 !== undefined) {
-        if ((set.tb1 ?? 0) > (set.tb2 ?? 0)) {
-          g1 += 1;
-        } else if ((set.tb2 ?? 0) > (set.tb1 ?? 0)) {
-          g2 += 1;
-        }
+        if ((set.tb1 ?? 0) > (set.tb2 ?? 0)) g1 += 1;
+        else if ((set.tb2 ?? 0) > (set.tb1 ?? 0)) g2 += 1;
       }
-
       gamesP1 += g1;
       gamesP2 += g2;
       if (g1 > g2) setsP1++;
@@ -90,7 +107,6 @@ function calcularTabla(grupo) {
     s1.gc += gamesP2;
     s2.gf += gamesP2;
     s2.gc += gamesP1;
-
     if (setsP1 > setsP2) {
       s1.pg++;
       s2.pp++;
@@ -102,12 +118,8 @@ function calcularTabla(grupo) {
 
   return Object.values(stats).sort((a, b) => {
     if (b.pg !== a.pg) return b.pg - a.pg;
-    const diffSetsA = a.sf - a.sc;
-    const diffSetsB = b.sf - b.sc;
-    if (diffSetsB !== diffSetsA) return diffSetsB - diffSetsA;
-    const diffGamesA = a.gf - a.gc;
-    const diffGamesB = b.gf - b.gc;
-    return diffGamesB - diffGamesA;
+    if (b.sf - b.sc !== a.sf - a.sc) return b.sf - b.sc - (a.sf - a.sc);
+    return b.gf - b.gc - (a.gf - a.gc);
   });
 }
 
@@ -144,8 +156,6 @@ function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm }) {
     );
   };
 
-  const todasAsignadas = sinAsignar.length === 0;
-
   return (
     <div className="flex flex-col gap-3 mt-2">
       {sinAsignar.length > 0 && (
@@ -179,7 +189,6 @@ function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm }) {
           </div>
         </div>
       )}
-
       {gruposManuales.map((g, gi) => (
         <div key={gi}>
           <p className="text-sm font-semibold text-gray-600 mb-1">
@@ -211,13 +220,12 @@ function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm }) {
           )}
         </div>
       ))}
-
       <button
         onClick={() => onConfirm(gruposManuales)}
-        disabled={!todasAsignadas}
+        disabled={sinAsignar.length > 0}
         className="bg-green-600 text-white font-semibold py-2 rounded-xl hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {todasAsignadas
+        {sinAsignar.length === 0
           ? "Generar grupos manuales"
           : `Faltan ${sinAsignar.length} pareja${sinAsignar.length !== 1 ? "s" : ""} por asignar`}
       </button>
@@ -235,6 +243,7 @@ export default function TabGrupos({ torneoId, torneo }) {
   const [editandoResultado, setEditandoResultado] = useState(null);
   const [setsInput, setSetsInput] = useState([]);
   const [tiebreakInput, setTiebreakInput] = useState([]);
+  const [errorModal, setErrorModal] = useState("");
 
   useEffect(() => {
     const cargar = async () => {
@@ -259,20 +268,18 @@ export default function TabGrupos({ torneoId, torneo }) {
   const generarGruposAleatorio = () => {
     const shuffled = [...parejas].sort(() => Math.random() - 0.5);
     const nuevosGrupos = [];
-    let idx = 0;
-    let grupoNum = 1;
-
+    let idx = 0,
+      grupoNum = 1;
     while (idx < shuffled.length) {
-      const parejasGrupo = shuffled.slice(idx, idx + parejasXGrupo);
+      const pg = shuffled.slice(idx, idx + parejasXGrupo);
       nuevosGrupos.push({
         nombre: `Grupo ${String.fromCharCode(64 + grupoNum)}`,
-        parejas: parejasGrupo,
-        partidos: generarPartidos(parejasGrupo),
+        parejas: pg,
+        partidos: generarPartidos(pg),
       });
       idx += parejasXGrupo;
       grupoNum++;
     }
-
     setGrupos(nuevosGrupos);
   };
 
@@ -286,12 +293,29 @@ export default function TabGrupos({ torneoId, torneo }) {
     }
   };
 
+  const actualizarPartidoInfo = async (grupoIdx, partidoIdx, campo, valor) => {
+    const nuevosGrupos = [...grupos];
+    const grupo = { ...nuevosGrupos[grupoIdx] };
+    const partidos = [...grupo.partidos];
+    partidos[partidoIdx] = { ...partidos[partidoIdx], [campo]: valor };
+    grupo.partidos = partidos;
+    nuevosGrupos[grupoIdx] = grupo;
+    setGrupos(nuevosGrupos);
+    if (grupo.id) {
+      try {
+        await actualizarGrupo(torneoId, grupo.id, { partidos });
+      } catch (err) {
+        console.error("Error al actualizar partido:", err);
+      }
+    }
+  };
+
   const abrirEditarResultado = (grupoIdx, partidoIdx) => {
     const partido = grupos[grupoIdx].partidos[partidoIdx];
-    const cantSets = torneo.sets || 1;
+    const cantSets = Number(torneo.sets) || 1;
     const setsExistentes = partido.resultado?.sets || [];
-    const sets = [];
-    const tbs = [];
+    const sets = [],
+      tbs = [];
     for (let i = 0; i < cantSets; i++) {
       sets.push({
         g1: setsExistentes[i]?.g1 || 0,
@@ -307,27 +331,83 @@ export default function TabGrupos({ torneoId, torneo }) {
     }
     setSetsInput(sets);
     setTiebreakInput(tbs);
+    setErrorModal("");
     setEditandoResultado({ grupoIdx, partidoIdx });
   };
 
-  const guardarResultado = async () => {
-    const { grupoIdx, partidoIdx } = editandoResultado;
-    const nuevosGrupos = [...grupos];
-    const grupo = { ...nuevosGrupos[grupoIdx] };
-    const partidos = [...grupo.partidos];
+  const validarResultado = () => {
+    const gamesPorSet = Number(torneo.gamesPorSet) || 6;
+    const cantSets = Number(torneo.sets) || 1;
+    const setsParaGanar = Math.ceil(cantSets / 2);
+    let setsP1 = 0,
+      setsP2 = 0;
 
-    const setsConTb = setsInput.map((set, i) => {
+    for (let i = 0; i < setsInput.length; i++) {
+      const s = setsInput[i];
+      // Si ya se definió ganador, ignorar sets vacíos restantes
+      if (setsP1 >= setsParaGanar || setsP2 >= setsParaGanar) break;
+
+      const max = Math.max(s.g1, s.g2);
+      if (max < gamesPorSet) {
+        return `Set ${i + 1}: al menos un equipo debe alcanzar ${gamesPorSet} games`;
+      }
+
+      let g1 = s.g1,
+        g2 = s.g2;
+      if (tiebreakInput[i]?.activo) {
+        if ((tiebreakInput[i].tb1 ?? 0) > (tiebreakInput[i].tb2 ?? 0)) g1 += 1;
+        else if ((tiebreakInput[i].tb2 ?? 0) > (tiebreakInput[i].tb1 ?? 0))
+          g2 += 1;
+      }
+      if (g1 > g2) setsP1++;
+      else if (g2 > g1) setsP2++;
+    }
+
+    if (setsP1 === 0 && setsP2 === 0) return "Cargá al menos un set";
+    return null;
+  };
+
+  const guardarResultado = async () => {
+    const err = validarResultado();
+    if (err) {
+      setErrorModal(err);
+      return;
+    }
+
+    const { grupoIdx, partidoIdx } = editandoResultado;
+    const cantSets = Number(torneo.sets) || 1;
+    const setsParaGanar = Math.ceil(cantSets / 2);
+
+    // Solo guardar sets necesarios
+    let setsP1 = 0,
+      setsP2 = 0;
+    const setsFinales = [];
+    for (let i = 0; i < setsInput.length; i++) {
+      if (setsP1 >= setsParaGanar || setsP2 >= setsParaGanar) break;
+      const set = setsInput[i];
       const resultado = { g1: set.g1, g2: set.g2 };
       if (tiebreakInput[i]?.activo) {
         resultado.tb1 = tiebreakInput[i].tb1;
         resultado.tb2 = tiebreakInput[i].tb2;
       }
-      return resultado;
-    });
+      setsFinales.push(resultado);
 
+      let g1 = set.g1,
+        g2 = set.g2;
+      if (resultado.tb1 !== undefined) {
+        if (resultado.tb1 > (resultado.tb2 ?? 0)) g1 += 1;
+        else if ((resultado.tb2 ?? 0) > resultado.tb1) g2 += 1;
+      }
+      if (g1 > g2) setsP1++;
+      else if (g2 > g1) setsP2++;
+    }
+
+    const nuevosGrupos = [...grupos];
+    const grupo = { ...nuevosGrupos[grupoIdx] };
+    const partidos = [...grupo.partidos];
     partidos[partidoIdx] = {
       ...partidos[partidoIdx],
-      resultado: { sets: setsConTb },
+      resultado: { sets: setsFinales },
     };
     grupo.partidos = partidos;
     nuevosGrupos[grupoIdx] = grupo;
@@ -335,8 +415,8 @@ export default function TabGrupos({ torneoId, torneo }) {
     if (grupo.id) {
       try {
         await actualizarGrupo(torneoId, grupo.id, { partidos });
-      } catch (err) {
-        console.error("Error al guardar resultado:", err);
+      } catch (e) {
+        console.error("Error al guardar resultado:", e);
       }
     }
 
@@ -344,13 +424,36 @@ export default function TabGrupos({ torneoId, torneo }) {
     setEditandoResultado(null);
     setSetsInput([]);
     setTiebreakInput([]);
+    setErrorModal("");
   };
 
-  if (loading) {
+  // Calcular sets necesarios para mostrar en el modal
+  const setsVisibles = () => {
+    const cantSets = Number(torneo.sets) || 1;
+    if (cantSets <= 1) return 1;
+    const setsParaGanar = Math.ceil(cantSets / 2);
+    let p1 = 0,
+      p2 = 0;
+    for (let i = 0; i < setsInput.length; i++) {
+      const s = setsInput[i];
+      let g1 = s.g1,
+        g2 = s.g2;
+      if (tiebreakInput[i]?.activo) {
+        if ((tiebreakInput[i].tb1 ?? 0) > (tiebreakInput[i].tb2 ?? 0)) g1 += 1;
+        else if ((tiebreakInput[i].tb2 ?? 0) > (tiebreakInput[i].tb1 ?? 0))
+          g2 += 1;
+      }
+      if (g1 > g2) p1++;
+      else if (g2 > g1) p2++;
+      if (p1 >= setsParaGanar || p2 >= setsParaGanar) return i + 1;
+    }
+    return cantSets;
+  };
+
+  if (loading)
     return (
       <div className="text-center text-gray-400 py-12">Cargando grupos...</div>
     );
-  }
 
   if (parejas.length < 3) {
     return (
@@ -371,8 +474,40 @@ export default function TabGrupos({ torneoId, torneo }) {
     ? grupos[editandoResultado.grupoIdx].partidos[editandoResultado.partidoIdx]
     : null;
 
+  const parejasQueAvanzan = Number(torneo.parejasQueAvanzan) || 2;
+
   return (
     <div className="flex flex-col gap-4">
+      {/* Regenerar arriba */}
+      {gruposGenerados && (
+        <div className="flex justify-end">
+          <button
+            onClick={() => {
+              if (
+                window.confirm(
+                  "¿Regenerar grupos? Se perderán todos los resultados cargados.",
+                )
+              ) {
+                setGruposGenerados(false);
+                setGrupos([]);
+              }
+            }}
+            className="px-3 py-1 rounded-lg text-xs font-semibold text-red-500 bg-red-50 hover:bg-red-100 transition"
+          >
+            Regenerar grupos desde cero
+          </button>
+        </div>
+      )}
+
+      {/* Tip */}
+      {gruposGenerados && (
+        <div className="text-xs text-blue-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+          💡 Asigná horario y cancha a cada partido tocando los campos debajo de
+          cada enfrentamiento. Cargá los resultados con el botón "Cargar
+          resultado".
+        </div>
+      )}
+
       {!gruposGenerados && (
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
           <h2 className="font-semibold text-gray-700 mb-3">Generar grupos</h2>
@@ -399,21 +534,13 @@ export default function TabGrupos({ torneoId, torneo }) {
               <div className="flex gap-2">
                 <button
                   onClick={() => setModoGeneracion("aleatorio")}
-                  className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${
-                    modoGeneracion === "aleatorio"
-                      ? "bg-green-600 text-white"
-                      : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                  }`}
+                  className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "aleatorio" ? "bg-green-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
                 >
                   Aleatorio
                 </button>
                 <button
                   onClick={() => setModoGeneracion("manual")}
-                  className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${
-                    modoGeneracion === "manual"
-                      ? "bg-green-600 text-white"
-                      : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                  }`}
+                  className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "manual" ? "bg-green-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
                 >
                   Manual
                 </button>
@@ -431,13 +558,14 @@ export default function TabGrupos({ torneoId, torneo }) {
               <ManualGroupBuilder
                 parejas={parejas}
                 parejasXGrupo={parejasXGrupo}
-                onConfirm={(gruposManuales) => {
-                  const gruposConPartidos = gruposManuales.map((g) => ({
-                    ...g,
-                    partidos: generarPartidos(g.parejas),
-                  }));
-                  setGrupos(gruposConPartidos);
-                }}
+                onConfirm={(gm) =>
+                  setGrupos(
+                    gm.map((g) => ({
+                      ...g,
+                      partidos: generarPartidos(g.parejas),
+                    })),
+                  )
+                }
               />
             )}
           </div>
@@ -487,6 +615,7 @@ export default function TabGrupos({ torneoId, torneo }) {
         </div>
       )}
 
+      {/* Grupos confirmados */}
       {gruposGenerados &&
         grupos.map((grupo, gi) => {
           const tabla = calcularTabla(grupo);
@@ -517,7 +646,7 @@ export default function TabGrupos({ torneoId, torneo }) {
                     {tabla.map((row, ri) => (
                       <tr
                         key={row.id}
-                        className={`border-b border-gray-50 ${ri < 2 ? "bg-green-50" : ""}`}
+                        className={`border-b border-gray-50 ${ri < parejasQueAvanzan ? "bg-green-50" : ""}`}
                       >
                         <td className="py-2 pr-2 font-bold text-gray-400">
                           {ri + 1}
@@ -541,63 +670,103 @@ export default function TabGrupos({ torneoId, torneo }) {
                   </tbody>
                 </table>
               </div>
+
               <h3 className="text-sm font-semibold text-gray-500 mb-2">
                 Partidos
               </h3>
               <div className="flex flex-col gap-2">
-                {(grupo.partidos || []).map((p, pi) => (
-                  <div
-                    key={pi}
-                    className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3"
-                  >
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-700">
-                        {p.pareja1.nombrePareja ||
-                          `${p.pareja1.jugador1} / ${p.pareja1.jugador2}`}
-                      </p>
-                      <p className="text-xs text-gray-400">vs</p>
-                      <p className="text-sm font-medium text-gray-700">
-                        {p.pareja2.nombrePareja ||
-                          `${p.pareja2.jugador1} / ${p.pareja2.jugador2}`}
-                      </p>
-                    </div>
-                    <div>
-                      {/* ✅ Bloque modificado: sets como badges individuales */}
-                      {p.resultado ? (
-                        <div className="flex flex-col items-end gap-1">
-                          <div className="flex flex-wrap gap-1 justify-end">
-                            {p.resultado.sets.map((s, si) => (
-                              <span
-                                key={si}
-                                className="text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-lg px-2 py-0.5"
-                              >
-                                {s.g1}-{s.g2}
-                                {s.tb1 !== undefined && s.tb2 !== undefined && (
-                                  <span className="text-xs font-normal text-orange-500 ml-1">
-                                    TB {s.tb1}-{s.tb2}
-                                  </span>
-                                )}
-                              </span>
-                            ))}
-                          </div>
-                          <button
-                            onClick={() => abrirEditarResultado(gi, pi)}
-                            className="text-xs text-green-600 hover:underline"
+                {(grupo.partidos || []).map((p, pi) => {
+                  const ganador = getGanador(p.resultado);
+                  return (
+                    <div key={pi} className="bg-gray-50 rounded-xl px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <p
+                            className={`text-sm font-medium ${ganador === 1 ? "text-green-700 font-bold" : ganador === 2 ? "text-red-400" : "text-gray-700"}`}
                           >
-                            Editar
-                          </button>
+                            {ganador === 1 && "🏆 "}
+                            {p.pareja1.nombrePareja ||
+                              `${p.pareja1.jugador1} / ${p.pareja1.jugador2}`}
+                          </p>
+                          <p className="text-xs text-gray-400">vs</p>
+                          <p
+                            className={`text-sm font-medium ${ganador === 2 ? "text-green-700 font-bold" : ganador === 1 ? "text-red-400" : "text-gray-700"}`}
+                          >
+                            {ganador === 2 && "🏆 "}
+                            {p.pareja2.nombrePareja ||
+                              `${p.pareja2.jugador1} / ${p.pareja2.jugador2}`}
+                          </p>
                         </div>
-                      ) : (
-                        <button
-                          onClick={() => abrirEditarResultado(gi, pi)}
-                          className="px-3 py-1 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition"
-                        >
-                          Cargar resultado
-                        </button>
-                      )}
+                        <div>
+                          {p.resultado ? (
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex flex-wrap gap-1 justify-end">
+                                {p.resultado.sets.map((s, si) => (
+                                  <span
+                                    key={si}
+                                    className="text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-lg px-2 py-0.5"
+                                  >
+                                    {s.g1}-{s.g2}
+                                    {s.tb1 !== undefined &&
+                                      s.tb2 !== undefined && (
+                                        <span className="text-xs font-normal text-orange-500 ml-1">
+                                          TB {s.tb1}-{s.tb2}
+                                        </span>
+                                      )}
+                                  </span>
+                                ))}
+                              </div>
+                              <button
+                                onClick={() => abrirEditarResultado(gi, pi)}
+                                className="text-xs text-green-600 hover:underline"
+                              >
+                                Editar
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => abrirEditarResultado(gi, pi)}
+                              className="px-3 py-1 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition"
+                            >
+                              Cargar resultado
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {/* Horario y cancha */}
+                      <div className="flex gap-2 mt-2">
+                        <input
+                          type="time"
+                          value={p.hora || ""}
+                          onChange={(e) =>
+                            actualizarPartidoInfo(
+                              gi,
+                              pi,
+                              "hora",
+                              e.target.value,
+                            )
+                          }
+                          className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
+                          placeholder="Hora"
+                        />
+                        <input
+                          type="text"
+                          value={p.cancha || ""}
+                          onChange={(e) =>
+                            actualizarPartidoInfo(
+                              gi,
+                              pi,
+                              "cancha",
+                              e.target.value,
+                            )
+                          }
+                          placeholder="Cancha (ej: 1)"
+                          className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500 w-28"
+                        />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
@@ -621,6 +790,13 @@ export default function TabGrupos({ torneoId, torneo }) {
                   `${partido.pareja2.jugador1} / ${partido.pareja2.jugador2}`}
               </p>
             </div>
+
+            {errorModal && (
+              <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3 text-xs text-red-600">
+                {errorModal}
+              </div>
+            )}
+
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-3">
                 <span className="w-12"></span>
@@ -634,7 +810,7 @@ export default function TabGrupos({ torneoId, torneo }) {
                     partido.pareja2.jugador1}
                 </span>
               </div>
-              {setsInput.map((set, si) => (
+              {setsInput.slice(0, setsVisibles()).map((set, si) => (
                 <div key={si}>
                   <div className="flex items-center gap-3">
                     <span className="text-sm text-gray-400 w-12">
@@ -645,12 +821,9 @@ export default function TabGrupos({ torneoId, torneo }) {
                       min="0"
                       value={set.g1}
                       onChange={(e) => {
-                        const nuevo = [...setsInput];
-                        nuevo[si] = {
-                          ...nuevo[si],
-                          g1: Number(e.target.value),
-                        };
-                        setSetsInput(nuevo);
+                        const n = [...setsInput];
+                        n[si] = { ...n[si], g1: Number(e.target.value) };
+                        setSetsInput(n);
                       }}
                       className="w-16 border border-gray-200 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
@@ -660,35 +833,27 @@ export default function TabGrupos({ torneoId, torneo }) {
                       min="0"
                       value={set.g2}
                       onChange={(e) => {
-                        const nuevo = [...setsInput];
-                        nuevo[si] = {
-                          ...nuevo[si],
-                          g2: Number(e.target.value),
-                        };
-                        setSetsInput(nuevo);
+                        const n = [...setsInput];
+                        n[si] = { ...n[si], g2: Number(e.target.value) };
+                        setSetsInput(n);
                       }}
                       className="w-16 border border-gray-200 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                   </div>
-                  {/* Toggle tie break */}
                   <div className="ml-12 mt-1">
                     <button
                       type="button"
                       onClick={() => {
-                        const nuevo = [...tiebreakInput];
-                        nuevo[si] = {
-                          ...nuevo[si],
-                          activo: !nuevo[si].activo,
+                        const n = [...tiebreakInput];
+                        n[si] = {
+                          ...n[si],
+                          activo: !n[si].activo,
                           tb1: 0,
                           tb2: 0,
                         };
-                        setTiebreakInput(nuevo);
+                        setTiebreakInput(n);
                       }}
-                      className={`text-xs font-semibold transition ${
-                        tiebreakInput[si]?.activo
-                          ? "text-orange-600"
-                          : "text-gray-400 hover:text-gray-600"
-                      }`}
+                      className={`text-xs font-semibold transition ${tiebreakInput[si]?.activo ? "text-orange-600" : "text-gray-400 hover:text-gray-600"}`}
                     >
                       {tiebreakInput[si]?.activo
                         ? "✓ Tie break"
@@ -702,12 +867,9 @@ export default function TabGrupos({ torneoId, torneo }) {
                           min="0"
                           value={tiebreakInput[si].tb1}
                           onChange={(e) => {
-                            const nuevo = [...tiebreakInput];
-                            nuevo[si] = {
-                              ...nuevo[si],
-                              tb1: Number(e.target.value),
-                            };
-                            setTiebreakInput(nuevo);
+                            const n = [...tiebreakInput];
+                            n[si] = { ...n[si], tb1: Number(e.target.value) };
+                            setTiebreakInput(n);
                           }}
                           className="w-16 border border-orange-200 rounded-lg px-3 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-orange-400"
                         />
@@ -717,12 +879,9 @@ export default function TabGrupos({ torneoId, torneo }) {
                           min="0"
                           value={tiebreakInput[si].tb2}
                           onChange={(e) => {
-                            const nuevo = [...tiebreakInput];
-                            nuevo[si] = {
-                              ...nuevo[si],
-                              tb2: Number(e.target.value),
-                            };
-                            setTiebreakInput(nuevo);
+                            const n = [...tiebreakInput];
+                            n[si] = { ...n[si], tb2: Number(e.target.value) };
+                            setTiebreakInput(n);
                           }}
                           className="w-16 border border-orange-200 rounded-lg px-3 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-orange-400"
                         />
@@ -738,6 +897,7 @@ export default function TabGrupos({ torneoId, torneo }) {
                   setEditandoResultado(null);
                   setSetsInput([]);
                   setTiebreakInput([]);
+                  setErrorModal("");
                 }}
                 className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
               >
@@ -752,24 +912,6 @@ export default function TabGrupos({ torneoId, torneo }) {
             </div>
           </div>
         </div>
-      )}
-
-      {gruposGenerados && (
-        <button
-          onClick={() => {
-            if (
-              window.confirm(
-                "¿Regenerar grupos? Se perderán todos los resultados cargados.",
-              )
-            ) {
-              setGruposGenerados(false);
-              setGrupos([]);
-            }
-          }}
-          className="text-sm text-red-400 hover:text-red-600 transition text-center"
-        >
-          Regenerar grupos desde cero
-        </button>
       )}
     </div>
   );

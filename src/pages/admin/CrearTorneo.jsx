@@ -8,6 +8,8 @@ const inputClass =
 const selectClass =
   "border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full bg-white";
 const labelClass = "text-xs font-semibold text-gray-500 mb-1 block";
+const tipClass =
+  "text-xs text-blue-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mt-2";
 
 const provinciasArgentina = [
   "Buenos Aires",
@@ -61,6 +63,13 @@ const categoriasNivel = [
   "Libre",
 ];
 
+const formatoDescripcion = {
+  mini: "1 set por partido, fase de grupos → eliminación directa",
+  normal: "3 sets por partido, fase de grupos → eliminación directa",
+  liga: "Sistema de liga con fechas y tabla de posiciones general",
+  eliminacion: "Eliminación directa desde la primera ronda",
+};
+
 export default function CrearTorneo() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
@@ -74,6 +83,8 @@ export default function CrearTorneo() {
     categoriasConfig: {},
     maxParejas: 8,
     inscripcion: 0,
+    inscripcionIncluye: "",
+    parejasQueAvanzan: 2,
     sede: "",
     direccionSede: "",
     instagramSede: "",
@@ -88,15 +99,30 @@ export default function CrearTorneo() {
     superTiebreak: false,
     inscripcionAbierta: true,
     reglamento: "",
+    premios: "",
     instagramOrganizador: "",
     facebookOrganizador: "",
     whatsappOrganizador: "",
+    administradores: [{ nombre: "", whatsapp: "" }],
   });
 
   const set = (field) => (e) => {
     const val =
       e.target.type === "checkbox" ? e.target.checked : e.target.value;
-    setForm({ ...form, [field]: val });
+    let updatedForm = { ...form, [field]: val };
+
+    // Auto-configurar sets según formato
+    if (field === "formato") {
+      if (val === "mini") {
+        updatedForm.sets = 1;
+        updatedForm.gamesPorSet = 6;
+      } else if (val === "normal") {
+        updatedForm.sets = 3;
+        updatedForm.gamesPorSet = 6;
+      }
+    }
+
+    setForm(updatedForm);
   };
 
   const toggleGenero = (genero) => {
@@ -133,6 +159,27 @@ export default function CrearTorneo() {
     setForm({
       ...form,
       categoriasConfig: { ...form.categoriasConfig, [genero]: updated },
+    });
+  };
+
+  const agregarAdmin = () => {
+    setForm({
+      ...form,
+      administradores: [...form.administradores, { nombre: "", whatsapp: "" }],
+    });
+  };
+
+  const actualizarAdmin = (index, field, value) => {
+    const nuevos = [...form.administradores];
+    nuevos[index] = { ...nuevos[index], [field]: value };
+    setForm({ ...form, administradores: nuevos });
+  };
+
+  const eliminarAdmin = (index) => {
+    if (form.administradores.length <= 1) return;
+    setForm({
+      ...form,
+      administradores: form.administradores.filter((_, i) => i !== index),
     });
   };
 
@@ -210,7 +257,6 @@ export default function CrearTorneo() {
               />
             </div>
 
-            {/* Categoría Género */}
             <div>
               <label className={labelClass}>Categoría Género (hasta 3)</label>
               <div className="flex gap-2">
@@ -231,7 +277,6 @@ export default function CrearTorneo() {
               </div>
             </div>
 
-            {/* Categoría Nivel por cada género seleccionado */}
             {form.categoriaGenero.map((genero) => (
               <div key={genero}>
                 <label className={labelClass}>
@@ -270,16 +315,16 @@ export default function CrearTorneo() {
                 onChange={set("formato")}
                 className={selectClass}
               >
-                <option value="mini">
-                  Mini torneo (1 set, fase de grupos + eliminación)
-                </option>
-                <option value="normal">
-                  Torneo normal (3 sets, fase de grupos + eliminación)
-                </option>
-                <option value="liga">Liga (fechas, tabla de posiciones)</option>
+                <option value="mini">Mini torneo</option>
+                <option value="normal">Torneo normal</option>
+                <option value="liga">Liga</option>
                 <option value="eliminacion">Eliminación directa</option>
               </select>
+              <p className="text-xs text-gray-400 mt-1">
+                {formatoDescripcion[form.formato]}
+              </p>
             </div>
+
             {(form.formato === "mini" || form.formato === "normal") && (
               <div className="flex gap-3">
                 <div className="flex-1">
@@ -289,23 +334,41 @@ export default function CrearTorneo() {
                     onChange={set("sets")}
                     className={selectClass}
                   >
-                    <option value={1}>1 set</option>
+                    {form.formato === "mini" && (
+                      <option value={1}>1 set</option>
+                    )}
                     <option value={3}>3 sets</option>
                   </select>
                 </div>
                 <div className="flex-1">
                   <label className={labelClass}>Games por set</label>
-                  <select
-                    value={form.gamesPorSet}
-                    onChange={set("gamesPorSet")}
-                    className={selectClass}
-                  >
-                    <option value={4}>4 games</option>
-                    <option value={6}>6 games</option>
-                  </select>
+                  <div className="border border-gray-300 rounded-lg px-4 py-2 text-sm bg-gray-50 text-gray-600">
+                    6 games
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Siempre 6 games por set
+                  </p>
                 </div>
               </div>
             )}
+
+            {(form.formato === "mini" || form.formato === "normal") && (
+              <div>
+                <label className={labelClass}>
+                  Parejas que avanzan de cada grupo
+                </label>
+                <select
+                  value={form.parejasQueAvanzan}
+                  onChange={set("parejasQueAvanzan")}
+                  className={selectClass}
+                >
+                  <option value={1}>1 pareja (solo el primero)</option>
+                  <option value={2}>2 parejas (primero y segundo)</option>
+                  <option value={3}>3 parejas</option>
+                </select>
+              </div>
+            )}
+
             <div className="flex items-center gap-3">
               <input
                 type="checkbox"
@@ -333,36 +396,74 @@ export default function CrearTorneo() {
                 Inscripción abierta al público
               </label>
             </div>
+
+            <p className={tipClass}>
+              💡 En formato "Mini torneo" se juega 1 set por partido. En "Torneo
+              normal" siempre 3 sets. Los games por set son siempre 6.
+            </p>
           </div>
         </div>
 
         {/* Participantes */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <h2 className="font-semibold text-gray-700 mb-4">Participantes</h2>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className={labelClass}>Máximo de parejas</label>
-              <input
-                type="number"
-                min="4"
-                max="256"
-                placeholder="Ej: 32"
-                value={form.maxParejas}
-                onChange={set("maxParejas")}
-                className={inputClass}
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className={labelClass}>Máximo de parejas</label>
+                <input
+                  type="number"
+                  min="4"
+                  max="256"
+                  placeholder="Ej: 32"
+                  value={form.maxParejas}
+                  onChange={set("maxParejas")}
+                  className={inputClass}
+                />
+              </div>
+              <div className="flex-1">
+                <label className={labelClass}>Costo de inscripción ($)</label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  value={form.inscripcion}
+                  onChange={set("inscripcion")}
+                  className={inputClass}
+                />
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>
+                ¿Qué incluye la inscripción? (opcional)
+              </label>
+              <textarea
+                placeholder={
+                  "Ej:\n- 1 tubo de pelotas\n- Remera del torneo\n- Hidratación durante los partidos\n- Acceso a vestuarios"
+                }
+                value={form.inscripcionIncluye}
+                onChange={set("inscripcionIncluye")}
+                rows={3}
+                className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
               />
             </div>
-            <div className="flex-1">
-              <label className={labelClass}>Costo de inscripción ($)</label>
-              <input
-                type="number"
-                min="0"
-                placeholder="0"
-                value={form.inscripcion}
-                onChange={set("inscripcion")}
-                className={inputClass}
-              />
-            </div>
+          </div>
+        </div>
+
+        {/* Premios */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <h2 className="font-semibold text-gray-700 mb-4">Premios</h2>
+          <div>
+            <label className={labelClass}>Premios del torneo (opcional)</label>
+            <textarea
+              placeholder={
+                "Ej:\n🥇 1er puesto: $50.000 + 2 paletas Bullpadel\n🥈 2do puesto: $25.000 + voucher tienda\n🥉 3er puesto: Kit de pelotas\n\nTambién podés incluir premios especiales como mejor jugador, fair play, etc."
+              }
+              value={form.premios}
+              onChange={set("premios")}
+              rows={5}
+              className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
+            />
           </div>
         </div>
 
@@ -486,14 +587,12 @@ export default function CrearTorneo() {
           </div>
         </div>
 
-        {/* Redes sociales del organizador */}
+        {/* Redes y administradores */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-4">
-            Redes del organizador
-          </h2>
+          <h2 className="font-semibold text-gray-700 mb-4">Redes y contacto</h2>
           <div className="flex flex-col gap-3">
             <div>
-              <label className={labelClass}>Instagram</label>
+              <label className={labelClass}>Instagram del organizador</label>
               <input
                 type="text"
                 placeholder="@toppadeltorneos"
@@ -503,7 +602,7 @@ export default function CrearTorneo() {
               />
             </div>
             <div>
-              <label className={labelClass}>Facebook</label>
+              <label className={labelClass}>Facebook del organizador</label>
               <input
                 type="text"
                 placeholder="facebook.com/toppadeltorneos"
@@ -513,7 +612,7 @@ export default function CrearTorneo() {
               />
             </div>
             <div>
-              <label className={labelClass}>WhatsApp de contacto</label>
+              <label className={labelClass}>WhatsApp general</label>
               <input
                 type="text"
                 placeholder="Ej: +54 385 1234567"
@@ -521,6 +620,58 @@ export default function CrearTorneo() {
                 onChange={set("whatsappOrganizador")}
                 className={inputClass}
               />
+            </div>
+
+            <div className="mt-2 pt-3 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <label className={labelClass}>
+                  Personas administradoras del torneo
+                </label>
+                <button
+                  type="button"
+                  onClick={agregarAdmin}
+                  className="text-xs font-semibold text-green-600 hover:underline"
+                >
+                  + Agregar persona
+                </button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {form.administradores.map((admin, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      placeholder="Nombre"
+                      value={admin.nombre}
+                      onChange={(e) =>
+                        actualizarAdmin(i, "nombre", e.target.value)
+                      }
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="WhatsApp"
+                      value={admin.whatsapp}
+                      onChange={(e) =>
+                        actualizarAdmin(i, "whatsapp", e.target.value)
+                      }
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                    {form.administradores.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => eliminarAdmin(i)}
+                        className="text-red-400 hover:text-red-600 text-sm font-semibold"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Personas responsables que los jugadores pueden contactar durante
+                el torneo
+              </p>
             </div>
           </div>
         </div>
