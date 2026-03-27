@@ -39,25 +39,6 @@ function getGanador(resultado) {
   return setsP1 > setsP2 ? 1 : setsP2 > setsP1 ? 2 : null;
 }
 
-function setsNecesarios(resultado, totalSets) {
-  if (!resultado || totalSets <= 1) return totalSets;
-  let setsP1 = 0,
-    setsP2 = 0;
-  const setsParaGanar = Math.ceil(totalSets / 2);
-  for (const s of resultado.sets) {
-    let g1 = s.g1,
-      g2 = s.g2;
-    if (s.tb1 !== undefined || s.tb2 !== undefined) {
-      if ((s.tb1 ?? 0) > (s.tb2 ?? 0)) g1 += 1;
-      else if ((s.tb2 ?? 0) > (s.tb1 ?? 0)) g2 += 1;
-    }
-    if (g1 > g2) setsP1++;
-    else if (g2 > g1) setsP2++;
-    if (setsP1 >= setsParaGanar || setsP2 >= setsParaGanar) break;
-  }
-  return setsP1 + setsP2;
-}
-
 function calcularTabla(grupo) {
   const stats = {};
   grupo.parejas.forEach((p) => {

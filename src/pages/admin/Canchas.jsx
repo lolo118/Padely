@@ -87,6 +87,7 @@ export default function Canchas() {
       setLoading(false);
     };
     cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   useEffect(() => {
@@ -158,7 +159,7 @@ export default function Canchas() {
   const handleGuardarEdicion = async () => {
     if (!editForm || !club) return;
     try {
-      const { id: canchaId, createdAt, ...datos } = editForm;
+      const { id: canchaId, createdAt: _ca, ...datos } = editForm;
       const datosActualizar = {
         ...datos,
         precioBase: Number(datos.precioBase),

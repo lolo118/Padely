@@ -49,15 +49,13 @@ export default function Dashboard() {
       setLoading(false);
     };
     cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   if (loading) {
     return <div className="text-center text-gray-400 py-12">Cargando...</div>;
   }
 
-  const torneosActivos = torneos.filter(
-    (t) => t.status === "inscripcion" || t.status === "en_curso",
-  );
   const reservasConfirmadas = reservasHoy.filter(
     (r) => r.status === "confirmada",
   );

@@ -5,7 +5,7 @@ import {
   getBracket,
 } from "../../services/torneoService";
 
-function calcularTabla(grupo, parejasQueAvanzan) {
+function calcularTabla(grupo) {
   const stats = {};
   grupo.parejas.forEach((p) => {
     stats[p.id] = {

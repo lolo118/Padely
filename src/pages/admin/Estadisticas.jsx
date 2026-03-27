@@ -271,7 +271,7 @@ export default function Estadisticas() {
                   cy="50%"
                   outerRadius={80}
                   dataKey="value"
-                  label={({ name, value }) => `${value}%`}
+                  label={({ value }) => `${value}%`}
                 >
                   {dataTorta.map((_, i) => (
                     <Cell key={i} fill={COLORES[i % COLORES.length]} />
