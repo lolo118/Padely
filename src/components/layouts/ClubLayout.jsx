@@ -1,78 +1,227 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useState } from "react";
+import { useAuthStore } from "../../store/authStore";
 
 const navItems = [
-  { to: "/admin", label: "Dashboard", icon: "🏠" },
-  { to: "/admin/torneos", label: "Torneos", icon: "🏆" },
-  { to: "/admin/canchas", label: "Canchas", icon: "⊞" },
-  { to: "/admin/estadisticas", label: "Estadísticas", icon: "📊" },
-  { to: "/admin/configuracion", label: "Configuración", icon: "⚙️" },
+  {
+    to: "/admin",
+    label: "Dashboard",
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="w-5 h-5"
+      >
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+      </svg>
+    ),
+  },
+  {
+    to: "/admin/torneos",
+    label: "Torneos",
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="w-5 h-5"
+      >
+        <path d="M6 9H4.5a2.5 2.5 0 010-5H6" />
+        <path d="M18 9h1.5a2.5 2.5 0 000-5H18" />
+        <path d="M4 22h16" />
+        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+        <path d="M18 2H6v7a6 6 0 0012 0V2Z" />
+      </svg>
+    ),
+  },
+  {
+    to: "/admin/canchas",
+    label: "Canchas",
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="w-5 h-5"
+      >
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <line x1="12" y1="3" x2="12" y2="21" />
+        <line x1="3" y1="12" x2="21" y2="12" />
+      </svg>
+    ),
+  },
+  {
+    to: "/admin/estadisticas",
+    label: "Estadísticas",
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="w-5 h-5"
+      >
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    ),
+  },
+  {
+    to: "/admin/configuracion",
+    label: "Config",
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="w-5 h-5"
+      >
+        <circle cx="12" cy="12" r="3" />
+        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+      </svg>
+    ),
+  },
 ];
 
 export default function ClubLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user } = useAuthStore();
+  const nombre = user?.displayName || user?.email?.split("@")[0] || "Admin";
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-4 sticky top-0 z-10">
+    <div className="min-h-screen bg-[#f5f7fa] flex flex-col">
+      {/* Header */}
+      <header className="bg-slate-800/95 backdrop-blur-lg px-5 py-3 flex items-center gap-4 sticky top-0 z-30 shadow-lg shadow-slate-900/10">
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="text-gray-500 hover:text-gray-700 md:hidden"
+          className="text-slate-300 hover:text-white md:hidden p-1 transition"
         >
-          ☰
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="w-5 h-5"
+          >
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
         </button>
-        <span className="text-green-700 font-bold text-xl">Padely</span>
-        <span className="ml-auto text-sm text-gray-500">Panel de club</span>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-green-600 rounded-xl flex items-center justify-center shadow-md shadow-green-900/20">
+            <span className="text-white font-bold text-sm">P</span>
+          </div>
+          <span className="text-white font-bold text-lg tracking-tight">
+            Padely
+          </span>
+        </div>
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-xs text-slate-400 hidden sm:block">
+            Panel de administración
+          </span>
+          <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full flex items-center justify-center ring-2 ring-emerald-400/20">
+            <span className="text-white text-xs font-bold">
+              {nombre.charAt(0).toUpperCase()}
+            </span>
+          </div>
+        </div>
       </header>
 
       <div className="flex flex-1">
+        {/* Sidebar */}
         <aside
           className={`
-          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
-          fixed md:static md:translate-x-0
-          w-56 bg-white border-r border-gray-200
-          min-h-screen z-20 transition-transform duration-200
-          flex flex-col pt-4
-        `}
+            ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+            fixed md:static md:translate-x-0
+            w-60 bg-slate-800 md:bg-white border-r border-slate-700 md:border-slate-200
+            min-h-screen z-20 transition-transform duration-300 ease-in-out
+            flex flex-col pt-2
+          `}
         >
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/admin"}
-              onClick={() => setSidebarOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 text-sm transition ${
-                  isActive
-                    ? "bg-green-50 text-green-700 font-semibold border-r-2 border-green-600"
-                    : "text-gray-600 hover:bg-gray-50"
-                }`
-              }
-            >
-              <span className="text-base">{item.icon}</span>
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
+          <div className="flex flex-col gap-0.5 px-3 py-2">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/admin"}
+                onClick={() => setSidebarOpen(false)}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${
+                    isActive
+                      ? "bg-emerald-50 md:bg-emerald-50 text-emerald-400 md:text-emerald-700 font-semibold shadow-sm shadow-emerald-100/50"
+                      : "text-slate-400 md:text-slate-500 hover:bg-slate-700/50 md:hover:bg-slate-50 hover:text-white md:hover:text-slate-700"
+                  }`
+                }
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </NavLink>
+            ))}
+          </div>
 
-          <div className="mt-auto border-t border-gray-100 p-4">
+          <div className="mt-auto border-t border-slate-700 md:border-slate-200 p-4">
             <NavLink
               to="/hub"
-              className="flex items-center gap-3 text-sm text-gray-500 hover:text-green-600 transition"
+              className="flex items-center gap-3 text-sm text-slate-400 md:text-slate-400 hover:text-emerald-400 md:hover:text-emerald-600 transition px-3 py-2 rounded-xl hover:bg-slate-700/50 md:hover:bg-slate-50"
             >
-              <span>🌐</span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-5 h-5"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+              </svg>
               <span>Ver hub público</span>
             </NavLink>
           </div>
         </aside>
 
+        {/* Overlay mobile */}
         {sidebarOpen && (
           <div
-            className="fixed inset-0 bg-black bg-opacity-30 z-10 md:hidden"
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-10 md:hidden"
             onClick={() => setSidebarOpen(false)}
           />
         )}
 
-        <main className="flex-1 p-4 md:p-6 overflow-y-auto">
+        {/* Main */}
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto max-w-5xl">
           <Outlet />
         </main>
       </div>

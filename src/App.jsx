@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { onAuthChange } from "./services/authService";
 import { useAuthStore } from "./store/authStore";
+import Inicio from "./pages/Inicio"; // ✅ Import agregado
 
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
@@ -11,7 +12,7 @@ import ClubLayout from "./components/layouts/ClubLayout";
 
 import Hub from "./pages/Hub";
 import Torneos from "./pages/Torneos";
-import DetalleTorneoPublico from "./pages/DetalleTorneoPublico"; // ✅ Import agregado
+import DetalleTorneoPublico from "./pages/DetalleTorneoPublico";
 import Noticias from "./pages/Noticias";
 import Marketplace from "./pages/Marketplace";
 import Perfil from "./pages/Perfil";
@@ -67,11 +68,13 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="/hub" />} />
+          <Route index element={<Navigate to="/inicio" />} />{" "}
+          {/* ✅ Cambiado redirect a /inicio */}
+          <Route path="inicio" element={<Inicio />} />{" "}
+          {/* ✅ Ruta de inicio agregada */}
           <Route path="hub" element={<Hub />} />
           <Route path="torneos" element={<Torneos />} />
-          <Route path="torneos/:id" element={<DetalleTorneoPublico />} />{" "}
-          {/* ✅ Ruta agregada */}
+          <Route path="torneos/:id" element={<DetalleTorneoPublico />} />
           <Route path="noticias" element={<Noticias />} />
           <Route path="marketplace" element={<Marketplace />} />
           <Route path="perfil" element={<Perfil />} />
