@@ -214,7 +214,7 @@ export default function CrearTorneo() {
     <div className="max-w-2xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <button
-          onClick={() => navigate("/admin/torneos")}
+          onClick={() => navigate(-1)}
           className="text-gray-400 hover:text-gray-600 text-xl"
         >
           ←

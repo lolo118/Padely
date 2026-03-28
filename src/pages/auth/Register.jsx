@@ -64,7 +64,13 @@ export default function Register() {
     setError("");
     try {
       await registerUser(form.email, form.password, { tipo, ...form });
-      navigate("/");
+      if (tipo === "club") {
+        navigate("/admin");
+      } else if (tipo === "organizador") {
+        navigate("/org");
+      } else {
+        navigate("/inicio");
+      }
     } catch {
       setError("Error al registrarse. Verificá los datos.");
     }

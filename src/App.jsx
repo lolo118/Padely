@@ -26,6 +26,13 @@ import AdminConfiguracion from "./pages/admin/Configuracion";
 import Dashboard from "./pages/admin/Dashboard";
 import AceptarInvitacion from "./pages/AceptarInvitacion";
 
+import OrgLayout from "./components/layouts/OrgLayout";
+import OrgDashboard from "./pages/org/OrgDashboard";
+import OrgTorneos from "./pages/org/OrgTorneos";
+import OrgEntidad from "./pages/org/OrgEntidad";
+import OrgEquipo from "./pages/org/OrgEquipo";
+import OrgEstadisticas from "./pages/org/OrgEstadisticas";
+
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuthStore();
   if (loading)
@@ -60,24 +67,14 @@ export default function App() {
           element={<AceptarInvitacion />}
         />
 
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <PlayerLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Navigate to="/inicio" />} />{" "}
-          {/* ✅ Cambiado redirect a /inicio */}
-          <Route path="inicio" element={<Inicio />} />{" "}
-          {/* ✅ Ruta de inicio agregada */}
-          <Route path="hub" element={<Hub />} />
-          <Route path="torneos" element={<Torneos />} />
-          <Route path="torneos/:id" element={<DetalleTorneoPublico />} />
-          <Route path="noticias" element={<Noticias />} />
-          <Route path="marketplace" element={<Marketplace />} />
-          <Route path="perfil" element={<Perfil />} />
+        <Route element={<ProtectedRoute><PlayerLayout /></ProtectedRoute>}>
+          <Route path="/inicio" element={<Inicio />} />
+          <Route path="/hub" element={<Hub />} />
+          <Route path="/torneos" element={<Torneos />} />
+          <Route path="/torneos/:id" element={<DetalleTorneoPublico />} />
+          <Route path="/noticias" element={<Noticias />} />
+          <Route path="/marketplace" element={<Marketplace />} />
+          <Route path="/perfil" element={<Perfil />} />
         </Route>
 
         <Route
@@ -97,7 +94,24 @@ export default function App() {
           <Route path="configuracion" element={<AdminConfiguracion />} />
         </Route>
 
-        <Route path="*" element={<Navigate to="/hub" />} />
+        <Route
+          path="/org"
+          element={
+            <ProtectedRoute>
+              <OrgLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<OrgDashboard />} />
+          <Route path="torneos" element={<OrgTorneos />} />
+          <Route path="torneos/nuevo" element={<CrearTorneo />} />
+          <Route path="torneos/:id" element={<DetalleTorneo />} />
+          <Route path="estadisticas" element={<OrgEstadisticas />} />
+          <Route path="entidad" element={<OrgEntidad />} />
+          <Route path="equipo" element={<OrgEquipo />} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/inicio" />} />
       </Routes>
     </BrowserRouter>
   );

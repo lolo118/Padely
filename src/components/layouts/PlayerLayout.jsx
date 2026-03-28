@@ -202,6 +202,20 @@ export default function PlayerLayout() {
                   {item.label}
                 </NavLink>
               ))}
+              <div className="border-t border-slate-700 mt-1 pt-1">
+                <button
+                  onClick={async () => {
+                    setMenuOpen(false);
+                    const { signOut } = await import("firebase/auth");
+                    const { auth } = await import("../../lib/firebase");
+                    await signOut(auth);
+                    window.location.href = "/login";
+                  }}
+                  className="w-full text-left px-6 py-3 text-sm text-red-400 hover:text-red-300 hover:bg-slate-700/30 transition"
+                >
+                  Cerrar sesión
+                </button>
+              </div>
             </div>
           </div>
         </>
