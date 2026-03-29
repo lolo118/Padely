@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { onAuthChange } from "./services/authService";
 import { useAuthStore } from "./store/authStore";
+import useThemeStore from "./store/themeStore";
 import Inicio from "./pages/Inicio"; // ✅ Import agregado
 
 import Login from "./pages/auth/Login";
@@ -11,6 +12,7 @@ import PlayerLayout from "./components/layouts/PlayerLayout";
 import ClubLayout from "./components/layouts/ClubLayout";
 
 import Hub from "./pages/Hub";
+import ClubPublico from "./pages/ClubPublico";
 import Torneos from "./pages/Torneos";
 import DetalleTorneoPublico from "./pages/DetalleTorneoPublico";
 import Noticias from "./pages/Noticias";
@@ -47,6 +49,9 @@ function ProtectedRoute({ children }) {
 
 export default function App() {
   const { setUser, setLoading } = useAuthStore();
+  const { initTheme } = useThemeStore();
+
+  useEffect(() => { initTheme(); }, [initTheme]);
 
   useEffect(() => {
     const unsub = onAuthChange((user) => {
@@ -75,6 +80,7 @@ export default function App() {
           <Route path="/noticias" element={<Noticias />} />
           <Route path="/marketplace" element={<Marketplace />} />
           <Route path="/perfil" element={<Perfil />} />
+          <Route path="/club/:id" element={<ClubPublico />} />
         </Route>
 
         <Route

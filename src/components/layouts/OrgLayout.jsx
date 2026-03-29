@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useState } from "react";
 import { useAuthStore } from "../../store/authStore";
+import ThemeToggle from "../ThemeToggle";
 
 const navItems = [
   {
@@ -116,7 +117,7 @@ export default function OrgLayout() {
     user?.displayName || user?.email?.split("@")[0] || "Organizador";
 
   return (
-    <div className="min-h-screen bg-[#f5f7fa] flex flex-col">
+    <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col">
       <header className="bg-slate-800/95 backdrop-blur-lg px-5 py-3 flex items-center gap-4 sticky top-0 z-30 shadow-lg shadow-slate-900/10">
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -137,18 +138,12 @@ export default function OrgLayout() {
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-green-600 rounded-xl flex items-center justify-center shadow-md shadow-green-900/20">
-            <span className="text-white font-bold text-sm">P</span>
-          </div>
-          <span className="text-white font-bold text-lg tracking-tight">
-            Padely
-          </span>
-        </div>
+        <img src="/logo.png" alt="Padely" className="h-7" />
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-slate-400 hidden sm:block">
             Panel organizador
           </span>
+          <ThemeToggle />
           <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center ring-2 ring-blue-400/20">
             <span className="text-white text-xs font-bold">
               {nombre.charAt(0).toUpperCase()}
@@ -162,7 +157,7 @@ export default function OrgLayout() {
           className={`
             ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
             fixed md:sticky md:top-[52px] md:translate-x-0
-            w-60 bg-slate-800 md:bg-white border-r border-slate-700 md:border-slate-200
+            w-60 bg-slate-800 md:bg-[var(--sidebar-bg)] border-r border-slate-700 md:border-[var(--sidebar-border)]
             h-[calc(100vh-52px)] z-20 transition-transform duration-300 ease-in-out
             flex flex-col pt-2 shrink-0
           `}
@@ -177,8 +172,8 @@ export default function OrgLayout() {
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${
                     isActive
-                      ? "bg-blue-50 md:bg-blue-50 text-blue-400 md:text-blue-700 font-semibold shadow-sm shadow-blue-100/50"
-                      : "text-slate-400 md:text-slate-500 hover:bg-slate-700/50 md:hover:bg-slate-50 hover:text-white md:hover:text-slate-700"
+                      ? "bg-blue-50 md:bg-[var(--sidebar-active-bg)] text-blue-400 md:text-[var(--sidebar-active-text)] font-semibold"
+                      : "text-slate-400 md:text-[var(--text-muted)] hover:bg-slate-700/50 md:hover:bg-[var(--bg-card-hover)] hover:text-white md:hover:text-[var(--text-primary)]"
                   }`
                 }
               >
@@ -191,7 +186,7 @@ export default function OrgLayout() {
           <div className="mt-auto border-t border-slate-700 md:border-slate-200 p-4">
             <NavLink
               to="/hub"
-              className="flex items-center gap-3 text-sm text-slate-400 hover:text-blue-400 md:hover:text-blue-600 transition px-3 py-2 rounded-xl hover:bg-slate-700/50 md:hover:bg-slate-50"
+              className="flex items-center gap-3 text-sm text-slate-400 hover:text-emerald-400 md:hover:text-[var(--accent)] transition px-3 py-2 rounded-xl hover:bg-slate-700/50 md:hover:bg-[var(--bg-card-hover)]"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"

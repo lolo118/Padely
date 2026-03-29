@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useState } from "react";
 import { useAuthStore } from "../../store/authStore";
+import ThemeToggle from "../ThemeToggle";
 
 const navItems = [
   {
@@ -121,7 +122,7 @@ export default function PlayerLayout() {
   const nombre = user?.displayName || user?.email?.split("@")[0] || "Jugador";
 
   return (
-    <div className="min-h-screen bg-[#f5f7fa] flex flex-col">
+    <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col">
       {/* Header */}
       <header className="bg-slate-800/95 backdrop-blur-lg px-5 py-3 flex items-center justify-between sticky top-0 z-30 shadow-lg shadow-slate-900/10">
         <div className="flex items-center gap-3">
@@ -153,28 +154,17 @@ export default function PlayerLayout() {
               )}
             </svg>
           </button>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-green-600 rounded-xl flex items-center justify-center shadow-md shadow-green-900/20">
-              <span className="text-white font-bold text-sm">P</span>
-            </div>
-            <span className="text-white font-bold text-lg tracking-tight">
-              Padely
-            </span>
-          </div>
+          <img src="/logo.png" alt="Padely" className="h-7" />
         </div>
-        <NavLink
-          to="/perfil"
-          className="flex items-center gap-2 hover:opacity-80 transition"
-        >
-          <span className="text-xs text-slate-400 hidden sm:block">
-            {nombre}
-          </span>
-          <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full flex items-center justify-center ring-2 ring-emerald-400/20">
-            <span className="text-white text-xs font-bold">
-              {nombre.charAt(0).toUpperCase()}
-            </span>
-          </div>
-        </NavLink>
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+          <NavLink to="/perfil" className="flex items-center gap-2 hover:opacity-80 transition">
+            <span className="text-xs text-slate-400 hidden sm:block">{nombre}</span>
+            <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full flex items-center justify-center ring-2 ring-emerald-400/20">
+              <span className="text-white text-xs font-bold">{nombre.charAt(0).toUpperCase()}</span>
+            </div>
+          </NavLink>
+        </div>
       </header>
 
       {/* Menu hamburguesa mobile */}
@@ -227,7 +217,7 @@ export default function PlayerLayout() {
       </main>
 
       {/* Bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
+      <nav className="fixed bottom-0 left-0 right-0 z-20 border-t" style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)", boxShadow: "0 -4px 20px rgba(0,0,0,0.06)" }}>
         <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
           {navItems.map((item) => (
             <NavLink

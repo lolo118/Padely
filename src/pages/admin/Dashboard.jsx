@@ -53,7 +53,14 @@ export default function Dashboard() {
   }, [user]);
 
   if (loading) {
-    return <div className="text-center text-gray-400 py-12">Cargando...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
+        <p style={{ color: "var(--text-muted)" }} className="text-sm">
+          Cargando...
+        </p>
+      </div>
+    );
   }
 
   const reservasConfirmadas = reservasHoy.filter(
@@ -68,7 +75,6 @@ export default function Dashboard() {
   );
   const turnosFijosActivos = turnosFijos.filter((t) => t.status === "activo");
 
-  // Canchas libres ahora
   const horaAhora = `${String(horaActual).padStart(2, "0")}:00`;
   const partesFecha = hoy.split("-");
   const fechaLocal = new Date(
@@ -90,37 +96,45 @@ export default function Dashboard() {
   const canchasLibresAhora = canchas.filter((c) => {
     const disponible = (c.horariosDisponibles || []).includes(horaAhora);
     if (!disponible) return false;
-    const ocupada = reservasHoy.some(
-      (r) =>
-        r.canchaId === c.id && r.hora === horaAhora && r.status !== "cancelada",
-    );
-    if (ocupada) return false;
-    const tieneTurnoFijo = turnosFijosActivos.some(
-      (t) =>
-        t.canchaId === c.id &&
-        t.dia === diaHoy &&
-        (t.horas || [t.hora]).includes(horaAhora),
-    );
-    if (tieneTurnoFijo) return false;
+    if (
+      reservasHoy.some(
+        (r) =>
+          r.canchaId === c.id &&
+          r.hora === horaAhora &&
+          r.status !== "cancelada",
+      )
+    )
+      return false;
+    if (
+      turnosFijosActivos.some(
+        (t) =>
+          t.canchaId === c.id &&
+          t.dia === diaHoy &&
+          (t.horas || [t.hora]).includes(horaAhora),
+      )
+    )
+      return false;
     return true;
   }).length;
 
-  // Próximas horas con reservas hoy
   const proximasReservas = reservasConfirmadas
-    .filter((r) => {
-      const horaReserva = parseInt(r.hora);
-      return horaReserva >= horaActual;
-    })
+    .filter((r) => parseInt(r.hora) >= horaActual)
     .sort((a, b) => a.hora.localeCompare(b.hora))
     .slice(0, 5);
+
+  const cardStyle =
+    "themed-card rounded-2xl p-5 border cursor-pointer card-hover";
 
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-800">
+        <h1
+          className="text-xl font-bold"
+          style={{ color: "var(--text-primary)" }}
+        >
           {club ? `Bienvenido, ${club.nombre}` : "Dashboard"}
         </h1>
-        <p className="text-sm text-gray-400 mt-1">
+        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
           Resumen del día —{" "}
           {new Date().toLocaleDateString("es-AR", {
             weekday: "long",
@@ -133,95 +147,187 @@ export default function Dashboard() {
 
       {/* Tarjetas resumen */}
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <div
-          onClick={() => navigate("/admin/canchas")}
-          className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition"
-        >
+        <div onClick={() => navigate("/admin/canchas")} className={cardStyle}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-3xl font-bold text-green-600">
+              <p
+                className="text-3xl font-bold"
+                style={{ color: "var(--accent)" }}
+              >
                 {reservasConfirmadas.length}
               </p>
-              <p className="text-xs text-gray-400 mt-1">Reservas hoy</p>
+              <p
+                className="text-xs mt-1"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Reservas hoy
+              </p>
             </div>
-            <span className="text-3xl">📅</span>
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ backgroundColor: "var(--accent-light)" }}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                className="w-5 h-5"
+                style={{ color: "var(--accent)" }}
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+            </div>
           </div>
         </div>
 
         <div
           onClick={() => navigate("/admin/estadisticas")}
-          className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition"
+          className={cardStyle}
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-3xl font-bold text-blue-600">
+              <p className="text-3xl font-bold" style={{ color: "#3b82f6" }}>
                 ${ingresosHoy.toLocaleString()}
               </p>
-              <p className="text-xs text-gray-400 mt-1">Ingresos hoy</p>
+              <p
+                className="text-xs mt-1"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Ingresos hoy
+              </p>
             </div>
-            <span className="text-3xl">💰</span>
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ backgroundColor: "rgba(59,130,246,0.1)" }}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#3b82f6"
+                strokeWidth="1.8"
+                className="w-5 h-5"
+              >
+                <line x1="12" y1="1" x2="12" y2="23" />
+                <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+              </svg>
+            </div>
           </div>
         </div>
 
-        <div
-          onClick={() => navigate("/admin/torneos")}
-          className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition"
-        >
+        <div onClick={() => navigate("/admin/canchas")} className={cardStyle}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-3xl font-bold text-purple-600">
+              <p className="text-3xl font-bold" style={{ color: "#8b5cf6" }}>
                 {turnosFijosActivos.length}
               </p>
-              <p className="text-xs text-gray-400 mt-1">Turnos fijos activos</p>
+              <p
+                className="text-xs mt-1"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Turnos fijos activos
+              </p>
             </div>
-            <span className="text-3xl">📌</span>
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ backgroundColor: "rgba(139,92,246,0.1)" }}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#8b5cf6"
+                strokeWidth="1.8"
+                className="w-5 h-5"
+              >
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+            </div>
           </div>
         </div>
 
-        <div
-          onClick={() => navigate("/admin/canchas")}
-          className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition"
-        >
+        <div onClick={() => navigate("/admin/canchas")} className={cardStyle}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-3xl font-bold text-orange-500">
+              <p className="text-3xl font-bold" style={{ color: "#f97316" }}>
                 {canchasLibresAhora}
               </p>
-              <p className="text-xs text-gray-400 mt-1">Canchas libres ahora</p>
+              <p
+                className="text-xs mt-1"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Canchas libres ahora
+              </p>
             </div>
-            <span className="text-3xl">🟢</span>
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ backgroundColor: "rgba(249,115,22,0.1)" }}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#f97316"
+                strokeWidth="1.8"
+                className="w-5 h-5"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="12" y1="3" x2="12" y2="21" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+              </svg>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Reservas pendientes de aprobación */}
+      {/* Reservas pendientes */}
       {reservasPendientes.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-yellow-200 mb-4">
-          <h2 className="font-semibold text-yellow-700 mb-3">
+        <div
+          className="themed-card rounded-2xl p-5 border mb-4"
+          style={{ borderColor: "rgba(245,158,11,0.3)" }}
+        >
+          <h2 className="font-semibold mb-3" style={{ color: "#f59e0b" }}>
             Reservas pendientes de aprobación ({reservasPendientes.length})
           </h2>
           <div className="flex flex-col gap-2">
             {reservasPendientes.map((r) => (
               <div
                 key={r.id}
-                className="flex items-center justify-between bg-yellow-50 rounded-xl px-4 py-3"
+                className="flex items-center justify-between rounded-xl px-4 py-3"
+                style={{ backgroundColor: "rgba(245,158,11,0.08)" }}
               >
                 <div>
-                  <p className="text-sm font-semibold text-gray-700">
+                  <p
+                    className="text-sm font-semibold"
+                    style={{ color: "var(--text-primary)" }}
+                  >
                     {r.nombreJugador || "Jugador"}
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                     {r.canchaName || "Cancha"} — {r.hora}
                   </p>
                 </div>
-                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">
+                <span
+                  className="text-xs font-semibold px-2 py-1 rounded-full"
+                  style={{
+                    backgroundColor: "rgba(245,158,11,0.15)",
+                    color: "#f59e0b",
+                  }}
+                >
                   Pendiente
                 </span>
               </div>
             ))}
             <button
               onClick={() => navigate("/admin/canchas")}
-              className="text-xs text-green-600 font-semibold hover:underline mt-1"
+              className="text-xs font-semibold hover:underline mt-1"
+              style={{ color: "var(--accent)" }}
             >
               Gestionar en Canchas →
             </button>
@@ -229,13 +335,19 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Próximas reservas de hoy */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
-        <h2 className="font-semibold text-gray-700 mb-3">
+      {/* Próximas reservas */}
+      <div className="themed-card rounded-2xl p-5 border mb-4">
+        <h2
+          className="font-semibold mb-3"
+          style={{ color: "var(--text-primary)" }}
+        >
           Próximas reservas hoy
         </h2>
         {proximasReservas.length === 0 ? (
-          <p className="text-gray-400 text-sm text-center py-4">
+          <p
+            className="text-sm text-center py-4"
+            style={{ color: "var(--text-muted)" }}
+          >
             No hay más reservas para hoy
           </p>
         ) : (
@@ -243,22 +355,35 @@ export default function Dashboard() {
             {proximasReservas.map((r, i) => (
               <div
                 key={i}
-                className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3"
+                className="flex items-center justify-between rounded-xl px-4 py-3"
+                style={{ backgroundColor: "var(--bg-card-hover)" }}
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-sm font-bold text-green-600 w-14">
+                  <span
+                    className="text-sm font-bold w-14"
+                    style={{ color: "var(--accent)" }}
+                  >
                     {r.hora}
                   </span>
                   <div>
-                    <p className="text-sm font-medium text-gray-700">
+                    <p
+                      className="text-sm font-medium"
+                      style={{ color: "var(--text-primary)" }}
+                    >
                       {r.nombreJugador || "Jugador"}
                     </p>
-                    <p className="text-xs text-gray-400">
+                    <p
+                      className="text-xs"
+                      style={{ color: "var(--text-muted)" }}
+                    >
                       {r.canchaName || "Cancha"}
                     </p>
                   </div>
                 </div>
-                <span className="text-xs font-semibold text-green-600">
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: "var(--accent)" }}
+                >
                   ${r.precio || 0}
                 </span>
               </div>
@@ -268,49 +393,68 @@ export default function Dashboard() {
       </div>
 
       {/* Turnos activos ahora */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
-        <h2 className="font-semibold text-gray-700 mb-3">
+      <div className="themed-card rounded-2xl p-5 border mb-4">
+        <h2
+          className="font-semibold mb-3"
+          style={{ color: "var(--text-primary)" }}
+        >
           Turnos activos ahora
         </h2>
         {(() => {
-          const turnosAhora = reservasConfirmadas.filter((r) => {
-            const horaReserva = parseInt(r.hora);
-            return horaReserva === horaActual;
-          });
+          const turnosAhora = reservasConfirmadas.filter(
+            (r) => parseInt(r.hora) === horaActual,
+          );
           const turnosFijosAhora = turnosFijosActivos.filter(
             (t) =>
               t.dia === diaHoy && (t.horas || [t.hora]).includes(horaAhora),
           );
-
           if (turnosAhora.length === 0 && turnosFijosAhora.length === 0) {
             return (
-              <p className="text-gray-400 text-sm text-center py-4">
+              <p
+                className="text-sm text-center py-4"
+                style={{ color: "var(--text-muted)" }}
+              >
                 No hay turnos activos en este momento
               </p>
             );
           }
-
           return (
             <div className="flex flex-col gap-2">
               {turnosAhora.map((r, i) => (
                 <div
                   key={i}
-                  className="flex items-center justify-between bg-green-50 rounded-xl px-4 py-3"
+                  className="flex items-center justify-between rounded-xl px-4 py-3"
+                  style={{ backgroundColor: "var(--accent-light)" }}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-green-600">
+                    <span
+                      className="text-sm font-bold"
+                      style={{ color: "var(--accent)" }}
+                    >
                       {r.hora}
                     </span>
                     <div>
-                      <p className="text-sm font-medium text-gray-700">
+                      <p
+                        className="text-sm font-medium"
+                        style={{ color: "var(--text-primary)" }}
+                      >
                         {r.nombreJugador || "Jugador"}
                       </p>
-                      <p className="text-xs text-gray-400">
+                      <p
+                        className="text-xs"
+                        style={{ color: "var(--text-muted)" }}
+                      >
                         {r.canchaName || "Cancha"}
                       </p>
                     </div>
                   </div>
-                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-600">
+                  <span
+                    className="text-xs font-semibold px-2 py-1 rounded-full"
+                    style={{
+                      backgroundColor: "rgba(5,150,105,0.15)",
+                      color: "var(--accent)",
+                    }}
+                  >
                     En juego
                   </span>
                 </div>
@@ -318,22 +462,38 @@ export default function Dashboard() {
               {turnosFijosAhora.map((tf, i) => (
                 <div
                   key={`tf-${i}`}
-                  className="flex items-center justify-between bg-purple-50 rounded-xl px-4 py-3"
+                  className="flex items-center justify-between rounded-xl px-4 py-3"
+                  style={{ backgroundColor: "rgba(139,92,246,0.08)" }}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-purple-600">
+                    <span
+                      className="text-sm font-bold"
+                      style={{ color: "#8b5cf6" }}
+                    >
                       {(tf.horas || [tf.hora]).join(", ")}
                     </span>
                     <div>
-                      <p className="text-sm font-medium text-gray-700">
+                      <p
+                        className="text-sm font-medium"
+                        style={{ color: "var(--text-primary)" }}
+                      >
                         {tf.nombreJugador}
                       </p>
-                      <p className="text-xs text-gray-400">
+                      <p
+                        className="text-xs"
+                        style={{ color: "var(--text-muted)" }}
+                      >
                         {tf.canchaName} · Turno fijo
                       </p>
                     </div>
                   </div>
-                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-purple-100 text-purple-600">
+                  <span
+                    className="text-xs font-semibold px-2 py-1 rounded-full"
+                    style={{
+                      backgroundColor: "rgba(139,92,246,0.15)",
+                      color: "#8b5cf6",
+                    }}
+                  >
                     Fijo
                   </span>
                 </div>
@@ -345,8 +505,13 @@ export default function Dashboard() {
 
       {/* Torneos próximos */}
       {torneos.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
-          <h2 className="font-semibold text-gray-700 mb-3">Torneos próximos</h2>
+        <div className="themed-card rounded-2xl p-5 border mb-4">
+          <h2
+            className="font-semibold mb-3"
+            style={{ color: "var(--text-primary)" }}
+          >
+            Torneos próximos
+          </h2>
           <div className="flex flex-col gap-2">
             {torneos
               .filter(
@@ -357,13 +522,20 @@ export default function Dashboard() {
                 <div
                   key={t.id}
                   onClick={() => navigate(`/admin/torneos/${t.id}`)}
-                  className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3 cursor-pointer hover:bg-gray-100 transition"
+                  className="flex items-center justify-between rounded-xl px-4 py-3 cursor-pointer transition"
+                  style={{ backgroundColor: "var(--bg-card-hover)" }}
                 >
                   <div>
-                    <p className="text-sm font-semibold text-gray-700">
+                    <p
+                      className="text-sm font-semibold"
+                      style={{ color: "var(--text-primary)" }}
+                    >
                       {t.nombre}
                     </p>
-                    <p className="text-xs text-gray-400">
+                    <p
+                      className="text-xs"
+                      style={{ color: "var(--text-muted)" }}
+                    >
                       {t.sede} — {t.fechaInicio} → {t.fechaFin}
                     </p>
                   </div>
@@ -371,7 +543,7 @@ export default function Dashboard() {
                     className={`text-xs font-semibold px-2 py-1 rounded-full ${
                       t.status === "inscripcion"
                         ? "bg-blue-100 text-blue-700"
-                        : "bg-green-100 text-green-700"
+                        : "bg-emerald-100 text-emerald-700"
                     }`}
                   >
                     {t.status === "inscripcion" ? "Inscripción" : "En curso"}
@@ -381,7 +553,10 @@ export default function Dashboard() {
             {torneos.filter(
               (t) => t.status === "inscripcion" || t.status === "en_curso",
             ).length === 0 && (
-              <p className="text-gray-400 text-sm text-center py-4">
+              <p
+                className="text-sm text-center py-4"
+                style={{ color: "var(--text-muted)" }}
+              >
                 No hay torneos próximos
               </p>
             )}
@@ -393,13 +568,14 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => navigate("/admin/torneos/nuevo")}
-          className="bg-green-600 text-white rounded-2xl p-4 text-sm font-semibold hover:bg-green-700 transition"
+          className="rounded-2xl p-4 text-sm font-semibold text-white transition hover:opacity-90"
+          style={{ backgroundColor: "var(--accent)" }}
         >
           + Crear torneo
         </button>
         <button
           onClick={() => navigate("/admin/canchas")}
-          className="bg-blue-600 text-white rounded-2xl p-4 text-sm font-semibold hover:bg-blue-700 transition"
+          className="rounded-2xl p-4 text-sm font-semibold text-white transition hover:opacity-90 bg-blue-600"
         >
           Gestionar canchas
         </button>
