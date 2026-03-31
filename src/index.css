@@ -68,6 +68,22 @@ body {
   transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
+/* Inputs globales adaptados al tema */
+input, select, textarea {
+  border: 1px solid var(--border-input);
+  color: var(--text-primary);
+  background-color: var(--bg-input);
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--text-muted);
+}
+
+option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

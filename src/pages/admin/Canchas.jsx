@@ -22,10 +22,10 @@ const horasDelDia = Array.from({ length: 24 }, (_, i) => {
 });
 
 const inputClass =
-  "border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
+  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
 const selectClass =
-  "border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full bg-white";
-const labelClass = "text-xs font-semibold text-gray-500 mb-1 block";
+  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
+const labelClass = "text-xs font-semibold mb-1 block";
 
 export default function Canchas() {
   const { user } = useAuthStore();
@@ -256,15 +256,21 @@ export default function Canchas() {
   };
 
   if (loading) {
-    return <div className="text-center text-gray-400 py-12">Cargando...</div>;
+    return (
+      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
+        Cargando...
+      </div>
+    );
   }
 
   if (!club) {
     return (
-      <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 shadow-sm">
+      <div className="text-center py-16 themed-card rounded-2xl border">
         <div className="text-5xl mb-4">🏟️</div>
-        <p className="text-gray-500 font-medium">No tenés un club registrado</p>
-        <p className="text-gray-400 text-sm mt-1">
+        <p className="font-medium" style={{ color: "var(--text-muted)" }}>
+          No tenés un club registrado
+        </p>
+        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
           Registrate como club para gestionar canchas y turnos
         </p>
       </div>
@@ -274,17 +280,28 @@ export default function Canchas() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-gray-800">Canchas y turnos</h1>
+        <h1
+          className="text-xl font-bold"
+          style={{ color: "var(--text-primary)" }}
+        >
+          Canchas y turnos
+        </h1>
         <div className="flex gap-2">
           <button
             onClick={() => setMostrarConfig(!mostrarConfig)}
-            className="px-3 py-2 rounded-xl text-sm font-semibold bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
+            className="px-3 py-2 rounded-xl text-sm font-semibold transition hover:opacity-80"
+            style={{
+              backgroundColor: "var(--bg-card)",
+              color: "var(--text-primary)",
+              border: "1px solid var(--border-card)",
+            }}
           >
             ⚙ Config
           </button>
           <button
             onClick={() => setMostrarForm(!mostrarForm)}
-            className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-700 transition"
+            className="text-white px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90 transition"
+            style={{ backgroundColor: "var(--accent)" }}
           >
             + Nueva cancha
           </button>
@@ -292,7 +309,10 @@ export default function Canchas() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-gray-200">
+      <div
+        className="flex gap-2 mb-6 border-b"
+        style={{ borderColor: "var(--border-card)" }}
+      >
         {["Canchas", "Turnos fijos"].map((t) => (
           <button
             key={t}
@@ -300,8 +320,9 @@ export default function Canchas() {
             className={`px-4 py-2 text-sm font-semibold transition border-b-2 -mb-px ${
               tabCanchas === t
                 ? "border-green-600 text-green-600"
-                : "border-transparent text-gray-400 hover:text-gray-600"
+                : "border-transparent hover:opacity-80"
             }`}
+            style={tabCanchas !== t ? { color: "var(--text-muted)" } : {}}
           >
             {t}
           </button>
@@ -312,8 +333,11 @@ export default function Canchas() {
         <>
           {/* Configuración del club */}
           {mostrarConfig && (
-            <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
-              <h2 className="font-semibold text-gray-700 mb-3">
+            <div className="themed-card rounded-2xl p-5 border mb-4">
+              <h2
+                className="font-semibold mb-3"
+                style={{ color: "var(--text-primary)" }}
+              >
                 Configuración de reservas
               </h2>
               <div className="flex flex-col gap-3">
@@ -329,12 +353,18 @@ export default function Canchas() {
                     }
                     className="w-4 h-4 accent-green-600"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span
+                    className="text-sm"
+                    style={{ color: "var(--text-muted)" }}
+                  >
                     Reserva directa (sin aprobación del club)
                   </span>
                 </div>
                 <div>
-                  <label className={labelClass}>
+                  <label
+                    className={labelClass}
+                    style={{ color: "var(--text-muted)" }}
+                  >
                     Días de anticipación máxima
                   </label>
                   <input
@@ -353,7 +383,8 @@ export default function Canchas() {
                 </div>
                 <button
                   onClick={handleGuardarConfig}
-                  className="bg-green-600 text-white font-semibold py-2 rounded-xl hover:bg-green-700 transition"
+                  className="text-white font-semibold py-2 rounded-xl hover:opacity-90 transition"
+                  style={{ backgroundColor: "var(--accent)" }}
                 >
                   Guardar configuración
                 </button>
@@ -363,7 +394,7 @@ export default function Canchas() {
 
           {/* Formulario nueva cancha */}
           {mostrarForm && (
-            <div className="bg-white rounded-2xl p-5 shadow-sm border border-green-200 mb-4">
+            <div className="themed-card rounded-2xl p-5 border border-green-200 mb-4">
               <h2 className="font-semibold text-green-700 mb-3">
                 Nueva cancha
               </h2>
@@ -372,7 +403,12 @@ export default function Canchas() {
                 className="flex flex-col gap-3"
               >
                 <div>
-                  <label className={labelClass}>Nombre</label>
+                  <label
+                    className={labelClass}
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Nombre
+                  </label>
                   <input
                     type="text"
                     placeholder="Ej: Cancha 1"
@@ -386,7 +422,12 @@ export default function Canchas() {
                 </div>
                 <div className="flex gap-3">
                   <div className="flex-1">
-                    <label className={labelClass}>Superficie</label>
+                    <label
+                      className={labelClass}
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Superficie
+                    </label>
                     <select
                       value={formCancha.superficie}
                       onChange={(e) =>
@@ -405,7 +446,10 @@ export default function Canchas() {
                     </select>
                   </div>
                   <div className="flex-1">
-                    <label className={labelClass}>
+                    <label
+                      className={labelClass}
+                      style={{ color: "var(--text-muted)" }}
+                    >
                       Precio base por turno ($)
                     </label>
                     <input
@@ -420,7 +464,10 @@ export default function Canchas() {
                       }
                       className={inputClass}
                     />
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p
+                      className="text-xs mt-1"
+                      style={{ color: "var(--text-muted)" }}
+                    >
                       Se aplica al seleccionar horarios nuevos
                     </p>
                   </div>
@@ -437,10 +484,20 @@ export default function Canchas() {
                     }
                     className="w-4 h-4 accent-green-600"
                   />
-                  <span className="text-sm text-gray-600">Cancha techada</span>
+                  <span
+                    className="text-sm"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Cancha techada
+                  </span>
                 </div>
                 <div>
-                  <label className={labelClass}>Horarios y precios</label>
+                  <label
+                    className={labelClass}
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Horarios y precios
+                  </label>
                   <div className="flex flex-wrap gap-1 mb-2">
                     {horasDelDia.map((hora) => (
                       <button
@@ -450,7 +507,7 @@ export default function Canchas() {
                         className={`px-2 py-1 rounded-lg text-xs font-semibold transition ${
                           formCancha.horarios[hora] !== undefined
                             ? "bg-green-600 text-white"
-                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                            : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
                         }`}
                       >
                         {hora}
@@ -458,15 +515,24 @@ export default function Canchas() {
                     ))}
                   </div>
                   {Object.keys(formCancha.horarios).length > 0 && (
-                    <div className="bg-gray-50 rounded-xl p-3 flex flex-col gap-1">
-                      <p className="text-xs font-semibold text-gray-500 mb-1">
+                    <div
+                      className="rounded-xl p-3 flex flex-col gap-1"
+                      style={{ backgroundColor: "var(--bg-card-hover)" }}
+                    >
+                      <p
+                        className="text-xs font-semibold mb-1"
+                        style={{ color: "var(--text-muted)" }}
+                      >
                         Precio por horario
                       </p>
                       {Object.keys(formCancha.horarios)
                         .sort()
                         .map((hora) => (
                           <div key={hora} className="flex items-center gap-2">
-                            <span className="text-xs text-gray-600 w-14">
+                            <span
+                              className="text-xs w-14"
+                              style={{ color: "var(--text-muted)" }}
+                            >
                               {hora}
                             </span>
                             <input
@@ -476,14 +542,22 @@ export default function Canchas() {
                               onChange={(e) =>
                                 setPrecioHorario(hora, e.target.value)
                               }
-                              className="w-24 border border-gray-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-2 focus:ring-green-500"
+                              className="themed-input w-24 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-2 focus:ring-green-500"
                             />
-                            <span className="text-xs text-gray-400">$</span>
+                            <span
+                              className="text-xs"
+                              style={{ color: "var(--text-muted)" }}
+                            >
+                              $
+                            </span>
                           </div>
                         ))}
                     </div>
                   )}
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p
+                    className="text-xs mt-1"
+                    style={{ color: "var(--text-muted)" }}
+                  >
                     {Object.keys(formCancha.horarios).length} horarios
                     seleccionados
                   </p>
@@ -491,7 +565,8 @@ export default function Canchas() {
                 <button
                   type="submit"
                   disabled={guardando || !formCancha.nombre.trim()}
-                  className="bg-green-600 text-white font-semibold py-2 rounded-xl hover:bg-green-700 transition disabled:opacity-50"
+                  className="text-white font-semibold py-2 rounded-xl hover:opacity-90 transition disabled:opacity-50"
+                  style={{ backgroundColor: "var(--accent)" }}
                 >
                   {guardando ? "Creando..." : "Crear cancha"}
                 </button>
@@ -501,12 +576,15 @@ export default function Canchas() {
 
           {/* Lista de canchas */}
           {canchas.length === 0 && !mostrarForm && (
-            <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 shadow-sm mb-4">
+            <div className="text-center py-16 themed-card rounded-2xl border mb-4">
               <div className="text-5xl mb-4">🏸</div>
-              <p className="text-gray-500 font-medium">
+              <p className="font-medium" style={{ color: "var(--text-muted)" }}>
                 No tenés canchas creadas
               </p>
-              <p className="text-gray-400 text-sm mt-1">
+              <p
+                className="text-sm mt-1"
+                style={{ color: "var(--text-muted)" }}
+              >
                 Hacé clic en "+ Nueva cancha" para empezar
               </p>
             </div>
@@ -517,7 +595,7 @@ export default function Canchas() {
               {canchas.map((cancha) => (
                 <div
                   key={cancha.id}
-                  className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
+                  className="themed-card rounded-2xl p-5 border"
                 >
                   {editandoCancha === cancha.id && editForm ? (
                     <div className="flex flex-col gap-3">
@@ -531,7 +609,8 @@ export default function Canchas() {
                               setEditandoCancha(null);
                               setEditForm(null);
                             }}
-                            className="text-xs font-semibold text-gray-400 hover:text-gray-600"
+                            className="text-xs font-semibold hover:opacity-80"
+                            style={{ color: "var(--text-muted)" }}
                           >
                             Cancelar
                           </button>
@@ -544,7 +623,12 @@ export default function Canchas() {
                         </div>
                       </div>
                       <div>
-                        <label className={labelClass}>Nombre</label>
+                        <label
+                          className={labelClass}
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          Nombre
+                        </label>
                         <input
                           type="text"
                           value={editForm.nombre}
@@ -556,7 +640,12 @@ export default function Canchas() {
                       </div>
                       <div className="flex gap-3">
                         <div className="flex-1">
-                          <label className={labelClass}>Superficie</label>
+                          <label
+                            className={labelClass}
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            Superficie
+                          </label>
                           <select
                             value={editForm.superficie}
                             onChange={(e) =>
@@ -575,7 +664,12 @@ export default function Canchas() {
                           </select>
                         </div>
                         <div className="flex-1">
-                          <label className={labelClass}>Precio base ($)</label>
+                          <label
+                            className={labelClass}
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            Precio base ($)
+                          </label>
                           <input
                             type="number"
                             min="0"
@@ -602,10 +696,20 @@ export default function Canchas() {
                           }
                           className="w-4 h-4 accent-green-600"
                         />
-                        <span className="text-sm text-gray-600">Techada</span>
+                        <span
+                          className="text-sm"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          Techada
+                        </span>
                       </div>
                       <div>
-                        <label className={labelClass}>Horarios y precios</label>
+                        <label
+                          className={labelClass}
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          Horarios y precios
+                        </label>
                         <div className="flex flex-wrap gap-1 mb-2">
                           {horasDelDia.map((hora) => (
                             <button
@@ -615,7 +719,7 @@ export default function Canchas() {
                               className={`px-2 py-1 rounded-lg text-xs font-semibold transition ${
                                 (editForm.horarios || {})[hora] !== undefined
                                   ? "bg-green-600 text-white"
-                                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                                  : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
                               }`}
                             >
                               {hora}
@@ -623,8 +727,14 @@ export default function Canchas() {
                           ))}
                         </div>
                         {Object.keys(editForm.horarios || {}).length > 0 && (
-                          <div className="bg-gray-50 rounded-xl p-3 flex flex-col gap-1">
-                            <p className="text-xs font-semibold text-gray-500 mb-1">
+                          <div
+                            className="rounded-xl p-3 flex flex-col gap-1"
+                            style={{ backgroundColor: "var(--bg-card-hover)" }}
+                          >
+                            <p
+                              className="text-xs font-semibold mb-1"
+                              style={{ color: "var(--text-muted)" }}
+                            >
                               Precio por horario
                             </p>
                             {Object.keys(editForm.horarios || {})
@@ -634,7 +744,10 @@ export default function Canchas() {
                                   key={hora}
                                   className="flex items-center gap-2"
                                 >
-                                  <span className="text-xs text-gray-600 w-14">
+                                  <span
+                                    className="text-xs w-14"
+                                    style={{ color: "var(--text-muted)" }}
+                                  >
                                     {hora}
                                   </span>
                                   <input
@@ -644,9 +757,12 @@ export default function Canchas() {
                                     onChange={(e) =>
                                       setPrecioHorarioEdit(hora, e.target.value)
                                     }
-                                    className="w-24 border border-gray-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    className="themed-input w-24 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-2 focus:ring-green-500"
                                   />
-                                  <span className="text-xs text-gray-400">
+                                  <span
+                                    className="text-xs"
+                                    style={{ color: "var(--text-muted)" }}
+                                  >
                                     $
                                   </span>
                                 </div>
@@ -659,14 +775,29 @@ export default function Canchas() {
                     <div>
                       <div className="flex items-center justify-between">
                         <div>
-                          <h3 className="font-semibold text-gray-800">
+                          <h3
+                            className="font-semibold"
+                            style={{ color: "var(--text-primary)" }}
+                          >
                             {cancha.nombre}
                           </h3>
                           <div className="flex gap-2 mt-1 flex-wrap">
-                            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                            <span
+                              className="text-xs px-2 py-0.5 rounded-full"
+                              style={{
+                                backgroundColor: "var(--bg-card-hover)",
+                                color: "var(--text-muted)",
+                              }}
+                            >
                               {cancha.superficie}
                             </span>
-                            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                            <span
+                              className="text-xs px-2 py-0.5 rounded-full"
+                              style={{
+                                backgroundColor: "var(--bg-card-hover)",
+                                color: "var(--text-muted)",
+                              }}
+                            >
                               {cancha.techada ? "Techada" : "Al aire libre"}
                             </span>
                             <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
@@ -710,28 +841,40 @@ export default function Canchas() {
 
           {/* Grilla de turnos del día */}
           {canchas.length > 0 && (
-            <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <div className="themed-card rounded-2xl p-5 border">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-gray-700">Turnos del día</h2>
+                <h2
+                  className="font-semibold"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  Turnos del día
+                </h2>
                 <input
                   type="date"
                   value={fechaSeleccionada}
                   onChange={(e) => setFechaSeleccionada(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="themed-input rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-100">
-                      <th className="text-left py-2 pr-3 text-gray-400 text-xs">
+                    <tr
+                      className="border-b"
+                      style={{ borderColor: "var(--border-card)" }}
+                    >
+                      <th
+                        className="text-left py-2 pr-3 text-xs"
+                        style={{ color: "var(--text-muted)" }}
+                      >
                         Hora
                       </th>
                       {canchas.map((c) => (
                         <th
                           key={c.id}
-                          className="text-center py-2 px-2 text-gray-400 text-xs"
+                          className="text-center py-2 px-2 text-xs"
+                          style={{ color: "var(--text-muted)" }}
                         >
                           {c.nombre}
                         </th>
@@ -746,8 +889,15 @@ export default function Canchas() {
                       if (!algunaCanchaDisponible) return null;
 
                       return (
-                        <tr key={hora} className="border-b border-gray-50">
-                          <td className="py-2 pr-3 text-gray-500 font-medium">
+                        <tr
+                          key={hora}
+                          className="border-b"
+                          style={{ borderColor: "var(--border-card)" }}
+                        >
+                          <td
+                            className="py-2 pr-3 font-medium"
+                            style={{ color: "var(--text-muted)" }}
+                          >
                             {hora}
                           </td>
                           {canchas.map((cancha) => {
@@ -760,7 +910,13 @@ export default function Canchas() {
                                   key={cancha.id}
                                   className="text-center py-2 px-2"
                                 >
-                                  <span className="text-xs text-gray-300">
+                                  <span
+                                    className="text-xs"
+                                    style={{
+                                      color: "var(--text-muted)",
+                                      opacity: 0.3,
+                                    }}
+                                  >
                                     —
                                   </span>
                                 </td>
@@ -845,7 +1001,10 @@ export default function Canchas() {
                                   <span className="text-xs text-green-500 font-semibold block">
                                     Libre
                                   </span>
-                                  <span className="text-xs text-gray-400">
+                                  <span
+                                    className="text-xs"
+                                    style={{ color: "var(--text-muted)" }}
+                                  >
                                     ${precioHora}
                                   </span>
                                 </div>

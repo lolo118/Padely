@@ -11,8 +11,8 @@ import {
 import { db } from "../../lib/firebase";
 
 const inputClass =
-  "border border-slate-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full";
-const labelClass = "text-xs font-semibold text-slate-500 mb-1 block";
+  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full";
+const labelClass = "text-xs font-semibold mb-1 block";
 
 export default function OrgEntidad() {
   const { user } = useAuthStore();
@@ -75,19 +75,19 @@ export default function OrgEntidad() {
   };
 
   if (loading)
-    return <div className="text-center text-slate-400 py-12">Cargando...</div>;
+    return <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
 
   if (!entidad)
     return (
-      <div className="text-center py-16 bg-white rounded-2xl border border-slate-200">
-        <p className="text-slate-500">No se encontró tu entidad organizadora</p>
+      <div className="text-center py-16 themed-card rounded-2xl border">
+        <p style={{ color: "var(--text-muted)" }}>No se encontró tu entidad organizadora</p>
       </div>
     );
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold text-slate-800">Mi entidad</h1>
+        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Mi entidad</h1>
         <button
           onClick={handleGuardar}
           disabled={guardando}
@@ -103,10 +103,10 @@ export default function OrgEntidad() {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl p-6 border border-slate-200">
+      <div className="themed-card rounded-2xl p-6 border">
         <div className="flex flex-col gap-4">
           <div>
-            <label className={labelClass}>Nombre de la entidad</label>
+            <label className={labelClass} style={{ color: "var(--text-muted)" }}>Nombre de la entidad</label>
             <input
               type="text"
               value={form.nombre}
@@ -115,7 +115,7 @@ export default function OrgEntidad() {
             />
           </div>
           <div>
-            <label className={labelClass}>Descripción / Bio</label>
+            <label className={labelClass} style={{ color: "var(--text-muted)" }}>Descripción / Bio</label>
             <textarea
               value={form.bio}
               onChange={(e) => setForm({ ...form, bio: e.target.value })}
@@ -125,7 +125,7 @@ export default function OrgEntidad() {
           </div>
           <div className="flex gap-3">
             <div className="flex-1">
-              <label className={labelClass}>Teléfono</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Teléfono</label>
               <input
                 type="text"
                 value={form.telefono}
@@ -134,7 +134,7 @@ export default function OrgEntidad() {
               />
             </div>
             <div className="flex-1">
-              <label className={labelClass}>Email</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Email</label>
               <input
                 type="email"
                 value={form.email}
@@ -144,7 +144,7 @@ export default function OrgEntidad() {
             </div>
           </div>
           <div>
-            <label className={labelClass}>Instagram</label>
+            <label className={labelClass} style={{ color: "var(--text-muted)" }}>Instagram</label>
             <input
               type="text"
               placeholder="@entidad"
@@ -154,7 +154,7 @@ export default function OrgEntidad() {
             />
           </div>
           <div>
-            <label className={labelClass}>Facebook</label>
+            <label className={labelClass} style={{ color: "var(--text-muted)" }}>Facebook</label>
             <input
               type="text"
               value={form.facebook}
@@ -163,13 +163,25 @@ export default function OrgEntidad() {
             />
           </div>
           <div>
-            <label className={labelClass}>Sitio web</label>
+            <label className={labelClass} style={{ color: "var(--text-muted)" }}>Sitio web</label>
             <input
               type="text"
               value={form.website}
               onChange={(e) => setForm({ ...form, website: e.target.value })}
               className={inputClass}
             />
+          </div>
+          <div>
+            <label className={labelClass}>Logo de la entidad</label>
+            <div className="border-2 border-dashed rounded-xl p-6 text-center" style={{ borderColor: "var(--border-input)" }}>
+              <div className="w-16 h-16 rounded-xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-8 h-8" style={{ color: "var(--text-muted)" }}>
+                  <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium" style={{ color: "var(--text-muted)" }}>Subida de logo disponible próximamente</p>
+              <p className="text-xs mt-1" style={{ color: "var(--text-muted)", opacity: 0.6 }}>PNG o JPG, máximo 2MB</p>
+            </div>
           </div>
         </div>
       </div>

@@ -17,7 +17,7 @@ export default function OrgDashboard() {
   }, [user]);
 
   if (loading)
-    return <div className="text-center text-slate-400 py-12">Cargando...</div>;
+    return <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
 
   const activos = torneos.filter(
     (t) => t.status === "inscripcion" || t.status === "en_curso",
@@ -27,40 +27,40 @@ export default function OrgDashboard() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-slate-800">Dashboard</h1>
-        <p className="text-sm text-slate-400 mt-1">
+        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Dashboard</h1>
+        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
           Resumen de tu actividad como organizador
         </p>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-6">
         <div
-          className="bg-white rounded-2xl p-5 border border-slate-200 text-center card-hover cursor-pointer"
+          className="themed-card rounded-2xl p-5 border text-center card-hover cursor-pointer"
           onClick={() => navigate("/org/torneos")}
         >
           <p className="text-3xl font-bold text-blue-600">{torneos.length}</p>
-          <p className="text-xs text-slate-400 mt-1">Torneos totales</p>
+          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Torneos totales</p>
         </div>
         <div
-          className="bg-white rounded-2xl p-5 border border-slate-200 text-center card-hover cursor-pointer"
+          className="themed-card rounded-2xl p-5 border text-center card-hover cursor-pointer"
           onClick={() => navigate("/org/torneos")}
         >
           <p className="text-3xl font-bold text-emerald-600">
             {activos.length}
           </p>
-          <p className="text-xs text-slate-400 mt-1">Activos</p>
+          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Activos</p>
         </div>
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 text-center">
-          <p className="text-3xl font-bold text-slate-500">
+        <div className="themed-card rounded-2xl p-5 border text-center">
+          <p className="text-3xl font-bold" style={{ color: "var(--text-muted)" }}>
             {finalizados.length}
           </p>
-          <p className="text-xs text-slate-400 mt-1">Finalizados</p>
+          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Finalizados</p>
         </div>
       </div>
 
       {activos.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 mb-4">
-          <h2 className="font-semibold text-slate-700 text-sm mb-3">
+        <div className="themed-card rounded-2xl p-5 border mb-4">
+          <h2 className="font-semibold text-sm mb-3" style={{ color: "var(--text-primary)" }}>
             Torneos activos
           </h2>
           <div className="flex flex-col gap-2">
@@ -68,13 +68,14 @@ export default function OrgDashboard() {
               <div
                 key={t.id}
                 onClick={() => navigate(`/org/torneos/${t.id}`)}
-                className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 cursor-pointer hover:bg-slate-100 transition"
+                className="flex items-center justify-between rounded-xl px-4 py-3 cursor-pointer transition"
+                style={{ backgroundColor: "var(--bg-card-hover)" }}
               >
                 <div>
-                  <p className="text-sm font-semibold text-slate-700">
+                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                     {t.nombre}
                   </p>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                     {t.sede} — {t.fechaInicio}
                   </p>
                 </div>

@@ -1,9 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { onAuthChange } from "./services/authService";
+import { onAuthChange, getUserData } from "./services/authService";
 import { useAuthStore } from "./store/authStore";
 import useThemeStore from "./store/themeStore";
-import Inicio from "./pages/Inicio"; // ✅ Import agregado
+import Inicio from "./pages/Inicio";
 
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
@@ -39,7 +39,10 @@ function ProtectedRoute({ children }) {
   const { user, loading } = useAuthStore();
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center text-gray-500">
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ color: "var(--text-muted)" }}
+      >
         Cargando...
       </div>
     );
@@ -47,18 +50,73 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+function RoleRoute({ children, allowedRoles }) {
+  const { user, loading } = useAuthStore();
+  const [userRole, setUserRole] = useState(null);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    const verificar = async () => {
+      if (!user) {
+        setChecking(false);
+        return;
+      }
+      try {
+        const data = await getUserData(user.uid);
+        setUserRole(data?.role || ["jugador"]);
+      } catch {
+        setUserRole(["jugador"]);
+      }
+      setChecking(false);
+    };
+    verificar();
+  }, [user]);
+
+  if (loading || checking)
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ color: "var(--text-muted)" }}
+      >
+        Cargando...
+      </div>
+    );
+  if (!user) return <Navigate to="/login" />;
+
+  const tienePermiso =
+    userRole && allowedRoles.some((r) => userRole.includes(r));
+  if (!tienePermiso) {
+    if (userRole.includes("club")) return <Navigate to="/admin" />;
+    if (userRole.includes("organizador")) return <Navigate to="/org" />;
+    return <Navigate to="/inicio" />;
+  }
+
+  return children;
+}
+
 export default function App() {
   const { setUser, setLoading } = useAuthStore();
   const { initTheme } = useThemeStore();
 
-  useEffect(() => { initTheme(); }, [initTheme]);
+  useEffect(() => {
+    initTheme();
+  }, [initTheme]);
 
   useEffect(() => {
+    let first = true;
     const unsub = onAuthChange((user) => {
       setUser(user);
       setLoading(false);
+      first = false;
     });
-    return () => unsub();
+    // Si después de 3 segundos no resolvió, parar el loading
+    const timeout = setTimeout(() => {
+      if (first) setLoading(false);
+    }, 3000);
+    return () => {
+      unsub();
+      clearTimeout(timeout);
+    };
   }, [setUser, setLoading]);
 
   return (
@@ -72,7 +130,14 @@ export default function App() {
           element={<AceptarInvitacion />}
         />
 
-        <Route element={<ProtectedRoute><PlayerLayout /></ProtectedRoute>}>
+        {/* Rutas del jugador - accesibles por todos los logueados */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <PlayerLayout />
+            </ProtectedRoute>
+          }
+        >
           <Route path="/inicio" element={<Inicio />} />
           <Route path="/hub" element={<Hub />} />
           <Route path="/torneos" element={<Torneos />} />
@@ -83,12 +148,13 @@ export default function App() {
           <Route path="/club/:id" element={<ClubPublico />} />
         </Route>
 
+        {/* Rutas del admin club - solo clubs */}
         <Route
           path="/admin"
           element={
-            <ProtectedRoute>
+            <RoleRoute allowedRoles={["club"]}>
               <ClubLayout />
-            </ProtectedRoute>
+            </RoleRoute>
           }
         >
           <Route index element={<Dashboard />} />
@@ -100,12 +166,13 @@ export default function App() {
           <Route path="configuracion" element={<AdminConfiguracion />} />
         </Route>
 
+        {/* Rutas del organizador - solo organizadores */}
         <Route
           path="/org"
           element={
-            <ProtectedRoute>
+            <RoleRoute allowedRoles={["organizador"]}>
               <OrgLayout />
-            </ProtectedRoute>
+            </RoleRoute>
           }
         >
           <Route index element={<OrgDashboard />} />

@@ -33,7 +33,7 @@ export default function OrgTorneos() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold text-slate-800">Mis torneos</h1>
+        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Mis torneos</h1>
         <button
           onClick={() => navigate("/org/torneos/nuevo")}
           className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition"
@@ -43,16 +43,16 @@ export default function OrgTorneos() {
       </div>
 
       {loading && (
-        <div className="text-center text-slate-400 py-12">Cargando...</div>
+        <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando...</div>
       )}
 
       {!loading && torneos.length === 0 && (
-        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200">
+        <div className="text-center py-16 themed-card rounded-2xl border">
           <div className="text-5xl mb-4">🏆</div>
-          <p className="text-slate-500 font-medium">
+          <p className="font-medium" style={{ color: "var(--text-muted)" }}>
             Todavía no creaste ningún torneo
           </p>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
             Hacé clic en "Nuevo torneo" para empezar
           </p>
         </div>
@@ -64,15 +64,15 @@ export default function OrgTorneos() {
             <div
               key={t.id}
               onClick={() => navigate(`/org/torneos/${t.id}`)}
-              className="bg-white rounded-2xl p-5 border border-slate-200 cursor-pointer card-hover"
+              className="themed-card rounded-2xl p-5 border cursor-pointer card-hover"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1">
-                  <h2 className="font-semibold text-slate-800">{t.nombre}</h2>
-                  <p className="text-sm text-slate-400 mt-0.5">
+                  <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>{t.nombre}</h2>
+                  <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
                     {t.sede} — {t.ciudad}, {t.provincia}
                   </p>
-                  <p className="text-sm text-slate-400 mt-0.5">
+                  <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
                     {t.fechaInicio} → {t.fechaFin}
                   </p>
                   <div className="flex gap-2 mt-2 flex-wrap">

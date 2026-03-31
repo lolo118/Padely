@@ -182,7 +182,7 @@ export default function TabTurnosFijos({ clubId }) {
 
   if (loading) {
     return (
-      <div className="text-center text-gray-400 py-12">
+      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
         Cargando turnos fijos...
       </div>
     );
@@ -194,7 +194,7 @@ export default function TabTurnosFijos({ clubId }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-gray-800">Turnos fijos</h2>
+        <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>Turnos fijos</h2>
         {!mostrarForm && (
           <button
             onClick={() => {
@@ -211,14 +211,14 @@ export default function TabTurnosFijos({ clubId }) {
 
       {/* Formulario */}
       {mostrarForm && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-green-200">
+        <div className="themed-card border rounded-2xl p-5 border-green-200">
           <h3 className="font-semibold text-green-700 mb-3">
             {editandoId ? "Editar turno fijo" : "Nuevo turno fijo"}
           </h3>
           <form onSubmit={handleGuardar} className="flex flex-col gap-3">
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="text-xs font-semibold text-gray-500 mb-1 block">
+                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>
                   Cancha
                 </label>
                 <select
@@ -226,7 +226,7 @@ export default function TabTurnosFijos({ clubId }) {
                   onChange={(e) =>
                     setForm({ ...form, canchaId: e.target.value, horas: [] })
                   }
-                  className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full bg-white"
+                  className="themed-input rounded-lg px-4 py-2 text-sm w-full"
                   required
                 >
                   <option value="">Seleccionar cancha</option>
@@ -238,13 +238,13 @@ export default function TabTurnosFijos({ clubId }) {
                 </select>
               </div>
               <div className="flex-1">
-                <label className="text-xs font-semibold text-gray-500 mb-1 block">
+                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>
                   Día de la semana
                 </label>
                 <select
                   value={form.dia}
                   onChange={(e) => setForm({ ...form, dia: e.target.value })}
-                  className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full bg-white"
+                  className="themed-input rounded-lg px-4 py-2 text-sm w-full"
                 >
                   {diasSemana.map((d) => (
                     <option key={d} value={d}>
@@ -257,7 +257,7 @@ export default function TabTurnosFijos({ clubId }) {
 
             {/* Selección múltiple de horas */}
             <div>
-              <label className="text-xs font-semibold text-gray-500 mb-1 block">
+              <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>
                 Horarios ({form.horas.length}hs seleccionadas)
               </label>
               {horariosCancha.length > 0 ? (
@@ -270,7 +270,7 @@ export default function TabTurnosFijos({ clubId }) {
                       className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
                         form.horas.includes(hora)
                           ? "bg-green-600 text-white"
-                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                          : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
                       }`}
                     >
                       {hora}
@@ -278,7 +278,7 @@ export default function TabTurnosFijos({ clubId }) {
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-gray-400 py-2">
+                <p className="text-xs py-2" style={{ color: "var(--text-muted)" }}>
                   Seleccioná una cancha primero
                 </p>
               )}
@@ -293,7 +293,7 @@ export default function TabTurnosFijos({ clubId }) {
 
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="text-xs font-semibold text-gray-500 mb-1 block">
+                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>
                   Nombre del jugador/grupo
                 </label>
                 <input
@@ -303,12 +303,12 @@ export default function TabTurnosFijos({ clubId }) {
                   onChange={(e) =>
                     setForm({ ...form, nombreJugador: e.target.value })
                   }
-                  className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full"
+                  className="themed-input rounded-lg px-4 py-2 text-sm w-full"
                   required
                 />
               </div>
               <div className="flex-1">
-                <label className="text-xs font-semibold text-gray-500 mb-1 block">
+                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>
                   Teléfono
                 </label>
                 <input
@@ -318,13 +318,13 @@ export default function TabTurnosFijos({ clubId }) {
                   onChange={(e) =>
                     setForm({ ...form, telefono: e.target.value })
                   }
-                  className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full"
+                  className="themed-input rounded-lg px-4 py-2 text-sm w-full"
                 />
               </div>
             </div>
 
             <div className="flex-1">
-              <label className="text-xs font-semibold text-gray-500 mb-1 block">
+              <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>
                 Precio total del pack ($)
               </label>
               <input
@@ -334,12 +334,12 @@ export default function TabTurnosFijos({ clubId }) {
                 onChange={(e) =>
                   setForm({ ...form, precioTotal: e.target.value })
                 }
-                className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full"
+                className="themed-input rounded-lg px-4 py-2 text-sm w-full"
               />
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-gray-500 mb-1 block">
+              <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>
                 Descripción del pack/combo (opcional)
               </label>
               <textarea
@@ -349,10 +349,10 @@ export default function TabTurnosFijos({ clubId }) {
                   setForm({ ...form, packDescripcion: e.target.value })
                 }
                 rows={3}
-                className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
+                className="themed-input rounded-lg px-4 py-2 text-sm w-full resize-none"
               />
               <div className="mt-2">
-                <p className="text-xs text-gray-400 mb-1">Sugerencias:</p>
+                <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Sugerencias:</p>
                 <div className="flex flex-wrap gap-1">
                   {packSugerencias.map((sug, i) => (
                     <button
@@ -379,7 +379,7 @@ export default function TabTurnosFijos({ clubId }) {
               <button
                 type="button"
                 onClick={cancelarForm}
-                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
+                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
               >
                 Cancelar
               </button>
@@ -406,10 +406,10 @@ export default function TabTurnosFijos({ clubId }) {
 
       {/* Turnos activos */}
       {activos.length === 0 && suspendidos.length === 0 && !mostrarForm && (
-        <div className="text-center py-12 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div className="text-center py-12 themed-card border rounded-2xl">
           <div className="text-4xl mb-3">📌</div>
-          <p className="text-gray-500 font-medium">No hay turnos fijos</p>
-          <p className="text-gray-400 text-sm mt-1">
+          <p className="font-medium" style={{ color: "var(--text-muted)" }}>No hay turnos fijos</p>
+          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
             Los turnos fijos bloquean automáticamente el horario en la grilla
           </p>
         </div>
@@ -417,19 +417,19 @@ export default function TabTurnosFijos({ clubId }) {
 
       {activos.length > 0 && (
         <div>
-          <p className="text-sm font-semibold text-gray-500 mb-2">
+          <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
             Activos ({activos.length})
           </p>
           <div className="flex flex-col gap-3">
             {activos.map((turno) => (
               <div
                 key={turno.id}
-                className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
+                className="themed-card border rounded-2xl p-5"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <h3 className="font-semibold text-gray-800">
+                      <h3 className="font-semibold" style={{ color: "var(--text-primary)" }}>
                         {turno.canchaName} — {turno.dia}
                       </h3>
                       <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-semibold">
@@ -440,11 +440,11 @@ export default function TabTurnosFijos({ clubId }) {
                       {(turno.horas || [turno.hora]).join(", ")} (
                       {(turno.horas || [turno.hora]).length}hs)
                     </p>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <p className="text-sm mt-1" style={{ color: "var(--text-primary)" }}>
                       {turno.nombreJugador}
                     </p>
                     {turno.telefono && (
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                         Tel: {turno.telefono}
                       </p>
                     )}
@@ -487,7 +487,7 @@ export default function TabTurnosFijos({ clubId }) {
                 </div>
 
                 {dandoBajaId === turno.id && (
-                  <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-2">
+                  <div className="mt-3 pt-3 border-t flex flex-col gap-2" style={{ borderColor: "var(--border-card)" }}>
                     <input
                       type="text"
                       placeholder="Motivo de suspensión (ej: Torneo del 25 al 28 de marzo)"
@@ -501,7 +501,7 @@ export default function TabTurnosFijos({ clubId }) {
                           setDandoBajaId(null);
                           setMotivoBaja("");
                         }}
-                        className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
+                        className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
                       >
                         Cancelar
                       </button>
@@ -523,30 +523,30 @@ export default function TabTurnosFijos({ clubId }) {
       {/* Turnos suspendidos */}
       {suspendidos.length > 0 && (
         <div>
-          <p className="text-sm font-semibold text-gray-500 mb-2">
+          <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
             Suspendidos ({suspendidos.length})
           </p>
           <div className="flex flex-col gap-3">
             {suspendidos.map((turno) => (
               <div
                 key={turno.id}
-                className="bg-white rounded-2xl p-5 shadow-sm border border-orange-200 opacity-75"
+                className="themed-card border rounded-2xl p-5 border-orange-200 opacity-75"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <h3 className="font-semibold text-gray-600">
+                      <h3 className="font-semibold" style={{ color: "var(--text-primary)" }}>
                         {turno.canchaName} — {turno.dia}
                       </h3>
                       <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-semibold">
                         Suspendido
                       </span>
                     </div>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                       {(turno.horas || [turno.hora]).join(", ")} (
                       {(turno.horas || [turno.hora]).length}hs)
                     </p>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
                       {turno.nombreJugador}
                     </p>
                     {turno.motivoBaja && (

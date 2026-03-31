@@ -6,8 +6,8 @@ import {
 } from "../../services/canchaService";
 
 const inputClass =
-  "border border-slate-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full";
-const labelClass = "text-xs font-semibold text-slate-500 mb-1 block";
+  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full";
+const labelClass = "text-xs font-semibold mb-1 block";
 const tipClass =
   "text-xs text-blue-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mt-2";
 
@@ -156,14 +156,14 @@ export default function Configuracion() {
   };
 
   if (loading) {
-    return <div className="text-center text-slate-400 py-12">Cargando...</div>;
+    return <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
   }
 
   if (!club) {
     return (
-      <div className="text-center py-16 bg-white rounded-2xl border border-slate-100 shadow-sm">
+      <div className="text-center py-16 themed-card rounded-2xl border">
         <div className="text-5xl mb-4">⚙️</div>
-        <p className="text-slate-500 font-medium">
+        <p className="font-medium" style={{ color: "var(--text-muted)" }}>
           No tenés un club registrado
         </p>
       </div>
@@ -181,7 +181,7 @@ export default function Configuracion() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-slate-800">Configuración</h1>
+        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Configuración</h1>
         <button
           onClick={handleGuardar}
           disabled={guardando}
@@ -212,8 +212,9 @@ export default function Configuracion() {
             className={`px-4 py-2 rounded-xl text-sm font-semibold transition whitespace-nowrap ${
               tab === t.key
                 ? "bg-emerald-600 text-white"
-                : "bg-white text-slate-500 hover:bg-slate-100 border border-slate-200"
+                : "themed-card border"
             }`}
+            style={tab !== t.key ? { color: "var(--text-muted)" } : {}}
           >
             {t.label}
           </button>
@@ -222,11 +223,11 @@ export default function Configuracion() {
 
       {/* Datos del club */}
       {tab === "datos" && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-          <h2 className="font-semibold text-slate-700 mb-4">Datos del club</h2>
+        <div className="themed-card rounded-2xl p-6 border">
+          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Datos del club</h2>
           <div className="flex flex-col gap-4">
             <div>
-              <label className={labelClass}>Nombre del club</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Nombre del club</label>
               <input
                 type="text"
                 value={form.nombre}
@@ -235,7 +236,7 @@ export default function Configuracion() {
               />
             </div>
             <div>
-              <label className={labelClass}>Dirección</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Dirección</label>
               <input
                 type="text"
                 placeholder="Ej: Av. Belgrano 1234"
@@ -248,7 +249,7 @@ export default function Configuracion() {
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className={labelClass}>Ciudad</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Ciudad</label>
                 <input
                   type="text"
                   value={form.ciudad}
@@ -257,7 +258,7 @@ export default function Configuracion() {
                 />
               </div>
               <div className="flex-1">
-                <label className={labelClass}>Provincia</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Provincia</label>
                 <input
                   type="text"
                   value={form.provincia}
@@ -270,7 +271,7 @@ export default function Configuracion() {
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className={labelClass}>Teléfono</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Teléfono</label>
                 <input
                   type="text"
                   placeholder="Ej: 385 1234567"
@@ -282,7 +283,7 @@ export default function Configuracion() {
                 />
               </div>
               <div className="flex-1">
-                <label className={labelClass}>Email</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Email</label>
                 <input
                   type="email"
                   value={form.email}
@@ -294,12 +295,12 @@ export default function Configuracion() {
 
             {/* Logo placeholder */}
             <div>
-              <label className={labelClass}>Logo del club</label>
-              <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center">
-                <div className="w-16 h-16 bg-slate-100 rounded-xl mx-auto mb-2 flex items-center justify-center">
-                  <span className="text-2xl text-slate-400">🏟️</span>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Logo del club</label>
+              <div className="border-2 border-dashed rounded-xl p-6 text-center" style={{ borderColor: "var(--border-card)" }}>
+                <div className="w-16 h-16 rounded-xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+                  <span className="text-2xl" style={{ color: "var(--text-muted)" }}>🏟️</span>
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                   Subida de logo disponible próximamente
                 </p>
               </div>
@@ -310,14 +311,14 @@ export default function Configuracion() {
 
       {/* Horarios */}
       {tab === "horarios" && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-          <h2 className="font-semibold text-slate-700 mb-4">
+        <div className="themed-card rounded-2xl p-6 border">
+          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
             Horario de atención
           </h2>
           <div className="flex flex-col gap-4">
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className={labelClass}>Hora de apertura</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Hora de apertura</label>
                 <input
                   type="time"
                   value={form.horarioApertura}
@@ -328,7 +329,7 @@ export default function Configuracion() {
                 />
               </div>
               <div className="flex-1">
-                <label className={labelClass}>Hora de cierre</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Hora de cierre</label>
                 <input
                   type="time"
                   value={form.horarioCierre}
@@ -341,7 +342,7 @@ export default function Configuracion() {
             </div>
 
             <div>
-              <label className={labelClass}>Días abiertos</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Días abiertos</label>
               <div className="flex flex-wrap gap-2">
                 {diasSemana.map((dia) => (
                   <button
@@ -351,7 +352,7 @@ export default function Configuracion() {
                     className={`px-3 py-2 rounded-xl text-sm font-semibold transition ${
                       form.diasAbiertos.includes(dia)
                         ? "bg-emerald-600 text-white"
-                        : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                        : "bg-[var(--bg-card-hover)] text-[var(--text-muted)] hover:opacity-80"
                     }`}
                   >
                     {dia.slice(0, 3)}
@@ -371,11 +372,11 @@ export default function Configuracion() {
 
       {/* Redes sociales */}
       {tab === "redes" && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-          <h2 className="font-semibold text-slate-700 mb-4">Redes sociales</h2>
+        <div className="themed-card rounded-2xl p-6 border">
+          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Redes sociales</h2>
           <div className="flex flex-col gap-4">
             <div>
-              <label className={labelClass}>Instagram</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Instagram</label>
               <input
                 type="text"
                 placeholder="@tuclub"
@@ -387,7 +388,7 @@ export default function Configuracion() {
               />
             </div>
             <div>
-              <label className={labelClass}>Facebook</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Facebook</label>
               <input
                 type="text"
                 placeholder="facebook.com/tuclub"
@@ -397,7 +398,7 @@ export default function Configuracion() {
               />
             </div>
             <div>
-              <label className={labelClass}>WhatsApp</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>WhatsApp</label>
               <input
                 type="text"
                 placeholder="Ej: +54 385 1234567"
@@ -407,7 +408,7 @@ export default function Configuracion() {
               />
             </div>
             <div>
-              <label className={labelClass}>Sitio web</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Sitio web</label>
               <input
                 type="text"
                 placeholder="www.tuclub.com"
@@ -422,13 +423,13 @@ export default function Configuracion() {
 
       {/* Facturación */}
       {tab === "facturacion" && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-          <h2 className="font-semibold text-slate-700 mb-4">
+        <div className="themed-card rounded-2xl p-6 border">
+          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
             Datos de facturación
           </h2>
           <div className="flex flex-col gap-4">
             <div>
-              <label className={labelClass}>Razón social</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Razón social</label>
               <input
                 type="text"
                 value={form.razonSocial}
@@ -439,7 +440,7 @@ export default function Configuracion() {
               />
             </div>
             <div>
-              <label className={labelClass}>CUIT</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>CUIT</label>
               <input
                 type="text"
                 placeholder="Ej: 30-12345678-9"
@@ -449,7 +450,7 @@ export default function Configuracion() {
               />
             </div>
             <div>
-              <label className={labelClass}>CBU</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>CBU</label>
               <input
                 type="text"
                 placeholder="22 dígitos"
@@ -459,7 +460,7 @@ export default function Configuracion() {
               />
             </div>
             <div>
-              <label className={labelClass}>Alias CBU</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Alias CBU</label>
               <input
                 type="text"
                 placeholder="Ej: CLUB.PADEL.SANTIAGO"
@@ -469,7 +470,7 @@ export default function Configuracion() {
               />
             </div>
             <div>
-              <label className={labelClass}>Titular de la cuenta</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Titular de la cuenta</label>
               <input
                 type="text"
                 value={form.titularCuenta}
@@ -491,14 +492,14 @@ export default function Configuracion() {
       {/* Usuarios */}
       {tab === "usuarios" && (
         <div className="flex flex-col gap-4">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-            <h2 className="font-semibold text-slate-700 mb-4">
+          <div className="themed-card rounded-2xl p-6 border">
+            <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
               Agregar usuario
             </h2>
             <div className="flex flex-col gap-3">
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className={labelClass}>Nombre</label>
+                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Nombre</label>
                   <input
                     type="text"
                     placeholder="Nombre completo"
@@ -513,7 +514,7 @@ export default function Configuracion() {
                   />
                 </div>
                 <div className="flex-1">
-                  <label className={labelClass}>Email</label>
+                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Email</label>
                   <input
                     type="email"
                     placeholder="email@ejemplo.com"
@@ -530,7 +531,7 @@ export default function Configuracion() {
               </div>
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className={labelClass}>Teléfono</label>
+                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Teléfono</label>
                   <input
                     type="text"
                     placeholder="385 1234567"
@@ -545,13 +546,13 @@ export default function Configuracion() {
                   />
                 </div>
                 <div className="flex-1">
-                  <label className={labelClass}>Rol</label>
+                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Rol</label>
                   <select
                     value={nuevoUsuario.rol}
                     onChange={(e) =>
                       setNuevoUsuario({ ...nuevoUsuario, rol: e.target.value })
                     }
-                    className={`${inputClass} bg-white`}
+                    className={inputClass}
                   >
                     {rolesDisponibles.map((r) => (
                       <option key={r.value} value={r.value}>
@@ -574,18 +575,18 @@ export default function Configuracion() {
           </div>
 
           {/* Lista de usuarios */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-            <h2 className="font-semibold text-slate-700 mb-4">
+          <div className="themed-card rounded-2xl p-6 border">
+            <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
               Usuarios del club ({usuarios.length})
             </h2>
 
             {/* Dueño */}
             <div className="flex items-center justify-between bg-emerald-50 rounded-xl px-4 py-3 mb-3">
               <div>
-                <p className="text-sm font-semibold text-slate-700">
+                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                   {user?.email}
                 </p>
-                <p className="text-xs text-slate-400">Dueño del club</p>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>Dueño del club</p>
               </div>
               <span className="text-xs font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
                 Dueño
@@ -593,7 +594,7 @@ export default function Configuracion() {
             </div>
 
             {usuarios.length === 0 ? (
-              <p className="text-slate-400 text-sm text-center py-4">
+              <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
                 No hay otros usuarios agregados
               </p>
             ) : (
@@ -601,13 +602,14 @@ export default function Configuracion() {
                 {usuarios.map((u) => (
                   <div
                     key={u.id}
-                    className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3"
+                    className="flex items-center justify-between rounded-xl px-4 py-3"
+                    style={{ backgroundColor: "var(--bg-card-hover)" }}
                   >
                     <div>
-                      <p className="text-sm font-semibold text-slate-700">
+                      <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                         {u.nombre}
                       </p>
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                         {u.email} {u.telefono && `· ${u.telefono}`}
                       </p>
                     </div>
@@ -617,7 +619,7 @@ export default function Configuracion() {
                         onChange={(e) =>
                           cambiarRolUsuario(u.id, e.target.value)
                         }
-                        className="border border-slate-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        className="themed-input rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       >
                         {rolesDisponibles.map((r) => (
                           <option key={r.value} value={r.value}>
@@ -637,15 +639,15 @@ export default function Configuracion() {
               </div>
             )}
 
-            <div className="mt-4 pt-3 border-t border-slate-100">
-              <p className="text-xs text-slate-400 mb-2">Roles disponibles:</p>
+            <div className="mt-4 pt-3 border-t" style={{ borderColor: "var(--border-card)" }}>
+              <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>Roles disponibles:</p>
               <div className="flex flex-col gap-1">
                 {rolesDisponibles.map((r) => (
                   <div key={r.value} className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-600 w-28">
+                    <span className="text-xs font-semibold w-28" style={{ color: "var(--text-primary)" }}>
                       {r.label}
                     </span>
-                    <span className="text-xs text-slate-400">{r.desc}</span>
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>{r.desc}</span>
                   </div>
                 ))}
               </div>

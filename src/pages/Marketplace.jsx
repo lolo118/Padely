@@ -1,6 +1,6 @@
 export default function Hub() {
   return (
-    <div className="text-gray-700 text-lg font-semibold">
+    <div className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
       Hub de marketplace
     </div>
   );

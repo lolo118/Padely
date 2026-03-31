@@ -236,7 +236,7 @@ function ManualBracketBuilder({ grupos, parejasQueAvanzan, onConfirm }) {
     <div className="flex flex-col gap-3 mt-2">
       {sinAsignar.length > 0 && (
         <div>
-          <p className="text-sm font-semibold text-gray-500 mb-2">
+          <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
             Parejas clasificadas sin asignar ({sinAsignar.length})
           </p>
           <div className="flex flex-col gap-1">
@@ -246,10 +246,10 @@ function ManualBracketBuilder({ grupos, parejasQueAvanzan, onConfirm }) {
                 className="flex items-center justify-between bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2"
               >
                 <div>
-                  <span className="text-sm font-medium text-gray-700">
+                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                     {getNombrePareja(p)}
                   </span>
-                  <span className="text-xs text-gray-400 ml-2">
+                  <span className="text-xs ml-2" style={{ color: "var(--text-muted)" }}>
                     ({p.grupo} — {p.posGrupo}°)
                   </span>
                 </div>
@@ -291,16 +291,17 @@ function ManualBracketBuilder({ grupos, parejasQueAvanzan, onConfirm }) {
         </div>
       )}
       <div>
-        <p className="text-sm font-semibold text-gray-500 mb-2">Llaves</p>
+        <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>Llaves</p>
         <div className="flex flex-col gap-2">
           {llaves.map((l, li) => (
-            <div key={li} className="bg-gray-50 rounded-xl px-4 py-3">
-              <p className="text-xs font-semibold text-gray-400 mb-1">
+            <div key={li} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+              <p className="text-xs font-semibold mb-1" style={{ color: "var(--text-muted)" }}>
                 Llave {li + 1}
               </p>
               <div className="flex items-center justify-between">
                 <span
-                  className={`text-sm ${l.pareja1 ? "font-medium text-gray-700" : "text-gray-300"}`}
+                  className={`text-sm ${l.pareja1 ? "font-medium" : ""}`}
+                  style={l.pareja1 ? { color: "var(--text-primary)" } : { color: "var(--text-muted)", opacity: 0.4 }}
                 >
                   {l.pareja1 ? getNombrePareja(l.pareja1) : "— vacío —"}
                 </span>
@@ -318,10 +319,11 @@ function ManualBracketBuilder({ grupos, parejasQueAvanzan, onConfirm }) {
                   </button>
                 )}
               </div>
-              <p className="text-xs text-gray-400 my-0.5">vs</p>
+              <p className="text-xs my-0.5" style={{ color: "var(--text-muted)" }}>vs</p>
               <div className="flex items-center justify-between">
                 <span
-                  className={`text-sm ${l.pareja2 ? "font-medium text-gray-700" : "text-gray-300"}`}
+                  className={`text-sm ${l.pareja2 ? "font-medium" : ""}`}
+                  style={l.pareja2 ? { color: "var(--text-primary)" } : { color: "var(--text-muted)", opacity: 0.4 }}
                 >
                   {l.pareja2 ? getNombrePareja(l.pareja2) : "— vacío —"}
                 </span>
@@ -552,15 +554,15 @@ export default function TabBracket({ torneoId, torneo }) {
 
   if (loading)
     return (
-      <div className="text-center text-gray-400 py-12">Cargando bracket...</div>
+      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando bracket...</div>
     );
 
   if (grupos.length === 0) {
     return (
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-center py-12">
+      <div className="themed-card rounded-2xl p-5 border text-center py-12">
         <div className="text-4xl mb-3">📋</div>
-        <p className="text-gray-500 font-medium">Primero generá los grupos</p>
-        <p className="text-gray-400 text-sm mt-1">
+        <p className="font-medium" style={{ color: "var(--text-muted)" }}>Primero generá los grupos</p>
+        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
           Necesitás tener grupos confirmados con resultados cargados
         </p>
       </div>
@@ -610,14 +612,14 @@ export default function TabBracket({ torneoId, torneo }) {
           <p className="text-xs text-yellow-600 font-semibold uppercase tracking-wider mb-1">
             Campeones
           </p>
-          <p className="text-xl font-bold text-gray-800 mb-4">
+          <p className="text-xl font-bold mb-4" style={{ color: "var(--text-primary)" }}>
             {getNombrePareja(campeonData.campeon)}
           </p>
           <div className="text-3xl mb-2">🥈</div>
-          <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-1">
+          <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
             Subcampeones
           </p>
-          <p className="text-lg font-semibold text-gray-600">
+          <p className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
             {getNombrePareja(campeonData.subcampeon)}
           </p>
         </div>
@@ -625,24 +627,24 @@ export default function TabBracket({ torneoId, torneo }) {
 
       {/* Generar bracket */}
       {!bracketGenerado && rondas.length === 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-3">
+        <div className="themed-card rounded-2xl p-5 border">
+          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
             Generar bracket eliminatorio
           </h2>
-          <p className="text-xs text-gray-400 mb-3">
+          <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
             Avanzan {parejasQueAvanzan} pareja
             {parejasQueAvanzan !== 1 ? "s" : ""} de cada grupo
           </p>
           <div className="flex gap-2 mb-3">
             <button
               onClick={() => setModoGeneracion("automatico")}
-              className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "automatico" ? "bg-green-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+              className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "automatico" ? "bg-green-600 text-white" : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"}`}
             >
               Automático (cruzado)
             </button>
             <button
               onClick={() => setModoGeneracion("manual")}
-              className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "manual" ? "bg-green-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+              className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "manual" ? "bg-green-600 text-white" : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"}`}
             >
               Manual
             </button>
@@ -672,7 +674,7 @@ export default function TabBracket({ torneoId, torneo }) {
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setRondas([])}
-                className="px-3 py-1 rounded-lg text-sm font-semibold bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
+                className="px-3 py-1 rounded-lg text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
               >
                 Descartar
               </button>
@@ -688,27 +690,29 @@ export default function TabBracket({ torneoId, torneo }) {
           {rondas.map((ronda, ri) => (
             <div
               key={ri}
-              className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
+              className="themed-card rounded-2xl p-5 border"
             >
-              <h2 className="font-semibold text-gray-700 mb-3">
+              <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
                 {getNombreRonda(rondas.length, ri)}
               </h2>
               <div className="flex flex-col gap-2">
                 {ronda.map((p, pi) => {
                   const ganador = getGanador(p.resultado);
                   return (
-                    <div key={pi} className="bg-gray-50 rounded-xl px-4 py-3">
+                    <div key={pi} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <p
-                            className={`text-sm font-medium ${!p.pareja1 ? "text-gray-300" : ganador === 1 ? "text-green-700 font-bold" : ganador === 2 ? "text-red-400" : "text-gray-700"}`}
+                            className={`text-sm font-medium ${!p.pareja1 ? "" : ganador === 1 ? "text-green-700 font-bold" : ganador === 2 ? "text-red-400" : ""}`}
+                            style={!p.pareja1 ? { color: "var(--text-muted)", opacity: 0.4 } : (!ganador ? { color: "var(--text-primary)" } : undefined)}
                           >
                             {ganador === 1 && "🏆 "}
                             {getNombrePareja(p.pareja1)}
                           </p>
-                          <p className="text-xs text-gray-400">vs</p>
+                          <p className="text-xs" style={{ color: "var(--text-muted)" }}>vs</p>
                           <p
-                            className={`text-sm font-medium ${!p.pareja2 ? "text-gray-300" : ganador === 2 ? "text-green-700 font-bold" : ganador === 1 ? "text-red-400" : "text-gray-700"}`}
+                            className={`text-sm font-medium ${!p.pareja2 ? "" : ganador === 2 ? "text-green-700 font-bold" : ganador === 1 ? "text-red-400" : ""}`}
+                            style={!p.pareja2 ? { color: "var(--text-muted)", opacity: 0.4 } : (!ganador ? { color: "var(--text-primary)" } : undefined)}
                           >
                             {ganador === 2 && "🏆 "}
                             {getNombrePareja(p.pareja2)}
@@ -721,7 +725,8 @@ export default function TabBracket({ torneoId, torneo }) {
                                 {p.resultado.sets.map((s, si) => (
                                   <span
                                     key={si}
-                                    className="text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-lg px-2 py-0.5"
+                                    className="text-sm font-bold rounded-lg px-2 py-0.5 themed-card border border-[var(--border-card)]"
+                                    style={{ color: "var(--text-primary)" }}
                                   >
                                     {s.g1}-{s.g2}
                                     {s.tb1 !== undefined &&
@@ -750,7 +755,7 @@ export default function TabBracket({ torneoId, torneo }) {
                               Cargar resultado
                             </button>
                           ) : (
-                            <span className="text-xs text-gray-300">—</span>
+                            <span className="text-xs" style={{ color: "var(--text-muted)", opacity: 0.4 }}>—</span>
                           )}
                         </div>
                       </div>
@@ -768,7 +773,7 @@ export default function TabBracket({ torneoId, torneo }) {
                                 e.target.value,
                               )
                             }
-                            className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
+                            className="border border-[var(--border-card)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
                           />
                           <input
                             type="text"
@@ -782,7 +787,7 @@ export default function TabBracket({ torneoId, torneo }) {
                                 e.target.value,
                               )
                             }
-                            className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500 w-28"
+                            className="border border-[var(--border-card)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500 w-28"
                           />
                         </div>
                       )}
@@ -798,16 +803,16 @@ export default function TabBracket({ torneoId, torneo }) {
       {/* Modal cargar resultado */}
       {editandoResultado && partido && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm mx-4">
-            <h3 className="font-semibold text-gray-700 mb-2">
+          <div className="themed-card rounded-2xl p-6 w-full max-w-sm mx-4">
+            <h3 className="font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
               Cargar resultado
             </h3>
             <div className="mb-4 text-sm">
-              <p className="font-medium text-gray-700">
+              <p className="font-medium" style={{ color: "var(--text-primary)" }}>
                 {getNombrePareja(partido.pareja1)}
               </p>
-              <p className="text-gray-400 text-xs">vs</p>
-              <p className="font-medium text-gray-700">
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>vs</p>
+              <p className="font-medium" style={{ color: "var(--text-primary)" }}>
                 {getNombrePareja(partido.pareja2)}
               </p>
             </div>
@@ -832,7 +837,7 @@ export default function TabBracket({ torneoId, torneo }) {
               {setsInput.slice(0, setsVisibles()).map((set, si) => (
                 <div key={si}>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-400 w-12">
+                    <span className="text-sm w-12" style={{ color: "var(--text-muted)" }}>
                       Set {si + 1}
                     </span>
                     <input
@@ -844,9 +849,9 @@ export default function TabBracket({ torneoId, torneo }) {
                         n[si] = { ...n[si], g1: Number(e.target.value) };
                         setSetsInput(n);
                       }}
-                      className="w-16 border border-gray-200 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="w-16 border border-[var(--border-card)] rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
-                    <span className="text-gray-400">-</span>
+                    <span style={{ color: "var(--text-muted)" }}>-</span>
                     <input
                       type="number"
                       min="0"
@@ -856,7 +861,7 @@ export default function TabBracket({ torneoId, torneo }) {
                         n[si] = { ...n[si], g2: Number(e.target.value) };
                         setSetsInput(n);
                       }}
-                      className="w-16 border border-gray-200 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="w-16 border border-[var(--border-card)] rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                   </div>
                   <div className="ml-12 mt-1">
@@ -872,7 +877,8 @@ export default function TabBracket({ torneoId, torneo }) {
                         };
                         setTiebreakInput(n);
                       }}
-                      className={`text-xs font-semibold transition ${tiebreakInput[si]?.activo ? "text-orange-600" : "text-gray-400 hover:text-gray-600"}`}
+                      className={`text-xs font-semibold transition ${tiebreakInput[si]?.activo ? "text-orange-600" : ""}`}
+                      style={!tiebreakInput[si]?.activo ? { color: "var(--text-muted)" } : undefined}
                     >
                       {tiebreakInput[si]?.activo
                         ? "✓ Tie break"
@@ -892,7 +898,7 @@ export default function TabBracket({ torneoId, torneo }) {
                           }}
                           className="w-16 border border-orange-200 rounded-lg px-3 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-orange-400"
                         />
-                        <span className="text-gray-400">-</span>
+                        <span style={{ color: "var(--text-muted)" }}>-</span>
                         <input
                           type="number"
                           min="0"
@@ -918,7 +924,7 @@ export default function TabBracket({ torneoId, torneo }) {
                   setTiebreakInput([]);
                   setErrorModal("");
                 }}
-                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
+                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
               >
                 Cancelar
               </button>

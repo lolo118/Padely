@@ -11,8 +11,8 @@ import {
 import { db } from "../../lib/firebase";
 
 const inputClass =
-  "border border-slate-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full";
-const labelClass = "text-xs font-semibold text-slate-500 mb-1 block";
+  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full";
+const labelClass = "text-xs font-semibold mb-1 block";
 
 const roles = [
   {
@@ -97,11 +97,11 @@ export default function OrgEquipo() {
   };
 
   if (loading)
-    return <div className="text-center text-slate-400 py-12">Cargando...</div>;
+    return <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-slate-800 mb-6">
+      <h1 className="text-xl font-bold mb-6" style={{ color: "var(--text-primary)" }}>
         Equipo de trabajo
       </h1>
 
@@ -111,12 +111,12 @@ export default function OrgEquipo() {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl p-6 border border-slate-200 mb-4">
-        <h2 className="font-semibold text-slate-700 mb-4">Agregar miembro</h2>
+      <div className="themed-card rounded-2xl p-6 border mb-4">
+        <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Agregar miembro</h2>
         <div className="flex flex-col gap-3">
           <div className="flex gap-3">
             <div className="flex-1">
-              <label className={labelClass}>Nombre</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Nombre</label>
               <input
                 type="text"
                 value={nuevo.nombre}
@@ -125,7 +125,7 @@ export default function OrgEquipo() {
               />
             </div>
             <div className="flex-1">
-              <label className={labelClass}>Email</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Email</label>
               <input
                 type="email"
                 value={nuevo.email}
@@ -136,7 +136,7 @@ export default function OrgEquipo() {
           </div>
           <div className="flex gap-3">
             <div className="flex-1">
-              <label className={labelClass}>Teléfono</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Teléfono</label>
               <input
                 type="text"
                 value={nuevo.telefono}
@@ -147,11 +147,11 @@ export default function OrgEquipo() {
               />
             </div>
             <div className="flex-1">
-              <label className={labelClass}>Rol</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Rol</label>
               <select
                 value={nuevo.rol}
                 onChange={(e) => setNuevo({ ...nuevo, rol: e.target.value })}
-                className={`${inputClass} bg-white`}
+                className={inputClass}
               >
                 {roles.map((r) => (
                   <option key={r.value} value={r.value}>
@@ -171,17 +171,17 @@ export default function OrgEquipo() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl p-6 border border-slate-200">
-        <h2 className="font-semibold text-slate-700 mb-4">
+      <div className="themed-card rounded-2xl p-6 border">
+        <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
           Miembros ({equipo.length + 1})
         </h2>
 
         <div className="flex items-center justify-between bg-blue-50 rounded-xl px-4 py-3 mb-3">
           <div>
-            <p className="text-sm font-semibold text-slate-700">
+            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
               {user?.email}
             </p>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               Dueño / Organizador principal
             </p>
           </div>
@@ -191,7 +191,7 @@ export default function OrgEquipo() {
         </div>
 
         {equipo.length === 0 ? (
-          <p className="text-slate-400 text-sm text-center py-4">
+          <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
             No hay otros miembros
           </p>
         ) : (
@@ -199,13 +199,14 @@ export default function OrgEquipo() {
             {equipo.map((m) => (
               <div
                 key={m.id}
-                className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3"
+                className="flex items-center justify-between rounded-xl px-4 py-3"
+                style={{ backgroundColor: "var(--bg-card-hover)" }}
               >
                 <div>
-                  <p className="text-sm font-semibold text-slate-700">
+                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                     {m.nombre}
                   </p>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                     {m.email} {m.telefono && `· ${m.telefono}`}
                   </p>
                 </div>
@@ -225,14 +226,14 @@ export default function OrgEquipo() {
           </div>
         )}
 
-        <div className="mt-4 pt-3 border-t border-slate-100">
-          <p className="text-xs text-slate-400 mb-2">Roles:</p>
+        <div className="mt-4 pt-3 border-t" style={{ borderColor: "var(--border-card)" }}>
+          <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>Roles:</p>
           {roles.map((r) => (
             <div key={r.value} className="flex gap-2 mb-1">
-              <span className="text-xs font-semibold text-slate-600 w-28">
+              <span className="text-xs font-semibold w-28" style={{ color: "var(--text-primary)" }}>
                 {r.label}
               </span>
-              <span className="text-xs text-slate-400">{r.desc}</span>
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>{r.desc}</span>
             </div>
           ))}
         </div>

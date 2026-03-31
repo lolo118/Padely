@@ -76,7 +76,7 @@ export default function AceptarInvitacion() {
 
   if (loading) {
     return (
-      <div className="text-center text-gray-400 py-12">
+      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
         Cargando invitación...
       </div>
     );
@@ -86,8 +86,8 @@ export default function AceptarInvitacion() {
     return (
       <div className="max-w-md mx-auto text-center py-12">
         <div className="text-5xl mb-4">❌</div>
-        <p className="text-gray-500 font-medium">Invitación no encontrada</p>
-        <p className="text-gray-400 text-sm mt-1">
+        <p className="font-medium" style={{ color: "var(--text-muted)" }}>Invitación no encontrada</p>
+        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
           El link puede estar vencido o ser incorrecto
         </p>
         <button
@@ -102,72 +102,72 @@ export default function AceptarInvitacion() {
 
   return (
     <div className="max-w-md mx-auto">
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-4">
+      <div className="themed-card border rounded-2xl p-6 mb-4">
         <div className="text-center mb-4">
           <div className="text-4xl mb-2">🏸</div>
-          <h1 className="text-lg font-bold text-gray-800">
+          <h1 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
             Invitación a torneo
           </h1>
-          <p className="text-sm text-gray-400 mt-1">{torneo.nombre}</p>
+          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>{torneo.nombre}</p>
         </div>
 
         {/* ✅ Bloque reemplazado según consigna */}
-        <div className="bg-gray-50 rounded-xl p-4 mb-4">
+        <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: "var(--bg-card-hover)" }}>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div>
-              <span className="text-gray-400 block text-xs">Sede</span>
-              <span className="font-medium text-gray-700">{torneo.sede}</span>
+              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Sede</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>{torneo.sede}</span>
             </div>
             <div>
-              <span className="text-gray-400 block text-xs">Ubicación</span>
-              <span className="font-medium text-gray-700">
+              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Ubicación</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                 {torneo.ciudad}, {torneo.provincia}
               </span>
             </div>
             {torneo.direccionSede && (
               <div className="col-span-2">
-                <span className="text-gray-400 block text-xs">Dirección</span>
-                <span className="font-medium text-gray-700">
+                <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Dirección</span>
+                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                   {torneo.direccionSede}
                 </span>
               </div>
             )}
             <div>
-              <span className="text-gray-400 block text-xs">Fechas</span>
-              <span className="font-medium text-gray-700">
+              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Fechas</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                 {torneo.fechaInicio} → {torneo.fechaFin}
               </span>
             </div>
             <div>
-              <span className="text-gray-400 block text-xs">Inscripción</span>
-              <span className="font-medium text-gray-700">
+              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Inscripción</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                 {torneo.inscripcion > 0 ? `$${torneo.inscripcion}` : "Gratuita"}
               </span>
             </div>
             <div>
-              <span className="text-gray-400 block text-xs">Formato</span>
-              <span className="font-medium text-gray-700 capitalize">
+              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Formato</span>
+              <span className="font-medium capitalize" style={{ color: "var(--text-primary)" }}>
                 {torneo.formato}
               </span>
             </div>
             <div>
-              <span className="text-gray-400 block text-xs">Máx. parejas</span>
-              <span className="font-medium text-gray-700">
+              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Máx. parejas</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                 {torneo.maxParejas}
               </span>
             </div>
             {Array.isArray(torneo.categoriaGenero) && (
               <div>
-                <span className="text-gray-400 block text-xs">Género</span>
-                <span className="font-medium text-gray-700 capitalize">
+                <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Género</span>
+                <span className="font-medium capitalize" style={{ color: "var(--text-primary)" }}>
                   {torneo.categoriaGenero.join(", ")}
                 </span>
               </div>
             )}
             {torneo.categoriasConfig && (
               <div className="col-span-2">
-                <span className="text-gray-400 block text-xs">Categorías</span>
-                <span className="font-medium text-gray-700">
+                <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Categorías</span>
+                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                   {Object.entries(torneo.categoriasConfig)
                     .map(
                       ([g, niveles]) =>
@@ -179,11 +179,11 @@ export default function AceptarInvitacion() {
             )}
           </div>
           {torneo.reglamento && (
-            <div className="mt-3 pt-3 border-t border-gray-200">
-              <span className="text-gray-400 text-xs block mb-1">
+            <div className="mt-3 pt-3 border-t" style={{ borderColor: "var(--border-card)" }}>
+              <span className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>
                 Reglamento
               </span>
-              <p className="text-xs text-gray-600 whitespace-pre-line">
+              <p className="text-xs whitespace-pre-line" style={{ color: "var(--text-primary)" }}>
                 {torneo.reglamento}
               </p>
             </div>
@@ -202,7 +202,7 @@ export default function AceptarInvitacion() {
             </button>
             <button
               onClick={() => navigate("/torneos")}
-              className="w-full bg-gray-100 text-gray-500 font-semibold py-2 rounded-xl hover:bg-gray-200 transition"
+              className="w-full font-semibold py-2 rounded-xl bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
             >
               Rechazar
             </button>
@@ -221,8 +221,8 @@ export default function AceptarInvitacion() {
               </p>
             </div>
             {torneo.inscripcion > 0 ? (
-              <div className="bg-white border border-gray-200 rounded-xl p-4">
-                <p className="text-sm text-gray-700 font-semibold mb-2">
+              <div className="themed-card border rounded-xl p-4">
+                <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
                   Total a pagar: ${torneo.inscripcion}
                 </p>
                 <button
@@ -232,7 +232,7 @@ export default function AceptarInvitacion() {
                 >
                   {procesando ? "Procesando..." : "Simular pago"}
                 </button>
-                <p className="text-xs text-gray-400 mt-2 text-center">
+                <p className="text-xs mt-2 text-center" style={{ color: "var(--text-muted)" }}>
                   En producción esto se conectaría a MercadoPago
                 </p>
               </div>

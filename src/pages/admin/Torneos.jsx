@@ -6,7 +6,7 @@ import { getTorneosByOrganizer } from "../../services/torneoService";
 const estadoBadge = {
   inscripcion: "bg-blue-100 text-blue-700",
   en_curso: "bg-green-100 text-green-700",
-  finalizado: "bg-gray-100 text-gray-500",
+  finalizado: "bg-[var(--bg-card-hover)] text-[var(--text-muted)]",
   cancelado: "bg-red-100 text-red-500",
 };
 
@@ -33,26 +33,27 @@ export default function Torneos() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold text-gray-800">Mis torneos</h1>
+        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Mis torneos</h1>
         <button
           onClick={() => navigate("/admin/torneos/nuevo")}
-          className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-700 transition"
+          className="text-white px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90 transition"
+          style={{ backgroundColor: "var(--accent)" }}
         >
           + Nuevo torneo
         </button>
       </div>
 
       {loading && (
-        <div className="text-center text-gray-400 py-12">Cargando...</div>
+        <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando...</div>
       )}
 
       {!loading && torneos.length === 0 && (
-        <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div className="text-center py-16 themed-card rounded-2xl border">
           <div className="text-5xl mb-4">🏆</div>
-          <p className="text-gray-500 font-medium">
+          <p className="font-medium" style={{ color: "var(--text-muted)" }}>
             Todavía no creaste ningún torneo
           </p>
-          <p className="text-gray-400 text-sm mt-1">
+          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
             Hacé clic en "Nuevo torneo" para empezar
           </p>
         </div>
@@ -64,31 +65,31 @@ export default function Torneos() {
             <div
               key={t.id}
               onClick={() => navigate(`/admin/torneos/${t.id}`)}
-              className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition"
+              className="themed-card rounded-2xl p-5 border cursor-pointer hover:shadow-md transition"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1">
-                  <h2 className="font-semibold text-gray-800">{t.nombre}</h2>
-                  <p className="text-sm text-gray-400 mt-0.5">
+                  <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>{t.nombre}</h2>
+                  <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
                     {t.sede} — {t.ciudad}, {t.provincia}
                   </p>
-                  <p className="text-sm text-gray-400 mt-0.5">
+                  <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
                     {t.fechaInicio} → {t.fechaFin}
                   </p>
                   <div className="flex gap-2 mt-2 flex-wrap">
-                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full capitalize">
+                    <span className="text-xs px-2 py-0.5 rounded-full capitalize" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
                       {t.formato}
                     </span>
-                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full capitalize">
+                    <span className="text-xs px-2 py-0.5 rounded-full capitalize" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
                       {t.categoria}
                     </span>
-                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
                       {t.maxParejas} parejas
                     </span>
                   </div>
                 </div>
                 <span
-                  className={`text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap ${estadoBadge[t.status] || "bg-gray-100 text-gray-500"}`}
+                  className={`text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap ${estadoBadge[t.status] || "bg-[var(--bg-card-hover)] text-[var(--text-muted)]"}`}
                 >
                   {estadoLabel[t.status] || t.status}
                 </span>

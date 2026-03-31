@@ -13,7 +13,7 @@ import {
 const estadoBadge = {
   inscripcion: "bg-blue-100 text-blue-700",
   en_curso: "bg-green-100 text-green-700",
-  finalizado: "bg-gray-100 text-gray-500",
+  finalizado: "bg-[var(--bg-card-hover)] text-[var(--text-muted)]",
   cancelado: "bg-red-100 text-red-500",
 };
 
@@ -96,7 +96,6 @@ export default function DetalleTorneoPublico() {
       )
     : false;
 
-  // ✅ handleInscripcion modificada
   const handleInscripcion = async (e) => {
     e.preventDefault();
     if (!apellido1.trim() || !apellido2.trim()) return;
@@ -126,11 +125,11 @@ export default function DetalleTorneoPublico() {
   };
 
   if (loading)
-    return <div className="text-center text-gray-400 py-12">Cargando...</div>;
+    return <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
 
   if (!torneo)
     return (
-      <div className="text-center text-gray-400 py-12">
+      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
         Torneo no encontrado
       </div>
     );
@@ -141,20 +140,19 @@ export default function DetalleTorneoPublico() {
       <div className="flex items-center gap-3 mb-4">
         <button
           onClick={() => navigate("/torneos")}
-          className="text-gray-400 hover:text-gray-600 text-xl"
+          className="text-xl hover:opacity-70 transition"
+          style={{ color: "var(--text-muted)" }}
         >
           ←
         </button>
         <div className="flex-1">
-          <h1 className="text-xl font-bold text-gray-800">{torneo.nombre}</h1>
-          <p className="text-sm text-gray-400">
+          <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>{torneo.nombre}</h1>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
             {torneo.sede} — {torneo.ciudad}, {torneo.provincia}
           </p>
         </div>
         <span
-          className={`text-xs font-semibold px-3 py-1 rounded-full ${
-            estadoBadge[torneo.status]
-          }`}
+          className={`text-xs font-semibold px-3 py-1 rounded-full ${estadoBadge[torneo.status]}`}
         >
           {estadoLabel[torneo.status]}
         </span>
@@ -173,7 +171,7 @@ export default function DetalleTorneoPublico() {
           </button>
         )}
 
-      {/* ✅ Nuevo bloque de solicitud enviada */}
+      {/* Solicitud enviada */}
       {inscripcionEnviada && (
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
           <p className="text-green-700 font-semibold text-center">
@@ -182,23 +180,19 @@ export default function DetalleTorneoPublico() {
           <p className="text-green-600 text-sm mt-1 text-center">
             Enviá este link a tu compañero/a para que acepte la invitación:
           </p>
-          <div className="mt-3 bg-white border border-green-300 rounded-lg p-3 text-sm text-gray-700 break-all">
+          <div className="themed-card border border-green-300 rounded-lg mt-3 p-3 text-sm break-all" style={{ color: "var(--text-primary)" }}>
             {linkInvitacion}
           </div>
           <div className="flex gap-2 mt-3">
             <button
-              onClick={() => {
-                navigator.clipboard.writeText(linkInvitacion);
-              }}
+              onClick={() => { navigator.clipboard.writeText(linkInvitacion); }}
               className="flex-1 px-3 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition"
             >
               Copiar link
             </button>
             {whatsapp2.trim() && (
               <a
-                href={`https://wa.me/${whatsapp2
-                  .trim()
-                  .replace(/\D/g, "")}?text=${encodeURIComponent(
+                href={`https://wa.me/${whatsapp2.trim().replace(/\D/g, "")}?text=${encodeURIComponent(
                   `¡Hola! Te invité a jugar como pareja en el torneo "${torneo.nombre}". Aceptá la invitación acá: ${linkInvitacion}`,
                 )}`}
                 target="_blank"
@@ -222,10 +216,10 @@ export default function DetalleTorneoPublico() {
 
       {/* Formulario inscripción */}
       {mostrarFormInsc && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-green-200 mb-4">
+        <div className="themed-card rounded-2xl p-5 border border-green-200 mb-4">
           <h2 className="font-semibold text-green-700 mb-3">Inscripción</h2>
           <form onSubmit={handleInscripcion} className="flex flex-col gap-3">
-            <p className="text-xs font-semibold text-gray-500">
+            <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
               Tus datos (Jugador 1)
             </p>
             <div className="flex gap-2">
@@ -234,7 +228,7 @@ export default function DetalleTorneoPublico() {
                 placeholder="Nombre"
                 value={nombre1}
                 onChange={(e) => setNombre1(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                 required
               />
               <input
@@ -242,7 +236,7 @@ export default function DetalleTorneoPublico() {
                 placeholder="Apellido"
                 value={apellido1}
                 onChange={(e) => setApellido1(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                 required
               />
             </div>
@@ -252,18 +246,18 @@ export default function DetalleTorneoPublico() {
                 placeholder="Email"
                 value={email1}
                 onChange={(e) => setEmail1(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
               />
               <input
                 type="text"
                 placeholder="WhatsApp"
                 value={whatsapp1}
                 onChange={(e) => setWhatsapp1(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
               />
             </div>
 
-            <p className="text-xs font-semibold text-gray-500 mt-2">
+            <p className="text-xs font-semibold mt-2" style={{ color: "var(--text-muted)" }}>
               Datos de tu compañero/a (Jugador 2)
             </p>
             <div className="flex gap-2">
@@ -272,7 +266,7 @@ export default function DetalleTorneoPublico() {
                 placeholder="Nombre"
                 value={nombre2}
                 onChange={(e) => setNombre2(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                 required
               />
               <input
@@ -280,7 +274,7 @@ export default function DetalleTorneoPublico() {
                 placeholder="Apellido"
                 value={apellido2}
                 onChange={(e) => setApellido2(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                 required
               />
             </div>
@@ -290,23 +284,23 @@ export default function DetalleTorneoPublico() {
                 placeholder="Email"
                 value={email2}
                 onChange={(e) => setEmail2(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
               />
               <input
                 type="text"
                 placeholder="WhatsApp"
                 value={whatsapp2}
                 onChange={(e) => setWhatsapp2(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
               />
             </div>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               Se necesita al menos email o WhatsApp del compañero para enviar la
               invitación
             </p>
 
             {apellido1.trim() && apellido2.trim() && (
-              <p className="text-xs text-gray-500">
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                 Nombre de pareja:{" "}
                 <span className="font-semibold">
                   {apellido1.trim()}-{apellido2.trim()}
@@ -318,7 +312,8 @@ export default function DetalleTorneoPublico() {
               <button
                 type="button"
                 onClick={() => setMostrarFormInsc(false)}
-                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
+                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition"
+                style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}
               >
                 Cancelar
               </button>
@@ -340,7 +335,7 @@ export default function DetalleTorneoPublico() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-gray-200">
+      <div className="flex gap-2 mb-6 border-b" style={{ borderColor: "var(--border-card)" }}>
         {tabs.map((t) => (
           <button
             key={t}
@@ -348,8 +343,9 @@ export default function DetalleTorneoPublico() {
             className={`px-4 py-2 text-sm font-semibold transition border-b-2 -mb-px ${
               tab === t
                 ? "border-green-600 text-green-600"
-                : "border-transparent text-gray-400 hover:text-gray-600"
+                : "border-transparent hover:opacity-80"
             }`}
+            style={tab !== t ? { color: "var(--text-muted)" } : {}}
           >
             {t}
           </button>
@@ -359,26 +355,26 @@ export default function DetalleTorneoPublico() {
       {/* Info */}
       {tab === "Info" && (
         <div className="flex flex-col gap-4">
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-            <h2 className="font-semibold text-gray-700 mb-3">Detalles</h2>
+          <div className="themed-card rounded-2xl p-5 border">
+            <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Detalles</h2>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <span className="text-gray-400 block">Formato</span>
-                <span className="font-medium text-gray-700">
+                <span className="block" style={{ color: "var(--text-muted)" }}>Formato</span>
+                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                   {formatoLabel[torneo.formato]}
                 </span>
               </div>
               <div>
-                <span className="text-gray-400 block">Categoría Género</span>
-                <span className="font-medium text-gray-700 capitalize">
+                <span className="block" style={{ color: "var(--text-muted)" }}>Categoría Género</span>
+                <span className="font-medium capitalize" style={{ color: "var(--text-primary)" }}>
                   {Array.isArray(torneo.categoriaGenero)
                     ? torneo.categoriaGenero.join(", ")
                     : "—"}
                 </span>
               </div>
               <div>
-                <span className="text-gray-400 block">Categoría Nivel</span>
-                <span className="font-medium text-gray-700">
+                <span className="block" style={{ color: "var(--text-muted)" }}>Categoría Nivel</span>
+                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                   {torneo.categoriasConfig
                     ? Object.entries(torneo.categoriasConfig)
                         .map(
@@ -390,66 +386,64 @@ export default function DetalleTorneoPublico() {
                 </span>
               </div>
               <div>
-                <span className="text-gray-400 block">Máx. parejas</span>
-                <span className="font-medium text-gray-700">
+                <span className="block" style={{ color: "var(--text-muted)" }}>Máx. parejas</span>
+                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                   {torneo.maxParejas}
                 </span>
               </div>
               <div>
-                <span className="text-gray-400 block">Inscripción</span>
-                <span className="font-medium text-gray-700">
-                  {torneo.inscripcion > 0
-                    ? `$${torneo.inscripcion}`
-                    : "Gratuita"}
+                <span className="block" style={{ color: "var(--text-muted)" }}>Inscripción</span>
+                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+                  {torneo.inscripcion > 0 ? `$${torneo.inscripcion}` : "Gratuita"}
                 </span>
               </div>
               <div>
-                <span className="text-gray-400 block">Fechas</span>
-                <span className="font-medium text-gray-700">
+                <span className="block" style={{ color: "var(--text-muted)" }}>Fechas</span>
+                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                   {torneo.fechaInicio} → {torneo.fechaFin}
                 </span>
               </div>
             </div>
 
             {torneo.direccionSede && (
-              <div className="mt-3 pt-3 border-t border-gray-100 text-sm">
-                <span className="text-gray-400 block">Dirección</span>
-                <span className="font-medium text-gray-700">
+              <div className="mt-3 pt-3 border-t text-sm" style={{ borderColor: "var(--border-card)" }}>
+                <span className="block" style={{ color: "var(--text-muted)" }}>Dirección</span>
+                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                   {torneo.direccionSede}
                 </span>
               </div>
             )}
 
             {torneo.descripcion && (
-              <div className="mt-3 pt-3 border-t border-gray-100">
-                <span className="text-gray-400 text-sm block mb-1">
+              <div className="mt-3 pt-3 border-t" style={{ borderColor: "var(--border-card)" }}>
+                <span className="text-sm block mb-1" style={{ color: "var(--text-muted)" }}>
                   Descripción
                 </span>
-                <p className="text-sm text-gray-700">{torneo.descripcion}</p>
+                <p className="text-sm" style={{ color: "var(--text-primary)" }}>{torneo.descripcion}</p>
               </div>
             )}
 
             {torneo.reglamento && (
-              <div className="mt-3 pt-3 border-t border-gray-100">
-                <span className="text-gray-400 text-sm block mb-1">
+              <div className="mt-3 pt-3 border-t" style={{ borderColor: "var(--border-card)" }}>
+                <span className="text-sm block mb-1" style={{ color: "var(--text-muted)" }}>
                   Reglamento
                 </span>
-                <p className="text-sm text-gray-700 whitespace-pre-line">
+                <p className="text-sm whitespace-pre-line" style={{ color: "var(--text-primary)" }}>
                   {torneo.reglamento}
                 </p>
               </div>
             )}
 
             {(torneo.instagramOrganizador || torneo.whatsappOrganizador) && (
-              <div className="mt-3 pt-3 border-t border-gray-100 text-sm">
-                <span className="text-gray-400 block mb-1">Contacto</span>
+              <div className="mt-3 pt-3 border-t text-sm" style={{ borderColor: "var(--border-card)" }}>
+                <span className="block mb-1" style={{ color: "var(--text-muted)" }}>Contacto</span>
                 {torneo.instagramOrganizador && (
-                  <p className="text-gray-700">
+                  <p style={{ color: "var(--text-primary)" }}>
                     IG: {torneo.instagramOrganizador}
                   </p>
                 )}
                 {torneo.whatsappOrganizador && (
-                  <p className="text-gray-700">
+                  <p style={{ color: "var(--text-primary)" }}>
                     WA: {torneo.whatsappOrganizador}
                   </p>
                 )}
@@ -461,12 +455,12 @@ export default function DetalleTorneoPublico() {
 
       {/* Parejas */}
       {tab === "Parejas" && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-3">
+        <div className="themed-card rounded-2xl p-5 border">
+          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
             Parejas inscriptas ({parejas.length}/{torneo.maxParejas})
           </h2>
           {parejas.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-4">
+            <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
               No hay parejas inscriptas todavía
             </p>
           ) : (
@@ -474,16 +468,17 @@ export default function DetalleTorneoPublico() {
               {parejas.map((p, index) => (
                 <div
                   key={p.id}
-                  className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3"
+                  className="flex items-center gap-3 rounded-xl px-4 py-3"
+                  style={{ backgroundColor: "var(--bg-card-hover)" }}
                 >
-                  <span className="text-xs font-bold text-gray-400 w-6">
+                  <span className="text-xs font-bold w-6" style={{ color: "var(--text-muted)" }}>
                     {index + 1}
                   </span>
                   <div>
-                    <p className="text-sm font-semibold text-gray-700">
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                       {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
                     </p>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                       {p.jugador1} — {p.jugador2}
                     </p>
                   </div>
@@ -498,8 +493,8 @@ export default function DetalleTorneoPublico() {
       {tab === "Grupos" && (
         <div className="flex flex-col gap-4">
           {grupos.length === 0 ? (
-            <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-center py-12">
-              <p className="text-gray-400">
+            <div className="themed-card rounded-2xl p-5 border text-center py-12">
+              <p style={{ color: "var(--text-muted)" }}>
                 Los grupos aún no fueron generados
               </p>
             </div>
@@ -507,16 +502,17 @@ export default function DetalleTorneoPublico() {
             grupos.map((grupo, gi) => (
               <div
                 key={grupo.id || gi}
-                className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
+                className="themed-card rounded-2xl p-5 border"
               >
-                <h2 className="font-semibold text-gray-700 mb-3">
+                <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
                   {grupo.nombre}
                 </h2>
                 <div className="flex flex-col gap-1 mb-3">
                   {grupo.parejas.map((p, pi) => (
                     <div
                       key={pi}
-                      className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2"
+                      className="text-sm rounded-lg px-3 py-2"
+                      style={{ color: "var(--text-primary)", backgroundColor: "var(--bg-card-hover)" }}
                     >
                       {getNombrePareja(p)}
                     </div>
@@ -524,7 +520,7 @@ export default function DetalleTorneoPublico() {
                 </div>
                 {(grupo.partidos || []).some((p) => p.resultado) && (
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-500 mb-2">
+                    <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
                       Resultados
                     </h3>
                     <div className="flex flex-col gap-1">
@@ -533,20 +529,18 @@ export default function DetalleTorneoPublico() {
                         .map((p, pi) => (
                           <div
                             key={pi}
-                            className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-sm"
+                            className="flex items-center justify-between rounded-lg px-3 py-2 text-sm"
+                            style={{ backgroundColor: "var(--bg-card-hover)" }}
                           >
-                            <span className="text-gray-700">
+                            <span style={{ color: "var(--text-primary)" }}>
                               {getNombrePareja(p.pareja1)} vs{" "}
                               {getNombrePareja(p.pareja2)}
                             </span>
-                            <span className="font-bold text-gray-700">
+                            <span className="font-bold" style={{ color: "var(--text-primary)" }}>
                               {p.resultado.sets
                                 .map((s) => {
                                   let txt = `${s.g1}-${s.g2}`;
-                                  if (
-                                    s.tb1 !== undefined &&
-                                    s.tb2 !== undefined
-                                  )
+                                  if (s.tb1 !== undefined && s.tb2 !== undefined)
                                     txt += ` (TB ${s.tb1}-${s.tb2})`;
                                   return txt;
                                 })
@@ -567,8 +561,8 @@ export default function DetalleTorneoPublico() {
       {tab === "Bracket" && (
         <div className="flex flex-col gap-4">
           {!bracket || !bracket.rondas ? (
-            <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-center py-12">
-              <p className="text-gray-400">El bracket aún no fue generado</p>
+            <div className="themed-card rounded-2xl p-5 border text-center py-12">
+              <p style={{ color: "var(--text-muted)" }}>El bracket aún no fue generado</p>
             </div>
           ) : (
             bracket.rondas.map((ronda, ri) => {
@@ -583,32 +577,35 @@ export default function DetalleTorneoPublico() {
               return (
                 <div
                   key={ri}
-                  className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
+                  className="themed-card rounded-2xl p-5 border"
                 >
-                  <h2 className="font-semibold text-gray-700 mb-3">
+                  <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
                     {nombreRonda}
                   </h2>
                   <div className="flex flex-col gap-2">
                     {ronda.map((p, pi) => (
                       <div
                         key={pi}
-                        className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3"
+                        className="flex items-center justify-between rounded-xl px-4 py-3"
+                        style={{ backgroundColor: "var(--bg-card-hover)" }}
                       >
                         <div className="flex-1">
                           <p
-                            className={`text-sm font-medium ${p.pareja1 ? "text-gray-700" : "text-gray-300"}`}
+                            className="text-sm font-medium"
+                            style={{ color: p.pareja1 ? "var(--text-primary)" : "var(--text-muted)", opacity: p.pareja1 ? 1 : 0.4 }}
                           >
                             {getNombrePareja(p.pareja1)}
                           </p>
-                          <p className="text-xs text-gray-400">vs</p>
+                          <p className="text-xs" style={{ color: "var(--text-muted)" }}>vs</p>
                           <p
-                            className={`text-sm font-medium ${p.pareja2 ? "text-gray-700" : "text-gray-300"}`}
+                            className="text-sm font-medium"
+                            style={{ color: p.pareja2 ? "var(--text-primary)" : "var(--text-muted)", opacity: p.pareja2 ? 1 : 0.4 }}
                           >
                             {getNombrePareja(p.pareja2)}
                           </p>
                         </div>
                         {p.resultado && (
-                          <span className="text-sm font-bold text-gray-700">
+                          <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
                             {p.resultado.sets
                               .map((s) => {
                                 let txt = `${s.g1}-${s.g2}`;

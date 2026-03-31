@@ -141,7 +141,7 @@ function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm }) {
     <div className="flex flex-col gap-3 mt-2">
       {sinAsignar.length > 0 && (
         <div>
-          <p className="text-sm font-semibold text-gray-500 mb-2">
+          <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
             Parejas sin asignar ({sinAsignar.length})
           </p>
           <div className="flex flex-col gap-1">
@@ -150,7 +150,7 @@ function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm }) {
                 key={p.id}
                 className="flex items-center justify-between bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2"
               >
-                <span className="text-sm text-gray-700">
+                <span className="text-sm" style={{ color: "var(--text-primary)" }}>
                   {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
                 </span>
                 <div className="flex gap-1">
@@ -172,11 +172,11 @@ function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm }) {
       )}
       {gruposManuales.map((g, gi) => (
         <div key={gi}>
-          <p className="text-sm font-semibold text-gray-600 mb-1">
+          <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-primary)" }}>
             {g.nombre} ({g.parejas.length}/{parejasXGrupo})
           </p>
           {g.parejas.length === 0 ? (
-            <div className="text-sm text-gray-400 bg-gray-50 rounded-lg px-3 py-2 text-center">
+            <div className="text-sm rounded-lg px-3 py-2 text-center" style={{ color: "var(--text-muted)", opacity: 0.4, backgroundColor: "var(--bg-card-hover)" }}>
               Sin parejas asignadas
             </div>
           ) : (
@@ -184,9 +184,10 @@ function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm }) {
               {g.parejas.map((p) => (
                 <div
                   key={p.id}
-                  className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2"
+                  className="flex items-center justify-between rounded-lg px-3 py-2"
+                  style={{ backgroundColor: "var(--bg-card-hover)" }}
                 >
-                  <span className="text-sm text-gray-700">
+                  <span className="text-sm" style={{ color: "var(--text-primary)" }}>
                     {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
                   </span>
                   <button
@@ -433,17 +434,17 @@ export default function TabGrupos({ torneoId, torneo }) {
 
   if (loading)
     return (
-      <div className="text-center text-gray-400 py-12">Cargando grupos...</div>
+      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando grupos...</div>
     );
 
   if (parejas.length < 3) {
     return (
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-center py-12">
+      <div className="themed-card rounded-2xl p-5 border text-center py-12">
         <div className="text-4xl mb-3">👥</div>
-        <p className="text-gray-500 font-medium">
+        <p className="font-medium" style={{ color: "var(--text-muted)" }}>
           Necesitás al menos 3 parejas inscriptas
         </p>
-        <p className="text-gray-400 text-sm mt-1">
+        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
           Actualmente hay {parejas.length} pareja
           {parejas.length !== 1 ? "s" : ""}
         </p>
@@ -490,17 +491,17 @@ export default function TabGrupos({ torneoId, torneo }) {
       )}
 
       {!gruposGenerados && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-3">Generar grupos</h2>
+        <div className="themed-card rounded-2xl p-5 border">
+          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Generar grupos</h2>
           <div className="flex flex-col gap-3">
             <div>
-              <label className="text-sm text-gray-500 block mb-1">
+              <label className="text-sm block mb-1" style={{ color: "var(--text-muted)" }}>
                 Parejas por grupo
               </label>
               <select
                 value={parejasXGrupo}
                 onChange={(e) => setParejasXGrupo(Number(e.target.value))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full border border-[var(--border-card)] rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
               >
                 {[2, 3, 4, 5, 6].map((n) => (
                   <option key={n} value={n}>
@@ -511,17 +512,17 @@ export default function TabGrupos({ torneoId, torneo }) {
               </select>
             </div>
             <div>
-              <label className="text-sm text-gray-500 block mb-1">Modo</label>
+              <label className="text-sm block mb-1" style={{ color: "var(--text-muted)" }}>Modo</label>
               <div className="flex gap-2">
                 <button
                   onClick={() => setModoGeneracion("aleatorio")}
-                  className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "aleatorio" ? "bg-green-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                  className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "aleatorio" ? "bg-green-600 text-white" : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"}`}
                 >
                   Aleatorio
                 </button>
                 <button
                   onClick={() => setModoGeneracion("manual")}
-                  className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "manual" ? "bg-green-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                  className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "manual" ? "bg-green-600 text-white" : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"}`}
                 >
                   Manual
                 </button>
@@ -554,16 +555,16 @@ export default function TabGrupos({ torneoId, torneo }) {
       )}
 
       {grupos.length > 0 && !gruposGenerados && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div className="themed-card rounded-2xl p-5 border">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-700">
+            <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
               Vista previa ({grupos.length} grupos)
             </h2>
             <div className="flex gap-2">
               {modoGeneracion === "aleatorio" && (
                 <button
                   onClick={generarGruposAleatorio}
-                  className="px-3 py-1 rounded-lg text-sm font-semibold bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
+                  className="px-3 py-1 rounded-lg text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
                 >
                   Regenerar
                 </button>
@@ -578,14 +579,15 @@ export default function TabGrupos({ torneoId, torneo }) {
           </div>
           {grupos.map((g, gi) => (
             <div key={gi} className="mb-3 last:mb-0">
-              <p className="text-sm font-semibold text-gray-600 mb-1">
+              <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-primary)" }}>
                 {g.nombre}
               </p>
               <div className="flex flex-col gap-1">
                 {g.parejas.map((p, pi) => (
                   <div
                     key={pi}
-                    className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2"
+                    className="text-sm rounded-lg px-3 py-2"
+                    style={{ color: "var(--text-primary)", backgroundColor: "var(--bg-card-hover)" }}
                   >
                     {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
                   </div>
@@ -603,15 +605,15 @@ export default function TabGrupos({ torneoId, torneo }) {
           return (
             <div
               key={grupo.id || gi}
-              className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
+              className="themed-card rounded-2xl p-5 border"
             >
-              <h2 className="font-semibold text-gray-700 mb-3">
+              <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
                 {grupo.nombre}
               </h2>
               <div className="overflow-x-auto mb-4">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-gray-400 text-xs border-b border-gray-100">
+                    <tr className="text-xs border-b border-[var(--border-card)]" style={{ color: "var(--text-muted)" }}>
                       <th className="text-left py-2 pr-2">#</th>
                       <th className="text-left py-2">Pareja</th>
                       <th className="text-center py-2">PJ</th>
@@ -627,12 +629,12 @@ export default function TabGrupos({ torneoId, torneo }) {
                     {tabla.map((row, ri) => (
                       <tr
                         key={row.id}
-                        className={`border-b border-gray-50 ${ri < parejasQueAvanzan ? "bg-green-50" : ""}`}
+                        className={`border-b border-[var(--border-card)] ${ri < parejasQueAvanzan ? "bg-green-50" : ""}`}
                       >
-                        <td className="py-2 pr-2 font-bold text-gray-400">
+                        <td className="py-2 pr-2 font-bold" style={{ color: "var(--text-muted)" }}>
                           {ri + 1}
                         </td>
-                        <td className="py-2 text-gray-700 font-medium">
+                        <td className="py-2 font-medium" style={{ color: "var(--text-primary)" }}>
                           {row.nombre}
                         </td>
                         <td className="text-center py-2">{row.pj}</td>
@@ -652,26 +654,28 @@ export default function TabGrupos({ torneoId, torneo }) {
                 </table>
               </div>
 
-              <h3 className="text-sm font-semibold text-gray-500 mb-2">
+              <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
                 Partidos
               </h3>
               <div className="flex flex-col gap-2">
                 {(grupo.partidos || []).map((p, pi) => {
                   const ganador = getGanador(p.resultado);
                   return (
-                    <div key={pi} className="bg-gray-50 rounded-xl px-4 py-3">
+                    <div key={pi} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <p
-                            className={`text-sm font-medium ${ganador === 1 ? "text-green-700 font-bold" : ganador === 2 ? "text-red-400" : "text-gray-700"}`}
+                            className={`text-sm font-medium ${ganador === 1 ? "text-green-700 font-bold" : ganador === 2 ? "text-red-400" : ""}`}
+                          style={!ganador ? { color: "var(--text-primary)" } : undefined}
                           >
                             {ganador === 1 && "🏆 "}
                             {p.pareja1.nombrePareja ||
                               `${p.pareja1.jugador1} / ${p.pareja1.jugador2}`}
                           </p>
-                          <p className="text-xs text-gray-400">vs</p>
+                          <p className="text-xs" style={{ color: "var(--text-muted)" }}>vs</p>
                           <p
-                            className={`text-sm font-medium ${ganador === 2 ? "text-green-700 font-bold" : ganador === 1 ? "text-red-400" : "text-gray-700"}`}
+                            className={`text-sm font-medium ${ganador === 2 ? "text-green-700 font-bold" : ganador === 1 ? "text-red-400" : ""}`}
+                            style={!ganador ? { color: "var(--text-primary)" } : undefined}
                           >
                             {ganador === 2 && "🏆 "}
                             {p.pareja2.nombrePareja ||
@@ -685,7 +689,8 @@ export default function TabGrupos({ torneoId, torneo }) {
                                 {p.resultado.sets.map((s, si) => (
                                   <span
                                     key={si}
-                                    className="text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-lg px-2 py-0.5"
+                                    className="text-sm font-bold rounded-lg px-2 py-0.5 themed-card border border-[var(--border-card)]"
+                                    style={{ color: "var(--text-primary)" }}
                                   >
                                     {s.g1}-{s.g2}
                                     {s.tb1 !== undefined &&
@@ -727,7 +732,7 @@ export default function TabGrupos({ torneoId, torneo }) {
                               e.target.value,
                             )
                           }
-                          className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
+                          className="border border-[var(--border-card)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
                           placeholder="Hora"
                         />
                         <input
@@ -742,7 +747,7 @@ export default function TabGrupos({ torneoId, torneo }) {
                             )
                           }
                           placeholder="Cancha (ej: 1)"
-                          className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500 w-28"
+                          className="border border-[var(--border-card)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500 w-28"
                         />
                       </div>
                     </div>
@@ -756,17 +761,17 @@ export default function TabGrupos({ torneoId, torneo }) {
       {/* Modal cargar resultado */}
       {editandoResultado && partido && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm mx-4">
-            <h3 className="font-semibold text-gray-700 mb-2">
+          <div className="themed-card rounded-2xl p-6 w-full max-w-sm mx-4">
+            <h3 className="font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
               Cargar resultado
             </h3>
             <div className="mb-4 text-sm">
-              <p className="font-medium text-gray-700">
+              <p className="font-medium" style={{ color: "var(--text-primary)" }}>
                 {partido.pareja1.nombrePareja ||
                   `${partido.pareja1.jugador1} / ${partido.pareja1.jugador2}`}
               </p>
-              <p className="text-gray-400 text-xs">vs</p>
-              <p className="font-medium text-gray-700">
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>vs</p>
+              <p className="font-medium" style={{ color: "var(--text-primary)" }}>
                 {partido.pareja2.nombrePareja ||
                   `${partido.pareja2.jugador1} / ${partido.pareja2.jugador2}`}
               </p>
@@ -794,7 +799,7 @@ export default function TabGrupos({ torneoId, torneo }) {
               {setsInput.slice(0, setsVisibles()).map((set, si) => (
                 <div key={si}>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-400 w-12">
+                    <span className="text-sm w-12" style={{ color: "var(--text-muted)" }}>
                       Set {si + 1}
                     </span>
                     <input
@@ -806,9 +811,9 @@ export default function TabGrupos({ torneoId, torneo }) {
                         n[si] = { ...n[si], g1: Number(e.target.value) };
                         setSetsInput(n);
                       }}
-                      className="w-16 border border-gray-200 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="w-16 border border-[var(--border-card)] rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
-                    <span className="text-gray-400">-</span>
+                    <span style={{ color: "var(--text-muted)" }}>-</span>
                     <input
                       type="number"
                       min="0"
@@ -818,7 +823,7 @@ export default function TabGrupos({ torneoId, torneo }) {
                         n[si] = { ...n[si], g2: Number(e.target.value) };
                         setSetsInput(n);
                       }}
-                      className="w-16 border border-gray-200 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="w-16 border border-[var(--border-card)] rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                   </div>
                   <div className="ml-12 mt-1">
@@ -834,7 +839,8 @@ export default function TabGrupos({ torneoId, torneo }) {
                         };
                         setTiebreakInput(n);
                       }}
-                      className={`text-xs font-semibold transition ${tiebreakInput[si]?.activo ? "text-orange-600" : "text-gray-400 hover:text-gray-600"}`}
+                      className={`text-xs font-semibold transition ${tiebreakInput[si]?.activo ? "text-orange-600" : ""}`}
+                      style={!tiebreakInput[si]?.activo ? { color: "var(--text-muted)" } : undefined}
                     >
                       {tiebreakInput[si]?.activo
                         ? "✓ Tie break"
@@ -854,7 +860,7 @@ export default function TabGrupos({ torneoId, torneo }) {
                           }}
                           className="w-16 border border-orange-200 rounded-lg px-3 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-orange-400"
                         />
-                        <span className="text-gray-400">-</span>
+                        <span style={{ color: "var(--text-muted)" }}>-</span>
                         <input
                           type="number"
                           min="0"
@@ -880,7 +886,7 @@ export default function TabGrupos({ torneoId, torneo }) {
                   setTiebreakInput([]);
                   setErrorModal("");
                 }}
-                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
+                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
               >
                 Cancelar
               </button>

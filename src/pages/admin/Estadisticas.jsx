@@ -66,7 +66,7 @@ export default function Estadisticas() {
 
   if (loading) {
     return (
-      <div className="text-center text-gray-400 py-12">
+      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
         Cargando estadísticas...
       </div>
     );
@@ -74,9 +74,9 @@ export default function Estadisticas() {
 
   if (!club) {
     return (
-      <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 shadow-sm">
+      <div className="text-center py-16 themed-card rounded-2xl border">
         <div className="text-5xl mb-4">📊</div>
-        <p className="text-gray-500 font-medium">No tenés un club registrado</p>
+        <p className="font-medium" style={{ color: "var(--text-muted)" }}>No tenés un club registrado</p>
       </div>
     );
   }
@@ -183,7 +183,7 @@ export default function Estadisticas() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold text-gray-800">Estadísticas</h1>
+        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Estadísticas</h1>
         <div className="flex gap-2">
           {[
             { key: "dia", label: "Hoy" },
@@ -196,7 +196,7 @@ export default function Estadisticas() {
               className={`px-3 py-1 rounded-full text-xs font-semibold transition ${
                 periodo === p.key
                   ? "bg-green-600 text-white"
-                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                  : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
               }`}
             >
               {p.label}
@@ -207,40 +207,40 @@ export default function Estadisticas() {
 
       {/* Tarjetas resumen */}
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-center">
+        <div className="themed-card rounded-2xl p-5 border text-center">
           <p className="text-3xl font-bold text-green-600">
             ${ingresosTotales.toLocaleString()}
           </p>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
             Ingresos ({periodoLabel})
           </p>
         </div>
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-center">
+        <div className="themed-card rounded-2xl p-5 border text-center">
           <p className="text-3xl font-bold text-blue-600">
             {reservasConfirmadas.length}
           </p>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
             Reservas ({periodoLabel})
           </p>
         </div>
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-center">
+        <div className="themed-card rounded-2xl p-5 border text-center">
           <p className="text-3xl font-bold text-purple-600">
             {jugadoresUnicos.size}
           </p>
-          <p className="text-xs text-gray-400 mt-1">Jugadores únicos</p>
+          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Jugadores únicos</p>
         </div>
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-center">
+        <div className="themed-card rounded-2xl p-5 border text-center">
           <p className="text-3xl font-bold text-orange-500">
             {turnosFijos.filter((t) => t.status === "activo").length}
           </p>
-          <p className="text-xs text-gray-400 mt-1">Turnos fijos activos</p>
+          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Turnos fijos activos</p>
         </div>
       </div>
 
       {/* Gráfico de ingresos por cancha */}
       {dataIngresos.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
-          <h2 className="font-semibold text-gray-700 mb-4">
+        <div className="themed-card rounded-2xl p-5 border mb-4">
+          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
             Ingresos y reservas por cancha
           </h2>
           <ResponsiveContainer width="100%" height={250}>
@@ -258,8 +258,8 @@ export default function Estadisticas() {
 
       {/* Gráfico de ocupación */}
       {dataTorta.length > 0 && dataTorta.some((d) => d.value > 0) && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
-          <h2 className="font-semibold text-gray-700 mb-4">
+        <div className="themed-card rounded-2xl p-5 border mb-4">
+          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
             Tasa de ocupación por cancha
           </h2>
           <div className="flex items-center gap-4">
@@ -289,13 +289,13 @@ export default function Estadisticas() {
                       className="w-3 h-3 rounded-full"
                       style={{ backgroundColor: COLORES[i % COLORES.length] }}
                     />
-                    <span className="text-sm text-gray-700">{c.nombre}</span>
+                    <span className="text-sm" style={{ color: "var(--text-primary)" }}>{c.nombre}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-sm font-semibold text-gray-700">
+                    <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                       {c.tasa}%
                     </span>
-                    <span className="text-xs text-gray-400 ml-1">
+                    <span className="text-xs ml-1" style={{ color: "var(--text-muted)" }}>
                       ({c.slotsOcupados}/{c.slotsTotal})
                     </span>
                   </div>
@@ -308,21 +308,21 @@ export default function Estadisticas() {
 
       {/* Horarios más y menos reservados */}
       <div className="grid grid-cols-2 gap-4 mb-4">
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-3">
+        <div className="themed-card rounded-2xl p-5 border">
+          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
             Horarios más populares
           </h2>
           {top5Horarios.length === 0 ? (
-            <p className="text-gray-400 text-sm">Sin datos</p>
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>Sin datos</p>
           ) : (
             <div className="flex flex-col gap-2">
               {top5Horarios.map((h, i) => (
                 <div key={h.hora} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-400 w-5">
+                    <span className="text-xs font-bold w-5" style={{ color: "var(--text-muted)" }}>
                       {i + 1}
                     </span>
-                    <span className="text-sm font-medium text-gray-700">
+                    <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                       {h.hora}
                     </span>
                   </div>
@@ -334,21 +334,21 @@ export default function Estadisticas() {
             </div>
           )}
         </div>
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-3">
+        <div className="themed-card rounded-2xl p-5 border">
+          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
             Horarios menos populares
           </h2>
           {bottom5Horarios.length === 0 ? (
-            <p className="text-gray-400 text-sm">Sin datos</p>
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>Sin datos</p>
           ) : (
             <div className="flex flex-col gap-2">
               {bottom5Horarios.map((h, i) => (
                 <div key={h.hora} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-400 w-5">
+                    <span className="text-xs font-bold w-5" style={{ color: "var(--text-muted)" }}>
                       {i + 1}
                     </span>
-                    <span className="text-sm font-medium text-gray-700">
+                    <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                       {h.hora}
                     </span>
                   </div>
@@ -363,19 +363,20 @@ export default function Estadisticas() {
       </div>
 
       {/* Detalle por cancha */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
-        <h2 className="font-semibold text-gray-700 mb-3">Detalle por cancha</h2>
+      <div className="themed-card rounded-2xl p-5 border mb-4">
+        <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Detalle por cancha</h2>
         <div className="flex flex-col gap-3">
           {reservasPorCancha.map((c, i) => (
             <div
               key={i}
-              className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3"
+              className="flex items-center justify-between rounded-xl px-4 py-3"
+              style={{ backgroundColor: "var(--bg-card-hover)" }}
             >
               <div>
-                <p className="text-sm font-semibold text-gray-700">
+                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                   {c.nombre}
                 </p>
-                <p className="text-xs text-gray-400">{c.reservas} reservas</p>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>{c.reservas} reservas</p>
               </div>
               <p className="text-sm font-bold text-green-600">
                 ${c.ingresos.toLocaleString()}

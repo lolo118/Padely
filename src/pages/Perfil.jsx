@@ -19,8 +19,8 @@ const categoriasNivel = [
 ];
 
 const inputClass =
-  "border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
-const labelClass = "text-xs font-semibold text-gray-500 mb-1 block";
+  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
+const labelClass = "text-xs font-semibold mb-1 block";
 
 export default function Perfil() {
   const { user, setUser } = useAuthStore();
@@ -136,13 +136,13 @@ export default function Perfil() {
 
   if (loading) {
     return (
-      <div className="text-center text-gray-400 py-12">Cargando perfil...</div>
+      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando perfil...</div>
     );
   }
 
   if (!userData) {
     return (
-      <div className="text-center text-gray-400 py-12">
+      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
         No se encontró tu perfil
       </div>
     );
@@ -159,7 +159,7 @@ export default function Perfil() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <h1 className="text-xl font-bold text-gray-800 mb-6">Mi perfil</h1>
+      <h1 className="text-xl font-bold mb-6" style={{ color: "var(--text-primary)" }}>Mi perfil</h1>
 
       {/* Verificación de email */}
       {!emailVerificado && (
@@ -227,9 +227,9 @@ export default function Perfil() {
         )}
 
       {/* Datos personales */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
+      <div className="themed-card rounded-2xl p-5 border mb-4">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-gray-700">Datos personales</h2>
+          <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>Datos personales</h2>
           {!editando ? (
             <button
               onClick={() => setEditando(true)}
@@ -241,7 +241,8 @@ export default function Perfil() {
             <div className="flex gap-2">
               <button
                 onClick={() => setEditando(false)}
-                className="text-xs font-semibold text-gray-400 hover:text-gray-600"
+                className="text-xs font-semibold hover:opacity-80"
+                style={{ color: "var(--text-muted)" }}
               >
                 Cancelar
               </button>
@@ -259,38 +260,38 @@ export default function Perfil() {
         {!editando ? (
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <span className="text-gray-400 block">Nombre</span>
-              <span className="font-medium text-gray-700">
+              <span className="block" style={{ color: "var(--text-muted)" }}>Nombre</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                 {userData.nombre || "—"}
               </span>
             </div>
             <div>
-              <span className="text-gray-400 block">Email</span>
-              <span className="font-medium text-gray-700">
+              <span className="block" style={{ color: "var(--text-muted)" }}>Email</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                 {userData.email}
               </span>
             </div>
             <div>
-              <span className="text-gray-400 block">Teléfono</span>
-              <span className="font-medium text-gray-700">
+              <span className="block" style={{ color: "var(--text-muted)" }}>Teléfono</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                 {userData.telefono || "—"}
               </span>
             </div>
             <div>
-              <span className="text-gray-400 block">Provincia</span>
-              <span className="font-medium text-gray-700">
+              <span className="block" style={{ color: "var(--text-muted)" }}>Provincia</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                 {userData.provincia || "—"}
               </span>
             </div>
             <div>
-              <span className="text-gray-400 block">Fecha de nacimiento</span>
-              <span className="font-medium text-gray-700">
+              <span className="block" style={{ color: "var(--text-muted)" }}>Fecha de nacimiento</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                 {userData.nacimiento || "—"}
               </span>
             </div>
             <div>
-              <span className="text-gray-400 block">Género</span>
-              <span className="font-medium text-gray-700 capitalize">
+              <span className="block" style={{ color: "var(--text-muted)" }}>Género</span>
+              <span className="font-medium capitalize" style={{ color: "var(--text-primary)" }}>
                 {userData.genero || "—"}
               </span>
             </div>
@@ -298,7 +299,7 @@ export default function Perfil() {
         ) : (
           <div className="flex flex-col gap-3">
             <div>
-              <label className={labelClass}>Nombre</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Nombre</label>
               <input
                 type="text"
                 value={editForm.nombre}
@@ -309,7 +310,7 @@ export default function Perfil() {
               />
             </div>
             <div>
-              <label className={labelClass}>Teléfono</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Teléfono</label>
               <input
                 type="text"
                 placeholder="Ej: 385 1234567"
@@ -322,7 +323,7 @@ export default function Perfil() {
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className={labelClass}>Provincia</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Provincia</label>
                 <input
                   type="text"
                   value={editForm.provincia}
@@ -333,7 +334,7 @@ export default function Perfil() {
                 />
               </div>
               <div className="flex-1">
-                <label className={labelClass}>Fecha de nacimiento</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Fecha de nacimiento</label>
                 <input
                   type="date"
                   value={editForm.nacimiento}
@@ -345,13 +346,13 @@ export default function Perfil() {
               </div>
             </div>
             <div>
-              <label className={labelClass}>Género</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Género</label>
               <select
                 value={editForm.genero}
                 onChange={(e) =>
                   setEditForm({ ...editForm, genero: e.target.value })
                 }
-                className={`${inputClass} bg-white`}
+                className={inputClass}
               >
                 <option value="">Seleccionar</option>
                 <option value="masculino">Masculino</option>
@@ -364,30 +365,30 @@ export default function Perfil() {
       </div>
 
       {/* Datos de juego */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
-        <h2 className="font-semibold text-gray-700 mb-4">Datos de juego</h2>
+      <div className="themed-card rounded-2xl p-5 border mb-4">
+        <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Datos de juego</h2>
         {!editando ? (
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <span className="text-gray-400 block">Categoría/Nivel</span>
-              <span className="font-medium text-gray-700">
+              <span className="block" style={{ color: "var(--text-muted)" }}>Categoría/Nivel</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                 {userData.nivel || "Sin asignar"}
               </span>
             </div>
             <div>
-              <span className="text-gray-400 block">Mano hábil</span>
-              <span className="font-medium text-gray-700 capitalize">
+              <span className="block" style={{ color: "var(--text-muted)" }}>Mano hábil</span>
+              <span className="font-medium capitalize" style={{ color: "var(--text-primary)" }}>
                 {userData.manoHabil || "—"}
               </span>
             </div>
             <div>
-              <span className="text-gray-400 block">Posición preferida</span>
-              <span className="font-medium text-gray-700 capitalize">
+              <span className="block" style={{ color: "var(--text-muted)" }}>Posición preferida</span>
+              <span className="font-medium capitalize" style={{ color: "var(--text-primary)" }}>
                 {userData.posicionPreferida || "—"}
               </span>
             </div>
             <div>
-              <span className="text-gray-400 block">Puntos acumulados</span>
+              <span className="block" style={{ color: "var(--text-muted)" }}>Puntos acumulados</span>
               <span className="font-medium text-green-600 text-lg">
                 {userData.puntos || 0}
               </span>
@@ -396,13 +397,13 @@ export default function Perfil() {
         ) : (
           <div className="flex flex-col gap-3">
             <div>
-              <label className={labelClass}>Categoría/Nivel</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Categoría/Nivel</label>
               <select
                 value={editForm.nivel}
                 onChange={(e) =>
                   setEditForm({ ...editForm, nivel: e.target.value })
                 }
-                className={`${inputClass} bg-white`}
+                className={inputClass}
               >
                 <option value="">Sin asignar</option>
                 {categoriasNivel.map((n) => (
@@ -413,13 +414,13 @@ export default function Perfil() {
               </select>
             </div>
             <div>
-              <label className={labelClass}>Mano hábil</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Mano hábil</label>
               <select
                 value={editForm.manoHabil}
                 onChange={(e) =>
                   setEditForm({ ...editForm, manoHabil: e.target.value })
                 }
-                className={`${inputClass} bg-white`}
+                className={inputClass}
               >
                 <option value="">Seleccionar</option>
                 <option value="derecha">Derecha</option>
@@ -428,7 +429,7 @@ export default function Perfil() {
               </select>
             </div>
             <div>
-              <label className={labelClass}>Posición preferida</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Posición preferida</label>
               <select
                 value={editForm.posicionPreferida}
                 onChange={(e) =>
@@ -437,7 +438,7 @@ export default function Perfil() {
                     posicionPreferida: e.target.value,
                   })
                 }
-                className={`${inputClass} bg-white`}
+                className={inputClass}
               >
                 <option value="">Seleccionar</option>
                 <option value="drive">Drive (derecha)</option>
@@ -450,8 +451,8 @@ export default function Perfil() {
       </div>
 
       {/* Estadísticas */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
-        <h2 className="font-semibold text-gray-700 mb-3">Estadísticas</h2>
+      <div className="themed-card rounded-2xl p-5 border mb-4">
+        <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Estadísticas</h2>
         <div className="grid grid-cols-3 gap-3 text-center">
           <div className="bg-blue-50 rounded-xl p-4">
             <p className="text-2xl font-bold text-blue-600">
@@ -490,7 +491,7 @@ export default function Perfil() {
 
       {/* Inscripciones pendientes */}
       {inscPendientes.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-orange-200 mb-4">
+        <div className="themed-card rounded-2xl p-5 border border-orange-200 mb-4">
           <h2 className="font-semibold text-orange-700 mb-3">
             Inscripciones pendientes ({inscPendientes.length})
           </h2>
@@ -498,13 +499,14 @@ export default function Perfil() {
             {inscPendientes.map((insc) => (
               <div
                 key={insc.id}
-                className="flex items-center justify-between bg-orange-50 rounded-xl px-4 py-3"
+                className="flex items-center justify-between rounded-xl px-4 py-3"
+                style={{ backgroundColor: "var(--bg-card-hover)" }}
               >
                 <div>
-                  <p className="text-sm font-semibold text-gray-700">
+                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                     {insc.torneoNombre}
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                     {insc.apellido1}-{insc.apellido2}
                   </p>
                 </div>
@@ -519,8 +521,8 @@ export default function Perfil() {
 
       {/* Torneos confirmados */}
       {inscConfirmadas.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
-          <h2 className="font-semibold text-gray-700 mb-3">
+        <div className="themed-card rounded-2xl p-5 border mb-4">
+          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
             Mis torneos ({inscConfirmadas.length})
           </h2>
           <div className="flex flex-col gap-2">
@@ -528,13 +530,14 @@ export default function Perfil() {
               <div
                 key={insc.id}
                 onClick={() => navigate(`/torneos/${insc.torneoId}`)}
-                className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3 cursor-pointer hover:bg-gray-100 transition"
+                className="flex items-center justify-between rounded-xl px-4 py-3 cursor-pointer transition"
+                style={{ backgroundColor: "var(--bg-card-hover)" }}
               >
                 <div>
-                  <p className="text-sm font-semibold text-gray-700">
+                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                     {insc.torneoNombre}
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                     {insc.apellido1}-{insc.apellido2}
                   </p>
                 </div>
@@ -548,12 +551,13 @@ export default function Perfil() {
       )}
 
       {/* Acciones de cuenta */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-8">
-        <h2 className="font-semibold text-gray-700 mb-3">Cuenta</h2>
+      <div className="themed-card rounded-2xl p-5 border mb-8">
+        <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Cuenta</h2>
         <div className="flex flex-col gap-2">
           <button
             onClick={handleCerrarSesion}
-            className="w-full py-2 rounded-xl text-sm font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+            className="w-full py-2 rounded-xl text-sm font-semibold transition"
+            style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-secondary)" }}
           >
             Cerrar sesión
           </button>

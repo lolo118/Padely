@@ -8,7 +8,7 @@ import {
 } from "../../services/torneoService";
 
 const inscripcionBadge = {
-  esperando_companero: "bg-gray-100 text-gray-500",
+  esperando_companero: "bg-[var(--bg-card-hover)] text-[var(--text-muted)]",
   pendiente_pago: "bg-yellow-100 text-yellow-700",
   pendiente_aprobacion: "bg-orange-100 text-orange-700",
   confirmada: "bg-green-100 text-green-700",
@@ -145,7 +145,7 @@ export default function TabParejas({ torneoId, torneo }) {
 
   if (loading) {
     return (
-      <div className="text-center text-gray-400 py-12">Cargando parejas...</div>
+      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando parejas...</div>
     );
   }
 
@@ -168,11 +168,11 @@ export default function TabParejas({ torneoId, torneo }) {
   return (
     <div className="flex flex-col gap-4">
       {/* Contador */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+      <div className="themed-card border rounded-2xl p-5">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-semibold text-gray-700">Parejas inscriptas</h2>
-            <p className="text-sm text-gray-400 mt-1">
+            <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>Parejas inscriptas</h2>
+            <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
               {parejas.length} de {torneo.maxParejas} parejas
             </p>
           </div>
@@ -188,7 +188,7 @@ export default function TabParejas({ torneoId, torneo }) {
 
       {/* Pendientes de aprobación - PRIORIDAD */}
       {pendientesAprobacion.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-orange-200">
+        <div className="themed-card border rounded-2xl p-5 border-orange-200">
           <h2 className="font-semibold text-orange-700 mb-3">
             Pendientes de aprobación ({pendientesAprobacion.length})
           </h2>
@@ -200,18 +200,18 @@ export default function TabParejas({ torneoId, torneo }) {
               >
                 <div className="flex items-center justify-between mb-2">
                   <div>
-                    <p className="text-sm font-semibold text-gray-700">
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                       {insc.apellido1}-{insc.apellido2}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                       {insc.nombre1} {insc.apellido1} — {insc.nombre2}{" "}
                       {insc.apellido2}
                     </p>
                     {insc.email1 && (
-                      <p className="text-xs text-gray-400">{insc.email1}</p>
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>{insc.email1}</p>
                     )}
                     {insc.whatsapp1 && (
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                         WA: {insc.whatsapp1}
                       </p>
                     )}
@@ -235,7 +235,7 @@ export default function TabParejas({ torneoId, torneo }) {
                           setRechazandoId(null);
                           setMotivoRechazo("");
                         }}
-                        className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-gray-100 text-gray-500 hover:bg-gray-200 transition"
+                        className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
                       >
                         Cancelar
                       </button>
@@ -272,26 +272,27 @@ export default function TabParejas({ torneoId, torneo }) {
 
       {/* Esperando compañero */}
       {esperandoCompanero.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-200">
-          <h2 className="font-semibold text-gray-500 mb-3">
+        <div className="themed-card border rounded-2xl p-5">
+          <h2 className="font-semibold mb-3" style={{ color: "var(--text-muted)" }}>
             Esperando confirmación del compañero ({esperandoCompanero.length})
           </h2>
           <div className="flex flex-col gap-2">
             {esperandoCompanero.map((insc) => (
               <div
                 key={insc.id}
-                className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3"
+                className="flex items-center justify-between rounded-xl px-4 py-3"
+                style={{ backgroundColor: "var(--bg-card-hover)" }}
               >
                 <div>
-                  <p className="text-sm font-medium text-gray-700">
+                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                     {insc.apellido1}-{insc.apellido2}
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                     {insc.nombre1} {insc.apellido1} — esperando a {insc.nombre2}{" "}
                     {insc.apellido2}
                   </p>
                 </div>
-                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-500">
+                <span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
                   Esperando
                 </span>
               </div>
@@ -302,7 +303,7 @@ export default function TabParejas({ torneoId, torneo }) {
 
       {/* Pendientes de pago */}
       {pendientesPago.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-yellow-200">
+        <div className="themed-card border rounded-2xl p-5 border-yellow-200">
           <h2 className="font-semibold text-yellow-700 mb-3">
             Pendientes de pago ({pendientesPago.length})
           </h2>
@@ -313,10 +314,10 @@ export default function TabParejas({ torneoId, torneo }) {
                 className="flex items-center justify-between bg-yellow-50 rounded-xl px-4 py-3"
               >
                 <div>
-                  <p className="text-sm font-medium text-gray-700">
+                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                     {insc.apellido1}-{insc.apellido2}
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                     Ambos confirmados, esperando pago
                   </p>
                 </div>
@@ -331,18 +332,19 @@ export default function TabParejas({ torneoId, torneo }) {
 
       {/* Historial de solicitudes procesadas */}
       {procesadas.length > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-3">
+        <div className="themed-card border rounded-2xl p-5">
+          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
             Historial de solicitudes
           </h2>
           <div className="flex flex-col gap-2">
             {procesadas.map((insc) => (
               <div
                 key={insc.id}
-                className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2"
+                className="flex items-center justify-between rounded-xl px-4 py-2"
+                style={{ backgroundColor: "var(--bg-card-hover)" }}
               >
                 <div>
-                  <p className="text-sm font-medium text-gray-700">
+                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                     {insc.apellido1}-{insc.apellido2}
                   </p>
                   {insc.status === "rechazada" && insc.motivoRechazo && (
@@ -366,49 +368,49 @@ export default function TabParejas({ torneoId, torneo }) {
 
       {/* Agregar pareja manual */}
       {cuposDisponibles > 0 && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-3">
+        <div className="themed-card border rounded-2xl p-5">
+          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
             Agregar pareja manualmente
           </h2>
           <form onSubmit={handleAgregarPareja} className="flex flex-col gap-3">
-            <p className="text-xs text-gray-400">Jugador 1</p>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Jugador 1</p>
             <div className="flex gap-2">
               <input
                 type="text"
                 placeholder="Nombre"
                 value={nombre1}
                 onChange={(e) => setNombre1(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm"
               />
               <input
                 type="text"
                 placeholder="Apellido"
                 value={apellido1}
                 onChange={(e) => setApellido1(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm"
                 required
               />
             </div>
-            <p className="text-xs text-gray-400">Jugador 2</p>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Jugador 2</p>
             <div className="flex gap-2">
               <input
                 type="text"
                 placeholder="Nombre"
                 value={nombre2}
                 onChange={(e) => setNombre2(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm"
               />
               <input
                 type="text"
                 placeholder="Apellido"
                 value={apellido2}
                 onChange={(e) => setApellido2(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm"
                 required
               />
             </div>
             {apellido1.trim() && apellido2.trim() && (
-              <p className="text-xs text-gray-500">
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                 Nombre de pareja:{" "}
                 <span className="font-semibold">
                   {apellido1.trim()}-{apellido2.trim()}
@@ -427,12 +429,12 @@ export default function TabParejas({ torneoId, torneo }) {
       )}
 
       {/* Lista de parejas confirmadas */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-        <h2 className="font-semibold text-gray-700 mb-3">
+      <div className="themed-card border rounded-2xl p-5">
+        <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
           Lista de parejas confirmadas
         </h2>
         {parejas.length === 0 ? (
-          <p className="text-gray-400 text-sm text-center py-4">
+          <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
             No hay parejas inscriptas todavía
           </p>
         ) : (
@@ -440,17 +442,18 @@ export default function TabParejas({ torneoId, torneo }) {
             {parejas.map((p, index) => (
               <div
                 key={p.id}
-                className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3"
+                className="flex items-center justify-between rounded-xl px-4 py-3"
+                style={{ backgroundColor: "var(--bg-card-hover)" }}
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-gray-400 w-6">
+                  <span className="text-xs font-bold w-6" style={{ color: "var(--text-muted)" }}>
                     {index + 1}
                   </span>
                   <div>
-                    <p className="text-sm font-semibold text-gray-700">
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                       {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
                     </p>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                       {p.jugador1} — {p.jugador2}
                     </p>
                   </div>

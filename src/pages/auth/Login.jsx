@@ -59,7 +59,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md border border-slate-200">
+      <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md border border-slate-200" data-theme="light">
         <div className="flex items-center justify-center gap-2 mb-6">
           <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-green-600 rounded-xl flex items-center justify-center shadow-md shadow-green-900/20">
             <span className="text-white font-bold text-lg">P</span>

@@ -4,10 +4,10 @@ import { useAuthStore } from "../../store/authStore";
 import { crearTorneo } from "../../services/torneoService";
 
 const inputClass =
-  "border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
+  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
 const selectClass =
-  "border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full bg-white";
-const labelClass = "text-xs font-semibold text-gray-500 mb-1 block";
+  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
+const labelClass = "text-xs font-semibold mb-1 block";
 const tipClass =
   "text-xs text-blue-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mt-2";
 
@@ -215,11 +215,12 @@ export default function CrearTorneo() {
       <div className="flex items-center gap-3 mb-6">
         <button
           onClick={() => navigate(-1)}
-          className="text-gray-400 hover:text-gray-600 text-xl"
+          className="text-xl hover:opacity-70"
+          style={{ color: "var(--text-muted)" }}
         >
           ←
         </button>
-        <h1 className="text-xl font-bold text-gray-800">Crear torneo</h1>
+        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Crear torneo</h1>
       </div>
 
       {error && (
@@ -230,13 +231,13 @@ export default function CrearTorneo() {
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         {/* Información general */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-4">
+        <div className="themed-card rounded-2xl p-6 border">
+          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
             Información general
           </h2>
           <div className="flex flex-col gap-3">
             <div>
-              <label className={labelClass}>Nombre del torneo</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Nombre del torneo</label>
               <input
                 type="text"
                 placeholder="Ej: Torneo Apertura 2025"
@@ -247,18 +248,18 @@ export default function CrearTorneo() {
               />
             </div>
             <div>
-              <label className={labelClass}>Descripción (opcional)</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Descripción (opcional)</label>
               <textarea
                 placeholder="Información adicional del torneo..."
                 value={form.descripcion}
                 onChange={set("descripcion")}
                 rows={3}
-                className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
+                className="themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
               />
             </div>
 
             <div>
-              <label className={labelClass}>Categoría Género (hasta 3)</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Categoría Género (hasta 3)</label>
               <div className="flex gap-2">
                 {categoriasGenero.map((cat) => (
                   <button
@@ -268,7 +269,7 @@ export default function CrearTorneo() {
                     className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${
                       form.categoriaGenero.includes(cat.value)
                         ? "bg-green-600 text-white"
-                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                        : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
                     }`}
                   >
                     {cat.label}
@@ -279,7 +280,7 @@ export default function CrearTorneo() {
 
             {form.categoriaGenero.map((genero) => (
               <div key={genero}>
-                <label className={labelClass}>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>
                   Categoría Nivel —{" "}
                   {genero.charAt(0).toUpperCase() + genero.slice(1)}
                 </label>
@@ -292,7 +293,7 @@ export default function CrearTorneo() {
                       className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
                         (form.categoriasConfig[genero] || []).includes(nivel)
                           ? "bg-green-600 text-white"
-                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                          : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
                       }`}
                     >
                       {nivel}
@@ -305,11 +306,11 @@ export default function CrearTorneo() {
         </div>
 
         {/* Formato */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-4">Formato</h2>
+        <div className="themed-card rounded-2xl p-6 border">
+          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Formato</h2>
           <div className="flex flex-col gap-3">
             <div>
-              <label className={labelClass}>Tipo de torneo</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Tipo de torneo</label>
               <select
                 value={form.formato}
                 onChange={set("formato")}
@@ -320,7 +321,7 @@ export default function CrearTorneo() {
                 <option value="liga">Liga</option>
                 <option value="eliminacion">Eliminación directa</option>
               </select>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
                 {formatoDescripcion[form.formato]}
               </p>
             </div>
@@ -328,7 +329,7 @@ export default function CrearTorneo() {
             {(form.formato === "mini" || form.formato === "normal") && (
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className={labelClass}>Sets por partido</label>
+                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Sets por partido</label>
                   <select
                     value={form.sets}
                     onChange={set("sets")}
@@ -341,11 +342,11 @@ export default function CrearTorneo() {
                   </select>
                 </div>
                 <div className="flex-1">
-                  <label className={labelClass}>Games por set</label>
-                  <div className="border border-gray-300 rounded-lg px-4 py-2 text-sm bg-gray-50 text-gray-600">
+                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Games por set</label>
+                  <div className="themed-input rounded-lg px-4 py-2 text-sm" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
                     6 games
                   </div>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
                     Siempre 6 games por set
                   </p>
                 </div>
@@ -354,7 +355,7 @@ export default function CrearTorneo() {
 
             {(form.formato === "mini" || form.formato === "normal") && (
               <div>
-                <label className={labelClass}>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>
                   Parejas que avanzan de cada grupo
                 </label>
                 <select
@@ -377,7 +378,7 @@ export default function CrearTorneo() {
                 onChange={set("superTiebreak")}
                 className="w-4 h-4 accent-green-600"
               />
-              <label htmlFor="superTiebreak" className="text-sm text-gray-600">
+              <label htmlFor="superTiebreak" className="text-sm" style={{ color: "var(--text-muted)" }}>
                 Super tiebreak al 10 en caso de empate
               </label>
             </div>
@@ -391,7 +392,8 @@ export default function CrearTorneo() {
               />
               <label
                 htmlFor="inscripcionAbierta"
-                className="text-sm text-gray-600"
+                className="text-sm"
+                style={{ color: "var(--text-muted)" }}
               >
                 Inscripción abierta al público
               </label>
@@ -405,12 +407,12 @@ export default function CrearTorneo() {
         </div>
 
         {/* Participantes */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-4">Participantes</h2>
+        <div className="themed-card rounded-2xl p-6 border">
+          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Participantes</h2>
           <div className="flex flex-col gap-3">
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className={labelClass}>Máximo de parejas</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Máximo de parejas</label>
                 <input
                   type="number"
                   min="4"
@@ -422,7 +424,7 @@ export default function CrearTorneo() {
                 />
               </div>
               <div className="flex-1">
-                <label className={labelClass}>Costo de inscripción ($)</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Costo de inscripción ($)</label>
                 <input
                   type="number"
                   min="0"
@@ -434,7 +436,7 @@ export default function CrearTorneo() {
               </div>
             </div>
             <div>
-              <label className={labelClass}>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>
                 ¿Qué incluye la inscripción? (opcional)
               </label>
               <textarea
@@ -444,17 +446,17 @@ export default function CrearTorneo() {
                 value={form.inscripcionIncluye}
                 onChange={set("inscripcionIncluye")}
                 rows={3}
-                className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
+                className="themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
               />
             </div>
           </div>
         </div>
 
         {/* Premios */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-4">Premios</h2>
+        <div className="themed-card rounded-2xl p-6 border">
+          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Premios</h2>
           <div>
-            <label className={labelClass}>Premios del torneo (opcional)</label>
+            <label className={labelClass} style={{ color: "var(--text-muted)" }}>Premios del torneo (opcional)</label>
             <textarea
               placeholder={
                 "Ej:\n🥇 1er puesto: $50.000 + 2 paletas Bullpadel\n🥈 2do puesto: $25.000 + voucher tienda\n🥉 3er puesto: Kit de pelotas\n\nTambién podés incluir premios especiales como mejor jugador, fair play, etc."
@@ -462,17 +464,17 @@ export default function CrearTorneo() {
               value={form.premios}
               onChange={set("premios")}
               rows={5}
-              className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
+              className="themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
             />
           </div>
         </div>
 
         {/* Sede y fechas */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-4">Sede y fechas</h2>
+        <div className="themed-card rounded-2xl p-6 border">
+          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Sede y fechas</h2>
           <div className="flex flex-col gap-3">
             <div>
-              <label className={labelClass}>Nombre de la sede</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Nombre de la sede</label>
               <input
                 type="text"
                 placeholder="Ej: Club Náutico Santiago"
@@ -483,7 +485,7 @@ export default function CrearTorneo() {
               />
             </div>
             <div>
-              <label className={labelClass}>Dirección física</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Dirección física</label>
               <input
                 type="text"
                 placeholder="Ej: Av. Belgrano 1234"
@@ -494,7 +496,7 @@ export default function CrearTorneo() {
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className={labelClass}>Instagram de la sede</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Instagram de la sede</label>
                 <input
                   type="text"
                   placeholder="@clubnautico"
@@ -504,7 +506,7 @@ export default function CrearTorneo() {
                 />
               </div>
               <div className="flex-1">
-                <label className={labelClass}>Facebook de la sede</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Facebook de la sede</label>
                 <input
                   type="text"
                   placeholder="facebook.com/clubnautico"
@@ -516,7 +518,7 @@ export default function CrearTorneo() {
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className={labelClass}>Ciudad</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Ciudad</label>
                 <input
                   type="text"
                   placeholder="Ciudad"
@@ -527,7 +529,7 @@ export default function CrearTorneo() {
                 />
               </div>
               <div className="flex-1">
-                <label className={labelClass}>Provincia</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Provincia</label>
                 <select
                   value={form.provincia}
                   onChange={set("provincia")}
@@ -545,7 +547,7 @@ export default function CrearTorneo() {
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className={labelClass}>Fecha de inicio</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Fecha de inicio</label>
                 <input
                   type="date"
                   value={form.fechaInicio}
@@ -555,7 +557,7 @@ export default function CrearTorneo() {
                 />
               </div>
               <div className="flex-1">
-                <label className={labelClass}>Fecha de fin</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Fecha de fin</label>
                 <input
                   type="date"
                   value={form.fechaFin}
@@ -569,10 +571,10 @@ export default function CrearTorneo() {
         </div>
 
         {/* Reglamento */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-4">Reglamento</h2>
+        <div className="themed-card rounded-2xl p-6 border">
+          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Reglamento</h2>
           <div>
-            <label className={labelClass}>
+            <label className={labelClass} style={{ color: "var(--text-muted)" }}>
               Reglas especiales del torneo (opcional)
             </label>
             <textarea
@@ -582,17 +584,17 @@ export default function CrearTorneo() {
               value={form.reglamento}
               onChange={set("reglamento")}
               rows={5}
-              className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
+              className="themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
             />
           </div>
         </div>
 
         {/* Redes y administradores */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-4">Redes y contacto</h2>
+        <div className="themed-card rounded-2xl p-6 border">
+          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Redes y contacto</h2>
           <div className="flex flex-col gap-3">
             <div>
-              <label className={labelClass}>Instagram del organizador</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Instagram del organizador</label>
               <input
                 type="text"
                 placeholder="@toppadeltorneos"
@@ -602,7 +604,7 @@ export default function CrearTorneo() {
               />
             </div>
             <div>
-              <label className={labelClass}>Facebook del organizador</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Facebook del organizador</label>
               <input
                 type="text"
                 placeholder="facebook.com/toppadeltorneos"
@@ -612,7 +614,7 @@ export default function CrearTorneo() {
               />
             </div>
             <div>
-              <label className={labelClass}>WhatsApp general</label>
+              <label className={labelClass} style={{ color: "var(--text-muted)" }}>WhatsApp general</label>
               <input
                 type="text"
                 placeholder="Ej: +54 385 1234567"
@@ -622,9 +624,9 @@ export default function CrearTorneo() {
               />
             </div>
 
-            <div className="mt-2 pt-3 border-t border-gray-100">
+            <div className="mt-2 pt-3 border-t" style={{ borderColor: "var(--border-card)" }}>
               <div className="flex items-center justify-between mb-2">
-                <label className={labelClass}>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>
                   Personas administradoras del torneo
                 </label>
                 <button
@@ -645,7 +647,7 @@ export default function CrearTorneo() {
                       onChange={(e) =>
                         actualizarAdmin(i, "nombre", e.target.value)
                       }
-                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="themed-input flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                     <input
                       type="text"
@@ -654,7 +656,7 @@ export default function CrearTorneo() {
                       onChange={(e) =>
                         actualizarAdmin(i, "whatsapp", e.target.value)
                       }
-                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="themed-input flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                     {form.administradores.length > 1 && (
                       <button
@@ -668,7 +670,7 @@ export default function CrearTorneo() {
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
                 Personas responsables que los jugadores pueden contactar durante
                 el torneo
               </p>
@@ -679,7 +681,8 @@ export default function CrearTorneo() {
         <button
           type="submit"
           disabled={loading}
-          className="bg-green-600 text-white py-3 rounded-xl font-semibold hover:bg-green-700 transition disabled:opacity-50"
+          className="text-white py-3 rounded-xl font-semibold hover:opacity-90 transition disabled:opacity-50"
+          style={{ backgroundColor: "var(--accent)" }}
         >
           {loading ? "Creando torneo..." : "Crear torneo"}
         </button>

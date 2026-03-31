@@ -84,7 +84,7 @@ export default function Register() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-8 px-4">
-      <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md">
+      <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md" data-theme="light">
         <h1 className="text-2xl font-bold text-center text-green-700 mb-6">
           Padely
         </h1>
