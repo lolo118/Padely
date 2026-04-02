@@ -145,6 +145,27 @@ export default function Dashboard() {
         </p>
       </div>
 
+      {/* Recordatorio completar perfil */}
+      {club && (!club.telefono || !club.direccion) && (
+        <div
+          onClick={() => navigate("/admin/configuracion")}
+          className="rounded-2xl p-4 mb-4 cursor-pointer hover:shadow-md transition border"
+          style={{ backgroundColor: "var(--accent-light)", borderColor: "var(--accent)" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(245, 158, 11, 0.15)" }}>
+              <span className="text-lg">⚠️</span>
+            </div>
+            <div>
+              <p className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>Completá los datos de tu club</p>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                Agregá teléfono, dirección y redes sociales para que los jugadores te encuentren
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tarjetas resumen */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div onClick={() => navigate("/admin/canchas")} className={cardStyle}>

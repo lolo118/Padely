@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "../../lib/firebase";
 import { useAuthStore } from "../../store/authStore";
 import { getTorneosByOrganizer } from "../../services/torneoService";
 
@@ -8,12 +10,29 @@ export default function OrgDashboard() {
   const navigate = useNavigate();
   const [torneos, setTorneos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [entidad, setEntidad] = useState(null);
 
   useEffect(() => {
     if (!user) return;
-    getTorneosByOrganizer(user.uid)
-      .then(setTorneos)
-      .finally(() => setLoading(false));
+    const cargar = async () => {
+      try {
+        const [torneosData] = await Promise.all([
+          getTorneosByOrganizer(user.uid),
+        ]);
+        setTorneos(torneosData);
+
+        // Cargar entidad
+        const q = query(collection(db, "organizers"), where("ownerUid", "==", user.uid));
+        const snap = await getDocs(q);
+        if (snap.docs.length > 0) {
+          setEntidad({ id: snap.docs[0].id, ...snap.docs[0].data() });
+        }
+      } catch (err) {
+        console.error("Error:", err);
+      }
+      setLoading(false);
+    };
+    cargar();
   }, [user]);
 
   if (loading)
@@ -32,6 +51,27 @@ export default function OrgDashboard() {
           Resumen de tu actividad como organizador
         </p>
       </div>
+
+      {/* Recordatorio completar perfil de entidad */}
+      {(!entidad || !entidad.telefono || !entidad.bio) && (
+        <div
+          onClick={() => navigate("/org/entidad")}
+          className="rounded-2xl p-4 mb-4 cursor-pointer hover:shadow-md transition border"
+          style={{ backgroundColor: "var(--accent-light)", borderColor: "var(--accent)" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(245, 158, 11, 0.15)" }}>
+              <span className="text-lg">⚠️</span>
+            </div>
+            <div>
+              <p className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>Completá tu perfil de entidad</p>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                Configurá los datos de tu entidad y equipo para que los jugadores te conozcan
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-3 mb-6">
         <div
@@ -96,7 +136,8 @@ export default function OrgDashboard() {
 
       <button
         onClick={() => navigate("/org/torneos/nuevo")}
-        className="w-full bg-blue-600 text-white rounded-2xl p-4 text-sm font-semibold hover:bg-blue-700 transition"
+        className="w-full text-white rounded-2xl p-4 text-sm font-semibold hover:opacity-90 transition"
+        style={{ backgroundColor: "var(--accent)" }}
       >
         + Crear nuevo torneo
       </button>

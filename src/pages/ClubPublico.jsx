@@ -17,6 +17,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { getUserData } from "../services/authService";
 
 const horasDelDia = Array.from(
   { length: 24 },
@@ -183,7 +184,17 @@ export default function ClubPublico() {
     );
   };
 
-  const abrirModal = (cancha, hora, precio) => {
+  const abrirModal = async (cancha, hora, precio) => {
+    if (user) {
+      const userData = await getUserData(user.uid);
+      const registradoConGoogle = user.providerData?.some(p => p.providerId === "google.com");
+      if (!registradoConGoogle && userData && (!userData.telefono || !userData.nivel || !userData.genero || !userData.nacimiento)) {
+        if (window.confirm("Necesitás completar tu perfil para reservar. ¿Ir a completarlo ahora?")) {
+          navigate("/perfil");
+        }
+        return;
+      }
+    }
     setModalData({ cancha, hora, precio });
     setFormReserva({
       nombreJugador: user?.displayName || "",

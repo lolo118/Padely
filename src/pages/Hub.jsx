@@ -64,7 +64,7 @@ export default function Hub() {
       setCargando(false);
     };
     cargar();
-  }, [fechaSeleccionada]);
+  }, [fechaSeleccionada, user]);
 
   const estaOcupado = (clubId, canchaId, hora) => {
     const reservas = reservasPorClub[clubId] || [];

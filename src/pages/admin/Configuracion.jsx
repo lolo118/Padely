@@ -581,7 +581,7 @@ export default function Configuracion() {
             </h2>
 
             {/* Dueño */}
-            <div className="flex items-center justify-between bg-emerald-50 rounded-xl px-4 py-3 mb-3">
+            <div className="flex items-center justify-between rounded-xl px-4 py-3 mb-3" style={{ backgroundColor: "var(--accent-light)" }}>
               <div>
                 <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                   {user?.email}

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { onAuthChange, getUserData } from "./services/authService";
+import { onAuthChange } from "./services/authService";
 import { useAuthStore } from "./store/authStore";
 import useThemeStore from "./store/themeStore";
 import Inicio from "./pages/Inicio";
@@ -47,50 +47,6 @@ function ProtectedRoute({ children }) {
       </div>
     );
   if (!user) return <Navigate to="/login" />;
-  return children;
-}
-
-function RoleRoute({ children, allowedRoles }) {
-  const { user, loading } = useAuthStore();
-  const [userRole, setUserRole] = useState(null);
-  const [checking, setChecking] = useState(true);
-
-  useEffect(() => {
-    const verificar = async () => {
-      if (!user) {
-        setChecking(false);
-        return;
-      }
-      try {
-        const data = await getUserData(user.uid);
-        setUserRole(data?.role || ["jugador"]);
-      } catch {
-        setUserRole(["jugador"]);
-      }
-      setChecking(false);
-    };
-    verificar();
-  }, [user]);
-
-  if (loading || checking)
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ color: "var(--text-muted)" }}
-      >
-        Cargando...
-      </div>
-    );
-  if (!user) return <Navigate to="/login" />;
-
-  const tienePermiso =
-    userRole && allowedRoles.some((r) => userRole.includes(r));
-  if (!tienePermiso) {
-    if (userRole.includes("club")) return <Navigate to="/admin" />;
-    if (userRole.includes("organizador")) return <Navigate to="/org" />;
-    return <Navigate to="/inicio" />;
-  }
-
   return children;
 }
 
@@ -152,9 +108,9 @@ export default function App() {
         <Route
           path="/admin"
           element={
-            <RoleRoute allowedRoles={["club"]}>
+            <ProtectedRoute>
               <ClubLayout />
-            </RoleRoute>
+            </ProtectedRoute>
           }
         >
           <Route index element={<Dashboard />} />
@@ -170,9 +126,9 @@ export default function App() {
         <Route
           path="/org"
           element={
-            <RoleRoute allowedRoles={["organizador"]}>
+            <ProtectedRoute>
               <OrgLayout />
-            </RoleRoute>
+            </ProtectedRoute>
           }
         >
           <Route index element={<OrgDashboard />} />

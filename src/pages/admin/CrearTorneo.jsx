@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "../../lib/firebase";
 import { useAuthStore } from "../../store/authStore";
 import { crearTorneo } from "../../services/torneoService";
+import { getClubByOwner } from "../../services/canchaService";
+import PerfilIncompleto from "../../components/PerfilIncompleto";
 
 const inputClass =
   "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
@@ -75,6 +79,40 @@ export default function CrearTorneo() {
   const navigate = useNavigate();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [perfilCompleto, setPerfilCompleto] = useState(true);
+  const [tipoUsuario, setTipoUsuario] = useState("club");
+
+  useEffect(() => {
+    if (!user) return;
+    const verificar = async () => {
+      try {
+        const { getUserData } = await import("../../services/authService");
+        const userData = await getUserData(user.uid);
+        const roles = userData?.role || ["jugador"];
+
+        if (roles.includes("organizador")) {
+          setTipoUsuario("organizador");
+          const q = query(collection(db, "organizers"), where("ownerUid", "==", user.uid));
+          const snap = await getDocs(q);
+          if (snap.docs.length > 0) {
+            const ent = snap.docs[0].data();
+            if (!ent.telefono || !ent.bio || !ent.ciudad) setPerfilCompleto(false);
+          } else {
+            setPerfilCompleto(false);
+          }
+        } else if (roles.includes("club")) {
+          setTipoUsuario("club");
+          const clubData = await getClubByOwner(user.uid);
+          if (clubData && (!clubData.telefono || !clubData.direccion || !clubData.ciudad)) {
+            setPerfilCompleto(false);
+          }
+        }
+      } catch (err) {
+        console.error("Error verificando perfil:", err);
+      }
+    };
+    verificar();
+  }, [user]);
 
   const [form, setForm] = useState({
     nombre: "",
@@ -98,6 +136,8 @@ export default function CrearTorneo() {
     gamesPorSet: 6,
     superTiebreak: false,
     inscripcionAbierta: true,
+    habilitarReclamos: true,
+    plazoReclamosHoras: 2,
     reglamento: "",
     premios: "",
     instagramOrganizador: "",
@@ -209,6 +249,10 @@ export default function CrearTorneo() {
       setLoading(false);
     }
   };
+
+  if (!perfilCompleto) {
+    return <PerfilIncompleto tipo={tipoUsuario} ruta={tipoUsuario === "organizador" ? "/org/entidad" : "/admin/configuracion"} />;
+  }
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -398,6 +442,34 @@ export default function CrearTorneo() {
                 Inscripción abierta al público
               </label>
             </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="habilitarReclamos"
+                checked={form.habilitarReclamos}
+                onChange={set("habilitarReclamos")}
+                className="w-4 h-4 accent-green-600"
+              />
+              <label htmlFor="habilitarReclamos" className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                Habilitar sistema de reclamos de categoría
+              </label>
+            </div>
+            {form.habilitarReclamos && (
+              <div>
+                <label className={labelClass}>Plazo para adherirse al reclamo (horas)</label>
+                <select
+                  value={form.plazoReclamosHoras}
+                  onChange={set("plazoReclamosHoras")}
+                  className={`${selectClass} themed-input`}
+                >
+                  <option value={1}>1 hora</option>
+                  <option value={2}>2 horas</option>
+                  <option value={4}>4 horas</option>
+                  <option value={8}>8 horas</option>
+                  <option value={24}>24 horas</option>
+                </select>
+              </div>
+            )}
 
             <p className={tipClass}>
               💡 En formato "Mini torneo" se juega 1 set por partido. En "Torneo

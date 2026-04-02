@@ -176,7 +176,7 @@ export default function OrgEquipo() {
           Miembros ({equipo.length + 1})
         </h2>
 
-        <div className="flex items-center justify-between bg-blue-50 rounded-xl px-4 py-3 mb-3">
+        <div className="flex items-center justify-between rounded-xl px-4 py-3 mb-3" style={{ backgroundColor: "rgba(59,130,246,0.1)" }}>
           <div>
             <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
               {user?.email}

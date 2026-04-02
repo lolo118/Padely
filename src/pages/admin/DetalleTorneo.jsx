@@ -4,7 +4,7 @@ import { getTorneoById, actualizarTorneo } from "../../services/torneoService";
 
 import TabGrupos from "./TabGrupos";
 import TabBracket from "./TabBracket";
-import TabParejas from "./TabParejas"; // ✅ Import agregado
+import TabParejas from "./TabParejas";
 
 const estadoBadge = {
   inscripcion: "bg-blue-100 text-blue-700",

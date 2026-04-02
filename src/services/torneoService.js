@@ -168,3 +168,59 @@ export const getTodosLosTorneos = async () => {
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
+// ========== RECLAMOS ==========
+
+export const crearReclamo = async (torneoId, reclamo) => {
+  const ref = await addDoc(
+    collection(db, "tournaments", torneoId, "reclamos"),
+    {
+      ...reclamo,
+      estado: "abierto",
+      adheridos: [],
+      descargo: null,
+      decision: null,
+      motivoDecision: null,
+      creadoEn: new Date().toISOString(),
+    },
+  );
+  return ref.id;
+};
+
+export const getReclamos = async (torneoId) => {
+  const snap = await getDocs(
+    collection(db, "tournaments", torneoId, "reclamos"),
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const adherirseAReclamo = async (torneoId, reclamoId, pareja) => {
+  const ref = doc(db, "tournaments", torneoId, "reclamos", reclamoId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const data = snap.data();
+  const yaAdherido = (data.adheridos || []).some((a) => a.id === pareja.id);
+  if (yaAdherido) return;
+  await updateDoc(ref, {
+    adheridos: [...(data.adheridos || []), pareja],
+  });
+};
+
+export const dejarDescargo = async (torneoId, reclamoId, descargo) => {
+  await updateDoc(doc(db, "tournaments", torneoId, "reclamos", reclamoId), {
+    descargo,
+  });
+};
+
+export const resolverReclamo = async (
+  torneoId,
+  reclamoId,
+  decision,
+  motivoDecision,
+) => {
+  await updateDoc(doc(db, "tournaments", torneoId, "reclamos", reclamoId), {
+    estado: "resuelto",
+    decision,
+    motivoDecision,
+    resueltaEn: new Date().toISOString(),
+  });
+};

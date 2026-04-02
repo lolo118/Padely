@@ -64,6 +64,7 @@ export default function DetalleTorneoPublico() {
   const [inscripcionEnviada, setInscripcionEnviada] = useState(false);
   const [linkInvitacion, setLinkInvitacion] = useState("");
 
+  // Reclamos
   useEffect(() => {
     const cargar = async () => {
       try {
@@ -625,6 +626,7 @@ export default function DetalleTorneoPublico() {
           )}
         </div>
       )}
+
     </div>
   );
 }

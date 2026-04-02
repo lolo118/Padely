@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "../../store/authStore";
+import PerfilIncompleto from "../../components/PerfilIncompleto";
 import {
   getClubByOwner,
   getCanchas,
@@ -275,6 +276,10 @@ export default function Canchas() {
         </p>
       </div>
     );
+  }
+
+  if (club && (!club.telefono || !club.direccion || !club.ciudad)) {
+    return <PerfilIncompleto tipo="club" ruta="/admin/configuracion" />;
   }
 
   return (
