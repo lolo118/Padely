@@ -224,3 +224,107 @@ export const resolverReclamo = async (
     resueltaEn: new Date().toISOString(),
   });
 };
+
+// ========== SISTEMA DE PUNTOS Y RANKING ==========
+
+const CATEGORIAS_ORDEN = ["8va", "7ma", "6ta", "5ta", "4ta", "3era", "2da", "1era", "Libre"];
+
+const PUNTOS = {
+  ganarPartido: 10,
+  ganarSet: 3,
+  perderPartido: 2,
+  campeon: 50,
+  subcampeon: 25,
+};
+
+export const actualizarPuntosPartido = async (jugadorUid, setsGanados, ganoPartido) => {
+  if (!jugadorUid) return;
+  try {
+    const userRef = doc(db, "users", jugadorUid);
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) return;
+    const data = snap.data();
+
+    let puntosNuevos = (data.puntos || 0);
+    puntosNuevos += setsGanados * PUNTOS.ganarSet;
+    puntosNuevos += ganoPartido ? PUNTOS.ganarPartido : PUNTOS.perderPartido;
+
+    const updates = {
+      puntos: puntosNuevos,
+      partidosGanados: (data.partidosGanados || 0) + (ganoPartido ? 1 : 0),
+      partidosPerdidos: (data.partidosPerdidos || 0) + (ganoPartido ? 0 : 1),
+    };
+
+    await updateDoc(userRef, updates);
+  } catch (err) {
+    console.error("Error actualizando puntos:", err);
+  }
+};
+
+export const actualizarPuntosTorneo = async (jugadorUid, posicion) => {
+  if (!jugadorUid) return;
+  try {
+    const userRef = doc(db, "users", jugadorUid);
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) return;
+    const data = snap.data();
+
+    let bonus = 0;
+    if (posicion === 1) bonus = PUNTOS.campeon;
+    else if (posicion === 2) bonus = PUNTOS.subcampeon;
+
+    const updates = {
+      puntos: (data.puntos || 0) + bonus,
+      torneosJugados: (data.torneosJugados || 0) + 1,
+      torneosGanados: (data.torneosGanados || 0) + (posicion === 1 ? 1 : 0),
+    };
+
+    await updateDoc(userRef, updates);
+
+    // Evaluar ascenso
+    if (posicion === 1) {
+      await evaluarAscenso(jugadorUid);
+    }
+  } catch (err) {
+    console.error("Error actualizando puntos torneo:", err);
+  }
+};
+
+export const evaluarAscenso = async (jugadorUid) => {
+  try {
+    const userRef = doc(db, "users", jugadorUid);
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) return;
+    const data = snap.data();
+
+    const categoriaActual = data.nivel || "";
+    const puntos = data.puntos || 0;
+    const torneosGanadosEnCategoria = data.torneosGanadosEnCategoria || 0;
+
+    const idxActual = CATEGORIAS_ORDEN.indexOf(categoriaActual);
+    if (idxActual === -1 || idxActual >= CATEGORIAS_ORDEN.length - 1) return;
+
+    // Opción A: 150+ puntos + 2 torneos ganados en categoría
+    // Opción B: 300+ puntos + 1 torneo ganado en categoría
+    const opcionA = puntos >= 150 && torneosGanadosEnCategoria >= 2;
+    const opcionB = puntos >= 300 && torneosGanadosEnCategoria >= 1;
+
+    if (opcionA || opcionB) {
+      const nuevaCategoria = CATEGORIAS_ORDEN[idxActual + 1];
+      await updateDoc(userRef, {
+        nivel: nuevaCategoria,
+        torneosGanadosEnCategoria: 0,
+        ascensos: [...(data.ascensos || []), {
+          de: categoriaActual,
+          a: nuevaCategoria,
+          fecha: new Date().toISOString(),
+          puntos,
+          torneosGanados: torneosGanadosEnCategoria,
+        }],
+      });
+      console.log(`Jugador ${jugadorUid} ascendió de ${categoriaActual} a ${nuevaCategoria}`);
+    }
+  } catch (err) {
+    console.error("Error evaluando ascenso:", err);
+  }
+};

@@ -546,6 +546,38 @@ export default function TabBracket({ torneoId, torneo }) {
       console.error("Error al guardar resultado:", e);
     }
 
+    // Actualizar puntos de los jugadores
+    try {
+      const { actualizarPuntosPartido, actualizarPuntosTorneo } = await import("../../services/torneoService");
+      const partido = rondasActualizadas[rondaIdx][partidoIdx];
+      const p1 = partido.pareja1;
+      const p2 = partido.pareja2;
+      let sP1 = 0, sP2 = 0;
+      setsFinales.forEach((s) => {
+        let g1 = s.g1, g2 = s.g2;
+        if (s.tb1 !== undefined && s.tb2 !== undefined) {
+          if (s.tb1 > s.tb2) g1++; else if (s.tb2 > s.tb1) g2++;
+        }
+        if (g1 > g2) sP1++; else if (g2 > g1) sP2++;
+      });
+      const ganoP1 = sP1 > sP2;
+      if (p1.jugador1Uid) await actualizarPuntosPartido(p1.jugador1Uid, ganoP1 ? sP1 : sP2, ganoP1);
+      if (p1.jugador2Uid) await actualizarPuntosPartido(p1.jugador2Uid, ganoP1 ? sP1 : sP2, ganoP1);
+      if (p2.jugador1Uid) await actualizarPuntosPartido(p2.jugador1Uid, ganoP1 ? sP2 : sP1, !ganoP1);
+      if (p2.jugador2Uid) await actualizarPuntosPartido(p2.jugador2Uid, ganoP1 ? sP2 : sP1, !ganoP1);
+
+      // Si es la final, dar bonus
+      const esFinal = rondaIdx === rondasActualizadas.length - 1;
+      if (esFinal) {
+        const campeon = ganoP1 ? p1 : p2;
+        const sub = ganoP1 ? p2 : p1;
+        if (campeon.jugador1Uid) await actualizarPuntosTorneo(campeon.jugador1Uid, 1);
+        if (campeon.jugador2Uid) await actualizarPuntosTorneo(campeon.jugador2Uid, 1);
+        if (sub.jugador1Uid) await actualizarPuntosTorneo(sub.jugador1Uid, 2);
+        if (sub.jugador2Uid) await actualizarPuntosTorneo(sub.jugador2Uid, 2);
+      }
+    } catch (err) { console.error("Error actualizando puntos:", err); }
+
     setEditandoResultado(null);
     setSetsInput([]);
     setTiebreakInput([]);
