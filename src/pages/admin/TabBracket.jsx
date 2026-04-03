@@ -552,6 +552,7 @@ export default function TabBracket({ torneoId, torneo }) {
       const partido = rondasActualizadas[rondaIdx][partidoIdx];
       const p1 = partido.pareja1;
       const p2 = partido.pareja2;
+      const categoriaTorneo = torneo.categoriasConfig ? Object.values(torneo.categoriasConfig).flat()[0] || "8va" : "8va";
       let sP1 = 0, sP2 = 0;
       setsFinales.forEach((s) => {
         let g1 = s.g1, g2 = s.g2;
@@ -561,20 +562,20 @@ export default function TabBracket({ torneoId, torneo }) {
         if (g1 > g2) sP1++; else if (g2 > g1) sP2++;
       });
       const ganoP1 = sP1 > sP2;
-      if (p1.jugador1Uid) await actualizarPuntosPartido(p1.jugador1Uid, ganoP1 ? sP1 : sP2, ganoP1);
-      if (p1.jugador2Uid) await actualizarPuntosPartido(p1.jugador2Uid, ganoP1 ? sP1 : sP2, ganoP1);
-      if (p2.jugador1Uid) await actualizarPuntosPartido(p2.jugador1Uid, ganoP1 ? sP2 : sP1, !ganoP1);
-      if (p2.jugador2Uid) await actualizarPuntosPartido(p2.jugador2Uid, ganoP1 ? sP2 : sP1, !ganoP1);
+      if (p1.jugador1Uid) await actualizarPuntosPartido(p1.jugador1Uid, ganoP1 ? sP1 : sP2, ganoP1, categoriaTorneo);
+      if (p1.jugador2Uid) await actualizarPuntosPartido(p1.jugador2Uid, ganoP1 ? sP1 : sP2, ganoP1, categoriaTorneo);
+      if (p2.jugador1Uid) await actualizarPuntosPartido(p2.jugador1Uid, ganoP1 ? sP2 : sP1, !ganoP1, categoriaTorneo);
+      if (p2.jugador2Uid) await actualizarPuntosPartido(p2.jugador2Uid, ganoP1 ? sP2 : sP1, !ganoP1, categoriaTorneo);
 
       // Si es la final, dar bonus
       const esFinal = rondaIdx === rondasActualizadas.length - 1;
       if (esFinal) {
         const campeon = ganoP1 ? p1 : p2;
         const sub = ganoP1 ? p2 : p1;
-        if (campeon.jugador1Uid) await actualizarPuntosTorneo(campeon.jugador1Uid, 1);
-        if (campeon.jugador2Uid) await actualizarPuntosTorneo(campeon.jugador2Uid, 1);
-        if (sub.jugador1Uid) await actualizarPuntosTorneo(sub.jugador1Uid, 2);
-        if (sub.jugador2Uid) await actualizarPuntosTorneo(sub.jugador2Uid, 2);
+        if (campeon.jugador1Uid) await actualizarPuntosTorneo(campeon.jugador1Uid, 1, categoriaTorneo);
+        if (campeon.jugador2Uid) await actualizarPuntosTorneo(campeon.jugador2Uid, 1, categoriaTorneo);
+        if (sub.jugador1Uid) await actualizarPuntosTorneo(sub.jugador1Uid, 2, categoriaTorneo);
+        if (sub.jugador2Uid) await actualizarPuntosTorneo(sub.jugador2Uid, 2, categoriaTorneo);
       }
     } catch (err) { console.error("Error actualizando puntos:", err); }
 

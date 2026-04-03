@@ -237,7 +237,25 @@ const PUNTOS = {
   subcampeon: 25,
 };
 
-export const actualizarPuntosPartido = async (jugadorUid, setsGanados, ganoPartido) => {
+function getMultiplicadorCategoria(categoriaJugador, categoriaTorneo) {
+  const idxJugador = CATEGORIAS_ORDEN.indexOf(categoriaJugador);
+  const idxTorneo = CATEGORIAS_ORDEN.indexOf(categoriaTorneo);
+  if (idxJugador === -1 || idxTorneo === -1) return 1;
+  const diff = idxTorneo - idxJugador;
+  if (diff >= 2) return 2;
+  if (diff === 1) return 1.5;
+  return 1;
+}
+
+export function puedeInscribirse(categoriaJugador, categoriaTorneo) {
+  const idxJugador = CATEGORIAS_ORDEN.indexOf(categoriaJugador);
+  const idxTorneo = CATEGORIAS_ORDEN.indexOf(categoriaTorneo);
+  if (idxJugador === -1 || idxTorneo === -1) return true;
+  // No puede inscribirse en categoría menor
+  return idxTorneo >= idxJugador;
+}
+
+export const actualizarPuntosPartido = async (jugadorUid, setsGanados, ganoPartido, categoriaTorneo) => {
   if (!jugadorUid) return;
   try {
     const userRef = doc(db, "users", jugadorUid);
@@ -245,12 +263,15 @@ export const actualizarPuntosPartido = async (jugadorUid, setsGanados, ganoParti
     if (!snap.exists()) return;
     const data = snap.data();
 
-    let puntosNuevos = (data.puntos || 0);
-    puntosNuevos += setsGanados * PUNTOS.ganarSet;
-    puntosNuevos += ganoPartido ? PUNTOS.ganarPartido : PUNTOS.perderPartido;
+    const multiplicador = getMultiplicadorCategoria(data.nivel || "8va", categoriaTorneo || "8va");
+
+    let puntosPartido = 0;
+    puntosPartido += setsGanados * PUNTOS.ganarSet;
+    puntosPartido += ganoPartido ? PUNTOS.ganarPartido : PUNTOS.perderPartido;
+    puntosPartido = Math.round(puntosPartido * multiplicador);
 
     const updates = {
-      puntos: puntosNuevos,
+      puntos: (data.puntos || 0) + puntosPartido,
       partidosGanados: (data.partidosGanados || 0) + (ganoPartido ? 1 : 0),
       partidosPerdidos: (data.partidosPerdidos || 0) + (ganoPartido ? 0 : 1),
     };
@@ -261,7 +282,7 @@ export const actualizarPuntosPartido = async (jugadorUid, setsGanados, ganoParti
   }
 };
 
-export const actualizarPuntosTorneo = async (jugadorUid, posicion) => {
+export const actualizarPuntosTorneo = async (jugadorUid, posicion, categoriaTorneo) => {
   if (!jugadorUid) return;
   try {
     const userRef = doc(db, "users", jugadorUid);
@@ -269,22 +290,25 @@ export const actualizarPuntosTorneo = async (jugadorUid, posicion) => {
     if (!snap.exists()) return;
     const data = snap.data();
 
+    const multiplicador = getMultiplicadorCategoria(data.nivel || "8va", categoriaTorneo || "8va");
+
     let bonus = 0;
-    if (posicion === 1) bonus = PUNTOS.campeon;
-    else if (posicion === 2) bonus = PUNTOS.subcampeon;
+    if (posicion === 1) bonus = Math.round(PUNTOS.campeon * multiplicador);
+    else if (posicion === 2) bonus = Math.round(PUNTOS.subcampeon * multiplicador);
+
+    const torneosGanadosEnCategoria = (data.torneosGanadosEnCategoria || 0) + (posicion === 1 ? 1 : 0);
 
     const updates = {
       puntos: (data.puntos || 0) + bonus,
       torneosJugados: (data.torneosJugados || 0) + 1,
       torneosGanados: (data.torneosGanados || 0) + (posicion === 1 ? 1 : 0),
+      torneosGanadosEnCategoria,
     };
 
     await updateDoc(userRef, updates);
 
     // Evaluar ascenso
-    if (posicion === 1) {
-      await evaluarAscenso(jugadorUid);
-    }
+    await evaluarAscenso(jugadorUid);
   } catch (err) {
     console.error("Error actualizando puntos torneo:", err);
   }
@@ -304,13 +328,16 @@ export const evaluarAscenso = async (jugadorUid) => {
     const idxActual = CATEGORIAS_ORDEN.indexOf(categoriaActual);
     if (idxActual === -1 || idxActual >= CATEGORIAS_ORDEN.length - 1) return;
 
-    // Opción A: 150+ puntos + 2 torneos ganados en categoría
-    // Opción B: 300+ puntos + 1 torneo ganado en categoría
-    const opcionA = puntos >= 150 && torneosGanadosEnCategoria >= 2;
-    const opcionB = puntos >= 300 && torneosGanadosEnCategoria >= 1;
+    // Vía A: 150+ puntos + 2 torneos ganados en categoría
+    const viaA = puntos >= 150 && torneosGanadosEnCategoria >= 2;
+    // Vía B: 300+ puntos + 1 torneo ganado en categoría
+    const viaB = puntos >= 300 && torneosGanadosEnCategoria >= 1;
+    // Vía C: 500+ puntos sin necesidad de ganar torneos (ascenso por experiencia)
+    const viaC = puntos >= 500;
 
-    if (opcionA || opcionB) {
+    if (viaA || viaB || viaC) {
       const nuevaCategoria = CATEGORIAS_ORDEN[idxActual + 1];
+      const via = viaA ? "A (puntos + victorias)" : viaB ? "B (puntos + victoria)" : "C (experiencia)";
       await updateDoc(userRef, {
         nivel: nuevaCategoria,
         torneosGanadosEnCategoria: 0,
@@ -320,9 +347,10 @@ export const evaluarAscenso = async (jugadorUid) => {
           fecha: new Date().toISOString(),
           puntos,
           torneosGanados: torneosGanadosEnCategoria,
+          via,
         }],
       });
-      console.log(`Jugador ${jugadorUid} ascendió de ${categoriaActual} a ${nuevaCategoria}`);
+      console.log(`Jugador ${jugadorUid} ascendió de ${categoriaActual} a ${nuevaCategoria} por vía ${via}`);
     }
   } catch (err) {
     console.error("Error evaluando ascenso:", err);

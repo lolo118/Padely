@@ -409,6 +409,7 @@ export default function TabGrupos({ torneoId, torneo }) {
       const { actualizarPuntosPartido } = await import("../../services/torneoService");
       const p1 = partidos[partidoIdx].pareja1;
       const p2 = partidos[partidoIdx].pareja2;
+      const categoriaTorneo = torneo.categoriasConfig ? Object.values(torneo.categoriasConfig).flat()[0] || "8va" : "8va";
       let setsP1Final = 0, setsP2Final = 0;
       setsFinales.forEach((s) => {
         let g1 = s.g1, g2 = s.g2;
@@ -418,10 +419,10 @@ export default function TabGrupos({ torneoId, torneo }) {
         if (g1 > g2) setsP1Final++; else if (g2 > g1) setsP2Final++;
       });
       const ganoP1 = setsP1Final > setsP2Final;
-      if (p1.jugador1Uid) await actualizarPuntosPartido(p1.jugador1Uid, ganoP1 ? setsP1Final : setsP2Final, ganoP1);
-      if (p1.jugador2Uid) await actualizarPuntosPartido(p1.jugador2Uid, ganoP1 ? setsP1Final : setsP2Final, ganoP1);
-      if (p2.jugador1Uid) await actualizarPuntosPartido(p2.jugador1Uid, ganoP1 ? setsP2Final : setsP1Final, !ganoP1);
-      if (p2.jugador2Uid) await actualizarPuntosPartido(p2.jugador2Uid, ganoP1 ? setsP2Final : setsP1Final, !ganoP1);
+      if (p1.jugador1Uid) await actualizarPuntosPartido(p1.jugador1Uid, ganoP1 ? setsP1Final : setsP2Final, ganoP1, categoriaTorneo);
+      if (p1.jugador2Uid) await actualizarPuntosPartido(p1.jugador2Uid, ganoP1 ? setsP1Final : setsP2Final, ganoP1, categoriaTorneo);
+      if (p2.jugador1Uid) await actualizarPuntosPartido(p2.jugador1Uid, ganoP1 ? setsP2Final : setsP1Final, !ganoP1, categoriaTorneo);
+      if (p2.jugador2Uid) await actualizarPuntosPartido(p2.jugador2Uid, ganoP1 ? setsP2Final : setsP1Final, !ganoP1, categoriaTorneo);
     } catch (err) { console.error("Error actualizando puntos:", err); }
 
     setEditandoResultado(null);
