@@ -183,27 +183,21 @@ export default function ClubLayout() {
             ))}
           </div>
 
-          <div className="mt-auto border-t border-slate-700 md:border-slate-200 p-4">
-            <NavLink
-              to="/hub"
-              className="flex items-center gap-3 text-sm text-slate-400 hover:text-emerald-400 md:hover:text-[var(--accent)] transition px-3 py-2 rounded-xl hover:bg-slate-700/50 md:hover:bg-[var(--bg-card-hover)]"
+          <div className="mt-auto border-t border-slate-700 md:border-[var(--sidebar-border)] p-4">
+            <button
+              onClick={async () => {
+                const { signOut } = await import("firebase/auth");
+                const { auth } = await import("../../lib/firebase");
+                await signOut(auth);
+                window.location.href = "/login";
+              }}
+              className="flex items-center gap-3 text-sm text-red-400 hover:text-red-300 transition px-3 py-2 rounded-xl hover:bg-slate-700/50 md:hover:bg-red-50 w-full"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="2" y1="12" x2="22" y2="12" />
-                <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
               </svg>
-              <span>Ver hub público</span>
-            </NavLink>
+              <span>Cerrar sesión</span>
+            </button>
           </div>
         </aside>
 

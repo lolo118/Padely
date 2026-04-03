@@ -8,7 +8,9 @@ import {
   getBracket,
   crearSolicitudInscripcion,
   getInscripciones,
+  puedeInscribirse,
 } from "../services/torneoService";
+import { getUserData } from "../services/authService";
 
 const estadoBadge = {
   inscripcion: "bg-blue-100 text-blue-700",
@@ -63,6 +65,8 @@ export default function DetalleTorneoPublico() {
   const [enviando, setEnviando] = useState(false);
   const [inscripcionEnviada, setInscripcionEnviada] = useState(false);
   const [linkInvitacion, setLinkInvitacion] = useState("");
+  const [restriccionCategoria, setRestriccionCategoria] = useState(null);
+  const [categoriaJugador, setCategoriaJugador] = useState("");
 
   // Reclamos
   useEffect(() => {
@@ -81,13 +85,32 @@ export default function DetalleTorneoPublico() {
         setGrupos(gruposData);
         if (bracketData) setBracket(bracketData);
         setInscripciones(inscData);
+
+        // Verificar restricción de categoría
+        if (user && torneoData) {
+          const userData = await getUserData(user.uid);
+          if (userData) {
+            setCategoriaJugador(userData.nivel || "");
+            const categoriasTorneo = torneoData.categoriasConfig
+              ? Object.values(torneoData.categoriasConfig).flat()
+              : [];
+            if (userData.nivel && categoriasTorneo.length > 0) {
+              const puedeEnAlguna = categoriasTorneo.some((cat) => puedeInscribirse(userData.nivel, cat));
+              if (!puedeEnAlguna) {
+                setRestriccionCategoria(
+                  `Tu categoría (${userData.nivel}) es superior a las categorías de este torneo. No podés inscribirte en una categoría menor.`
+                );
+              }
+            }
+          }
+        }
       } catch (err) {
         console.error("Error al cargar torneo:", err);
       }
       setLoading(false);
     };
     cargar();
-  }, [id]);
+  }, [id, user]);
 
   const yaInscripto = user
     ? inscripciones.some(
@@ -164,13 +187,38 @@ export default function DetalleTorneoPublico() {
         torneo.inscripcionAbierta &&
         !yaInscripto &&
         !inscripcionEnviada && (
-          <button
-            onClick={() => setMostrarFormInsc(true)}
-            className="w-full bg-green-600 text-white font-semibold py-3 rounded-xl hover:bg-green-700 transition mb-4"
-          >
-            Inscribirme a este torneo
-          </button>
+          <>
+            {restriccionCategoria ? (
+              <div className="rounded-xl p-4 mb-4 border" style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.2)" }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-red-100">
+                    <span className="text-lg">🚫</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-red-600">No podés inscribirte</p>
+                    <p className="text-xs text-red-500 mt-0.5">{restriccionCategoria}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setMostrarFormInsc(true)}
+                className="w-full text-white font-semibold py-3 rounded-xl transition mb-4"
+                style={{ backgroundColor: "var(--accent)" }}
+              >
+                Inscribirme a este torneo
+              </button>
+            )}
+          </>
         )}
+
+      {yaInscripto && !inscripcionEnviada && (
+        <div className="rounded-xl p-4 mb-4 border" style={{ backgroundColor: "var(--accent-light)", borderColor: "var(--accent)" }}>
+          <p className="text-sm font-semibold text-center" style={{ color: "var(--accent)" }}>
+            Ya estás inscripto en este torneo
+          </p>
+        </div>
+      )}
 
       {/* Solicitud enviada */}
       {inscripcionEnviada && (
@@ -207,13 +255,6 @@ export default function DetalleTorneoPublico() {
         </div>
       )}
 
-      {yaInscripto && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 text-center">
-          <p className="text-blue-700 font-semibold">
-            Ya tenés una inscripción en este torneo
-          </p>
-        </div>
-      )}
 
       {/* Formulario inscripción */}
       {mostrarFormInsc && (
@@ -385,6 +426,13 @@ export default function DetalleTorneoPublico() {
                         .join(" | ")
                     : "—"}
                 </span>
+                {categoriaJugador && (
+                  <div className="mt-2 rounded-lg p-2" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      Tu categoría: <span className="font-semibold" style={{ color: "var(--accent)" }}>{categoriaJugador}</span>
+                    </p>
+                  </div>
+                )}
               </div>
               <div>
                 <span className="block" style={{ color: "var(--text-muted)" }}>Máx. parejas</span>

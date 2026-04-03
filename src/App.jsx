@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { onAuthChange } from "./services/authService";
+import { onAuthChange, getUserData } from "./services/authService";
 import { useAuthStore } from "./store/authStore";
 import useThemeStore from "./store/themeStore";
 import Inicio from "./pages/Inicio";
@@ -50,6 +50,32 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+function RedirigirPorRol() {
+  const { user } = useAuthStore();
+  const [rol, setRol] = useState(null);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    const verificar = async () => {
+      if (!user) { setChecking(false); return; }
+      try {
+        const data = await getUserData(user.uid);
+        const roles = data?.role || ["jugador"];
+        if (roles.includes("club")) setRol("club");
+        else if (roles.includes("organizador")) setRol("organizador");
+        else setRol("jugador");
+      } catch { setRol("jugador"); }
+      setChecking(false);
+    };
+    verificar();
+  }, [user]);
+
+  if (checking) return <div className="min-h-screen flex items-center justify-center" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
+  if (rol === "club") return <Navigate to="/admin" />;
+  if (rol === "organizador") return <Navigate to="/org" />;
+  return <Inicio />;
+}
+
 export default function App() {
   const { setUser, setLoading } = useAuthStore();
   const { initTheme } = useThemeStore();
@@ -94,7 +120,7 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route path="/inicio" element={<Inicio />} />
+          <Route path="/inicio" element={<RedirigirPorRol />} />
           <Route path="/hub" element={<Hub />} />
           <Route path="/torneos" element={<Torneos />} />
           <Route path="/torneos/:id" element={<DetalleTorneoPublico />} />
