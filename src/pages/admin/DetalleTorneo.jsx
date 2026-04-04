@@ -5,6 +5,7 @@ import { getTorneoById, actualizarTorneo } from "../../services/torneoService";
 import TabGrupos from "./TabGrupos";
 import TabBracket from "./TabBracket";
 import TabParejas from "./TabParejas";
+import TabReclamos from "./TabReclamos";
 
 const estadoBadge = {
   inscripcion: "bg-blue-100 text-blue-700",
@@ -25,6 +26,13 @@ const formatoLabel = {
   normal: "Torneo normal",
   liga: "Liga",
   eliminacion: "Eliminación directa",
+};
+
+const formatoDesc = {
+  mini: "Fase de grupos con pocas parejas, ideal para eventos rápidos.",
+  normal: "Fase de grupos seguida de un bracket de eliminación.",
+  liga: "Todos contra todos, se acumulan puntos por partido.",
+  eliminacion: "Bracket de eliminación directa desde la primera ronda.",
 };
 
 const provinciasArgentina = [
@@ -79,7 +87,7 @@ const selectClass =
   "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
 const labelClass = "text-xs font-semibold mb-1 block";
 
-const tabs = ["Info", "Parejas", "Grupos", "Bracket"];
+const tabs = ["Info", "Parejas", "Grupos", "Bracket", "Reclamos"];
 
 export default function DetalleTorneo() {
   const { id } = useParams();
@@ -251,6 +259,11 @@ export default function DetalleTorneo() {
                 <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                   {formatoLabel[torneo.formato]}
                 </span>
+                {formatoDesc[torneo.formato] && (
+                  <span className="text-xs mt-0.5 block" style={{ color: "var(--text-muted)" }}>
+                    {formatoDesc[torneo.formato]}
+                  </span>
+                )}
               </div>
               <div>
                 <span className="block" style={{ color: "var(--text-muted)" }}>Categoría Género</span>
@@ -415,24 +428,142 @@ export default function DetalleTorneo() {
             )}
           </div>
 
+          {/* Acciones del torneo */}
           <div className="themed-card rounded-2xl p-5 border">
-            <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Cambiar estado</h2>
-            <div className="flex gap-2 flex-wrap">
-              {Object.entries(estadoLabel).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => cambiarEstado(key)}
-                  className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
-                    torneo.status === key
-                      ? "bg-green-600 text-white"
-                      : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+            <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Acciones</h2>
+
+            {/* Acción principal según estado */}
+            {torneo.status === "inscripcion" && (
+              <button
+                onClick={() => {
+                  if (window.confirm("¿Cerrar inscripciones y comenzar el torneo?")) {
+                    if (window.confirm("¿Estás seguro? Una vez iniciado, no se pueden modificar las inscripciones.")) {
+                      cambiarEstado("en_curso");
+                    }
+                  }
+                }}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition mb-3"
+              >
+                🚀 Iniciar torneo
+              </button>
+            )}
+            {torneo.status === "en_curso" && (
+              <button
+                onClick={() => {
+                  if (window.confirm("¿Finalizar el torneo?")) {
+                    if (window.confirm("¿Estás seguro? Esta acción no se puede deshacer. Se asignarán los puntos finales.")) {
+                      cambiarEstado("finalizado");
+                    }
+                  }
+                }}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 transition mb-3"
+              >
+                🏆 Finalizar torneo
+              </button>
+            )}
+            {torneo.status === "finalizado" && (
+              <div className="text-sm text-center py-2 mb-3 rounded-xl" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
+                Torneo finalizado
+              </div>
+            )}
+
+            {/* Compartir */}
+            <div className="flex gap-2 mb-3 flex-wrap">
+              <button
+                onClick={() => window.open(`/torneos/${id}`, "_blank")}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
+                style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-primary)", border: "1px solid var(--border-card)" }}
+              >
+                👁️ Ver como jugador
+              </button>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/torneos/${id}`);
+                }}
+                className="flex-1 py-2 rounded-xl text-xs font-semibold border transition hover:opacity-80"
+                style={{ borderColor: "var(--border-card)", color: "var(--text-secondary)", backgroundColor: "var(--bg-card)" }}
+              >
+                🔗 Copiar link
+              </button>
+              <button
+                onClick={() => {
+                  const url = `https://wa.me/?text=${encodeURIComponent(`¡Inscribite al torneo ${torneo.nombre}! ${window.location.origin}/torneos/${id}`)}`;
+                  window.open(url, "_blank");
+                }}
+                className="flex-1 py-2 rounded-xl text-xs font-semibold border transition hover:opacity-80"
+                style={{ borderColor: "var(--border-card)", color: "var(--text-secondary)", backgroundColor: "var(--bg-card)" }}
+              >
+                💬 WhatsApp
+              </button>
             </div>
+
+            {/* Cancelar */}
+            {torneo.status !== "cancelado" && torneo.status !== "finalizado" && (
+              <button
+                onClick={() => {
+                  if (window.confirm("¿Cancelar el torneo? Esta acción no se puede deshacer.")) {
+                    cambiarEstado("cancelado");
+                  }
+                }}
+                className="w-full py-2 rounded-xl text-xs font-semibold border border-red-200 text-red-400 hover:bg-red-50 transition"
+              >
+                Cancelar torneo
+              </button>
+            )}
           </div>
+
+          {/* Tip contextual */}
+          {torneo.status === "inscripcion" && (
+            <div className="rounded-xl px-4 py-3 text-sm border border-blue-200" style={{ backgroundColor: "rgba(59,130,246,0.07)", color: "var(--text-secondary)" }}>
+              💡 <strong>Tip:</strong> Podés iniciar el torneo cuando hayas confirmado todas las parejas. Las inscripciones se cerrarán automáticamente.
+            </div>
+          )}
+          {torneo.status === "en_curso" && (
+            <div className="rounded-xl px-4 py-3 text-sm border border-green-200" style={{ backgroundColor: "rgba(34,197,94,0.07)", color: "var(--text-secondary)" }}>
+              💡 <strong>Tip:</strong> Cargá los resultados desde la pestaña Grupos o Bracket. Al finalizar, se otorgarán puntos automáticamente.
+            </div>
+          )}
+          {torneo.status === "finalizado" && (
+            <div className="rounded-xl px-4 py-3 text-sm border border-slate-200" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
+              ✅ El torneo ha finalizado. Podés revisar los reclamos desde la pestaña correspondiente.
+            </div>
+          )}
+
+          {/* Premios */}
+          {torneo.premios && (
+            <div className="themed-card rounded-2xl p-5 border">
+              <h2 className="font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Premios</h2>
+              <p className="text-sm whitespace-pre-line" style={{ color: "var(--text-secondary)" }}>{torneo.premios}</p>
+            </div>
+          )}
+
+          {/* Qué incluye la inscripción */}
+          {torneo.inscripcionIncluye && (
+            <div className="themed-card rounded-2xl p-5 border">
+              <h2 className="font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Incluye la inscripción</h2>
+              <p className="text-sm whitespace-pre-line" style={{ color: "var(--text-secondary)" }}>{torneo.inscripcionIncluye}</p>
+            </div>
+          )}
+
+          {/* Administradores */}
+          {torneo.administradores && torneo.administradores.length > 0 && (
+            <div className="themed-card rounded-2xl p-5 border">
+              <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Administradores</h2>
+              <div className="flex flex-col gap-2">
+                {torneo.administradores.map((admin, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold bg-gradient-to-br from-green-400 to-emerald-600">
+                      {(admin.nombre || admin.email || "A").charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{admin.nombre || admin.email}</p>
+                      {admin.nombre && <p className="text-xs" style={{ color: "var(--text-muted)" }}>{admin.email}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -737,6 +868,7 @@ export default function DetalleTorneo() {
       {tab === "Parejas" && <TabParejas torneoId={id} torneo={torneo} />}
       {tab === "Grupos" && <TabGrupos torneoId={id} torneo={torneo} />}
       {tab === "Bracket" && <TabBracket torneoId={id} torneo={torneo} />}
+      {tab === "Reclamos" && <TabReclamos torneoId={id} torneo={torneo} />}
     </div>
   );
 }

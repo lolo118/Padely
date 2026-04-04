@@ -236,7 +236,7 @@ export default function TabGrupos({ torneoId, torneo }) {
         ]);
         setParejas(parejasData);
         if (gruposData.length > 0) {
-          setGrupos(gruposData);
+          setGrupos(gruposData.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "")));
           setGruposGenerados(true);
         }
       } catch (err) {
@@ -485,21 +485,26 @@ export default function TabGrupos({ torneoId, torneo }) {
       {/* Regenerar arriba */}
       {gruposGenerados && (
         <div className="flex justify-end">
-          <button
-            onClick={() => {
-              if (
-                window.confirm(
-                  "¿Regenerar grupos? Se perderán todos los resultados cargados.",
-                )
-              ) {
-                setGruposGenerados(false);
-                setGrupos([]);
-              }
-            }}
-            className="px-3 py-1 rounded-lg text-xs font-semibold text-red-500 bg-red-50 hover:bg-red-100 transition"
-          >
-            Regenerar grupos desde cero
-          </button>
+          {(() => {
+            const tieneResultados = grupos.some((g) => (g.partidos || []).some((p) => p.resultado));
+            return tieneResultados ? (
+              <span className="px-3 py-1 rounded-lg text-xs font-semibold" style={{ color: "var(--text-muted)", backgroundColor: "var(--bg-card-hover)" }}>
+                No podés regenerar grupos después de cargar resultados
+              </span>
+            ) : (
+              <button
+                onClick={() => {
+                  if (window.confirm("¿Regenerar grupos? Se perderán los grupos actuales.")) {
+                    setGruposGenerados(false);
+                    setGrupos([]);
+                  }
+                }}
+                className="px-3 py-1 rounded-lg text-xs font-semibold text-red-500 bg-red-50 hover:bg-red-100 transition"
+              >
+                Regenerar grupos desde cero
+              </button>
+            );
+          })()}
         </div>
       )}
 
@@ -731,13 +736,16 @@ export default function TabGrupos({ torneoId, torneo }) {
                                 Editar
                               </button>
                             </div>
-                          ) : (
-                            <button
-                              onClick={() => abrirEditarResultado(gi, pi)}
-                              className="px-3 py-1 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition"
-                            >
+                          ) : torneo.status === "en_curso" || torneo.status === "finalizado" ? (
+                            <button onClick={() => abrirEditarResultado(gi, pi)}
+                              className="px-3 py-1 rounded-lg text-xs font-semibold text-white hover:opacity-90 transition"
+                              style={{ backgroundColor: "var(--accent)" }}>
                               Cargar resultado
                             </button>
+                          ) : (
+                            <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
+                              Iniciá el torneo primero
+                            </span>
                           )}
                         </div>
                       </div>

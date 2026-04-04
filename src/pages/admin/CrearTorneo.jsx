@@ -691,7 +691,7 @@ export default function CrearTorneo() {
                 type="text"
                 placeholder="Ej: +54 385 1234567"
                 value={form.whatsappOrganizador}
-                onChange={set("whatsappOrganizador")}
+                onChange={(e) => setForm({ ...form, whatsappOrganizador: e.target.value.replace(/\D/g, "") })}
                 className={inputClass}
               />
             </div>
@@ -722,11 +722,11 @@ export default function CrearTorneo() {
                       className="themed-input flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                     <input
-                      type="text"
-                      placeholder="WhatsApp"
+                      type="tel"
+                      placeholder="Ej: 5493851234567"
                       value={admin.whatsapp}
                       onChange={(e) =>
-                        actualizarAdmin(i, "whatsapp", e.target.value)
+                        actualizarAdmin(i, "whatsapp", e.target.value.replace(/\D/g, ""))
                       }
                       className="themed-input flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                     />

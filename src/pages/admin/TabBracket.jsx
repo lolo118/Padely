@@ -781,12 +781,19 @@ export default function TabBracket({ torneoId, torneo }) {
                               )}
                             </div>
                           ) : p.pareja1 && p.pareja2 && bracketGenerado ? (
-                            <button
-                              onClick={() => abrirEditarResultado(ri, pi)}
-                              className="px-3 py-1 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition"
-                            >
-                              Cargar resultado
-                            </button>
+                            torneo.status === "en_curso" || torneo.status === "finalizado" ? (
+                              <button
+                                onClick={() => abrirEditarResultado(ri, pi)}
+                                className="px-3 py-1 rounded-lg text-xs font-semibold text-white hover:opacity-90 transition"
+                                style={{ backgroundColor: "var(--accent)" }}
+                              >
+                                Cargar resultado
+                              </button>
+                            ) : (
+                              <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
+                                Iniciá el torneo primero
+                              </span>
+                            )
                           ) : (
                             <span className="text-xs" style={{ color: "var(--text-muted)", opacity: 0.4 }}>—</span>
                           )}
