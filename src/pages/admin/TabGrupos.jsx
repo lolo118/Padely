@@ -321,28 +321,41 @@ export default function TabGrupos({ torneoId, torneo }) {
     const gamesPorSet = Number(torneo.gamesPorSet) || 6;
     const cantSets = Number(torneo.sets) || 1;
     const setsParaGanar = Math.ceil(cantSets / 2);
-    let setsP1 = 0,
-      setsP2 = 0;
+    let setsP1 = 0, setsP2 = 0;
 
     for (let i = 0; i < setsInput.length; i++) {
-      const s = setsInput[i];
-      // Si ya se definió ganador, ignorar sets vacíos restantes
       if (setsP1 >= setsParaGanar || setsP2 >= setsParaGanar) break;
-
+      const s = setsInput[i];
       const max = Math.max(s.g1, s.g2);
+      const min = Math.min(s.g1, s.g2);
+
       if (max < gamesPorSet) {
         return `Set ${i + 1}: al menos un equipo debe alcanzar ${gamesPorSet} games`;
       }
 
-      let g1 = s.g1,
-        g2 = s.g2;
+      // Validar diferencia de 2 games
+      if (max === gamesPorSet && min === gamesPorSet - 1) {
+        return `Set ${i + 1}: no puede terminar ${max}-${min}. Si igualan ${gamesPorSet - 1}-${gamesPorSet - 1}, se juega a ${gamesPorSet + 1}. Si igualan ${gamesPorSet}-${gamesPorSet}, van a tiebreak.`;
+      }
+
+      // Si ambos tienen 6 o más, debe haber tiebreak
+      if (s.g1 >= gamesPorSet && s.g2 >= gamesPorSet && Math.abs(s.g1 - s.g2) <= 1) {
+        if (!tiebreakInput[i]?.activo) {
+          return `Set ${i + 1}: con ${s.g1}-${s.g2} necesitás activar el tiebreak`;
+        }
+      }
+
+      // Si la diferencia es mayor a 2 y ambos superan gamesPorSet, no es válido (excepto 7-5)
+      if (max > gamesPorSet + 1 && min >= gamesPorSet) {
+        return `Set ${i + 1}: resultado ${s.g1}-${s.g2} no es válido`;
+      }
+
+      let g1 = s.g1, g2 = s.g2;
       if (tiebreakInput[i]?.activo) {
         if ((tiebreakInput[i].tb1 ?? 0) > (tiebreakInput[i].tb2 ?? 0)) g1 += 1;
-        else if ((tiebreakInput[i].tb2 ?? 0) > (tiebreakInput[i].tb1 ?? 0))
-          g2 += 1;
+        else if ((tiebreakInput[i].tb2 ?? 0) > (tiebreakInput[i].tb1 ?? 0)) g2 += 1;
       }
-      if (g1 > g2) setsP1++;
-      else if (g2 > g1) setsP2++;
+      if (g1 > g2) setsP1++; else if (g2 > g1) setsP2++;
     }
 
     if (setsP1 === 0 && setsP2 === 0) return "Cargá al menos un set";
