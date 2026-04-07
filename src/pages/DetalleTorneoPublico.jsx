@@ -105,12 +105,20 @@ export default function DetalleTorneoPublico() {
           ]);
         setTorneo(torneoData);
         setParejas(parejasData);
-        setGrupos(gruposData);
+        setGrupos(
+          gruposData.sort((a, b) =>
+            (a.nombre || "").localeCompare(b.nombre || ""),
+          ),
+        );
         if (bracketData) setBracket(bracketData);
         setInscripciones(inscData);
 
         // Si el torneo está en curso, mostrar grupos por defecto
-        if (torneoData && (torneoData.status === "en_curso") && gruposData.length > 0) {
+        if (
+          torneoData &&
+          torneoData.status === "en_curso" &&
+          gruposData.length > 0
+        ) {
           setTab("Grupos");
         }
 
@@ -118,7 +126,9 @@ export default function DetalleTorneoPublico() {
         try {
           const reclamosData = await getReclamos(id);
           setReclamos(reclamosData);
-        } catch (e) { console.error("Error al cargar reclamos:", e); }
+        } catch (e) {
+          console.error("Error al cargar reclamos:", e);
+        }
 
         // Verificar restricción de categoría
         if (user && torneoData) {
@@ -149,17 +159,28 @@ export default function DetalleTorneoPublico() {
   }, [id, user]);
 
   const miPareja = parejas.find(
-    (p) => p.jugador1Uid === user?.uid || p.jugador2Uid === user?.uid
+    (p) => p.jugador1Uid === user?.uid || p.jugador2Uid === user?.uid,
   );
 
   const handleReclamo = async (partido, grupoNombre) => {
     if (!miPareja) return;
     setEnviandoReclamo(true);
     try {
-      const parejaDenunciada = partido.pareja1.id === miPareja.id ? partido.pareja2 : partido.pareja1;
+      const parejaDenunciada =
+        partido.pareja1.id === miPareja.id ? partido.pareja2 : partido.pareja1;
       await crearReclamo(id, {
-        parejaDenunciante: { id: miPareja.id, nombrePareja: miPareja.nombrePareja, jugador1: miPareja.jugador1, jugador2: miPareja.jugador2 },
-        parejaDenunciada: { id: parejaDenunciada.id, nombrePareja: parejaDenunciada.nombrePareja, jugador1: parejaDenunciada.jugador1, jugador2: parejaDenunciada.jugador2 },
+        parejaDenunciante: {
+          id: miPareja.id,
+          nombrePareja: miPareja.nombrePareja,
+          jugador1: miPareja.jugador1,
+          jugador2: miPareja.jugador2,
+        },
+        parejaDenunciada: {
+          id: parejaDenunciada.id,
+          nombrePareja: parejaDenunciada.nombrePareja,
+          jugador1: parejaDenunciada.jugador1,
+          jugador2: parejaDenunciada.jugador2,
+        },
         motivo: motivoReclamo,
         comentario: comentarioReclamo,
         grupoNombre,
@@ -169,17 +190,26 @@ export default function DetalleTorneoPublico() {
       setMostrarFormReclamo(null);
       setComentarioReclamo("");
       alert("Reclamo enviado correctamente");
-    } catch (err) { console.error("Error:", err); }
+    } catch (err) {
+      console.error("Error:", err);
+    }
     setEnviandoReclamo(false);
   };
 
   const handleAdherirse = async (reclamoId) => {
     if (!miPareja) return;
     try {
-      await adherirseAReclamo(id, reclamoId, { id: miPareja.id, nombrePareja: miPareja.nombrePareja, jugador1: miPareja.jugador1, jugador2: miPareja.jugador2 });
+      await adherirseAReclamo(id, reclamoId, {
+        id: miPareja.id,
+        nombrePareja: miPareja.nombrePareja,
+        jugador1: miPareja.jugador1,
+        jugador2: miPareja.jugador2,
+      });
       const reclamosData = await getReclamos(id);
       setReclamos(reclamosData);
-    } catch (err) { console.error("Error:", err); }
+    } catch (err) {
+      console.error("Error:", err);
+    }
   };
 
   const handleDescargo = async (reclamoId) => {
@@ -189,7 +219,9 @@ export default function DetalleTorneoPublico() {
       const reclamosData = await getReclamos(id);
       setReclamos(reclamosData);
       setDescargoTexto("");
-    } catch (err) { console.error("Error:", err); }
+    } catch (err) {
+      console.error("Error:", err);
+    }
   };
 
   const yaInscripto = user
@@ -709,45 +741,96 @@ export default function DetalleTorneoPublico() {
           {/* Premios */}
           {torneo.premios && (
             <div className="themed-card rounded-2xl p-5 border">
-              <h2 className="font-semibold mb-2" style={{ color: "var(--text-primary)" }}>🏆 Premios</h2>
-              <p className="text-sm whitespace-pre-line" style={{ color: "var(--text-secondary)" }}>{torneo.premios}</p>
+              <h2
+                className="font-semibold mb-2"
+                style={{ color: "var(--text-primary)" }}
+              >
+                🏆 Premios
+              </h2>
+              <p
+                className="text-sm whitespace-pre-line"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                {torneo.premios}
+              </p>
             </div>
           )}
 
           {/* Inscripción incluye */}
           {torneo.inscripcionIncluye && (
             <div className="themed-card rounded-2xl p-5 border">
-              <h2 className="font-semibold mb-2" style={{ color: "var(--text-primary)" }}>📋 La inscripción incluye</h2>
-              <p className="text-sm whitespace-pre-line" style={{ color: "var(--text-secondary)" }}>{torneo.inscripcionIncluye}</p>
+              <h2
+                className="font-semibold mb-2"
+                style={{ color: "var(--text-primary)" }}
+              >
+                📋 La inscripción incluye
+              </h2>
+              <p
+                className="text-sm whitespace-pre-line"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                {torneo.inscripcionIncluye}
+              </p>
             </div>
           )}
 
           {/* Administradores/Contacto */}
-          {torneo.administradores && torneo.administradores.length > 0 && torneo.administradores[0].nombre && (
-            <div className="themed-card rounded-2xl p-5 border">
-              <h2 className="font-semibold mb-2" style={{ color: "var(--text-primary)" }}>📞 Contacto del torneo</h2>
-              <div className="flex flex-col gap-2">
-                {torneo.administradores.filter(a => a.nombre).map((admin, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-                    <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{admin.nombre}</span>
-                    {admin.whatsapp && (
-                      <a href={`https://wa.me/${admin.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer"
-                        className="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700 hover:bg-green-200 transition">
-                        📱 {admin.whatsapp}
-                      </a>
-                    )}
-                  </div>
-                ))}
+          {torneo.administradores &&
+            torneo.administradores.length > 0 &&
+            torneo.administradores[0].nombre && (
+              <div className="themed-card rounded-2xl p-5 border">
+                <h2
+                  className="font-semibold mb-2"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  📞 Contacto del torneo
+                </h2>
+                <div className="flex flex-col gap-2">
+                  {torneo.administradores
+                    .filter((a) => a.nombre)
+                    .map((admin, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between rounded-xl px-4 py-3"
+                        style={{ backgroundColor: "var(--bg-card-hover)" }}
+                      >
+                        <span
+                          className="text-sm font-medium"
+                          style={{ color: "var(--text-primary)" }}
+                        >
+                          {admin.nombre}
+                        </span>
+                        {admin.whatsapp && (
+                          <a
+                            href={`https://wa.me/${admin.whatsapp.replace(/\D/g, "")}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700 hover:bg-green-200 transition"
+                          >
+                            📱 {admin.whatsapp}
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Compartir */}
           <div className="flex gap-2">
             <button
-              onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/torneos/${id}`); alert("Link copiado"); }}
+              onClick={() => {
+                navigator.clipboard.writeText(
+                  `${window.location.origin}/torneos/${id}`,
+                );
+                alert("Link copiado");
+              }}
               className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
-              style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-primary)", border: "1px solid var(--border-card)" }}
+              style={{
+                backgroundColor: "var(--bg-card-hover)",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border-card)",
+              }}
             >
               🔗 Copiar link
             </button>
@@ -819,15 +902,32 @@ export default function DetalleTorneoPublico() {
         <div className="flex flex-col gap-4">
           {grupos.length === 0 ? (
             <div className="themed-card rounded-2xl p-5 border text-center py-12">
-              <p style={{ color: "var(--text-muted)" }}>Los grupos aún no fueron generados</p>
+              <p style={{ color: "var(--text-muted)" }}>
+                Los grupos aún no fueron generados
+              </p>
             </div>
           ) : (
             grupos.map((grupo, gi) => (
-              <div key={grupo.id || gi} className="themed-card rounded-2xl p-5 border">
-                <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>{grupo.nombre}</h2>
+              <div
+                key={grupo.id || gi}
+                className="themed-card rounded-2xl p-5 border"
+              >
+                <h2
+                  className="font-semibold mb-3"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  {grupo.nombre}
+                </h2>
                 <div className="flex flex-col gap-1 mb-3">
                   {grupo.parejas.map((p, pi) => (
-                    <div key={pi} className="text-sm rounded-lg px-3 py-2" style={{ color: "var(--text-primary)", backgroundColor: "var(--bg-card-hover)" }}>
+                    <div
+                      key={pi}
+                      className="text-sm rounded-lg px-3 py-2"
+                      style={{
+                        color: "var(--text-primary)",
+                        backgroundColor: "var(--bg-card-hover)",
+                      }}
+                    >
                       {getNombrePareja(p)}
                     </div>
                   ))}
@@ -836,68 +936,154 @@ export default function DetalleTorneoPublico() {
                 {/* Partidos */}
                 {(grupo.partidos || []).length > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>Partidos</h3>
+                    <h3
+                      className="text-sm font-semibold mb-2"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Partidos
+                    </h3>
                     <div className="flex flex-col gap-2">
                       {grupo.partidos.map((p, pi) => {
-                        const esPartidoMio = miPareja && (p.pareja1.id === miPareja.id || p.pareja2.id === miPareja.id);
-                        const parejaDenunciada = esPartidoMio ? (p.pareja1.id === miPareja.id ? p.pareja2 : p.pareja1) : null;
-                        const yaReclamo = reclamos.some((r) => r.parejaDenunciante?.id === miPareja?.id && r.parejaDenunciada?.id === parejaDenunciada?.id);
+                        const esPartidoMio =
+                          miPareja &&
+                          (p.pareja1.id === miPareja.id ||
+                            p.pareja2.id === miPareja.id);
+                        const parejaDenunciada = esPartidoMio
+                          ? p.pareja1.id === miPareja.id
+                            ? p.pareja2
+                            : p.pareja1
+                          : null;
+                        const yaReclamo = reclamos.some(
+                          (r) =>
+                            r.parejaDenunciante?.id === miPareja?.id &&
+                            r.parejaDenunciada?.id === parejaDenunciada?.id,
+                        );
                         const partidoKey = `${gi}-${pi}`;
 
                         return (
                           <div key={pi}>
-                            <div className="flex items-center justify-between rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+                            <div
+                              className="flex items-center justify-between rounded-xl px-4 py-3"
+                              style={{
+                                backgroundColor: "var(--bg-card-hover)",
+                              }}
+                            >
                               <div className="flex-1">
-                                <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                                  {getNombrePareja(p.pareja1)} vs {getNombrePareja(p.pareja2)}
+                                <p
+                                  className="text-sm font-medium"
+                                  style={{ color: "var(--text-primary)" }}
+                                >
+                                  {getNombrePareja(p.pareja1)} vs{" "}
+                                  {getNombrePareja(p.pareja2)}
                                 </p>
-                                {p.hora && <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>🕐 {p.hora} {p.cancha && `· Cancha ${p.cancha}`}</p>}
+                                {p.hora && (
+                                  <p
+                                    className="text-xs mt-0.5"
+                                    style={{ color: "var(--text-muted)" }}
+                                  >
+                                    🕐 {p.hora}{" "}
+                                    {p.cancha && `· Cancha ${p.cancha}`}
+                                  </p>
+                                )}
                               </div>
                               <div className="text-right">
                                 {p.resultado ? (
-                                  <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                                    {p.resultado.sets.map((s) => `${s.g1}-${s.g2}`).join(" / ")}
+                                  <span
+                                    className="text-sm font-bold"
+                                    style={{ color: "var(--text-primary)" }}
+                                  >
+                                    {p.resultado.sets
+                                      .map((s) => `${s.g1}-${s.g2}`)
+                                      .join(" / ")}
                                   </span>
                                 ) : (
-                                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>Pendiente</span>
+                                  <span
+                                    className="text-xs"
+                                    style={{ color: "var(--text-muted)" }}
+                                  >
+                                    Pendiente
+                                  </span>
                                 )}
                               </div>
                             </div>
 
                             {/* Botón de reclamo */}
-                            {esPartidoMio && torneo.status === "en_curso" && torneo.habilitarReclamos && !yaReclamo && (
-                              <div className="mt-1 ml-4">
-                                {mostrarFormReclamo === partidoKey ? (
-                                  <div className="themed-card rounded-xl p-3 border mt-1">
-                                    <p className="text-xs font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
-                                      Reclamo contra {getNombrePareja(parejaDenunciada)}
-                                    </p>
-                                    <select value={motivoReclamo} onChange={(e) => setMotivoReclamo(e.target.value)}
-                                      className="themed-input w-full rounded-lg px-3 py-2 text-xs border mb-2">
-                                      <option value="categoria_incorrecta">Categoría incorrecta</option>
-                                      <option value="conducta_antideportiva">Conducta antideportiva</option>
-                                    </select>
-                                    <textarea value={comentarioReclamo} onChange={(e) => setComentarioReclamo(e.target.value)}
-                                      placeholder="Comentario (opcional)" rows={2}
-                                      className="themed-input w-full rounded-lg px-3 py-2 text-xs border mb-2 resize-none" />
-                                    <div className="flex gap-2">
-                                      <button onClick={() => setMostrarFormReclamo(null)}
-                                        className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition"
-                                        style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>Cancelar</button>
-                                      <button onClick={() => handleReclamo(p, grupo.nombre)} disabled={enviandoReclamo}
-                                        className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-white bg-red-600 hover:bg-red-700 transition disabled:opacity-50">
-                                        {enviandoReclamo ? "Enviando..." : "Enviar reclamo"}
-                                      </button>
+                            {esPartidoMio &&
+                              torneo.status === "en_curso" &&
+                              torneo.habilitarReclamos &&
+                              !yaReclamo && (
+                                <div className="mt-1 ml-4">
+                                  {mostrarFormReclamo === partidoKey ? (
+                                    <div className="themed-card rounded-xl p-3 border mt-1">
+                                      <p
+                                        className="text-xs font-semibold mb-2"
+                                        style={{ color: "var(--text-primary)" }}
+                                      >
+                                        Reclamo contra{" "}
+                                        {getNombrePareja(parejaDenunciada)}
+                                      </p>
+                                      <select
+                                        value={motivoReclamo}
+                                        onChange={(e) =>
+                                          setMotivoReclamo(e.target.value)
+                                        }
+                                        className="themed-input w-full rounded-lg px-3 py-2 text-xs border mb-2"
+                                      >
+                                        <option value="categoria_incorrecta">
+                                          Categoría incorrecta
+                                        </option>
+                                        <option value="conducta_antideportiva">
+                                          Conducta antideportiva
+                                        </option>
+                                      </select>
+                                      <textarea
+                                        value={comentarioReclamo}
+                                        onChange={(e) =>
+                                          setComentarioReclamo(e.target.value)
+                                        }
+                                        placeholder="Comentario (opcional)"
+                                        rows={2}
+                                        className="themed-input w-full rounded-lg px-3 py-2 text-xs border mb-2 resize-none"
+                                      />
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() =>
+                                            setMostrarFormReclamo(null)
+                                          }
+                                          className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition"
+                                          style={{
+                                            backgroundColor:
+                                              "var(--bg-card-hover)",
+                                            color: "var(--text-muted)",
+                                          }}
+                                        >
+                                          Cancelar
+                                        </button>
+                                        <button
+                                          onClick={() =>
+                                            handleReclamo(p, grupo.nombre)
+                                          }
+                                          disabled={enviandoReclamo}
+                                          className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-white bg-red-600 hover:bg-red-700 transition disabled:opacity-50"
+                                        >
+                                          {enviandoReclamo
+                                            ? "Enviando..."
+                                            : "Enviar reclamo"}
+                                        </button>
+                                      </div>
                                     </div>
-                                  </div>
-                                ) : (
-                                  <button onClick={() => setMostrarFormReclamo(partidoKey)}
-                                    className="text-xs font-semibold text-red-500 hover:text-red-600 transition">
-                                    ⚠️ Abrir reclamo
-                                  </button>
-                                )}
-                              </div>
-                            )}
+                                  ) : (
+                                    <button
+                                      onClick={() =>
+                                        setMostrarFormReclamo(partidoKey)
+                                      }
+                                      className="text-xs font-semibold text-red-500 hover:text-red-600 transition"
+                                    >
+                                      ⚠️ Abrir reclamo
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                           </div>
                         );
                       })}
@@ -911,56 +1097,108 @@ export default function DetalleTorneoPublico() {
           {/* Reclamos abiertos visibles para todos */}
           {reclamos.filter((r) => r.estado === "abierto").length > 0 && (
             <div className="themed-card rounded-2xl p-5 border border-red-200">
-              <h2 className="font-semibold mb-3 text-red-600">Reclamos abiertos</h2>
+              <h2 className="font-semibold mb-3 text-red-600">
+                Reclamos abiertos
+              </h2>
               <div className="flex flex-col gap-3">
-                {reclamos.filter((r) => r.estado === "abierto").map((r) => {
-                  const yaAdherido = miPareja && (r.adheridos || []).some((a) => a.id === miPareja?.id);
-                  const esDenunciante = miPareja && r.parejaDenunciante?.id === miPareja?.id;
-                  const esDenunciado = miPareja && r.parejaDenunciada?.id === miPareja?.id;
+                {reclamos
+                  .filter((r) => r.estado === "abierto")
+                  .map((r) => {
+                    const yaAdherido =
+                      miPareja &&
+                      (r.adheridos || []).some((a) => a.id === miPareja?.id);
+                    const esDenunciante =
+                      miPareja && r.parejaDenunciante?.id === miPareja?.id;
+                    const esDenunciado =
+                      miPareja && r.parejaDenunciada?.id === miPareja?.id;
 
-                  return (
-                    <div key={r.id} className="rounded-xl p-4" style={{ backgroundColor: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.15)" }}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-semibold px-2 py-1 rounded-full bg-red-100 text-red-600">
-                          {r.motivo === "categoria_incorrecta" ? "Categoría incorrecta" : "Conducta antideportiva"}
-                        </span>
-                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                          {(r.adheridos || []).length} adherido{(r.adheridos || []).length !== 1 ? "s" : ""}
-                        </span>
-                      </div>
-                      <p className="text-sm" style={{ color: "var(--text-primary)" }}>
-                        {getNombrePareja(r.parejaDenunciante)} → {getNombrePareja(r.parejaDenunciada)}
-                      </p>
-                      {r.comentario && <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{r.comentario}</p>}
-
-                      {/* Adherirse */}
-                      {miPareja && !esDenunciante && !esDenunciado && !yaAdherido && (
-                        <button onClick={() => handleAdherirse(r.id)}
-                          className="mt-2 text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition">
-                          Unirme al reclamo
-                        </button>
-                      )}
-                      {yaAdherido && <p className="text-xs mt-2 text-red-500">Ya te adheriste a este reclamo</p>}
-
-                      {/* Descargo */}
-                      {esDenunciado && !r.descargo && (
-                        <div className="mt-2">
-                          <textarea value={descargoTexto} onChange={(e) => setDescargoTexto(e.target.value)}
-                            placeholder="Escribí tu descargo..." rows={2}
-                            className="themed-input w-full rounded-lg px-3 py-2 text-xs border mb-1 resize-none" />
-                          <button onClick={() => handleDescargo(r.id)}
-                            className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition"
-                            style={{ backgroundColor: "var(--accent)" }}>
-                            Enviar descargo
-                          </button>
+                    return (
+                      <div
+                        key={r.id}
+                        className="rounded-xl p-4"
+                        style={{
+                          backgroundColor: "rgba(239,68,68,0.05)",
+                          border: "1px solid rgba(239,68,68,0.15)",
+                        }}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold px-2 py-1 rounded-full bg-red-100 text-red-600">
+                            {r.motivo === "categoria_incorrecta"
+                              ? "Categoría incorrecta"
+                              : "Conducta antideportiva"}
+                          </span>
+                          <span
+                            className="text-xs"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            {(r.adheridos || []).length} adherido
+                            {(r.adheridos || []).length !== 1 ? "s" : ""}
+                          </span>
                         </div>
-                      )}
-                      {esDenunciado && r.descargo && (
-                        <p className="text-xs mt-2" style={{ color: "var(--accent)" }}>Descargo enviado: {r.descargo}</p>
-                      )}
-                    </div>
-                  );
-                })}
+                        <p
+                          className="text-sm"
+                          style={{ color: "var(--text-primary)" }}
+                        >
+                          {getNombrePareja(r.parejaDenunciante)} →{" "}
+                          {getNombrePareja(r.parejaDenunciada)}
+                        </p>
+                        {r.comentario && (
+                          <p
+                            className="text-xs mt-1"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            {r.comentario}
+                          </p>
+                        )}
+
+                        {/* Adherirse */}
+                        {miPareja &&
+                          !esDenunciante &&
+                          !esDenunciado &&
+                          !yaAdherido && (
+                            <button
+                              onClick={() => handleAdherirse(r.id)}
+                              className="mt-2 text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition"
+                            >
+                              Unirme al reclamo
+                            </button>
+                          )}
+                        {yaAdherido && (
+                          <p className="text-xs mt-2 text-red-500">
+                            Ya te adheriste a este reclamo
+                          </p>
+                        )}
+
+                        {/* Descargo */}
+                        {esDenunciado && !r.descargo && (
+                          <div className="mt-2">
+                            <textarea
+                              value={descargoTexto}
+                              onChange={(e) => setDescargoTexto(e.target.value)}
+                              placeholder="Escribí tu descargo..."
+                              rows={2}
+                              className="themed-input w-full rounded-lg px-3 py-2 text-xs border mb-1 resize-none"
+                            />
+                            <button
+                              onClick={() => handleDescargo(r.id)}
+                              className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition"
+                              style={{ backgroundColor: "var(--accent)" }}
+                            >
+                              Enviar descargo
+                            </button>
+                          </div>
+                        )}
+                        {esDenunciado && r.descargo && (
+                          <p
+                            className="text-xs mt-2"
+                            style={{ color: "var(--accent)" }}
+                          >
+                            Descargo enviado: {r.descargo}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           )}

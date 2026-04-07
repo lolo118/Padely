@@ -64,6 +64,12 @@ export default function Register() {
     setError("");
     try {
       await registerUser(form.email, form.password, { tipo, ...form });
+      const vincularRedirect = localStorage.getItem("padely-vincular-redirect");
+      if (vincularRedirect) {
+        localStorage.removeItem("padely-vincular-redirect");
+        navigate(vincularRedirect);
+        return;
+      }
       if (tipo === "club") {
         navigate("/admin");
       } else if (tipo === "organizador") {

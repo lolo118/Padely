@@ -32,6 +32,8 @@ export default function TabParejas({ torneoId, torneo }) {
   const [apellido2, setApellido2] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [whatsapp1, setWhatsapp1] = useState("");
+  const [whatsapp2, setWhatsapp2] = useState("");
   const [motivoRechazo, setMotivoRechazo] = useState("");
   const [rechazandoId, setRechazandoId] = useState(null);
 
@@ -67,18 +69,15 @@ export default function TabParejas({ torneoId, torneo }) {
       const jugador2 = `${nombre2.trim()} ${apellido2.trim()}`.trim();
       const nombrePareja = `${apellido1.trim()}-${apellido2.trim()}`;
       const nuevaId = await agregarPareja(torneoId, {
-        jugador1,
-        jugador2,
-        nombrePareja,
+        jugador1, jugador2, nombrePareja,
+        whatsapp1: whatsapp1.trim(),
+        whatsapp2: whatsapp2.trim(),
+        jugador1Uid: null,
+        jugador2Uid: null,
       });
-      setParejas([
-        ...parejas,
-        { id: nuevaId, jugador1, jugador2, nombrePareja },
-      ]);
-      setNombre1("");
-      setApellido1("");
-      setNombre2("");
-      setApellido2("");
+      setParejas([...parejas, { id: nuevaId, jugador1, jugador2, nombrePareja, whatsapp1: whatsapp1.trim(), whatsapp2: whatsapp2.trim(), jugador1Uid: null, jugador2Uid: null }]);
+      setNombre1(""); setApellido1(""); setNombre2(""); setApellido2("");
+      setWhatsapp1(""); setWhatsapp2("");
     } catch (err) {
       console.error("Error al agregar pareja:", err);
     }
@@ -373,55 +372,39 @@ export default function TabParejas({ torneoId, torneo }) {
             Agregar pareja manualmente
           </h2>
           <form onSubmit={handleAgregarPareja} className="flex flex-col gap-3">
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Jugador 1</p>
+            <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Jugador 1</p>
             <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Nombre"
-                value={nombre1}
-                onChange={(e) => setNombre1(e.target.value)}
-                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm"
-              />
-              <input
-                type="text"
-                placeholder="Apellido"
-                value={apellido1}
-                onChange={(e) => setApellido1(e.target.value)}
-                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm"
-                required
-              />
+              <input type="text" placeholder="Nombre" value={nombre1} onChange={(e) => setNombre1(e.target.value)}
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm" />
+              <input type="text" placeholder="Apellido" value={apellido1} onChange={(e) => setApellido1(e.target.value)}
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm" required />
             </div>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Jugador 2</p>
+            <input type="tel" placeholder="WhatsApp Jugador 1 (ej: 5493851234567)" value={whatsapp1} onChange={(e) => setWhatsapp1(e.target.value.replace(/\D/g, ""))}
+              className="themed-input rounded-xl px-4 py-2 text-sm" />
+
+            <p className="text-xs font-semibold mt-1" style={{ color: "var(--text-muted)" }}>Jugador 2</p>
             <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Nombre"
-                value={nombre2}
-                onChange={(e) => setNombre2(e.target.value)}
-                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm"
-              />
-              <input
-                type="text"
-                placeholder="Apellido"
-                value={apellido2}
-                onChange={(e) => setApellido2(e.target.value)}
-                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm"
-                required
-              />
+              <input type="text" placeholder="Nombre" value={nombre2} onChange={(e) => setNombre2(e.target.value)}
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm" />
+              <input type="text" placeholder="Apellido" value={apellido2} onChange={(e) => setApellido2(e.target.value)}
+                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm" required />
             </div>
+            <input type="tel" placeholder="WhatsApp Jugador 2 (ej: 5493851234567)" value={whatsapp2} onChange={(e) => setWhatsapp2(e.target.value.replace(/\D/g, ""))}
+              className="themed-input rounded-xl px-4 py-2 text-sm" />
+
             {apellido1.trim() && apellido2.trim() && (
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Nombre de pareja:{" "}
-                <span className="font-semibold">
-                  {apellido1.trim()}-{apellido2.trim()}
-                </span>
+                Nombre de pareja: <span className="font-semibold">{apellido1.trim()}-{apellido2.trim()}</span>
               </p>
             )}
-            <button
-              type="submit"
-              disabled={guardando || !apellido1.trim() || !apellido2.trim()}
-              className="bg-green-600 text-white font-semibold py-2 rounded-xl hover:bg-green-700 transition disabled:opacity-50"
-            >
+
+            <div className="text-xs text-blue-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+              💡 Agregá el WhatsApp de cada jugador para enviarles un link de vinculación. Así podrán usar la app, recibir puntos y participar de reclamos.
+            </div>
+
+            <button type="submit" disabled={guardando || !apellido1.trim() || !apellido2.trim()}
+              className="text-white font-semibold py-2 rounded-xl transition disabled:opacity-50"
+              style={{ backgroundColor: "var(--accent)" }}>
               {guardando ? "Agregando..." : "Agregar pareja"}
             </button>
           </form>
@@ -434,38 +417,82 @@ export default function TabParejas({ torneoId, torneo }) {
           Lista de parejas confirmadas
         </h2>
         {parejas.length === 0 ? (
-          <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
-            No hay parejas inscriptas todavía
-          </p>
+          <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>No hay parejas inscriptas todavía</p>
         ) : (
-          <div className="flex flex-col gap-2">
-            {parejas.map((p, index) => (
-              <div
-                key={p.id}
-                className="flex items-center justify-between rounded-xl px-4 py-3"
-                style={{ backgroundColor: "var(--bg-card-hover)" }}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold w-6" style={{ color: "var(--text-muted)" }}>
-                    {index + 1}
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                      {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
-                    </p>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {p.jugador1} — {p.jugador2}
-                    </p>
+          <div className="flex flex-col gap-3">
+            {parejas.map((p, index) => {
+              const linkJ1 = `${window.location.origin}/vincular/${torneoId}/${p.id}/1`;
+              const linkJ2 = `${window.location.origin}/vincular/${torneoId}/${p.id}/2`;
+              const msgJ1 = `¡Hola ${p.jugador1}! Estás inscripto en el torneo "${torneo.nombre}". Vinculá tu cuenta de Padely para recibir puntos y notificaciones: ${linkJ1}`;
+              const msgJ2 = `¡Hola ${p.jugador2}! Estás inscripto en el torneo "${torneo.nombre}". Vinculá tu cuenta de Padely para recibir puntos y notificaciones: ${linkJ2}`;
+
+              return (
+                <div key={p.id} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-bold w-6" style={{ color: "var(--text-muted)" }}>{index + 1}</span>
+                      <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                        {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
+                      </p>
+                    </div>
+                    <button onClick={() => handleEliminarPareja(p.id)}
+                      className="text-red-400 hover:text-red-600 text-xs font-semibold transition">Eliminar</button>
+                  </div>
+
+                  {/* Jugador 1 */}
+                  <div className="flex items-center justify-between ml-9 mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{p.jugador1}</span>
+                      {p.jugador1Uid ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">✓ Vinculado</span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>Sin vincular</span>
+                      )}
+                    </div>
+                    {!p.jugador1Uid && (
+                      <div className="flex gap-1">
+                        <button onClick={() => { navigator.clipboard.writeText(linkJ1); alert("Link copiado"); }}
+                          className="text-[10px] px-2 py-1 rounded-lg transition" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border-card)" }}>
+                          🔗 Link
+                        </button>
+                        {p.whatsapp1 && (
+                          <a href={`https://wa.me/${p.whatsapp1}?text=${encodeURIComponent(msgJ1)}`} target="_blank" rel="noopener noreferrer"
+                            className="text-[10px] px-2 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition">
+                            📱 WA
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Jugador 2 */}
+                  <div className="flex items-center justify-between ml-9">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{p.jugador2}</span>
+                      {p.jugador2Uid ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">✓ Vinculado</span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>Sin vincular</span>
+                      )}
+                    </div>
+                    {!p.jugador2Uid && (
+                      <div className="flex gap-1">
+                        <button onClick={() => { navigator.clipboard.writeText(linkJ2); alert("Link copiado"); }}
+                          className="text-[10px] px-2 py-1 rounded-lg transition" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border-card)" }}>
+                          🔗 Link
+                        </button>
+                        {p.whatsapp2 && (
+                          <a href={`https://wa.me/${p.whatsapp2}?text=${encodeURIComponent(msgJ2)}`} target="_blank" rel="noopener noreferrer"
+                            className="text-[10px] px-2 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition">
+                            📱 WA
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <button
-                  onClick={() => handleEliminarPareja(p.id)}
-                  className="text-red-400 hover:text-red-600 text-sm font-semibold transition"
-                >
-                  Eliminar
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

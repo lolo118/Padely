@@ -314,6 +314,23 @@ export const actualizarPuntosTorneo = async (jugadorUid, posicion, categoriaTorn
   }
 };
 
+// ========== VINCULACIÓN DE JUGADORES ==========
+
+export const vincularJugadorAPareja = async (torneoId, parejaId, posicion, uid) => {
+  const ref = doc(db, "tournaments", torneoId, "pairs", parejaId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return false;
+  const campo = posicion === 1 ? "jugador1Uid" : "jugador2Uid";
+  await updateDoc(ref, { [campo]: uid });
+  return true;
+};
+
+export const getParejaById = async (torneoId, parejaId) => {
+  const snap = await getDoc(doc(db, "tournaments", torneoId, "pairs", parejaId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() };
+};
+
 export const evaluarAscenso = async (jugadorUid) => {
   try {
     const userRef = doc(db, "users", jugadorUid);

@@ -14,6 +14,12 @@ export default function Login() {
   const navigate = useNavigate();
 
   const redirigirSegunRol = async (user) => {
+    const vincularRedirect = localStorage.getItem("padely-vincular-redirect");
+    if (vincularRedirect) {
+      localStorage.removeItem("padely-vincular-redirect");
+      navigate(vincularRedirect);
+      return;
+    }
     try {
       const data = await getUserData(user.uid);
       if (data && data.role) {

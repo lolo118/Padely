@@ -27,6 +27,7 @@ import AdminEstadisticas from "./pages/admin/Estadisticas";
 import AdminConfiguracion from "./pages/admin/Configuracion";
 import Dashboard from "./pages/admin/Dashboard";
 import AceptarInvitacion from "./pages/AceptarInvitacion";
+import VincularJugador from "./pages/VincularJugador";
 
 import OrgLayout from "./components/layouts/OrgLayout";
 import OrgDashboard from "./pages/org/OrgDashboard";
@@ -111,6 +112,7 @@ export default function App() {
           path="invitacion/:torneoId/:inscripcionId"
           element={<AceptarInvitacion />}
         />
+        <Route path="vincular/:torneoId/:parejaId/:posicion" element={<VincularJugador />} />
 
         {/* Rutas del jugador - accesibles por todos los logueados */}
         <Route
