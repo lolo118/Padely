@@ -110,6 +110,7 @@ const navItems = [
 const menuItems = [
   { to: "/inicio", label: "Inicio" },
   { to: "/hub", label: "Canchas disponibles" },
+  { to: "/mis-reservas", label: "Mis reservas" },
   { to: "/torneos", label: "Torneos" },
   { to: "/noticias", label: "Noticias" },
   { to: "/marketplace", label: "Tienda" },

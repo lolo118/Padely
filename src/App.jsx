@@ -12,6 +12,7 @@ import PlayerLayout from "./components/layouts/PlayerLayout";
 import ClubLayout from "./components/layouts/ClubLayout";
 
 import Hub from "./pages/Hub";
+import MisReservas from "./pages/MisReservas";
 import ClubPublico from "./pages/ClubPublico";
 import Torneos from "./pages/Torneos";
 import DetalleTorneoPublico from "./pages/DetalleTorneoPublico";
@@ -124,6 +125,7 @@ export default function App() {
         >
           <Route path="/inicio" element={<RedirigirPorRol />} />
           <Route path="/hub" element={<Hub />} />
+          <Route path="/mis-reservas" element={<MisReservas />} />
           <Route path="/torneos" element={<Torneos />} />
           <Route path="/torneos/:id" element={<DetalleTorneoPublico />} />
           <Route path="/noticias" element={<Noticias />} />
