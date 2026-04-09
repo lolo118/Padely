@@ -87,6 +87,7 @@ export default function ClubPublico() {
   );
   const [mostrarModal, setMostrarModal] = useState(false);
   const [modalData, setModalData] = useState(null);
+  const [reservaExitosa, setReservaExitosa] = useState(null);
   const [formReserva, setFormReserva] = useState({
     nombreJugador: "",
     email: "",
@@ -223,6 +224,14 @@ export default function ClubPublico() {
       });
       const nuevasReservas = await getReservas(club.id, fechaSeleccionada);
       setReservas(nuevasReservas);
+      setReservaExitosa({
+        cancha: modalData.cancha.nombre,
+        fecha: fechaSeleccionada,
+        hora: modalData.hora,
+        precio: modalData.precio,
+        status: club.reservaDirecta ? "confirmada" : "pendiente",
+        clubNombre: club.nombre,
+      });
       setMostrarModal(false);
     } catch (err) {
       console.error("Error:", err);
@@ -1089,6 +1098,76 @@ export default function ClubPublico() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmación de reserva */}
+      {reservaExitosa && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="themed-card rounded-2xl max-w-sm w-full p-6 border text-center">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: reservaExitosa.status === "confirmada" ? "rgba(34,197,94,0.1)" : "rgba(234,179,8,0.1)" }}>
+              {reservaExitosa.status === "confirmada" ? (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              )}
+            </div>
+
+            <h2 className="text-lg font-bold mb-1" style={{ color: "var(--text-primary)" }}>
+              {reservaExitosa.status === "confirmada" ? "¡Reserva confirmada!" : "Reserva pendiente"}
+            </h2>
+            <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
+              {reservaExitosa.status === "confirmada"
+                ? "Tu cancha está reservada. ¡Nos vemos en la cancha!"
+                : "Tu reserva fue enviada y está pendiente de aprobación por el club."}
+            </p>
+
+            <div className="rounded-xl p-4 mb-4 flex flex-col gap-1.5" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+              <div className="flex justify-between">
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>Club</span>
+                <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{reservaExitosa.clubNombre}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>Cancha</span>
+                <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{reservaExitosa.cancha}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>Fecha</span>
+                <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{reservaExitosa.fecha}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>Hora</span>
+                <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{reservaExitosa.hora}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>Precio</span>
+                <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>${reservaExitosa.precio}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => setReservaExitosa(null)}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition"
+                style={{ backgroundColor: "var(--accent)" }}
+              >
+                Entendido
+              </button>
+              <button
+                onClick={() => { setReservaExitosa(null); navigate("/mis-reservas"); }}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold transition"
+                style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-secondary)" }}
+              >
+                Ver mis reservas
+              </button>
+            </div>
           </div>
         </div>
       )}
