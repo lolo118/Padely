@@ -28,6 +28,191 @@ const selectClass =
   "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
 const labelClass = "text-xs font-semibold mb-1 block";
 
+const statusBadge = {
+  pendiente: "bg-yellow-100 text-yellow-700",
+  confirmada: "bg-green-100 text-green-700",
+  cancelada: "bg-red-100 text-red-500",
+};
+
+const statusLabel = {
+  pendiente: "Pendiente",
+  confirmada: "Confirmada",
+  cancelada: "Cancelada",
+};
+
+function ReservasTab({ clubId, canchas }) {
+  const [reservas, setReservas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filtro, setFiltro] = useState("pendiente");
+  const [fechaFiltro, setFechaFiltro] = useState("");
+
+  useEffect(() => {
+    const cargar = async () => {
+      setLoading(true);
+      try {
+        const data = await getReservas(clubId);
+        setReservas(data);
+      } catch (err) {
+        console.error("Error cargando reservas:", err);
+      }
+      setLoading(false);
+    };
+    cargar();
+  }, [clubId]);
+
+  const handleConfirmar = async (reservaId) => {
+    try {
+      await actualizarReserva(clubId, reservaId, { status: "confirmada" });
+      setReservas(reservas.map((r) => r.id === reservaId ? { ...r, status: "confirmada" } : r));
+    } catch (err) { console.error(err); }
+  };
+
+  const handleRechazar = async (reservaId) => {
+    if (!window.confirm("¿Rechazar esta reserva?")) return;
+    try {
+      await actualizarReserva(clubId, reservaId, { status: "cancelada" });
+      setReservas(reservas.map((r) => r.id === reservaId ? { ...r, status: "cancelada" } : r));
+    } catch (err) { console.error(err); }
+  };
+
+  const handleEliminar = async (reservaId) => {
+    if (!window.confirm("¿Eliminar esta reserva definitivamente?")) return;
+    try {
+      await eliminarReserva(clubId, reservaId);
+      setReservas(reservas.filter((r) => r.id !== reservaId));
+    } catch (err) { console.error(err); }
+  };
+
+  const getCanchaName = (canchaId) => {
+    const c = canchas.find((x) => x.id === canchaId);
+    return c?.nombre || "Cancha";
+  };
+
+  let filtradas = reservas;
+  if (filtro !== "todas") {
+    filtradas = filtradas.filter((r) => r.status === filtro);
+  }
+  if (fechaFiltro) {
+    filtradas = filtradas.filter((r) => r.fecha === fechaFiltro);
+  }
+  filtradas.sort((a, b) => {
+    if (a.fecha !== b.fecha) return b.fecha.localeCompare(a.fecha);
+    return (a.hora || "").localeCompare(b.hora || "");
+  });
+
+  const pendientes = reservas.filter((r) => r.status === "pendiente").length;
+  const confirmadas = reservas.filter((r) => r.status === "confirmada").length;
+
+  if (loading) {
+    return <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando reservas...</div>;
+  }
+
+  const filtros = [
+    { key: "pendiente", label: `Pendientes (${pendientes})`, active: "bg-yellow-100 text-yellow-700" },
+    { key: "confirmada", label: `Confirmadas (${confirmadas})`, active: "bg-green-100 text-green-700" },
+    { key: "cancelada", label: "Canceladas", active: "bg-red-100 text-red-500" },
+    { key: "todas", label: "Todas", active: "bg-[var(--bg-card-hover)] text-[var(--text-primary)]" },
+  ];
+
+  const filtroLabel = { pendiente: "pendientes", confirmada: "confirmadas", cancelada: "canceladas", todas: "" };
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Filtros */}
+      <div className="flex flex-wrap gap-2 items-center">
+        {filtros.map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setFiltro(f.key)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+              filtro === f.key
+                ? f.active
+                : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+        <div className="flex items-center gap-1 ml-auto">
+          <input
+            type="date"
+            value={fechaFiltro}
+            onChange={(e) => setFechaFiltro(e.target.value)}
+            className="themed-input rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+          {fechaFiltro && (
+            <button
+              onClick={() => setFechaFiltro("")}
+              className="text-xs font-semibold hover:opacity-80 px-2 py-1.5 rounded-lg"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Lista */}
+      {filtradas.length === 0 ? (
+        <div className="themed-card rounded-2xl p-8 border text-center">
+          <div className="text-4xl mb-3">📋</div>
+          <p className="font-semibold" style={{ color: "var(--text-primary)" }}>
+            No hay reservas {filtroLabel[filtro]}
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {filtradas.map((r) => (
+            <div key={r.id} className="themed-card rounded-2xl p-4 border">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {r.nombreJugador || "Sin nombre"}
+                  </p>
+                  <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+                    {getCanchaName(r.canchaId)} · {r.fecha} · {r.hora}
+                  </p>
+                  {(r.email || r.telefono) && (
+                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                      {r.email}{r.email && r.telefono ? " · " : ""}{r.telefono}
+                    </p>
+                  )}
+                </div>
+                <div className="text-right flex flex-col items-end gap-1">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusBadge[r.status] || statusBadge.pendiente}`}>
+                    {statusLabel[r.status] || "Pendiente"}
+                  </span>
+                  {r.precio != null && (
+                    <p className="font-bold text-sm" style={{ color: "var(--accent)" }}>${r.precio}</p>
+                  )}
+                  <div className="flex gap-2 mt-1">
+                    {r.status === "pendiente" && (
+                      <>
+                        <button onClick={() => handleConfirmar(r.id)}
+                          className="text-xs font-semibold text-green-600 hover:underline">Confirmar</button>
+                        <button onClick={() => handleRechazar(r.id)}
+                          className="text-xs font-semibold text-red-400 hover:text-red-600">Rechazar</button>
+                      </>
+                    )}
+                    {r.status === "confirmada" && (
+                      <button onClick={() => handleRechazar(r.id)}
+                        className="text-xs font-semibold text-red-400 hover:text-red-600">Cancelar</button>
+                    )}
+                    {r.status === "cancelada" && (
+                      <button onClick={() => handleEliminar(r.id)}
+                        className="text-xs font-semibold text-red-400 hover:text-red-600">Eliminar</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Canchas() {
   const { user } = useAuthStore();
   const [club, setClub] = useState(null);
@@ -318,7 +503,7 @@ export default function Canchas() {
         className="flex gap-2 mb-6 border-b"
         style={{ borderColor: "var(--border-card)" }}
       >
-        {["Canchas", "Turnos fijos"].map((t) => (
+        {["Canchas", "Reservas", "Turnos fijos"].map((t) => (
           <button
             key={t}
             onClick={() => setTabCanchas(t)}
@@ -1025,6 +1210,10 @@ export default function Canchas() {
             </div>
           )}
         </>
+      )}
+
+      {tabCanchas === "Reservas" && club && (
+        <ReservasTab clubId={club.id} canchas={canchas} />
       )}
 
       {tabCanchas === "Turnos fijos" && club && (
