@@ -137,7 +137,7 @@ export default function CrearTorneo() {
     superTiebreak: false,
     inscripcionAbierta: true,
     habilitarReclamos: true,
-    plazoReclamosHoras: 2,
+    plazoReclamosMinutos: 30,
     reglamento: "",
     premios: "",
     instagramOrganizador: "",
@@ -150,6 +150,11 @@ export default function CrearTorneo() {
     const val =
       e.target.type === "checkbox" ? e.target.checked : e.target.value;
     let updatedForm = { ...form, [field]: val };
+
+    // Auto-ajustar fechaFin si fechaInicio cambió
+    if (field === "fechaInicio" && updatedForm.fechaFin && updatedForm.fechaFin < val) {
+      updatedForm.fechaFin = val;
+    }
 
     // Auto-configurar sets según formato
     if (field === "formato") {
@@ -240,6 +245,12 @@ export default function CrearTorneo() {
       return;
     }
 
+    const today = getTodayString();
+    if (form.fechaInicio && form.fechaInicio < today) {
+      setError("La fecha de inicio no puede ser anterior a hoy.");
+      return;
+    }
+
     setLoading(true);
     try {
       const id = await crearTorneo(form, user.uid);
@@ -249,6 +260,16 @@ export default function CrearTorneo() {
       setLoading(false);
     }
   };
+
+  function getTodayString() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  const todayStr = getTodayString();
 
   if (!perfilCompleto) {
     return <PerfilIncompleto tipo={tipoUsuario} ruta={tipoUsuario === "organizador" ? "/org/entidad" : "/admin/configuracion"} />;
@@ -371,29 +392,19 @@ export default function CrearTorneo() {
             </div>
 
             {(form.formato === "mini" || form.formato === "normal") && (
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Sets por partido</label>
-                  <select
-                    value={form.sets}
-                    onChange={set("sets")}
-                    className={selectClass}
-                  >
-                    {form.formato === "mini" && (
-                      <option value={1}>1 set</option>
-                    )}
-                    <option value={3}>3 sets</option>
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Games por set</label>
-                  <div className="themed-input rounded-lg px-4 py-2 text-sm" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
-                    6 games
-                  </div>
-                  <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                    Siempre 6 games por set
-                  </p>
-                </div>
+              <div>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Sets por partido</label>
+                <select
+                  value={form.sets}
+                  onChange={set("sets")}
+                  className={selectClass}
+                >
+                  {form.formato === "mini" && (
+                    <option value={1}>1 set</option>
+                  )}
+                  <option value={3}>3 sets</option>
+                </select>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Siempre 6 games por set</p>
               </div>
             )}
 
@@ -456,17 +467,16 @@ export default function CrearTorneo() {
             </div>
             {form.habilitarReclamos && (
               <div>
-                <label className={labelClass}>Plazo para adherirse al reclamo (horas)</label>
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Plazo para adherirse al reclamo</label>
                 <select
-                  value={form.plazoReclamosHoras}
-                  onChange={set("plazoReclamosHoras")}
+                  value={form.plazoReclamosMinutos}
+                  onChange={set("plazoReclamosMinutos")}
                   className={`${selectClass} themed-input`}
                 >
-                  <option value={1}>1 hora</option>
-                  <option value={2}>2 horas</option>
-                  <option value={4}>4 horas</option>
-                  <option value={8}>8 horas</option>
-                  <option value={24}>24 horas</option>
+                  <option value={15}>15 minutos</option>
+                  <option value={30}>30 minutos</option>
+                  <option value={45}>45 minutos</option>
+                  <option value={60}>60 minutos</option>
                 </select>
               </div>
             )}
@@ -624,6 +634,7 @@ export default function CrearTorneo() {
                   type="date"
                   value={form.fechaInicio}
                   onChange={set("fechaInicio")}
+                  min={todayStr}
                   className={inputClass}
                   required
                 />
@@ -634,6 +645,7 @@ export default function CrearTorneo() {
                   type="date"
                   value={form.fechaFin}
                   onChange={set("fechaFin")}
+                  min={form.fechaInicio || todayStr}
                   className={inputClass}
                   required
                 />

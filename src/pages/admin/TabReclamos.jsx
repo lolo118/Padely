@@ -85,9 +85,9 @@ export default function TabReclamos({ torneoId, torneo }) {
           </h3>
           <div className="flex flex-col gap-3">
             {abiertos.map((r) => {
-              const horasRestantes = Math.max(0,
-                (Number(torneo.plazoReclamosHoras) || 2) -
-                Math.floor((Date.now() - new Date(r.creadoEn).getTime()) / 3600000)
+              const minutosRestantes = Math.max(0,
+                (Number(torneo.plazoReclamosMinutos) || 30) -
+                Math.floor((Date.now() - new Date(r.creadoEn).getTime()) / 60000)
               );
               return (
                 <div key={r.id} className="themed-card rounded-2xl p-5 border">
@@ -97,7 +97,7 @@ export default function TabReclamos({ torneoId, torneo }) {
                         {motivoLabel[r.motivo] || r.motivo}
                       </span>
                       <span className="text-xs ml-2" style={{ color: "var(--text-muted)" }}>
-                        {horasRestantes > 0 ? `${horasRestantes}h restantes` : "Plazo vencido"}
+                        {minutosRestantes > 0 ? `${minutosRestantes}min restantes` : "Plazo vencido"}
                       </span>
                     </div>
                     <span className="text-xs font-semibold px-2 py-1 rounded-full bg-amber-100 text-amber-700">Abierto</span>

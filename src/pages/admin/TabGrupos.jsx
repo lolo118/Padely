@@ -543,13 +543,18 @@ export default function TabGrupos({ torneoId, torneo }) {
                 onChange={(e) => setParejasXGrupo(Number(e.target.value))}
                 className="w-full border border-[var(--border-card)] rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
               >
-                {[2, 3, 4, 5, 6].map((n) => (
+                {(modoGeneracion === "aleatorio" ? [2, 4, 6] : [2, 3, 4, 5, 6]).map((n) => (
                   <option key={n} value={n}>
                     {n} parejas por grupo ({Math.ceil(parejas.length / n)}{" "}
                     grupos)
                   </option>
                 ))}
               </select>
+              {modoGeneracion === "aleatorio" && parejas.length % parejasXGrupo !== 0 && (
+                <p className="text-xs text-amber-600 mt-1">
+                  ⚠ {parejas.length} parejas no se dividen exactamente en grupos de {parejasXGrupo}. El último grupo tendrá {parejas.length % parejasXGrupo} pareja{parejas.length % parejasXGrupo !== 1 ? "s" : ""}.
+                </p>
+              )}
             </div>
             <div>
               <label className="text-sm block mb-1" style={{ color: "var(--text-muted)" }}>Modo</label>
