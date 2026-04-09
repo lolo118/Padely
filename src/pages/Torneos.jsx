@@ -53,7 +53,7 @@ export default function Torneos() {
           placeholder="Buscar por nombre, sede o ciudad..."
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+          className="w-full border border-[var(--border-card)] rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
         />
         <div className="flex gap-2 flex-wrap">
           {[
