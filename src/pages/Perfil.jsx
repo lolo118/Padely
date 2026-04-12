@@ -16,6 +16,7 @@ import { sendEmailVerification, deleteUser, signOut } from "firebase/auth";
 import {
   getInscripcionesByJugador,
   getTorneosByOrganizer,
+  getHistorialPartidos,
 } from "../services/torneoService";
 import { getClubByOwner } from "../services/canchaService";
 
@@ -46,6 +47,9 @@ export default function Perfil() {
 
   // Jugador
   const [inscripciones, setInscripciones] = useState([]);
+  const [historial, setHistorial] = useState([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [editForm, setEditForm] = useState({
     nombre: "",
     telefono: "",
@@ -627,6 +631,92 @@ export default function Perfil() {
               </div>
             </div>
           )}
+
+          {/* Historial de partidos */}
+          <div className="themed-card rounded-2xl p-5 border mb-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>Historial de partidos</h2>
+              {!mostrarHistorial && (
+                <button
+                  onClick={async () => {
+                    setCargandoHistorial(true);
+                    setMostrarHistorial(true);
+                    try {
+                      const data = await getHistorialPartidos(user.uid);
+                      setHistorial(data);
+                    } catch (err) { console.error("Error cargando historial:", err); }
+                    setCargandoHistorial(false);
+                  }}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg transition"
+                  style={{ backgroundColor: "var(--accent)", color: "white" }}
+                >
+                  Ver historial
+                </button>
+              )}
+            </div>
+
+            {mostrarHistorial && cargandoHistorial && (
+              <div className="text-center py-6" style={{ color: "var(--text-muted)" }}>
+                <p className="text-sm">Cargando historial...</p>
+              </div>
+            )}
+
+            {mostrarHistorial && !cargandoHistorial && historial.length === 0 && (
+              <div className="text-center py-6">
+                <div className="text-3xl mb-2">🎾</div>
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                  Todavía no tenés partidos registrados
+                </p>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                  Participá en un torneo para ver tu historial acá
+                </p>
+              </div>
+            )}
+
+            {mostrarHistorial && !cargandoHistorial && historial.length > 0 && (
+              <div className="flex flex-col gap-2 mt-3">
+                <div className="flex gap-3 mb-2">
+                  <div className="flex-1 rounded-xl p-3 text-center" style={{ backgroundColor: "rgba(34,197,94,0.08)" }}>
+                    <p className="text-lg font-bold text-green-600">{historial.filter(h => h.gane).length}</p>
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Victorias</p>
+                  </div>
+                  <div className="flex-1 rounded-xl p-3 text-center" style={{ backgroundColor: "rgba(239,68,68,0.08)" }}>
+                    <p className="text-lg font-bold text-red-400">{historial.filter(h => !h.gane).length}</p>
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Derrotas</p>
+                  </div>
+                  <div className="flex-1 rounded-xl p-3 text-center" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+                    <p className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>{historial.length}</p>
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Partidos</p>
+                  </div>
+                </div>
+
+                {historial.map((m, i) => (
+                  <div key={i} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>{m.torneoNombre}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-muted)" }}>
+                        {m.fase}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>vs</p>
+                        <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{m.rival}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-bold px-2 py-1 rounded-lg ${m.gane ? "bg-green-100 text-green-700" : "bg-red-100 text-red-400"}`}>
+                          {m.gane ? "Victoria" : "Derrota"}
+                        </span>
+                        <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+                          {m.resultado.sets.map(s => `${s.g1}-${s.g2}`).join(" / ")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </>
       )}
 

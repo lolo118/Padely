@@ -351,6 +351,12 @@ export default function Canchas() {
 
   const [vistaGrilla, setVistaGrilla] = useState("dia");
 
+  // Block slot modal
+  const [mostrarModalBloqueo, setMostrarModalBloqueo] = useState(false);
+  const [bloqueoData, setBloqueoData] = useState(null);
+  const [motivoBloqueo, setMotivoBloqueo] = useState("Mantenimiento");
+  const [guardandoBloqueo, setGuardandoBloqueo] = useState(false);
+
   // Manual reservation modal
   const [mostrarModalManual, setMostrarModalManual] = useState(false);
   const [modalManualData, setModalManualData] = useState(null);
@@ -805,6 +811,29 @@ export default function Canchas() {
                   >
                     Horarios y precios
                   </label>
+                  <div className="flex gap-1 mb-2 flex-wrap">
+                    <button type="button" onClick={() => {
+                      const nuevos = {};
+                      for (let h = 7; h <= 23; h++) nuevos[`${h.toString().padStart(2,"0")}:00`] = formCancha.precioBase || 0;
+                      setFormCancha({ ...formCancha, horarios: nuevos });
+                    }} className="text-[10px] font-semibold px-2 py-1 rounded-lg transition"
+                      style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>7:00-23:00</button>
+                    <button type="button" onClick={() => {
+                      const nuevos = {};
+                      for (let h = 8; h <= 22; h++) nuevos[`${h.toString().padStart(2,"0")}:00`] = formCancha.precioBase || 0;
+                      setFormCancha({ ...formCancha, horarios: nuevos });
+                    }} className="text-[10px] font-semibold px-2 py-1 rounded-lg transition"
+                      style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>8:00-22:00</button>
+                    <button type="button" onClick={() => {
+                      const nuevos = {};
+                      for (let h = 9; h <= 21; h++) nuevos[`${h.toString().padStart(2,"0")}:00`] = formCancha.precioBase || 0;
+                      setFormCancha({ ...formCancha, horarios: nuevos });
+                    }} className="text-[10px] font-semibold px-2 py-1 rounded-lg transition"
+                      style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>9:00-21:00</button>
+                    <button type="button" onClick={() => setFormCancha({ ...formCancha, horarios: {} })}
+                      className="text-[10px] font-semibold px-2 py-1 rounded-lg transition text-red-400"
+                      style={{ backgroundColor: "var(--bg-card-hover)" }}>Limpiar</button>
+                  </div>
                   <div className="flex flex-wrap gap-1 mb-2">
                     {horasDelDia.map((hora) => (
                       <button
@@ -821,6 +850,30 @@ export default function Canchas() {
                       </button>
                     ))}
                   </div>
+                  {Object.keys(formCancha.horarios).length > 0 && (
+                    <div className="rounded-xl p-3 mb-2" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Precio para todos</label>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs" style={{ color: "var(--text-muted)" }}>$</span>
+                          <input type="number" min="0" placeholder="Ej: 15000" id="batchPriceNew"
+                            className="themed-input w-24 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-2 focus:ring-green-500" />
+                          <button type="button" onClick={() => {
+                            const precio = Number(document.getElementById("batchPriceNew").value);
+                            if (precio >= 0) {
+                              const nuevos = { ...formCancha.horarios };
+                              Object.keys(nuevos).forEach(h => { nuevos[h] = precio; });
+                              setFormCancha({ ...formCancha, horarios: nuevos });
+                            }
+                          }} className="text-xs font-semibold px-2 py-1 rounded-lg transition"
+                            style={{ backgroundColor: "var(--accent)", color: "white" }}>Aplicar</button>
+                        </div>
+                      </div>
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                        Aplicá un precio a todos, después ajustá individualmente
+                      </p>
+                    </div>
+                  )}
                   {Object.keys(formCancha.horarios).length > 0 && (
                     <div
                       className="rounded-xl p-3 flex flex-col gap-1"
@@ -1017,6 +1070,29 @@ export default function Canchas() {
                         >
                           Horarios y precios
                         </label>
+                        <div className="flex gap-1 mb-2 flex-wrap">
+                          <button type="button" onClick={() => {
+                            const nuevos = {};
+                            for (let h = 7; h <= 23; h++) nuevos[`${h.toString().padStart(2,"0")}:00`] = editForm.precioBase || 0;
+                            setEditForm({ ...editForm, horarios: nuevos });
+                          }} className="text-[10px] font-semibold px-2 py-1 rounded-lg transition"
+                            style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>7:00-23:00</button>
+                          <button type="button" onClick={() => {
+                            const nuevos = {};
+                            for (let h = 8; h <= 22; h++) nuevos[`${h.toString().padStart(2,"0")}:00`] = editForm.precioBase || 0;
+                            setEditForm({ ...editForm, horarios: nuevos });
+                          }} className="text-[10px] font-semibold px-2 py-1 rounded-lg transition"
+                            style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>8:00-22:00</button>
+                          <button type="button" onClick={() => {
+                            const nuevos = {};
+                            for (let h = 9; h <= 21; h++) nuevos[`${h.toString().padStart(2,"0")}:00`] = editForm.precioBase || 0;
+                            setEditForm({ ...editForm, horarios: nuevos });
+                          }} className="text-[10px] font-semibold px-2 py-1 rounded-lg transition"
+                            style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>9:00-21:00</button>
+                          <button type="button" onClick={() => setEditForm({ ...editForm, horarios: {} })}
+                            className="text-[10px] font-semibold px-2 py-1 rounded-lg transition text-red-400"
+                            style={{ backgroundColor: "var(--bg-card-hover)" }}>Limpiar</button>
+                        </div>
                         <div className="flex flex-wrap gap-1 mb-2">
                           {horasDelDia.map((hora) => (
                             <button
@@ -1033,6 +1109,27 @@ export default function Canchas() {
                             </button>
                           ))}
                         </div>
+                        {Object.keys(editForm.horarios || {}).length > 0 && (
+                          <div className="rounded-xl p-3 mb-2" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+                            <div className="flex items-center gap-2 mb-2">
+                              <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Precio para todos</label>
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs" style={{ color: "var(--text-muted)" }}>$</span>
+                                <input type="number" min="0" placeholder="Ej: 15000" id="batchPriceEdit"
+                                  className="themed-input w-24 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-2 focus:ring-green-500" />
+                                <button type="button" onClick={() => {
+                                  const precio = Number(document.getElementById("batchPriceEdit").value);
+                                  if (precio >= 0) {
+                                    const nuevos = { ...(editForm.horarios || {}) };
+                                    Object.keys(nuevos).forEach(h => { nuevos[h] = precio; });
+                                    setEditForm({ ...editForm, horarios: nuevos });
+                                  }
+                                }} className="text-xs font-semibold px-2 py-1 rounded-lg transition"
+                                  style={{ backgroundColor: "var(--accent)", color: "white" }}>Aplicar</button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                         {Object.keys(editForm.horarios || {}).length > 0 && (
                           <div
                             className="rounded-xl p-3 flex flex-col gap-1"
@@ -1243,6 +1340,17 @@ export default function Canchas() {
                             }
 
                             const reserva = getReservaParaSlot(cancha.id, hora);
+                            if (reserva && reserva.status === "bloqueado") {
+                              return (
+                                <td key={cancha.id} className="text-center py-2 px-2">
+                                  <div className="rounded-lg px-2 py-1 text-xs" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
+                                    <p className="font-semibold truncate">{reserva.nombreJugador || "🔒 Bloqueado"}</p>
+                                    <button onClick={() => handleCancelarReserva(reserva.id)}
+                                      className="text-red-400 hover:underline mt-0.5">Desbloquear</button>
+                                  </div>
+                                </td>
+                              );
+                            }
                             if (reserva) {
                               return (
                                 <td
@@ -1316,25 +1424,31 @@ export default function Canchas() {
                                 key={cancha.id}
                                 className="text-center py-2 px-2"
                               >
-                                <button
-                                  onClick={() => {
-                                    setModalManualData({ cancha, hora, precio: precioHora });
-                                    setFormManual({ nombreJugador: "", telefono: "" });
-                                    setMostrarModalManual(true);
-                                  }}
-                                  className="w-full rounded-lg px-2 py-1 transition hover:ring-2 hover:ring-green-400"
-                                  style={{ backgroundColor: "rgba(34,197,94,0.06)" }}
-                                >
-                                  <span className="text-xs text-green-500 font-semibold block">
-                                    Libre
-                                  </span>
-                                  <span
-                                    className="text-xs"
-                                    style={{ color: "var(--text-muted)" }}
+                                <div className="relative group">
+                                  <button
+                                    onClick={() => {
+                                      setModalManualData({ cancha, hora, precio: precioHora });
+                                      setFormManual({ nombreJugador: "", telefono: "" });
+                                      setMostrarModalManual(true);
+                                    }}
+                                    className="w-full rounded-lg px-2 py-1 transition hover:ring-2 hover:ring-green-400"
+                                    style={{ backgroundColor: "rgba(34,197,94,0.06)" }}
                                   >
-                                    ${precioHora}
-                                  </span>
-                                </button>
+                                    <span className="text-xs text-green-500 font-semibold block">Libre</span>
+                                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>${precioHora}</span>
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setBloqueoData({ cancha, hora });
+                                      setMotivoBloqueo("Mantenimiento");
+                                      setMostrarModalBloqueo(true);
+                                    }}
+                                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition"
+                                    style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}
+                                    title="Bloquear horario"
+                                  >🔒</button>
+                                </div>
                               </td>
                             );
                           })}
@@ -1441,6 +1555,72 @@ export default function Canchas() {
                 className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold text-white transition disabled:opacity-50"
                 style={{ backgroundColor: "var(--accent)" }}>
                 {guardandoManual ? "Guardando..." : "Reservar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal bloqueo de horario */}
+      {mostrarModalBloqueo && bloqueoData && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="themed-card rounded-2xl p-6 w-full max-w-sm mx-4 border">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(239,68,68,0.1)" }}>
+                <span className="text-lg">🔒</span>
+              </div>
+              <div>
+                <h3 className="font-bold" style={{ color: "var(--text-primary)" }}>Bloquear horario</h3>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  {bloqueoData.cancha.nombre} · {fechaSeleccionada} · {bloqueoData.hora}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>Motivo</label>
+                <select value={motivoBloqueo} onChange={(e) => setMotivoBloqueo(e.target.value)}
+                  className="themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full">
+                  <option value="Mantenimiento">Mantenimiento</option>
+                  <option value="Evento privado">Evento privado</option>
+                  <option value="Clima">Clima / Condiciones</option>
+                  <option value="Otro">Otro</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setMostrarModalBloqueo(false)}
+                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition"
+                style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  setGuardandoBloqueo(true);
+                  try {
+                    await crearReserva(club.id, {
+                      canchaId: bloqueoData.cancha.id,
+                      canchaName: bloqueoData.cancha.nombre,
+                      fecha: fechaSeleccionada,
+                      hora: bloqueoData.hora,
+                      precio: 0,
+                      jugadorUid: null,
+                      nombreJugador: `🔒 ${motivoBloqueo}`,
+                      telefono: "",
+                      email: "",
+                      status: "bloqueado",
+                    });
+                    const nuevasReservas = await getReservas(club.id, fechaSeleccionada);
+                    setReservas(nuevasReservas);
+                    setMostrarModalBloqueo(false);
+                  } catch (err) { console.error("Error al bloquear horario:", err); }
+                  setGuardandoBloqueo(false);
+                }}
+                disabled={guardandoBloqueo}
+                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold text-white transition disabled:opacity-50 bg-red-600 hover:bg-red-700">
+                {guardandoBloqueo ? "Bloqueando..." : "Bloquear"}
               </button>
             </div>
           </div>

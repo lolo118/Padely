@@ -373,3 +373,62 @@ export const evaluarAscenso = async (jugadorUid) => {
     console.error("Error evaluando ascenso:", err);
   }
 };
+
+// ========== HISTORIAL DE PARTIDOS ==========
+
+export const getHistorialPartidos = async (jugadorUid) => {
+  const torneosSnap = await getDocs(collection(db, "tournaments"));
+  const historial = [];
+
+  for (const torneoDoc of torneosSnap.docs) {
+    const torneoData = { id: torneoDoc.id, ...torneoDoc.data() };
+
+    const parejasSnap = await getDocs(collection(db, "tournaments", torneoDoc.id, "pairs"));
+    const miPareja = parejasSnap.docs.find((p) => {
+      const d = p.data();
+      return d.jugador1Uid === jugadorUid || d.jugador2Uid === jugadorUid;
+    });
+
+    if (!miPareja) continue;
+    const parejaData = { id: miPareja.id, ...miPareja.data() };
+
+    const gruposSnap = await getDocs(collection(db, "tournaments", torneoDoc.id, "groups"));
+    for (const grupoDoc of gruposSnap.docs) {
+      const grupo = grupoDoc.data();
+      (grupo.partidos || []).forEach((partido) => {
+        if (partido.pareja1?.id === parejaData.id || partido.pareja2?.id === parejaData.id) {
+          if (partido.resultado) {
+            const esPar1 = partido.pareja1?.id === parejaData.id;
+            let setsGanados = 0, setsPerdidos = 0;
+            partido.resultado.sets.forEach((s) => {
+              let g1 = s.g1, g2 = s.g2;
+              if (s.tb1 !== undefined || s.tb2 !== undefined) {
+                if ((s.tb1 ?? 0) > (s.tb2 ?? 0)) g1++;
+                else if ((s.tb2 ?? 0) > (s.tb1 ?? 0)) g2++;
+              }
+              if (esPar1) { if (g1 > g2) setsGanados++; else setsPerdidos++; }
+              else { if (g2 > g1) setsGanados++; else setsPerdidos++; }
+            });
+            historial.push({
+              torneoNombre: torneoData.nombre,
+              torneoId: torneoData.id,
+              fase: grupo.nombre || "Grupos",
+              miPareja: parejaData.nombrePareja || `${parejaData.jugador1} / ${parejaData.jugador2}`,
+              rival: esPar1
+                ? (partido.pareja2?.nombrePareja || `${partido.pareja2?.jugador1} / ${partido.pareja2?.jugador2}`)
+                : (partido.pareja1?.nombrePareja || `${partido.pareja1?.jugador1} / ${partido.pareja1?.jugador2}`),
+              resultado: partido.resultado,
+              gane: setsGanados > setsPerdidos,
+              setsGanados,
+              setsPerdidos,
+              fecha: torneoData.fechaInicio || "",
+            });
+          }
+        }
+      });
+    }
+  }
+
+  historial.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+  return historial;
+};
