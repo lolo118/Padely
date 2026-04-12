@@ -52,6 +52,38 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+function RoleRoute({ allowedRoles, children }) {
+  const { user, loading } = useAuthStore();
+  const [rol, setRol] = useState(null);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    if (loading) return;
+    const verificar = async () => {
+      if (!user) { setChecking(false); return; }
+      try {
+        const data = await getUserData(user.uid);
+        const roles = data?.role || ["jugador"];
+        if (roles.includes("club")) setRol("club");
+        else if (roles.includes("organizador")) setRol("organizador");
+        else setRol("jugador");
+      } catch { setRol("jugador"); }
+      setChecking(false);
+    };
+    verificar();
+  }, [user, loading]);
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
+  if (!user) return <Navigate to="/login" />;
+  if (checking) return <div className="min-h-screen flex items-center justify-center" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
+  if (!allowedRoles.includes(rol)) {
+    if (rol === "club") return <Navigate to="/admin" />;
+    if (rol === "organizador") return <Navigate to="/org" />;
+    return <Navigate to="/inicio" />;
+  }
+  return children;
+}
+
 function RedirigirPorRol() {
   const { user } = useAuthStore();
   const [rol, setRol] = useState(null);
@@ -138,9 +170,9 @@ export default function App() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute>
+            <RoleRoute allowedRoles={["club"]}>
               <ClubLayout />
-            </ProtectedRoute>
+            </RoleRoute>
           }
         >
           <Route index element={<Dashboard />} />
@@ -156,9 +188,9 @@ export default function App() {
         <Route
           path="/org"
           element={
-            <ProtectedRoute>
+            <RoleRoute allowedRoles={["organizador"]}>
               <OrgLayout />
-            </ProtectedRoute>
+            </RoleRoute>
           }
         >
           <Route index element={<OrgDashboard />} />
