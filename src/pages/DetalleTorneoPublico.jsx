@@ -42,6 +42,62 @@ function getNombrePareja(p) {
   return p.nombrePareja || `${p.jugador1} / ${p.jugador2}`;
 }
 
+function getGanador(resultado) {
+  if (!resultado) return null;
+  let setsP1 = 0, setsP2 = 0;
+  resultado.sets.forEach((s) => {
+    let g1 = s.g1, g2 = s.g2;
+    if (s.tb1 !== undefined || s.tb2 !== undefined) {
+      if ((s.tb1 ?? 0) > (s.tb2 ?? 0)) g1 += 1;
+      else if ((s.tb2 ?? 0) > (s.tb1 ?? 0)) g2 += 1;
+    }
+    if (g1 > g2) setsP1++;
+    else if (g2 > g1) setsP2++;
+  });
+  return setsP1 > setsP2 ? 1 : setsP2 > setsP1 ? 2 : null;
+}
+
+function calcularTabla(grupo) {
+  const stats = {};
+  grupo.parejas.forEach((p) => {
+    stats[p.id] = {
+      id: p.id,
+      nombre: p.nombrePareja || `${p.jugador1} / ${p.jugador2}`,
+      pj: 0, pg: 0, pp: 0, sf: 0, sc: 0, gf: 0, gc: 0,
+    };
+  });
+
+  (grupo.partidos || []).forEach((m) => {
+    if (!m.resultado) return;
+    const s1 = stats[m.pareja1.id];
+    const s2 = stats[m.pareja2.id];
+    if (!s1 || !s2) return;
+    let setsP1 = 0, setsP2 = 0, gamesP1 = 0, gamesP2 = 0;
+    m.resultado.sets.forEach((set) => {
+      let g1 = set.g1, g2 = set.g2;
+      if (set.tb1 !== undefined || set.tb2 !== undefined) {
+        if ((set.tb1 ?? 0) > (set.tb2 ?? 0)) g1 += 1;
+        else if ((set.tb2 ?? 0) > (set.tb1 ?? 0)) g2 += 1;
+      }
+      gamesP1 += g1; gamesP2 += g2;
+      if (g1 > g2) setsP1++; else if (g2 > g1) setsP2++;
+    });
+    s1.pj++; s2.pj++;
+    s1.sf += setsP1; s1.sc += setsP2;
+    s2.sf += setsP2; s2.sc += setsP1;
+    s1.gf += gamesP1; s1.gc += gamesP2;
+    s2.gf += gamesP2; s2.gc += gamesP1;
+    if (setsP1 > setsP2) { s1.pg++; s2.pp++; }
+    else { s2.pg++; s1.pp++; }
+  });
+
+  return Object.values(stats).sort((a, b) => {
+    if (b.pg !== a.pg) return b.pg - a.pg;
+    if (b.sf - b.sc !== a.sf - a.sc) return b.sf - b.sc - (a.sf - a.sc);
+    return b.gf - b.gc - (a.gf - a.gc);
+  });
+}
+
 const tabs = ["Info", "Parejas", "Grupos", "Bracket"];
 
 export default function DetalleTorneoPublico() {
@@ -918,20 +974,54 @@ export default function DetalleTorneoPublico() {
                 >
                   {grupo.nombre}
                 </h2>
-                <div className="flex flex-col gap-1 mb-3">
-                  {grupo.parejas.map((p, pi) => (
-                    <div
-                      key={pi}
-                      className="text-sm rounded-lg px-3 py-2"
-                      style={{
-                        color: "var(--text-primary)",
-                        backgroundColor: "var(--bg-card-hover)",
-                      }}
-                    >
-                      {getNombrePareja(p)}
-                    </div>
-                  ))}
-                </div>
+                {/* Tabla de posiciones */}
+                {(grupo.partidos || []).some(p => p.resultado) && (
+                  <div className="overflow-x-auto mb-4">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs border-b border-[var(--border-card)]" style={{ color: "var(--text-muted)" }}>
+                          <th className="text-left py-2 pr-2">#</th>
+                          <th className="text-left py-2">Pareja</th>
+                          <th className="text-center py-2">PJ</th>
+                          <th className="text-center py-2">PG</th>
+                          <th className="text-center py-2">PP</th>
+                          <th className="text-center py-2">SF</th>
+                          <th className="text-center py-2">SC</th>
+                          <th className="text-center py-2">GF</th>
+                          <th className="text-center py-2">GC</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {calcularTabla(grupo).map((row, ri) => (
+                          <tr key={row.id} className="border-b border-[var(--border-card)]"
+                            style={ri < (Number(torneo.parejasQueAvanzan) || 2) ? { backgroundColor: "rgba(34,197,94,0.08)" } : undefined}>
+                            <td className="py-2 pr-2 font-bold" style={{ color: "var(--text-muted)" }}>{ri + 1}</td>
+                            <td className="py-2 font-medium" style={{ color: "var(--text-primary)" }}>{row.nombre}</td>
+                            <td className="text-center py-2" style={{ color: "var(--text-secondary)" }}>{row.pj}</td>
+                            <td className="text-center py-2 font-semibold text-green-600">{row.pg}</td>
+                            <td className="text-center py-2 text-red-400">{row.pp}</td>
+                            <td className="text-center py-2" style={{ color: "var(--text-secondary)" }}>{row.sf}</td>
+                            <td className="text-center py-2" style={{ color: "var(--text-secondary)" }}>{row.sc}</td>
+                            <td className="text-center py-2" style={{ color: "var(--text-secondary)" }}>{row.gf}</td>
+                            <td className="text-center py-2" style={{ color: "var(--text-secondary)" }}>{row.gc}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Lista de parejas (when no results yet) */}
+                {!(grupo.partidos || []).some(p => p.resultado) && (
+                  <div className="flex flex-col gap-1 mb-3">
+                    {grupo.parejas.map((p, pi) => (
+                      <div key={pi} className="text-sm rounded-lg px-3 py-2"
+                        style={{ color: "var(--text-primary)", backgroundColor: "var(--bg-card-hover)" }}>
+                        {getNombrePareja(p)}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Partidos */}
                 {(grupo.partidos || []).length > 0 && (
@@ -969,13 +1059,22 @@ export default function DetalleTorneoPublico() {
                               }}
                             >
                               <div className="flex-1">
-                                <p
-                                  className="text-sm font-medium"
-                                  style={{ color: "var(--text-primary)" }}
-                                >
-                                  {getNombrePareja(p.pareja1)} vs{" "}
-                                  {getNombrePareja(p.pareja2)}
-                                </p>
+                                {(() => {
+                                  const ganador = p.resultado ? getGanador(p.resultado) : null;
+                                  return (
+                                    <>
+                                      <p className={`text-sm font-medium ${ganador === 1 ? "text-green-700 font-bold" : ganador === 2 ? "text-red-400" : ""}`}
+                                        style={!ganador ? { color: "var(--text-primary)" } : undefined}>
+                                        {ganador === 1 && "🏆 "}{getNombrePareja(p.pareja1)}
+                                      </p>
+                                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>vs</p>
+                                      <p className={`text-sm font-medium ${ganador === 2 ? "text-green-700 font-bold" : ganador === 1 ? "text-red-400" : ""}`}
+                                        style={!ganador ? { color: "var(--text-primary)" } : undefined}>
+                                        {ganador === 2 && "🏆 "}{getNombrePareja(p.pareja2)}
+                                      </p>
+                                    </>
+                                  );
+                                })()}
                                 {p.hora && (
                                   <p
                                     className="text-xs mt-0.5"
@@ -1215,7 +1314,27 @@ export default function DetalleTorneoPublico() {
               </p>
             </div>
           ) : (
-            bracket.rondas.map((ronda, ri) => {
+            <>
+            {/* Campeones */}
+            {(() => {
+              const finalMatch = bracket.rondas[bracket.rondas.length - 1]?.[0];
+              if (!finalMatch?.resultado || !finalMatch?.pareja1 || !finalMatch?.pareja2) return null;
+              const g = getGanador(finalMatch.resultado);
+              const campeon = g === 1 ? finalMatch.pareja1 : finalMatch.pareja2;
+              const subcampeon = g === 1 ? finalMatch.pareja2 : finalMatch.pareja1;
+              return (
+                <div className="rounded-2xl p-6 shadow-sm text-center border"
+                  style={{ background: "linear-gradient(to right, rgba(234,179,8,0.08), rgba(234,179,8,0.15))", borderColor: "rgba(234,179,8,0.3)" }}>
+                  <div className="text-5xl mb-3">🏆</div>
+                  <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "#ca8a04" }}>Campeones</p>
+                  <p className="text-xl font-bold mb-4" style={{ color: "var(--text-primary)" }}>{getNombrePareja(campeon)}</p>
+                  <div className="text-3xl mb-2">🥈</div>
+                  <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Subcampeones</p>
+                  <p className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>{getNombrePareja(subcampeon)}</p>
+                </div>
+              );
+            })()}
+            {bracket.rondas.map((ronda, ri) => {
               const totalRondas = bracket.rondas.length;
               const faltantes = totalRondas - ri;
               let nombreRonda = `Ronda ${ri + 1}`;
@@ -1240,34 +1359,22 @@ export default function DetalleTorneoPublico() {
                         style={{ backgroundColor: "var(--bg-card-hover)" }}
                       >
                         <div className="flex-1">
-                          <p
-                            className="text-sm font-medium"
-                            style={{
-                              color: p.pareja1
-                                ? "var(--text-primary)"
-                                : "var(--text-muted)",
-                              opacity: p.pareja1 ? 1 : 0.4,
-                            }}
-                          >
-                            {getNombrePareja(p.pareja1)}
-                          </p>
-                          <p
-                            className="text-xs"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            vs
-                          </p>
-                          <p
-                            className="text-sm font-medium"
-                            style={{
-                              color: p.pareja2
-                                ? "var(--text-primary)"
-                                : "var(--text-muted)",
-                              opacity: p.pareja2 ? 1 : 0.4,
-                            }}
-                          >
-                            {getNombrePareja(p.pareja2)}
-                          </p>
+                          {(() => {
+                            const ganador = p.resultado ? getGanador(p.resultado) : null;
+                            return (
+                              <>
+                                <p className={`text-sm font-medium ${!p.pareja1 ? "" : ganador === 1 ? "text-green-700 font-bold" : ganador === 2 ? "text-red-400" : ""}`}
+                                  style={!p.pareja1 ? { color: "var(--text-muted)", opacity: 0.4 } : (!ganador ? { color: "var(--text-primary)" } : undefined)}>
+                                  {ganador === 1 && "🏆 "}{getNombrePareja(p.pareja1)}
+                                </p>
+                                <p className="text-xs" style={{ color: "var(--text-muted)" }}>vs</p>
+                                <p className={`text-sm font-medium ${!p.pareja2 ? "" : ganador === 2 ? "text-green-700 font-bold" : ganador === 1 ? "text-red-400" : ""}`}
+                                  style={!p.pareja2 ? { color: "var(--text-muted)", opacity: 0.4 } : (!ganador ? { color: "var(--text-primary)" } : undefined)}>
+                                  {ganador === 2 && "🏆 "}{getNombrePareja(p.pareja2)}
+                                </p>
+                              </>
+                            );
+                          })()}
                         </div>
                         {p.resultado && (
                           <span
@@ -1289,7 +1396,8 @@ export default function DetalleTorneoPublico() {
                   </div>
                 </div>
               );
-            })
+            })}
+            </>
           )}
         </div>
       )}
