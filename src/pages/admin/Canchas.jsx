@@ -8,6 +8,7 @@ import {
   actualizarCancha,
   eliminarCancha,
   getReservas,
+  crearReserva,
   actualizarReserva,
   eliminarReserva,
   actualizarClubConfig,
@@ -239,6 +240,12 @@ export default function Canchas() {
   // Edición cancha
   const [editandoCancha, setEditandoCancha] = useState(null);
   const [editForm, setEditForm] = useState(null);
+
+  // Manual reservation modal
+  const [mostrarModalManual, setMostrarModalManual] = useState(false);
+  const [modalManualData, setModalManualData] = useState(null);
+  const [formManual, setFormManual] = useState({ nombreJugador: "", telefono: "" });
+  const [guardandoManual, setGuardandoManual] = useState(false);
 
   // Config club
   const [mostrarConfig, setMostrarConfig] = useState(false);
@@ -1187,7 +1194,15 @@ export default function Canchas() {
                                 key={cancha.id}
                                 className="text-center py-2 px-2"
                               >
-                                <div>
+                                <button
+                                  onClick={() => {
+                                    setModalManualData({ cancha, hora, precio: precioHora });
+                                    setFormManual({ nombreJugador: "", telefono: "" });
+                                    setMostrarModalManual(true);
+                                  }}
+                                  className="w-full rounded-lg px-2 py-1 transition hover:ring-2 hover:ring-green-400"
+                                  style={{ backgroundColor: "rgba(34,197,94,0.06)" }}
+                                >
                                   <span className="text-xs text-green-500 font-semibold block">
                                     Libre
                                   </span>
@@ -1197,7 +1212,7 @@ export default function Canchas() {
                                   >
                                     ${precioHora}
                                   </span>
-                                </div>
+                                </button>
                               </td>
                             );
                           })}
@@ -1218,6 +1233,83 @@ export default function Canchas() {
 
       {tabCanchas === "Turnos fijos" && club && (
         <TabTurnosFijos clubId={club.id} />
+      )}
+
+      {/* Modal reserva manual */}
+      {mostrarModalManual && modalManualData && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="themed-card rounded-2xl p-6 w-full max-w-sm mx-4 border">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "var(--accent-light)" }}>
+                <span className="text-lg">📝</span>
+              </div>
+              <div>
+                <h3 className="font-bold" style={{ color: "var(--text-primary)" }}>Reserva manual</h3>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  {modalManualData.cancha.nombre} · {fechaSeleccionada} · {modalManualData.hora}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl p-3 mb-4 flex items-center justify-between" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+              <span className="text-sm" style={{ color: "var(--text-muted)" }}>Precio</span>
+              <span className="text-lg font-bold" style={{ color: "var(--accent)" }}>${modalManualData.precio}</span>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>Nombre del jugador *</label>
+                <input type="text" required value={formManual.nombreJugador}
+                  onChange={(e) => setFormManual({ ...formManual, nombreJugador: e.target.value })}
+                  placeholder="Ej: Juan Pérez"
+                  className="themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>Teléfono (opcional)</label>
+                <input type="tel" value={formManual.telefono}
+                  onChange={(e) => setFormManual({ ...formManual, telefono: e.target.value.replace(/\D/g, "") })}
+                  placeholder="Ej: 3851234567"
+                  className="themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full" />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setMostrarModalManual(false)}
+                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition"
+                style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  if (!formManual.nombreJugador.trim()) return;
+                  setGuardandoManual(true);
+                  try {
+                    await crearReserva(club.id, {
+                      canchaId: modalManualData.cancha.id,
+                      canchaName: modalManualData.cancha.nombre,
+                      fecha: fechaSeleccionada,
+                      hora: modalManualData.hora,
+                      precio: modalManualData.precio,
+                      jugadorUid: null,
+                      nombreJugador: formManual.nombreJugador.trim(),
+                      telefono: formManual.telefono,
+                      email: "",
+                      status: "confirmada",
+                    });
+                    const nuevasReservas = await getReservas(club.id, fechaSeleccionada);
+                    setReservas(nuevasReservas);
+                    setMostrarModalManual(false);
+                  } catch (err) { console.error("Error al crear reserva manual:", err); }
+                  setGuardandoManual(false);
+                }}
+                disabled={guardandoManual || !formManual.nombreJugador.trim()}
+                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold text-white transition disabled:opacity-50"
+                style={{ backgroundColor: "var(--accent)" }}>
+                {guardandoManual ? "Guardando..." : "Reservar"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

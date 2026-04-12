@@ -7,6 +7,7 @@ import {
   getCanchas,
   getReservas,
   getTurnosFijos,
+  actualizarReserva,
 } from "../../services/canchaService";
 
 export default function Dashboard() {
@@ -17,9 +18,14 @@ export default function Dashboard() {
   const [canchas, setCanchas] = useState([]);
   const [reservasHoy, setReservasHoy] = useState([]);
   const [turnosFijos, setTurnosFijos] = useState([]);
+  const [reservasManana, setReservasManana] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const hoy = new Date().toISOString().split("T")[0];
+  const hoy = new Date();
+  const hoyStr = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+  const manana = new Date(hoy);
+  manana.setDate(manana.getDate() + 1);
+  const mananaStr = `${manana.getFullYear()}-${String(manana.getMonth() + 1).padStart(2, "0")}-${String(manana.getDate()).padStart(2, "0")}`;
   const ahora = new Date();
   const horaActual = ahora.getHours();
 
@@ -34,14 +40,16 @@ export default function Dashboard() {
         setTorneos(torneosData);
         if (clubData) {
           setClub(clubData);
-          const [canchasData, reservasData, turnosData] = await Promise.all([
+          const [canchasData, reservasData, turnosData, reservasMananaData] = await Promise.all([
             getCanchas(clubData.id),
-            getReservas(clubData.id, hoy),
+            getReservas(clubData.id, hoyStr),
             getTurnosFijos(clubData.id),
+            getReservas(clubData.id, mananaStr),
           ]);
           setCanchas(canchasData);
           setReservasHoy(reservasData);
           setTurnosFijos(turnosData);
+          setReservasManana(reservasMananaData);
         }
       } catch (err) {
         console.error("Error al cargar dashboard:", err);
@@ -76,7 +84,7 @@ export default function Dashboard() {
   const turnosFijosActivos = turnosFijos.filter((t) => t.status === "activo");
 
   const horaAhora = `${String(horaActual).padStart(2, "0")}:00`;
-  const partesFecha = hoy.split("-");
+  const partesFecha = hoyStr.split("-");
   const fechaLocal = new Date(
     Number(partesFecha[0]),
     Number(partesFecha[1]) - 1,
@@ -122,6 +130,23 @@ export default function Dashboard() {
     .sort((a, b) => a.hora.localeCompare(b.hora))
     .slice(0, 5);
 
+  const reservasMananaConfirmadas = reservasManana.filter((r) => r.status !== "cancelada");
+
+  const handleConfirmarReserva = async (reservaId) => {
+    try {
+      await actualizarReserva(club.id, reservaId, { status: "confirmada" });
+      setReservasHoy(reservasHoy.map((r) => r.id === reservaId ? { ...r, status: "confirmada" } : r));
+    } catch (err) { console.error(err); }
+  };
+
+  const handleRechazarReserva = async (reservaId) => {
+    if (!window.confirm("¿Rechazar esta reserva?")) return;
+    try {
+      await actualizarReserva(club.id, reservaId, { status: "cancelada" });
+      setReservasHoy(reservasHoy.map((r) => r.id === reservaId ? { ...r, status: "cancelada" } : r));
+    } catch (err) { console.error(err); }
+  };
+
   const cardStyle =
     "themed-card rounded-2xl p-5 border cursor-pointer card-hover";
 
@@ -144,6 +169,37 @@ export default function Dashboard() {
           })}
         </p>
       </div>
+
+      {/* Alertas */}
+      {(reservasPendientes.length > 0 || reservasMananaConfirmadas.length > 0) && (
+        <div className="flex flex-col gap-2 mb-4">
+          {reservasPendientes.length > 0 && (
+            <div className="themed-card rounded-xl p-3 border flex items-center justify-between"
+              style={{ borderLeft: "4px solid #f59e0b" }}>
+              <div className="flex items-center gap-2">
+                <span className="text-sm">⏳</span>
+                <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                  Tenés <strong>{reservasPendientes.length}</strong> reserva{reservasPendientes.length !== 1 ? "s" : ""} pendiente{reservasPendientes.length !== 1 ? "s" : ""} de aprobación
+                </span>
+              </div>
+              <button onClick={() => navigate("/admin/canchas")}
+                className="text-xs font-semibold px-3 py-1 rounded-lg transition"
+                style={{ color: "var(--accent)", backgroundColor: "var(--accent-light)" }}>
+                Ver reservas
+              </button>
+            </div>
+          )}
+          {reservasMananaConfirmadas.length > 0 && (
+            <div className="themed-card rounded-xl p-3 border flex items-center gap-2"
+              style={{ borderLeft: "4px solid var(--accent)" }}>
+              <span className="text-sm">📅</span>
+              <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                Mañana tenés <strong>{reservasMananaConfirmadas.length}</strong> reserva{reservasMananaConfirmadas.length !== 1 ? "s" : ""} programada{reservasMananaConfirmadas.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Recordatorio completar perfil */}
       {club && (!club.telefono || !club.direccion) && (
@@ -308,53 +364,47 @@ export default function Dashboard() {
       </div>
 
       {/* Reservas pendientes */}
-      {reservasPendientes.length > 0 && (
-        <div
-          className="themed-card rounded-2xl p-5 border mb-4"
-          style={{ borderColor: "rgba(245,158,11,0.3)" }}
-        >
-          <h2 className="font-semibold mb-3" style={{ color: "#f59e0b" }}>
-            Reservas pendientes de aprobación ({reservasPendientes.length})
-          </h2>
+      <div className="themed-card rounded-2xl p-5 border mb-4"
+        style={{ borderColor: reservasPendientes.length > 0 ? "rgba(245,158,11,0.3)" : undefined }}>
+        <h2 className="font-semibold mb-3" style={{ color: reservasPendientes.length > 0 ? "#f59e0b" : "var(--text-primary)" }}>
+          Reservas pendientes {reservasPendientes.length > 0 && `(${reservasPendientes.length})`}
+        </h2>
+        {reservasPendientes.length === 0 ? (
+          <p className="text-sm text-center py-3" style={{ color: "var(--text-muted)" }}>
+            No hay reservas pendientes ✓
+          </p>
+        ) : (
           <div className="flex flex-col gap-2">
             {reservasPendientes.map((r) => (
-              <div
-                key={r.id}
-                className="flex items-center justify-between rounded-xl px-4 py-3"
-                style={{ backgroundColor: "rgba(245,158,11,0.08)" }}
-              >
-                <div>
-                  <p
-                    className="text-sm font-semibold"
-                    style={{ color: "var(--text-primary)" }}
-                  >
-                    {r.nombreJugador || "Jugador"}
-                  </p>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {r.canchaName || "Cancha"} — {r.hora}
-                  </p>
+              <div key={r.id} className="rounded-xl px-4 py-3 border"
+                style={{ backgroundColor: "rgba(245,158,11,0.05)", borderLeft: "3px solid #f59e0b", borderColor: "rgba(245,158,11,0.2)" }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                      {r.nombreJugador || "Jugador"}
+                    </p>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      {r.canchaName || "Cancha"} · {r.hora} {r.precio != null && <span style={{ color: "var(--accent)" }}> · ${r.precio}</span>}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleConfirmarReserva(r.id)}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg text-green-700 transition"
+                      style={{ backgroundColor: "rgba(34,197,94,0.1)" }}>
+                      Confirmar
+                    </button>
+                    <button onClick={() => handleRechazarReserva(r.id)}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg text-red-500 transition"
+                      style={{ backgroundColor: "rgba(239,68,68,0.08)" }}>
+                      Rechazar
+                    </button>
+                  </div>
                 </div>
-                <span
-                  className="text-xs font-semibold px-2 py-1 rounded-full"
-                  style={{
-                    backgroundColor: "rgba(245,158,11,0.15)",
-                    color: "#f59e0b",
-                  }}
-                >
-                  Pendiente
-                </span>
               </div>
             ))}
-            <button
-              onClick={() => navigate("/admin/canchas")}
-              className="text-xs font-semibold hover:underline mt-1"
-              style={{ color: "var(--accent)" }}
-            >
-              Gestionar en Canchas →
-            </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Próximas reservas */}
       <div className="themed-card rounded-2xl p-5 border mb-4">

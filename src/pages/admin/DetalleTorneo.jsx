@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getTorneoById, actualizarTorneo } from "../../services/torneoService";
+import { getTorneoById, actualizarTorneo, getParejas, getGrupos, getBracket } from "../../services/torneoService";
 
 import TabGrupos from "./TabGrupos";
 import TabBracket from "./TabBracket";
@@ -89,6 +89,86 @@ const labelClass = "text-xs font-semibold mb-1 block";
 
 const tabs = ["Info", "Parejas", "Grupos", "Bracket", "Reclamos"];
 
+function TournamentStepper({ torneo, parejas, grupos, bracket }) {
+  const steps = [
+    { key: "inscripcion", label: "Inscripción", icon: "📝" },
+    { key: "grupos", label: "Grupos", icon: "👥" },
+    { key: "en_curso", label: "En curso", icon: "🎾" },
+    { key: "bracket", label: "Bracket", icon: "🏆" },
+    { key: "finalizado", label: "Finalizado", icon: "🎉" },
+  ];
+
+  let currentIdx = 0;
+  if (torneo.status === "inscripcion") currentIdx = 0;
+  else if (torneo.status === "en_curso") {
+    const bracketHasResults = bracket && bracket.rondas && bracket.rondas.some((r) => r.some((p) => p.resultado));
+    currentIdx = bracketHasResults ? 3 : 2;
+  } else if (torneo.status === "finalizado") currentIdx = 4;
+
+  const pendingActions = [];
+  if (torneo.status === "inscripcion") {
+    if (parejas.length === 0) pendingActions.push("Agregá parejas para comenzar");
+    else if (parejas.length < 3) pendingActions.push(`Necesitás al menos 3 parejas (tenés ${parejas.length})`);
+    else pendingActions.push(`${parejas.length} parejas inscriptas — Podés iniciar el torneo`);
+  }
+  if (torneo.status === "en_curso") {
+    if (grupos.length === 0) {
+      pendingActions.push("Generá los grupos en la pestaña Grupos");
+    } else {
+      const partidosSinResultado = grupos.reduce((acc, g) => acc + (g.partidos || []).filter((p) => !p.resultado).length, 0);
+      if (partidosSinResultado > 0) pendingActions.push(`${partidosSinResultado} partido(s) sin resultado en grupos`);
+      const todosConResultado = grupos.every((g) => (g.partidos || []).every((p) => p.resultado));
+      if (todosConResultado && (!bracket || !bracket.rondas)) {
+        pendingActions.push("Todos los grupos completos — Generá el bracket");
+      }
+      if (bracket && bracket.rondas) {
+        const bracketPendientes = bracket.rondas.reduce((acc, r) => acc + r.filter((p) => p.pareja1 && p.pareja2 && !p.resultado).length, 0);
+        if (bracketPendientes > 0) pendingActions.push(`${bracketPendientes} partido(s) sin resultado en bracket`);
+      }
+    }
+  }
+
+  return (
+    <div className="themed-card rounded-2xl p-5 border mb-4">
+      <div className="flex items-center justify-between mb-4">
+        {steps.map((step, i) => (
+          <div key={step.key} className="flex items-center flex-1">
+            <div className="flex flex-col items-center flex-1">
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center text-lg mb-1 transition ${i <= currentIdx ? "" : "opacity-30"}`}
+                style={{
+                  backgroundColor: i === currentIdx ? "var(--accent)" : i < currentIdx ? "rgba(34,197,94,0.15)" : "var(--bg-card-hover)",
+                }}
+              >
+                {i < currentIdx ? "✓" : step.icon}
+              </div>
+              <span className="text-[10px] font-semibold text-center"
+                style={{ color: i <= currentIdx ? "var(--text-primary)" : "var(--text-muted)" }}>
+                {step.label}
+              </span>
+            </div>
+            {i < steps.length - 1 && (
+              <div className="h-0.5 flex-1 mx-1 rounded-full mt-[-14px]"
+                style={{ backgroundColor: i < currentIdx ? "var(--accent)" : "var(--bg-card-hover)" }} />
+            )}
+          </div>
+        ))}
+      </div>
+      {pendingActions.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {pendingActions.map((action, i) => (
+            <div key={i} className="flex items-center gap-2 rounded-lg px-3 py-2"
+              style={{ backgroundColor: "var(--bg-card-hover)" }}>
+              <span className="text-xs">💡</span>
+              <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{action}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DetalleTorneo() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -98,11 +178,29 @@ export default function DetalleTorneo() {
   const [editando, setEditando] = useState(false);
   const [editForm, setEditForm] = useState(null);
   const [guardandoEdit, setGuardandoEdit] = useState(false);
+  const [parejasStepper, setParejasStepper] = useState([]);
+  const [gruposStepper, setGruposStepper] = useState([]);
+  const [bracketStepper, setBracketStepper] = useState(null);
 
   useEffect(() => {
-    getTorneoById(id)
-      .then(setTorneo)
-      .finally(() => setLoading(false));
+    const cargar = async () => {
+      try {
+        const [torneoData, parejasData, gruposData, bracketData] = await Promise.all([
+          getTorneoById(id),
+          getParejas(id),
+          getGrupos(id),
+          getBracket(id),
+        ]);
+        setTorneo(torneoData);
+        setParejasStepper(parejasData);
+        setGruposStepper(gruposData);
+        if (bracketData) setBracketStepper(bracketData);
+      } catch (err) {
+        console.error("Error al cargar torneo:", err);
+      }
+      setLoading(false);
+    };
+    cargar();
   }, [id]);
 
   const cambiarEstado = async (nuevoEstado) => {
@@ -221,6 +319,8 @@ export default function DetalleTorneo() {
           {estadoLabel[torneo.status]}
         </span>
       </div>
+
+      <TournamentStepper torneo={torneo} parejas={parejasStepper} grupos={gruposStepper} bracket={bracketStepper} />
 
       <div className="flex gap-2 mb-6 border-b" style={{ borderColor: "var(--border-card)" }}>
         {tabs.map((t) => (
