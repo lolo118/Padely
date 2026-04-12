@@ -29,6 +29,114 @@ const selectClass =
   "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
 const labelClass = "text-xs font-semibold mb-1 block";
 
+function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData }) {
+  const [weekData, setWeekData] = useState({});
+  const [loadingWeek, setLoadingWeek] = useState(true);
+
+  const diasLabels = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+  const partes = fechaBase.split("-");
+  const base = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
+  const dayOfWeek = base.getDay();
+  const monday = new Date(base);
+  monday.setDate(base.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+
+  const dias = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const str = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    dias.push({ date: str, label: diasLabels[d.getDay()], dayNum: d.getDate() });
+  }
+
+  useEffect(() => {
+    const cargar = async () => {
+      setLoadingWeek(true);
+      const data = {};
+      for (const dia of dias) {
+        try { data[dia.date] = await getReservasForDate(dia.date); }
+        catch { data[dia.date] = []; }
+      }
+      setWeekData(data);
+      setLoadingWeek(false);
+    };
+    cargar();
+  }, [fechaBase, canchas.length]);
+
+  const esTurnoFijoSemana = (canchaId, hora, fechaStr) => {
+    const p = fechaStr.split("-");
+    const d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+    const diasMap = { 0: "Domingo", 1: "Lunes", 2: "Martes", 3: "Miércoles", 4: "Jueves", 5: "Viernes", 6: "Sábado" };
+    return getTurnosFijosData.some(
+      (t) => t.canchaId === canchaId && t.dia === diasMap[d.getDay()] && (t.horas || [t.hora]).includes(hora) && t.status === "activo"
+    );
+  };
+
+  if (loadingWeek) return <div className="text-center py-8" style={{ color: "var(--text-muted)" }}>Cargando semana...</div>;
+
+  return (
+    <div className="flex flex-col gap-3">
+      {canchas.map((cancha) => {
+        const horasCancha = cancha.horariosDisponibles || [];
+        if (horasCancha.length === 0) return null;
+        return (
+          <div key={cancha.id}>
+            <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>{cancha.nombre}</p>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b" style={{ borderColor: "var(--border-card)" }}>
+                  <th className="text-left py-2 pr-2" style={{ color: "var(--text-muted)" }}>Hora</th>
+                  {dias.map((d) => (
+                    <th key={d.date} className="text-center py-2 px-1" style={{ color: d.date === fechaBase ? "var(--accent)" : "var(--text-muted)" }}>
+                      <div>{d.label}</div>
+                      <div className="font-bold">{d.dayNum}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {horasCancha.map((hora) => (
+                  <tr key={hora} className="border-b" style={{ borderColor: "var(--border-card)" }}>
+                    <td className="py-1.5 pr-2 font-medium" style={{ color: "var(--text-muted)" }}>{hora}</td>
+                    {dias.map((d) => {
+                      const reservas = weekData[d.date] || [];
+                      const reserva = reservas.find((r) => r.canchaId === cancha.id && r.hora === hora && r.status !== "cancelada");
+                      const turnoFijo = esTurnoFijoSemana(cancha.id, hora, d.date);
+
+                      if (reserva) {
+                        return (
+                          <td key={d.date} className="text-center py-1.5 px-1">
+                            <div className={`rounded px-1 py-0.5 ${reserva.status === "pendiente" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
+                              <span className="font-semibold truncate block" style={{ maxWidth: "60px", fontSize: "9px" }}>
+                                {reserva.nombreJugador?.split(" ")[0] || "Res"}
+                              </span>
+                            </div>
+                          </td>
+                        );
+                      }
+                      if (turnoFijo) {
+                        return (
+                          <td key={d.date} className="text-center py-1.5 px-1">
+                            <div className="rounded px-1 py-0.5 bg-purple-100 text-purple-700" style={{ fontSize: "9px" }}>Fijo</div>
+                          </td>
+                        );
+                      }
+                      return (
+                        <td key={d.date} className="text-center py-1.5 px-1">
+                          <span className="text-green-500 font-semibold" style={{ fontSize: "9px" }}>•</span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const statusBadge = {
   pendiente: "bg-yellow-100 text-yellow-700",
   confirmada: "bg-green-100 text-green-700",
@@ -240,6 +348,8 @@ export default function Canchas() {
   // Edición cancha
   const [editandoCancha, setEditandoCancha] = useState(null);
   const [editForm, setEditForm] = useState(null);
+
+  const [vistaGrilla, setVistaGrilla] = useState("dia");
 
   // Manual reservation modal
   const [mostrarModalManual, setMostrarModalManual] = useState(false);
@@ -1036,16 +1146,27 @@ export default function Canchas() {
             </div>
           )}
 
-          {/* Grilla de turnos del día */}
+          {/* Grilla de turnos */}
           {canchas.length > 0 && (
             <div className="themed-card rounded-2xl p-5 border">
               <div className="flex items-center justify-between mb-4">
-                <h2
-                  className="font-semibold"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  Turnos del día
-                </h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {vistaGrilla === "dia" ? "Turnos del día" : "Vista semanal"}
+                  </h2>
+                  <div className="flex gap-1">
+                    <button onClick={() => setVistaGrilla("dia")}
+                      className="px-3 py-1 rounded-lg text-xs font-semibold transition"
+                      style={{ backgroundColor: vistaGrilla === "dia" ? "var(--accent)" : "var(--bg-card-hover)", color: vistaGrilla === "dia" ? "white" : "var(--text-muted)" }}>
+                      Día
+                    </button>
+                    <button onClick={() => setVistaGrilla("semana")}
+                      className="px-3 py-1 rounded-lg text-xs font-semibold transition"
+                      style={{ backgroundColor: vistaGrilla === "semana" ? "var(--accent)" : "var(--bg-card-hover)", color: vistaGrilla === "semana" ? "white" : "var(--text-muted)" }}>
+                      Semana
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="date"
                   value={fechaSeleccionada}
@@ -1054,6 +1175,7 @@ export default function Canchas() {
                 />
               </div>
 
+              {vistaGrilla === "dia" && (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -1222,6 +1344,19 @@ export default function Canchas() {
                   </tbody>
                 </table>
               </div>
+              )}
+
+              {vistaGrilla === "semana" && (
+                <WeeklyGrid
+                  canchas={canchas}
+                  clubId={club.id}
+                  fechaBase={fechaSeleccionada}
+                  getReservasForDate={async (fecha) => {
+                    try { return await getReservas(club.id, fecha); } catch { return []; }
+                  }}
+                  getTurnosFijosData={turnosFijos}
+                />
+              )}
             </div>
           )}
         </>

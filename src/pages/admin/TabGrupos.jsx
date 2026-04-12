@@ -363,7 +363,7 @@ export default function TabGrupos({ torneoId, torneo }) {
     return null;
   };
 
-  const guardarResultado = async () => {
+  const guardarResultado = async (keepOpen = false) => {
     const err = validarResultado();
     if (err) {
       setErrorModal(err);
@@ -439,10 +439,12 @@ export default function TabGrupos({ torneoId, torneo }) {
       if (p2.jugador2Uid) await actualizarPuntosPartido(p2.jugador2Uid, ganoP1 ? setsP2Final : setsP1Final, !ganoP1, categoriaTorneo);
     } catch (err) { console.error("Error actualizando puntos:", err); }
 
-    setEditandoResultado(null);
-    setSetsInput([]);
-    setTiebreakInput([]);
-    setErrorModal("");
+    if (!keepOpen) {
+      setEditandoResultado(null);
+      setSetsInput([]);
+      setTiebreakInput([]);
+      setErrorModal("");
+    }
   };
 
   // Calcular sets necesarios para mostrar en el modal
@@ -931,24 +933,59 @@ export default function TabGrupos({ torneoId, torneo }) {
                 </div>
               ))}
             </div>
-            <div className="flex gap-2 mt-4">
-              <button
-                onClick={() => {
-                  setEditandoResultado(null);
-                  setSetsInput([]);
-                  setTiebreakInput([]);
-                  setErrorModal("");
-                }}
-                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={guardarResultado}
-                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition"
-              >
-                Guardar
-              </button>
+            <div className="flex flex-col gap-2 mt-4">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setEditandoResultado(null);
+                    setSetsInput([]);
+                    setTiebreakInput([]);
+                    setErrorModal("");
+                  }}
+                  className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={guardarResultado}
+                  className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition"
+                >
+                  Guardar
+                </button>
+              </div>
+              {(() => {
+                if (!editandoResultado) return null;
+                const { grupoIdx, partidoIdx } = editandoResultado;
+                const partidosGrupo = grupos[grupoIdx]?.partidos || [];
+                const siguienteIdx = partidosGrupo.findIndex((p, i) => i > partidoIdx && !p.resultado);
+                let siguienteGrupo = null;
+                if (siguienteIdx === -1) {
+                  for (let gi = grupoIdx + 1; gi < grupos.length; gi++) {
+                    const pi = (grupos[gi]?.partidos || []).findIndex(p => !p.resultado);
+                    if (pi !== -1) { siguienteGrupo = { grupoIdx: gi, partidoIdx: pi }; break; }
+                  }
+                }
+                const haySiguiente = siguienteIdx !== -1 || siguienteGrupo;
+                if (!haySiguiente) return null;
+                return (
+                  <button
+                    onClick={async () => {
+                      const err = validarResultado();
+                      if (err) { setErrorModal(err); return; }
+                      await guardarResultado(true);
+                      if (siguienteIdx !== -1) {
+                        abrirEditarResultado(grupoIdx, siguienteIdx);
+                      } else if (siguienteGrupo) {
+                        abrirEditarResultado(siguienteGrupo.grupoIdx, siguienteGrupo.partidoIdx);
+                      }
+                    }}
+                    className="px-4 py-2 rounded-xl text-sm font-semibold transition border-2"
+                    style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
+                  >
+                    Guardar y cargar siguiente →
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>

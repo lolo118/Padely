@@ -205,6 +205,32 @@ export default function Estadisticas() {
         </div>
       </div>
 
+      {todasReservas.length === 0 ? (
+        <div className="themed-card rounded-2xl p-8 border text-center">
+          <div className="text-5xl mb-4">📊</div>
+          <h2 className="text-lg font-bold mb-2" style={{ color: "var(--text-primary)" }}>
+            Tus estadísticas aparecerán acá
+          </h2>
+          <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
+            Empezá a recibir reservas para ver métricas de tu club: ingresos, horarios populares, ocupación por cancha y más.
+          </p>
+          <div className="flex flex-col gap-2 max-w-sm mx-auto">
+            <div className="flex items-center gap-3 rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+              <span className="text-lg">💡</span>
+              <span className="text-xs text-left" style={{ color: "var(--text-secondary)" }}>
+                Compartí tu club con jugadores para empezar a recibir reservas
+              </span>
+            </div>
+            <div className="flex items-center gap-3 rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+              <span className="text-lg">📱</span>
+              <span className="text-xs text-left" style={{ color: "var(--text-secondary)" }}>
+                Los jugadores pueden encontrar tu club en la sección "Canchas" de la app
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Tarjetas resumen */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div className="themed-card rounded-2xl p-5 border text-center">
@@ -385,6 +411,8 @@ export default function Estadisticas() {
           ))}
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

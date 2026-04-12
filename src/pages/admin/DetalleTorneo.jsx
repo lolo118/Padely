@@ -178,6 +178,7 @@ export default function DetalleTorneo() {
   const [editando, setEditando] = useState(false);
   const [editForm, setEditForm] = useState(null);
   const [guardandoEdit, setGuardandoEdit] = useState(false);
+  const [mostrarNotificar, setMostrarNotificar] = useState(false);
   const [parejasStepper, setParejasStepper] = useState([]);
   const [gruposStepper, setGruposStepper] = useState([]);
   const [bracketStepper, setBracketStepper] = useState(null);
@@ -318,6 +319,80 @@ export default function DetalleTorneo() {
         >
           {estadoLabel[torneo.status]}
         </span>
+
+        {/* Notificar */}
+        {mostrarNotificar && (
+          <div className="fixed inset-0 z-10" onClick={() => setMostrarNotificar(false)} />
+        )}
+        <div className="relative">
+          <button
+            onClick={() => setMostrarNotificar(!mostrarNotificar)}
+            className="px-3 py-2 rounded-xl text-sm font-semibold transition"
+            style={{ backgroundColor: "#25d366", color: "white" }}
+          >
+            📱
+          </button>
+          {mostrarNotificar && (
+            <div className="absolute right-0 top-12 themed-card rounded-xl border shadow-lg p-3 z-20 w-72">
+              <p className="text-xs font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
+                Enviar mensaje por WhatsApp
+              </p>
+              <div className="flex flex-col gap-1.5">
+                {torneo.status === "en_curso" && (
+                  <button
+                    onClick={() => {
+                      const msg = encodeURIComponent(`¡Los grupos del torneo "${torneo.nombre}" ya fueron publicados! Consultá tus partidos acá: ${window.location.origin}/torneos/${id}`);
+                      window.open(`https://wa.me/?text=${msg}`, "_blank");
+                      setMostrarNotificar(false);
+                    }}
+                    className="text-left rounded-lg px-3 py-2 text-xs transition hover:opacity-80"
+                    style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-secondary)" }}
+                  >
+                    📋 Grupos publicados — compartir link
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    const msg = encodeURIComponent(`📢 Información del torneo "${torneo.nombre}"\n📍 Sede: ${torneo.sede}\n📅 Fecha: ${torneo.fechaInicio}\n🔗 Más info: ${window.location.origin}/torneos/${id}`);
+                    window.open(`https://wa.me/?text=${msg}`, "_blank");
+                    setMostrarNotificar(false);
+                  }}
+                  className="text-left rounded-lg px-3 py-2 text-xs transition hover:opacity-80"
+                  style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-secondary)" }}
+                >
+                  📢 Info general del torneo
+                </button>
+                {torneo.status === "inscripcion" && (
+                  <button
+                    onClick={() => {
+                      const cats = torneo.categoriasConfig ? Object.values(torneo.categoriasConfig).flat().join(", ") : "";
+                      const msg = encodeURIComponent(`🏆 ¡Inscripciones abiertas!\n\nTorneo: ${torneo.nombre}\n📍 ${torneo.sede}, ${torneo.ciudad}\n📅 ${torneo.fechaInicio}\n🎾 Categorías: ${cats}\n💰 Inscripción: $${torneo.inscripcion || "Gratis"}\n\n✍️ Inscribite acá: ${window.location.origin}/torneos/${id}`);
+                      window.open(`https://wa.me/?text=${msg}`, "_blank");
+                      setMostrarNotificar(false);
+                    }}
+                    className="text-left rounded-lg px-3 py-2 text-xs transition hover:opacity-80"
+                    style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-secondary)" }}
+                  >
+                    📝 Invitar a inscribirse
+                  </button>
+                )}
+                {torneo.status === "finalizado" && (
+                  <button
+                    onClick={() => {
+                      const msg = encodeURIComponent(`🏆 ¡Finalizó el torneo "${torneo.nombre}"!\n\nMirá los resultados acá: ${window.location.origin}/torneos/${id}`);
+                      window.open(`https://wa.me/?text=${msg}`, "_blank");
+                      setMostrarNotificar(false);
+                    }}
+                    className="text-left rounded-lg px-3 py-2 text-xs transition hover:opacity-80"
+                    style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-secondary)" }}
+                  >
+                    🎉 Compartir resultados finales
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <TournamentStepper torneo={torneo} parejas={parejasStepper} grupos={gruposStepper} bracket={bracketStepper} />
