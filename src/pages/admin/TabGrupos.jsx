@@ -148,7 +148,8 @@ function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm }) {
             {sinAsignar.map((p) => (
               <div
                 key={p.id}
-                className="flex items-center justify-between bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2"
+                className="flex items-center justify-between rounded-xl px-4 py-2 border"
+                style={{ backgroundColor: "rgba(234,179,8,0.08)", borderColor: "rgba(234,179,8,0.3)" }}
               >
                 <span className="text-sm" style={{ color: "var(--text-primary)" }}>
                   {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
@@ -512,7 +513,8 @@ export default function TabGrupos({ torneoId, torneo }) {
                     setGrupos([]);
                   }
                 }}
-                className="px-3 py-1 rounded-lg text-xs font-semibold text-red-500 bg-red-50 hover:bg-red-100 transition"
+                className="px-3 py-1 rounded-lg text-xs font-semibold text-red-500 transition"
+                style={{ backgroundColor: "rgba(239,68,68,0.08)" }}
               >
                 Regenerar grupos desde cero
               </button>
@@ -523,7 +525,8 @@ export default function TabGrupos({ torneoId, torneo }) {
 
       {/* Tip */}
       {gruposGenerados && (
-        <div className="text-xs text-blue-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+        <div className="text-xs rounded-lg px-3 py-2 border"
+          style={{ color: "#3b82f6", backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.15)" }}>
           💡 Asigná horario y cancha a cada partido tocando los campos debajo de
           cada enfrentamiento. Cargá los resultados con el botón "Cargar
           resultado".
@@ -674,7 +677,8 @@ export default function TabGrupos({ torneoId, torneo }) {
                     {tabla.map((row, ri) => (
                       <tr
                         key={row.id}
-                        className={`border-b border-[var(--border-card)] ${ri < parejasQueAvanzan ? "bg-green-50" : ""}`}
+                        className="border-b border-[var(--border-card)]"
+                        style={ri < parejasQueAvanzan ? { backgroundColor: "rgba(34,197,94,0.08)" } : undefined}
                       >
                         <td className="py-2 pr-2 font-bold" style={{ color: "var(--text-muted)" }}>
                           {ri + 1}
@@ -826,7 +830,8 @@ export default function TabGrupos({ torneoId, torneo }) {
             </div>
 
             {errorModal && (
-              <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3 text-xs text-red-600">
+              <div className="rounded-lg px-3 py-2 mb-3 text-xs text-red-600 border"
+                style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.2)" }}>
                 {errorModal}
               </div>
             )}

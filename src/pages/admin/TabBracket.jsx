@@ -243,7 +243,8 @@ function ManualBracketBuilder({ grupos, parejasQueAvanzan, onConfirm }) {
             {sinAsignar.map((p) => (
               <div
                 key={p.id}
-                className="flex items-center justify-between bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2"
+                className="flex items-center justify-between rounded-xl px-4 py-2 border"
+                style={{ backgroundColor: "rgba(234,179,8,0.08)", borderColor: "rgba(234,179,8,0.3)" }}
               >
                 <div>
                   <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
@@ -642,7 +643,8 @@ export default function TabBracket({ torneoId, torneo }) {
                 setRondas([]);
               }
             }}
-            className="px-3 py-1 rounded-lg text-xs font-semibold text-red-500 bg-red-50 hover:bg-red-100 transition"
+            className="px-3 py-1 rounded-lg text-xs font-semibold text-red-500 transition"
+            style={{ backgroundColor: "rgba(239,68,68,0.08)" }}
           >
             Regenerar bracket desde cero
           </button>
@@ -651,7 +653,8 @@ export default function TabBracket({ torneoId, torneo }) {
 
       {/* Tip */}
       {bracketGenerado && !campeonData && (
-        <div className="text-xs text-blue-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+        <div className="text-xs rounded-lg px-3 py-2 border"
+          style={{ color: "#3b82f6", backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.15)" }}>
           💡 Asigná horario y cancha a cada partido. Cargá los resultados y los
           ganadores avanzarán automáticamente a la siguiente ronda.
         </div>
@@ -659,7 +662,8 @@ export default function TabBracket({ torneoId, torneo }) {
 
       {/* Campeones */}
       {bracketGenerado && campeonData && (
-        <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-2xl p-6 shadow-sm border border-yellow-200 text-center">
+        <div className="rounded-2xl p-6 shadow-sm text-center border"
+          style={{ background: "linear-gradient(to right, rgba(234,179,8,0.08), rgba(234,179,8,0.15))", borderColor: "rgba(234,179,8,0.3)" }}>
           <div className="text-5xl mb-3">🏆</div>
           <p className="text-xs text-yellow-600 font-semibold uppercase tracking-wider mb-1">
             Campeones
@@ -877,7 +881,8 @@ export default function TabBracket({ torneoId, torneo }) {
             </div>
 
             {errorModal && (
-              <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3 text-xs text-red-600">
+              <div className="rounded-lg px-3 py-2 mb-3 text-xs text-red-600 border"
+                style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.2)" }}>
                 {errorModal}
               </div>
             )}
