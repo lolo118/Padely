@@ -150,6 +150,16 @@ export const notificarNuevoReclamo = async (organizadorUid, torneoNombre, torneo
   });
 };
 
+export const notificarResultadoCargado = async (jugadorUid, torneoNombre, torneoId) => {
+  await crearNotificacion(jugadorUid, {
+    tipo: "resultado_cargado",
+    titulo: "Resultado cargado",
+    mensaje: `Se cargó un resultado en tu partido del torneo "${torneoNombre}".`,
+    link: `/torneos/${torneoId}`,
+    icono: "🎾",
+  });
+};
+
 export const notificarPartidoListo = async (jugadorUid, torneoNombre, torneoId, hora, cancha, rival) => {
   await crearNotificacion(jugadorUid, {
     tipo: "partido_listo",
