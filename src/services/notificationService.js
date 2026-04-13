@@ -149,3 +149,13 @@ export const notificarNuevoReclamo = async (organizadorUid, torneoNombre, torneo
     icono: "⚠️",
   });
 };
+
+export const notificarPartidoListo = async (jugadorUid, torneoNombre, torneoId, hora, cancha, rival) => {
+  await crearNotificacion(jugadorUid, {
+    tipo: "partido_listo",
+    titulo: "¡Tu partido está listo!",
+    mensaje: `${torneoNombre}: jugás a las ${hora}${cancha ? ` en Cancha ${cancha}` : ""} contra ${rival}.`,
+    link: `/torneos/${torneoId}`,
+    icono: "🎾",
+  });
+};

@@ -179,6 +179,7 @@ export default function DetalleTorneo() {
   const [editForm, setEditForm] = useState(null);
   const [guardandoEdit, setGuardandoEdit] = useState(false);
   const [mostrarNotificar, setMostrarNotificar] = useState(false);
+  const [mostrarAyuda, setMostrarAyuda] = useState(true);
   const [parejasStepper, setParejasStepper] = useState([]);
   const [gruposStepper, setGruposStepper] = useState([]);
   const [bracketStepper, setBracketStepper] = useState(null);
@@ -396,6 +397,72 @@ export default function DetalleTorneo() {
       </div>
 
       <TournamentStepper torneo={torneo} parejas={parejasStepper} grupos={gruposStepper} bracket={bracketStepper} />
+
+      {mostrarAyuda && (
+        <div className="themed-card rounded-2xl p-4 border mb-4" style={{ borderColor: "rgba(59,130,246,0.2)", backgroundColor: "rgba(59,130,246,0.04)" }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">💡</span>
+              <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>¿Sabías que...?</span>
+            </div>
+            <button onClick={() => setMostrarAyuda(false)} className="text-xs font-semibold px-2 py-1 rounded-lg transition" style={{ color: "var(--text-muted)" }}>
+              Ocultar
+            </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            {torneo.status === "inscripcion" && (
+              <>
+                <div className="flex items-start gap-2">
+                  <span className="text-xs mt-0.5">📝</span>
+                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Cuando un jugador se inscribe, recibís una <strong>notificación automática</strong> en la campana de la app.</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-xs mt-0.5">🔗</span>
+                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Podés <strong>vincular jugadores a sus parejas</strong> desde la pestaña Parejas. Cada jugador recibe un link único para asociar su cuenta.</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-xs mt-0.5">📱</span>
+                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Usá el botón <strong>"📱"</strong> para compartir la info del torneo por WhatsApp e invitar jugadores a inscribirse.</p>
+                </div>
+              </>
+            )}
+            {torneo.status === "en_curso" && (
+              <>
+                <div className="flex items-start gap-2">
+                  <span className="text-xs mt-0.5">🎾</span>
+                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Cuando asignás <strong>horario y cancha</strong> a un partido, los jugadores vinculados reciben una notificación automática.</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-xs mt-0.5">📊</span>
+                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Al cargar un resultado, los <strong>puntos se calculan automáticamente</strong> y los jugadores reciben notificación.</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-xs mt-0.5">⚡</span>
+                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Usá <strong>"Guardar y cargar siguiente"</strong> en el modal de resultados para cargar varios partidos en secuencia.</p>
+                </div>
+                {torneo.habilitarReclamos && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs mt-0.5">⚠️</span>
+                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Los jugadores vinculados pueden <strong>abrir reclamos</strong>. Revisalos en la pestaña Reclamos.</p>
+                  </div>
+                )}
+              </>
+            )}
+            {torneo.status === "finalizado" && (
+              <>
+                <div className="flex items-start gap-2">
+                  <span className="text-xs mt-0.5">🏆</span>
+                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Los <strong>puntos de campeón y subcampeón</strong> ya fueron asignados automáticamente a los jugadores vinculados.</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-xs mt-0.5">📱</span>
+                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Compartí los resultados finales por WhatsApp con el botón <strong>"📱"</strong>.</p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-2 mb-6 border-b" style={{ borderColor: "var(--border-card)" }}>
         {tabs.map((t) => (

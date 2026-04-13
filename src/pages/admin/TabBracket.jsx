@@ -4,6 +4,7 @@ import {
   guardarBracket,
   getBracket,
 } from "../../services/torneoService";
+import { notificarResultadoCargado } from "../../services/notificationService";
 
 function calcularTabla(grupo) {
   const stats = {};
@@ -413,6 +414,9 @@ export default function TabBracket({ torneoId, torneo }) {
     campo,
     valor,
   ) => {
+    const partidoOriginal = rondas[rondaIdx]?.[partidoIdx];
+    const yaEstabaProgramado = partidoOriginal?.hora && partidoOriginal?.cancha;
+
     const nuevasRondas = rondas.map((r) => r.map((p) => ({ ...p })));
     nuevasRondas[rondaIdx][partidoIdx] = {
       ...nuevasRondas[rondaIdx][partidoIdx],
@@ -423,6 +427,23 @@ export default function TabBracket({ torneoId, torneo }) {
       await guardarBracket(torneoId, { rondas: nuevasRondas });
     } catch (err) {
       console.error("Error al actualizar:", err);
+    }
+
+    const partidoActualizado = nuevasRondas[rondaIdx][partidoIdx];
+    if (!yaEstabaProgramado && partidoActualizado.hora && partidoActualizado.cancha) {
+      try {
+        const { notificarPartidoListo } = await import("../../services/notificationService");
+        const torneoNombre = torneo.nombre || "torneo";
+        const p1 = partidoActualizado.pareja1;
+        const p2 = partidoActualizado.pareja2;
+        if (!p1 || !p2) return;
+        const nombreP1 = p1.nombrePareja || `${p1.jugador1} / ${p1.jugador2}`;
+        const nombreP2 = p2.nombrePareja || `${p2.jugador1} / ${p2.jugador2}`;
+        if (p1.jugador1Uid) notificarPartidoListo(p1.jugador1Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP2);
+        if (p1.jugador2Uid) notificarPartidoListo(p1.jugador2Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP2);
+        if (p2.jugador1Uid) notificarPartidoListo(p2.jugador1Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP1);
+        if (p2.jugador2Uid) notificarPartidoListo(p2.jugador2Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP1);
+      } catch (err) { console.error("Error notificando partido listo:", err); }
     }
   };
 
@@ -598,6 +619,16 @@ export default function TabBracket({ torneoId, torneo }) {
         if (sub.jugador2Uid) await actualizarPuntosTorneo(sub.jugador2Uid, 2, categoriaTorneo);
       }
     } catch (err) { console.error("Error actualizando puntos:", err); }
+
+    // Notify players about result
+    try {
+      const matchP = rondasActualizadas[rondaIdx][partidoIdx];
+      const torneoNombre = torneo.nombre || "torneo";
+      if (matchP.pareja1?.jugador1Uid) notificarResultadoCargado(matchP.pareja1.jugador1Uid, torneoNombre, torneoId);
+      if (matchP.pareja1?.jugador2Uid) notificarResultadoCargado(matchP.pareja1.jugador2Uid, torneoNombre, torneoId);
+      if (matchP.pareja2?.jugador1Uid) notificarResultadoCargado(matchP.pareja2.jugador1Uid, torneoNombre, torneoId);
+      if (matchP.pareja2?.jugador2Uid) notificarResultadoCargado(matchP.pareja2.jugador2Uid, torneoNombre, torneoId);
+    } catch (err) { console.error("Error notificando resultado:", err); }
 
     if (!keepOpen) {
       setEditandoResultado(null);
@@ -854,6 +885,21 @@ export default function TabBracket({ torneoId, torneo }) {
                             }
                             className="border border-[var(--border-card)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500 w-28"
                           />
+                          {p.hora && p.cancha && (
+                            <a
+                              href={`https://wa.me/?text=${encodeURIComponent(
+                                `🎾 ¡Partido listo!\n\nTorneo: ${torneo.nombre}\n⏰ Hora: ${p.hora}\n📍 Cancha: ${p.cancha}\n\n${p.pareja1?.nombrePareja || "Pareja 1"}\nvs\n${p.pareja2?.nombrePareja || "Pareja 2"}\n\n¡Nos vemos en la cancha!`
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center justify-center w-8 h-8 rounded-lg transition hover:opacity-80"
+                              style={{ backgroundColor: "#25d366" }}
+                              title="Enviar por WhatsApp"
+                            >
+                              <span className="text-white text-xs font-bold">W</span>
+                            </a>
+                          )}
                         </div>
                       )}
                     </div>

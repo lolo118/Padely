@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [turnosFijos, setTurnosFijos] = useState([]);
   const [reservasManana, setReservasManana] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [mostrarAyuda, setMostrarAyuda] = useState(true);
 
   const hoy = new Date();
   const hoyStr = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
@@ -198,6 +199,39 @@ export default function Dashboard() {
               </span>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Ayuda contextual */}
+      {mostrarAyuda && (
+        <div className="themed-card rounded-2xl p-4 border mb-4" style={{ borderColor: "rgba(59,130,246,0.2)", backgroundColor: "rgba(59,130,246,0.04)" }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">💡</span>
+              <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Funcionalidades automáticas</span>
+            </div>
+            <button onClick={() => setMostrarAyuda(false)} className="text-xs font-semibold px-2 py-1 rounded-lg transition" style={{ color: "var(--text-muted)" }}>
+              Ocultar
+            </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-start gap-2">
+              <span className="text-xs mt-0.5">🔔</span>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Cuando un jugador reserva una cancha, recibís una <strong>notificación automática</strong>. Si tenés aprobación manual activa, podés confirmar o rechazar desde acá.</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-xs mt-0.5">📝</span>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Podés crear <strong>reservas manuales</strong> tocando los horarios libres en la grilla de canchas.</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-xs mt-0.5">🔒</span>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Podés <strong>bloquear horarios</strong> temporalmente pasando el mouse sobre un horario libre y tocando el candado.</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-xs mt-0.5">📅</span>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>En Canchas podés alternar entre <strong>vista diaria y semanal</strong> para planificar mejor la semana.</p>
+            </div>
+          </div>
         </div>
       )}
 

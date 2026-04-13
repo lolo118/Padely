@@ -5,6 +5,7 @@ import {
   guardarGrupos,
   actualizarGrupo,
 } from "../../services/torneoService";
+import { notificarResultadoCargado } from "../../services/notificationService";
 
 function generarPartidos(parejas) {
   const partidos = [];
@@ -277,6 +278,9 @@ export default function TabGrupos({ torneoId, torneo }) {
   };
 
   const actualizarPartidoInfo = async (grupoIdx, partidoIdx, campo, valor) => {
+    const partidoOriginal = grupos[grupoIdx]?.partidos?.[partidoIdx];
+    const yaEstabaProgramado = partidoOriginal?.hora && partidoOriginal?.cancha;
+
     const nuevosGrupos = [...grupos];
     const grupo = { ...nuevosGrupos[grupoIdx] };
     const partidos = [...grupo.partidos];
@@ -290,6 +294,23 @@ export default function TabGrupos({ torneoId, torneo }) {
       } catch (err) {
         console.error("Error al actualizar partido:", err);
       }
+    }
+
+    // Notify players when match has both hora and cancha assigned for the first time
+    const partidoActualizado = partidos[partidoIdx];
+    if (!yaEstabaProgramado && partidoActualizado.hora && partidoActualizado.cancha) {
+      try {
+        const { notificarPartidoListo } = await import("../../services/notificationService");
+        const torneoNombre = torneo.nombre || "torneo";
+        const p1 = partidoActualizado.pareja1;
+        const p2 = partidoActualizado.pareja2;
+        const nombreP1 = p1.nombrePareja || `${p1.jugador1} / ${p1.jugador2}`;
+        const nombreP2 = p2.nombrePareja || `${p2.jugador1} / ${p2.jugador2}`;
+        if (p1.jugador1Uid) notificarPartidoListo(p1.jugador1Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP2);
+        if (p1.jugador2Uid) notificarPartidoListo(p1.jugador2Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP2);
+        if (p2.jugador1Uid) notificarPartidoListo(p2.jugador1Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP1);
+        if (p2.jugador2Uid) notificarPartidoListo(p2.jugador2Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP1);
+      } catch (err) { console.error("Error notificando partido listo:", err); }
     }
   };
 
@@ -438,6 +459,17 @@ export default function TabGrupos({ torneoId, torneo }) {
       if (p2.jugador1Uid) await actualizarPuntosPartido(p2.jugador1Uid, ganoP1 ? setsP2Final : setsP1Final, !ganoP1, categoriaTorneo);
       if (p2.jugador2Uid) await actualizarPuntosPartido(p2.jugador2Uid, ganoP1 ? setsP2Final : setsP1Final, !ganoP1, categoriaTorneo);
     } catch (err) { console.error("Error actualizando puntos:", err); }
+
+    // Notify players about result
+    try {
+      const p1 = partidos[partidoIdx].pareja1;
+      const p2 = partidos[partidoIdx].pareja2;
+      const torneoNombre = torneo.nombre || "torneo";
+      if (p1.jugador1Uid) notificarResultadoCargado(p1.jugador1Uid, torneoNombre, torneoId);
+      if (p1.jugador2Uid) notificarResultadoCargado(p1.jugador2Uid, torneoNombre, torneoId);
+      if (p2.jugador1Uid) notificarResultadoCargado(p2.jugador1Uid, torneoNombre, torneoId);
+      if (p2.jugador2Uid) notificarResultadoCargado(p2.jugador2Uid, torneoNombre, torneoId);
+    } catch (err) { console.error("Error notificando resultado:", err); }
 
     if (!keepOpen) {
       setEditandoResultado(null);
@@ -803,6 +835,21 @@ export default function TabGrupos({ torneoId, torneo }) {
                           placeholder="Cancha (ej: 1)"
                           className="border border-[var(--border-card)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500 w-28"
                         />
+                        {p.hora && p.cancha && (
+                          <a
+                            href={`https://wa.me/?text=${encodeURIComponent(
+                              `🎾 ¡Partido listo!\n\nTorneo: ${torneo.nombre}\n⏰ Hora: ${p.hora}\n📍 Cancha: ${p.cancha}\n\n${p.pareja1.nombrePareja || `${p.pareja1.jugador1} / ${p.pareja1.jugador2}`}\nvs\n${p.pareja2.nombrePareja || `${p.pareja2.jugador1} / ${p.pareja2.jugador2}`}\n\n¡Nos vemos en la cancha!`
+                            )}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center justify-center w-8 h-8 rounded-lg transition hover:opacity-80"
+                            style={{ backgroundColor: "#25d366" }}
+                            title="Enviar por WhatsApp"
+                          >
+                            <span className="text-white text-xs font-bold">W</span>
+                          </a>
+                        )}
                       </div>
                     </div>
                   );
