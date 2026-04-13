@@ -23,6 +23,11 @@ export default function Hub() {
   const [filtroSuperficie, setFiltroSuperficie] = useState("");
   const [filtroTechada, setFiltroTechada] = useState("");
   const [favoritos, setFavoritos] = useState([]);
+  const [ciudadJugador, setCiudadJugador] = useState("");
+  const [ciudadCargada, setCiudadCargada] = useState(false);
+  const [verTodasCiudades, setVerTodasCiudades] = useState(false);
+  const [horaDesde, setHoraDesde] = useState("");
+  const [horaHasta, setHoraHasta] = useState("");
 
   useEffect(() => {
     const cargarFavoritos = async () => {
@@ -33,6 +38,20 @@ export default function Hub() {
       } catch {}
     };
     cargarFavoritos();
+  }, [user]);
+
+  useEffect(() => {
+    const cargarCiudad = async () => {
+      if (!user) { setCiudadCargada(true); return; }
+      try {
+        const { getUserData } = await import("../services/authService");
+        const userData = await getUserData(user.uid);
+        if (userData?.ciudad) setCiudadJugador(userData.ciudad);
+        else if (userData?.provincia) setCiudadJugador(userData.provincia);
+      } catch (err) { console.error("Error cargando ciudad:", err); }
+      setCiudadCargada(true);
+    };
+    cargarCiudad();
   }, [user]);
 
   useEffect(() => {
@@ -86,6 +105,7 @@ export default function Hub() {
 
   const getInfoClub = (club) => {
     let libres = 0;
+    let libresEnRango = 0;
     let precioMin = Infinity;
     const canchasInfo = [];
     const superficies = new Set();
@@ -98,6 +118,7 @@ export default function Hub() {
       else tieneAireLibre = true;
 
       let canchaLibres = 0;
+      let canchaLibresEnRango = 0;
       const horasLibres = [];
       (cancha.horariosDisponibles || []).forEach((hora) => {
         if (!estaOcupado(club.id, cancha.id, hora) && !esTurnoFijoHub(club.id, cancha.id, hora)) {
@@ -106,12 +127,16 @@ export default function Hub() {
           horasLibres.push(hora);
           const precio = (cancha.horarios || {})[hora] ?? cancha.precioBase ?? 0;
           if (precio < precioMin) precioMin = precio;
+          if (horaDesde && horaHasta && hora >= horaDesde && hora < horaHasta) {
+            canchaLibresEnRango++;
+            libresEnRango++;
+          }
         }
       });
-      canchasInfo.push({ ...cancha, canchaLibres, horasLibres });
+      canchasInfo.push({ ...cancha, canchaLibres, canchaLibresEnRango, horasLibres });
     });
 
-    return { libres, precioMin: precioMin === Infinity ? 0 : precioMin, canchasInfo, superficies: [...superficies], tieneTechada, tieneAireLibre };
+    return { libres, libresEnRango, precioMin: precioMin === Infinity ? 0 : precioMin, canchasInfo, superficies: [...superficies], tieneTechada, tieneAireLibre };
   };
 
   const toggleFavorito = async (clubId) => {
@@ -128,9 +153,21 @@ export default function Hub() {
   };
 
   // Filtrar clubes
-  let clubesFiltrados = clubes.filter((club) =>
-    club.nombre.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  let clubesFiltrados = clubes;
+
+  if (ciudadJugador && !verTodasCiudades) {
+    clubesFiltrados = clubesFiltrados.filter((club) =>
+      (club.ciudad || "").toLowerCase().includes(ciudadJugador.toLowerCase())
+    );
+  }
+
+  if (busqueda.trim()) {
+    clubesFiltrados = clubesFiltrados.filter((club) =>
+      club.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+      (club.ciudad || "").toLowerCase().includes(busqueda.toLowerCase()) ||
+      (club.direccion || "").toLowerCase().includes(busqueda.toLowerCase())
+    );
+  }
 
   if (filtroSuperficie) {
     clubesFiltrados = clubesFiltrados.filter((club) =>
@@ -146,16 +183,20 @@ export default function Hub() {
     );
   }
 
-  // Ordenar: favoritos primero, después por horarios libres
-  const clubesConInfo = clubesFiltrados.map((club) => ({
+  let clubesConInfo = clubesFiltrados.map((club) => ({
     ...club,
     ...getInfoClub(club),
     esFavorito: favoritos.includes(club.id),
   }));
 
+  if (horaDesde && horaHasta) {
+    clubesConInfo = clubesConInfo.filter((c) => c.libresEnRango > 0);
+  }
+
   clubesConInfo.sort((a, b) => {
     if (a.esFavorito && !b.esFavorito) return -1;
     if (!a.esFavorito && b.esFavorito) return 1;
+    if (horaDesde && horaHasta) return b.libresEnRango - a.libresEnRango;
     return b.libres - a.libres;
   });
 
@@ -182,53 +223,116 @@ export default function Hub() {
         </p>
       </div>
 
-      {/* Filtros */}
-      <div className="flex gap-2 mb-4 flex-wrap">
-        <div className="themed-card rounded-xl border px-3 py-2 flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4" style={{ color: "var(--accent)" }}>
-            <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-          </svg>
-          <input type="date" value={fechaSeleccionada} onChange={(e) => setFechaSeleccionada(e.target.value)}
-            className="text-sm bg-transparent focus:outline-none" style={{ color: "var(--text-primary)" }} />
+      {/* Filtros principales */}
+      <div className="flex flex-col gap-3 mb-4">
+        <div className="flex gap-2 flex-wrap">
+          <div className="themed-card rounded-xl border px-3 py-2 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4" style={{ color: "var(--accent)" }}>
+              <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            <input type="date" value={fechaSeleccionada} onChange={(e) => setFechaSeleccionada(e.target.value)}
+              className="text-sm bg-transparent focus:outline-none" style={{ color: "var(--text-primary)" }} />
+          </div>
+          <div className="themed-card rounded-xl border px-3 py-2 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4" style={{ color: "var(--accent)" }}>
+              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+            </svg>
+            <select value={horaDesde}
+              onChange={(e) => {
+                setHoraDesde(e.target.value);
+                if (e.target.value && !horaHasta) {
+                  const h = parseInt(e.target.value.split(":")[0]) + 3;
+                  setHoraHasta(h <= 23 ? `${h.toString().padStart(2, "0")}:00` : "23:00");
+                }
+              }}
+              className="text-xs bg-transparent focus:outline-none"
+              style={{ color: horaDesde ? "var(--text-primary)" : "var(--text-muted)" }}>
+              <option value="">Desde</option>
+              {Array.from({ length: 17 }, (_, i) => i + 7).map((h) => (
+                <option key={h} value={`${h.toString().padStart(2, "0")}:00`}>{h.toString().padStart(2, "0")}:00</option>
+              ))}
+            </select>
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>—</span>
+            <select value={horaHasta} onChange={(e) => setHoraHasta(e.target.value)}
+              className="text-xs bg-transparent focus:outline-none"
+              style={{ color: horaHasta ? "var(--text-primary)" : "var(--text-muted)" }}>
+              <option value="">Hasta</option>
+              {Array.from({ length: 17 }, (_, i) => i + 7).map((h) => (
+                <option key={h} value={`${h.toString().padStart(2, "0")}:00`}>{h.toString().padStart(2, "0")}:00</option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div className="themed-card rounded-xl border px-3 py-2 flex items-center gap-2 flex-1 min-w-[150px]">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4" style={{ color: "var(--text-muted)" }}>
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input type="text" placeholder="Buscar club..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
-            className="text-sm bg-transparent focus:outline-none w-full" style={{ color: "var(--text-primary)" }} />
-        </div>
-      </div>
 
-      <div className="flex gap-2 mb-6 flex-wrap">
-        {todasSuperficies.length > 0 && (
-          <select value={filtroSuperficie} onChange={(e) => setFiltroSuperficie(e.target.value)}
+        <div className="flex gap-2 flex-wrap">
+          <div className="themed-card rounded-xl border px-3 py-2 flex items-center gap-2 flex-1 min-w-[150px]">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4" style={{ color: "var(--text-muted)" }}>
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input type="text" placeholder="Buscar club..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
+              className="text-sm bg-transparent focus:outline-none w-full" style={{ color: "var(--text-primary)" }} />
+          </div>
+          {todasSuperficies.length > 0 && (
+            <select value={filtroSuperficie} onChange={(e) => setFiltroSuperficie(e.target.value)}
+              className="themed-card rounded-xl border px-3 py-2 text-xs bg-transparent" style={{ color: "var(--text-secondary)" }}>
+              <option value="">Superficie</option>
+              {todasSuperficies.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
+          <select value={filtroTechada} onChange={(e) => setFiltroTechada(e.target.value)}
             className="themed-card rounded-xl border px-3 py-2 text-xs bg-transparent" style={{ color: "var(--text-secondary)" }}>
-            <option value="">Superficie</option>
-            {todasSuperficies.map((s) => <option key={s} value={s}>{s}</option>)}
+            <option value="">Cobertura</option>
+            <option value="techada">Techada</option>
+            <option value="airelibre">Aire libre</option>
           </select>
-        )}
-        <select value={filtroTechada} onChange={(e) => setFiltroTechada(e.target.value)}
-          className="themed-card rounded-xl border px-3 py-2 text-xs bg-transparent" style={{ color: "var(--text-secondary)" }}>
-          <option value="">Cobertura</option>
-          <option value="techada">Techada</option>
-          <option value="airelibre">Aire libre</option>
-        </select>
-        {(filtroSuperficie || filtroTechada) && (
-          <button onClick={() => { setFiltroSuperficie(""); setFiltroTechada(""); }}
-            className="text-xs font-semibold px-3 py-2 rounded-xl transition"
-            style={{ color: "var(--accent)" }}>
-            Limpiar filtros
-          </button>
-        )}
+        </div>
+
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            {ciudadJugador && !verTodasCiudades && (
+              <span className="text-xs px-3 py-1 rounded-full flex items-center gap-1.5"
+                style={{ backgroundColor: "rgba(16,185,129,0.1)", color: "var(--accent)" }}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" />
+                </svg>
+                {ciudadJugador}
+              </span>
+            )}
+            {ciudadJugador && (
+              <button onClick={() => setVerTodasCiudades(!verTodasCiudades)}
+                className="text-xs font-semibold transition" style={{ color: "var(--accent)" }}>
+                {verTodasCiudades ? "Solo mi ciudad" : "Ver todas las ciudades"}
+              </button>
+            )}
+          </div>
+          {(filtroSuperficie || filtroTechada || horaDesde || horaHasta) && (
+            <button onClick={() => { setFiltroSuperficie(""); setFiltroTechada(""); setHoraDesde(""); setHoraHasta(""); }}
+              className="text-xs font-semibold px-3 py-1 rounded-xl transition" style={{ color: "var(--accent)" }}>
+              Limpiar filtros
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Sin resultados */}
       {clubesConInfo.length === 0 && (
         <div className="themed-card text-center py-16 rounded-2xl border">
           <div className="text-5xl mb-4">🏟️</div>
-          <p className="font-medium" style={{ color: "var(--text-secondary)" }}>No hay canchas disponibles</p>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Probá cambiando la fecha o los filtros</p>
+          <p className="font-medium" style={{ color: "var(--text-secondary)" }}>
+            {ciudadJugador && !verTodasCiudades ? `No hay canchas disponibles en ${ciudadJugador}` : "No hay canchas disponibles"}
+          </p>
+          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+            {horaDesde && horaHasta
+              ? `No hay disponibilidad entre ${horaDesde} y ${horaHasta}. Probá con otro horario.`
+              : "Probá cambiando la fecha o los filtros"}
+          </p>
+          {ciudadJugador && !verTodasCiudades && (
+            <button onClick={() => setVerTodasCiudades(true)}
+              className="mt-3 text-sm font-semibold px-4 py-2 rounded-xl transition"
+              style={{ backgroundColor: "var(--accent)", color: "white" }}>
+              Ver canchas en todas las ciudades
+            </button>
+          )}
         </div>
       )}
 
@@ -238,7 +342,7 @@ export default function Hub() {
           <div
             key={club.id}
             className="themed-card rounded-2xl border overflow-hidden card-hover cursor-pointer"
-            onClick={() => navigate(`/club/${club.id}`, { state: { fecha: fechaSeleccionada } })}
+            onClick={() => navigate(`/club/${club.id}`, { state: { fecha: fechaSeleccionada, horaDesde, horaHasta } })}
           >
             {/* Header del club */}
             <div className="px-4 pt-4 pb-3">
@@ -299,12 +403,22 @@ export default function Hub() {
                       </span>
                     </div>
                     <div className="text-right">
-                      {cancha.canchaLibres > 0 ? (
-                        <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>
-                          {cancha.canchaLibres} libre{cancha.canchaLibres !== 1 ? "s" : ""}
-                        </span>
+                      {(horaDesde && horaHasta) ? (
+                        cancha.canchaLibresEnRango > 0 ? (
+                          <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>
+                            {cancha.canchaLibresEnRango} libre{cancha.canchaLibresEnRango !== 1 ? "s" : ""}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>—</span>
+                        )
                       ) : (
-                        <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Completa</span>
+                        cancha.canchaLibres > 0 ? (
+                          <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>
+                            {cancha.canchaLibres} libre{cancha.canchaLibres !== 1 ? "s" : ""}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Completa</span>
+                        )
                       )}
                     </div>
                   </div>
@@ -315,15 +429,28 @@ export default function Hub() {
             {/* Footer */}
             <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--border-card)" }}>
               <div>
-                {club.libres > 0 ? (
-                  <>
-                    <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>{club.libres}</span>
-                    <span className="text-xs ml-1" style={{ color: "var(--text-muted)" }}>
-                      horario{club.libres !== 1 ? "s" : ""} disponible{club.libres !== 1 ? "s" : ""}
-                    </span>
-                  </>
+                {(horaDesde && horaHasta) ? (
+                  club.libresEnRango > 0 ? (
+                    <>
+                      <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>{club.libresEnRango}</span>
+                      <span className="text-xs ml-1" style={{ color: "var(--text-muted)" }}>
+                        disponible{club.libresEnRango !== 1 ? "s" : ""} entre {horaDesde}–{horaHasta}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Sin disponibilidad en ese horario</span>
+                  )
                 ) : (
-                  <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Sin disponibilidad</span>
+                  club.libres > 0 ? (
+                    <>
+                      <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>{club.libres}</span>
+                      <span className="text-xs ml-1" style={{ color: "var(--text-muted)" }}>
+                        horario{club.libres !== 1 ? "s" : ""} disponible{club.libres !== 1 ? "s" : ""}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Sin disponibilidad</span>
+                  )
                 )}
               </div>
               {club.precioMin > 0 && (
