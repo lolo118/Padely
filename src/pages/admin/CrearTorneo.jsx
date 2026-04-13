@@ -12,8 +12,8 @@ const inputClass =
 const selectClass =
   "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
 const labelClass = "text-xs font-semibold mb-1 block";
-const tipClass =
-  "text-xs text-blue-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mt-2";
+const tipClass = "text-xs rounded-lg px-3 py-2 mt-2 border";
+const tipStyle = { color: "#3b82f6", backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.15)" };
 
 const provinciasArgentina = [
   "Buenos Aires",
@@ -68,10 +68,10 @@ const categoriasNivel = [
 ];
 
 const formatoDescripcion = {
-  mini: "1 set por partido, fase de grupos → eliminación directa",
-  normal: "3 sets por partido, fase de grupos → eliminación directa",
-  liga: "Sistema de liga con fechas y tabla de posiciones general",
-  eliminacion: "Eliminación directa desde la primera ronda",
+  mini: "Fase de grupos + eliminación directa. Ideal para torneos rápidos de pocas parejas.",
+  normal: "Fase de grupos (round robin) + eliminación directa. El formato más usado en padel amateur.",
+  liga: "Todos contra todos (round robin) con tabla general de posiciones. Ideal para torneos largos con fechas semanales.",
+  eliminacion: "Eliminación directa (single elimination) desde la primera ronda. El que pierde, queda afuera.",
 };
 
 export default function CrearTorneo() {
@@ -381,9 +381,9 @@ export default function CrearTorneo() {
                 onChange={set("formato")}
                 className={selectClass}
               >
-                <option value="mini">Mini torneo</option>
-                <option value="normal">Torneo normal</option>
-                <option value="liga">Liga</option>
+                <option value="mini">Mini torneo (grupos + eliminación)</option>
+                <option value="normal">Torneo estándar (grupos + eliminación)</option>
+                <option value="liga">Liga (todos contra todos)</option>
                 <option value="eliminacion">Eliminación directa</option>
               </select>
               <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
@@ -493,8 +493,8 @@ export default function CrearTorneo() {
               </div>
             )}
 
-            <p className={tipClass}>
-              💡 "Mini torneo" sugiere 1 set de 4 games. "Torneo normal" sugiere 3 sets de 6 games. Podés personalizar ambos valores.
+            <p className={tipClass} style={tipStyle}>
+              💡 <strong>Mini torneo:</strong> sugiere 1 set de 4 games, rápido y dinámico. <strong>Estándar:</strong> sugiere 3 sets de 6 games, el clásico. <strong>Liga:</strong> todos juegan contra todos, ideal para temporadas largas. <strong>Eliminación directa:</strong> sin fase de grupos, máxima intensidad. Podés personalizar sets y games en cualquier formato.
             </p>
           </div>
         </div>
