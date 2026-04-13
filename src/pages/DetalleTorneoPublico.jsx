@@ -100,7 +100,11 @@ function calcularTabla(grupo) {
   });
 }
 
-const tabs = ["Info", "Parejas", "Grupos", "Bracket"];
+const getTabs = (formato) => {
+  if (formato === "liga") return ["Info", "Parejas", "Liga"];
+  if (formato === "eliminacion") return ["Info", "Parejas", "Bracket"];
+  return ["Info", "Parejas", "Grupos", "Bracket"];
+};
 
 export default function DetalleTorneoPublico() {
   const { id } = useParams();
@@ -178,7 +182,7 @@ export default function DetalleTorneoPublico() {
           torneoData.status === "en_curso" &&
           gruposData.length > 0
         ) {
-          setTab("Grupos");
+          setTab(torneoData.formato === "liga" ? "Liga" : "Grupos");
         }
 
         // Cargar reclamos
@@ -600,7 +604,7 @@ export default function DetalleTorneoPublico() {
         className="flex gap-2 mb-6 border-b"
         style={{ borderColor: "var(--border-card)" }}
       >
-        {tabs.map((t) => (
+        {getTabs(torneo?.formato || "normal").map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -1348,6 +1352,122 @@ export default function DetalleTorneoPublico() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Liga */}
+      {tab === "Liga" && (
+        <div className="flex flex-col gap-4">
+          {grupos.length === 0 ? (
+            <div className="themed-card rounded-2xl p-5 border text-center py-12">
+              <p style={{ color: "var(--text-muted)" }}>El fixture aún no fue generado</p>
+            </div>
+          ) : (() => {
+            const grupo = grupos[0];
+            const tabla = calcularTabla(grupo);
+            const partidos = grupo.partidos || [];
+            const fechasMap = {};
+            partidos.forEach((p) => { const f = p.fecha || 1; if (!fechasMap[f]) fechasMap[f] = []; fechasMap[f].push(p); });
+            const fechasOrdenadas = Object.entries(fechasMap).sort(([a], [b]) => Number(a) - Number(b));
+
+            return (
+              <>
+                {torneo.status === "en_curso" && torneo.habilitarReclamos && (
+                  <div className="rounded-xl px-4 py-3 flex items-start gap-2 border" style={{ backgroundColor: "var(--bg-card-hover)", borderColor: "var(--border-card)" }}>
+                    <span className="text-sm mt-0.5" style={{ color: "var(--accent)" }}>*</span>
+                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                      Este torneo tiene habilitado el <strong>sistema de reclamos</strong>.
+                    </p>
+                  </div>
+                )}
+
+                <div className="themed-card rounded-2xl p-5 border">
+                  <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Tabla de posiciones</h2>
+                  {partidos.some((p) => p.resultado) ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-xs border-b border-[var(--border-card)]" style={{ color: "var(--text-muted)" }}>
+                            <th className="text-left py-2 pr-2">#</th>
+                            <th className="text-left py-2">Pareja</th>
+                            <th className="text-center py-2">PJ</th>
+                            <th className="text-center py-2">PG</th>
+                            <th className="text-center py-2">PP</th>
+                            <th className="text-center py-2">SF</th>
+                            <th className="text-center py-2">SC</th>
+                            <th className="text-center py-2">GF</th>
+                            <th className="text-center py-2">GC</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tabla.map((row, ri) => (
+                            <tr key={row.id} className="border-b border-[var(--border-card)]"
+                              style={ri === 0 ? { backgroundColor: "rgba(34,197,94,0.08)" } : undefined}>
+                              <td className="py-2 pr-2 font-bold" style={{ color: ri === 0 ? "var(--accent)" : "var(--text-muted)" }}>{ri + 1}</td>
+                              <td className="py-2 font-medium" style={{ color: "var(--text-primary)" }}>{ri === 0 && "👑 "}{row.nombre}</td>
+                              <td className="text-center py-2" style={{ color: "var(--text-secondary)" }}>{row.pj}</td>
+                              <td className="text-center py-2 font-semibold text-green-600">{row.pg}</td>
+                              <td className="text-center py-2 text-red-400">{row.pp}</td>
+                              <td className="text-center py-2" style={{ color: "var(--text-secondary)" }}>{row.sf}</td>
+                              <td className="text-center py-2" style={{ color: "var(--text-secondary)" }}>{row.sc}</td>
+                              <td className="text-center py-2" style={{ color: "var(--text-secondary)" }}>{row.gf}</td>
+                              <td className="text-center py-2" style={{ color: "var(--text-secondary)" }}>{row.gc}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
+                      La tabla se actualizará cuando se carguen resultados
+                    </p>
+                  )}
+                </div>
+
+                {fechasOrdenadas.map(([fecha, matches]) => (
+                  <div key={fecha} className="themed-card rounded-2xl p-5 border">
+                    <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Fecha {fecha}</h2>
+                    <div className="flex flex-col gap-2">
+                      {matches.map((p, pi) => {
+                        const ganador = p.resultado ? getGanador(p.resultado) : null;
+                        return (
+                          <div key={pi} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <p className={`text-sm font-medium ${ganador === 1 ? "text-green-700 font-bold" : ganador === 2 ? "text-red-400" : ""}`}
+                                  style={!ganador ? { color: "var(--text-primary)" } : undefined}>
+                                  {ganador === 1 && "🏆 "}{getNombrePareja(p.pareja1)}
+                                </p>
+                                <p className="text-xs" style={{ color: "var(--text-muted)" }}>vs</p>
+                                <p className={`text-sm font-medium ${ganador === 2 ? "text-green-700 font-bold" : ganador === 1 ? "text-red-400" : ""}`}
+                                  style={!ganador ? { color: "var(--text-primary)" } : undefined}>
+                                  {ganador === 2 && "🏆 "}{getNombrePareja(p.pareja2)}
+                                </p>
+                                {p.hora && (
+                                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                                    🕐 {p.hora}{p.cancha && ` · Cancha ${p.cancha}`}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                {p.resultado ? (
+                                  <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+                                    {p.resultado.sets.map((s) => `${s.g1}-${s.g2}`).join(" / ")}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>Pendiente</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </>
+            );
+          })()}
         </div>
       )}
 

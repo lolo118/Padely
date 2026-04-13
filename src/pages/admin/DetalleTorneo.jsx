@@ -88,23 +88,53 @@ const selectClass =
   "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
 const labelClass = "text-xs font-semibold mb-1 block";
 
-const tabs = ["Info", "Parejas", "Grupos", "Bracket", "Reclamos"];
+const getTabs = (formato) => {
+  if (formato === "liga") return ["Info", "Parejas", "Liga", "Reclamos"];
+  if (formato === "eliminacion") return ["Info", "Parejas", "Bracket", "Reclamos"];
+  return ["Info", "Parejas", "Grupos", "Bracket", "Reclamos"];
+};
 
 function TournamentStepper({ torneo, parejas, grupos, bracket }) {
-  const steps = [
-    { key: "inscripcion", label: "Inscripción", icon: "📝" },
-    { key: "grupos", label: "Grupos", icon: "👥" },
-    { key: "en_curso", label: "En curso", icon: "🎾" },
-    { key: "bracket", label: "Bracket", icon: "🏆" },
-    { key: "finalizado", label: "Finalizado", icon: "🎉" },
-  ];
+  const steps = torneo.formato === "liga"
+    ? [
+        { key: "inscripcion", label: "Inscripción", icon: "📝" },
+        { key: "fixture", label: "Fixture", icon: "📋" },
+        { key: "en_curso", label: "En curso", icon: "🎾" },
+        { key: "finalizado", label: "Finalizado", icon: "🏆" },
+      ]
+    : torneo.formato === "eliminacion"
+    ? [
+        { key: "inscripcion", label: "Inscripción", icon: "📝" },
+        { key: "en_curso", label: "En curso", icon: "🎾" },
+        { key: "bracket", label: "Bracket", icon: "🏆" },
+        { key: "finalizado", label: "Finalizado", icon: "🎉" },
+      ]
+    : [
+        { key: "inscripcion", label: "Inscripción", icon: "📝" },
+        { key: "grupos", label: "Grupos", icon: "👥" },
+        { key: "en_curso", label: "En curso", icon: "🎾" },
+        { key: "bracket", label: "Bracket", icon: "🏆" },
+        { key: "finalizado", label: "Finalizado", icon: "🎉" },
+      ];
 
   let currentIdx = 0;
-  if (torneo.status === "inscripcion") currentIdx = 0;
-  else if (torneo.status === "en_curso") {
-    const bracketHasResults = bracket && bracket.rondas && bracket.rondas.some((r) => r.some((p) => p.resultado));
-    currentIdx = bracketHasResults ? 3 : 2;
-  } else if (torneo.status === "finalizado") currentIdx = 4;
+  if (torneo.formato === "liga") {
+    if (torneo.status === "inscripcion") currentIdx = 0;
+    else if (torneo.status === "en_curso") currentIdx = grupos.length > 0 ? 2 : 1;
+    else if (torneo.status === "finalizado") currentIdx = 3;
+  } else if (torneo.formato === "eliminacion") {
+    if (torneo.status === "inscripcion") currentIdx = 0;
+    else if (torneo.status === "en_curso") {
+      const bracketHasResults = bracket && bracket.rondas && bracket.rondas.some((r) => r.some((p) => p.resultado));
+      currentIdx = bracketHasResults ? 2 : 1;
+    } else if (torneo.status === "finalizado") currentIdx = 3;
+  } else {
+    if (torneo.status === "inscripcion") currentIdx = 0;
+    else if (torneo.status === "en_curso") {
+      const bracketHasResults = bracket && bracket.rondas && bracket.rondas.some((r) => r.some((p) => p.resultado));
+      currentIdx = bracketHasResults ? 3 : 2;
+    } else if (torneo.status === "finalizado") currentIdx = 4;
+  }
 
   const pendingActions = [];
   if (torneo.status === "inscripcion") {
@@ -113,7 +143,16 @@ function TournamentStepper({ torneo, parejas, grupos, bracket }) {
     else pendingActions.push(`${parejas.length} parejas inscriptas — Podés iniciar el torneo`);
   }
   if (torneo.status === "en_curso") {
-    if (grupos.length === 0) {
+    if (torneo.formato === "liga") {
+      if (grupos.length === 0) {
+        pendingActions.push("Generá el fixture en la pestaña Liga");
+      } else {
+        const totalPartidos = grupos.reduce((acc, g) => acc + (g.partidos || []).length, 0);
+        const completados = grupos.reduce((acc, g) => acc + (g.partidos || []).filter((p) => p.resultado).length, 0);
+        if (completados < totalPartidos) pendingActions.push(`${completados}/${totalPartidos} partidos completados`);
+        else pendingActions.push("Todos los partidos completados — Podés finalizar el torneo");
+      }
+    } else if (grupos.length === 0) {
       pendingActions.push("Generá los grupos en la pestaña Grupos");
     } else {
       const partidosSinResultado = grupos.reduce((acc, g) => acc + (g.partidos || []).filter((p) => !p.resultado).length, 0);
@@ -441,6 +480,12 @@ export default function DetalleTorneo() {
                   <span className="text-xs mt-0.5">⚡</span>
                   <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Usá <strong>"Guardar y cargar siguiente"</strong> en el modal de resultados para cargar varios partidos en secuencia.</p>
                 </div>
+                {torneo.formato === "liga" && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs mt-0.5">📋</span>
+                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>En formato <strong>Liga</strong>, todas las parejas juegan entre sí. Los partidos están organizados por <strong>fechas</strong>. El líder de la tabla al finalizar es el campeón.</p>
+                  </div>
+                )}
                 {torneo.habilitarReclamos && (
                   <div className="flex items-start gap-2">
                     <span className="text-xs mt-0.5">⚠️</span>
@@ -466,7 +511,7 @@ export default function DetalleTorneo() {
       )}
 
       <div className="flex gap-2 mb-6 border-b" style={{ borderColor: "var(--border-card)" }}>
-        {tabs.map((t) => (
+        {getTabs(torneo?.formato || "normal").map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -1110,6 +1155,7 @@ export default function DetalleTorneo() {
       {/* ✅ Tab de parejas reemplazado por el componente independiente */}
       {tab === "Parejas" && <TabParejas torneoId={id} torneo={torneo} />}
       {tab === "Grupos" && <TabGrupos torneoId={id} torneo={torneo} />}
+      {tab === "Liga" && <TabGrupos torneoId={id} torneo={torneo} modoLiga={true} />}
       {tab === "Bracket" && <TabBracket torneoId={id} torneo={torneo} />}
       {tab === "Reclamos" && <TabReclamos torneoId={id} torneo={torneo} />}
     </div>
