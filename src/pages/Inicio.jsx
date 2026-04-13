@@ -78,6 +78,11 @@ export default function Inicio() {
               <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="12" y1="3" x2="12" y2="21" /><line x1="3" y1="12" x2="21" y2="12" />
             </svg>
           )},
+          { to: "/mis-reservas", label: "Mis reservas", sub: "Próximas y anteriores", color: "#3b82f6", bgColor: "rgba(59, 130, 246, 0.1)", icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+              <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /><polyline points="9 16 11 18 15 14" />
+            </svg>
+          )},
           { to: "/torneos", label: "Torneos", sub: "Inscribite o mirá resultados", color: "#3b82f6", bgColor: "rgba(59, 130, 246, 0.1)", icon: (
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.8" className="w-5 h-5">
               <path d="M6 9H4.5a2.5 2.5 0 010-5H6" /><path d="M18 9h1.5a2.5 2.5 0 000-5H18" /><path d="M4 22h16" /><path d="M18 2H6v7a6 6 0 0012 0V2Z" />

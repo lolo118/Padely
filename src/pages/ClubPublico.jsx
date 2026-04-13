@@ -195,14 +195,22 @@ export default function ClubPublico() {
         }
         return;
       }
+      setModalData({ cancha, hora, precio });
+      setFormReserva({
+        nombreJugador: userData?.nombre || user.displayName || "",
+        email: userData?.email || user.email || "",
+        telefono: userData?.telefono || "",
+      });
+      setMostrarModal(true);
+    } else {
+      setModalData({ cancha, hora, precio });
+      setFormReserva({
+        nombreJugador: "",
+        email: "",
+        telefono: "",
+      });
+      setMostrarModal(true);
     }
-    setModalData({ cancha, hora, precio });
-    setFormReserva({
-      nombreJugador: user?.displayName || "",
-      email: user?.email || "",
-      telefono: "",
-    });
-    setMostrarModal(true);
   };
 
   const handleReservar = async (e) => {
