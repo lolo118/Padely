@@ -55,6 +55,14 @@ export default function Hub() {
   }, [user]);
 
   useEffect(() => {
+    if (horaDesde && horaHasta && horaHasta <= horaDesde) {
+      const h = parseInt(horaDesde.split(":")[0]) + 3;
+      setHoraHasta(h <= 23 ? `${h.toString().padStart(2, "0")}:00` : "23:00");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [horaDesde]);
+
+  useEffect(() => {
     const cargar = async () => {
       setCargando(true);
       try {
@@ -257,9 +265,11 @@ export default function Hub() {
               className="text-xs bg-transparent focus:outline-none"
               style={{ color: horaHasta ? "var(--text-primary)" : "var(--text-muted)" }}>
               <option value="">Hasta</option>
-              {Array.from({ length: 17 }, (_, i) => i + 7).map((h) => (
-                <option key={h} value={`${h.toString().padStart(2, "0")}:00`}>{h.toString().padStart(2, "0")}:00</option>
-              ))}
+              {Array.from({ length: 17 }, (_, i) => i + 7)
+                .filter((h) => !horaDesde || h > parseInt(horaDesde.split(":")[0]))
+                .map((h) => (
+                  <option key={h} value={`${h.toString().padStart(2, "0")}:00`}>{h.toString().padStart(2, "0")}:00</option>
+                ))}
             </select>
           </div>
         </div>

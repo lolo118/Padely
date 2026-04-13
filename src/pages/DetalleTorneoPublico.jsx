@@ -15,6 +15,7 @@ import {
   dejarDescargo,
 } from "../services/torneoService";
 import { getUserData } from "../services/authService";
+import { formatFecha } from "../utils/formatDate";
 import { notificarInscripcionTorneo, notificarReclamoContra, notificarNuevoReclamo } from "../services/notificationService";
 
 const estadoBadge = {
@@ -719,7 +720,7 @@ export default function DetalleTorneoPublico() {
                   className="font-medium"
                   style={{ color: "var(--text-primary)" }}
                 >
-                  {torneo.fechaInicio} → {torneo.fechaFin}
+                  {formatFecha(torneo.fechaInicio)} → {formatFecha(torneo.fechaFin)}
                 </span>
               </div>
             </div>

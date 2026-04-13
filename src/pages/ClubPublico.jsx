@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
+import { formatFecha } from "../utils/formatDate";
 import {
   getCanchas,
   getReservas,
@@ -961,7 +962,7 @@ export default function ClubPublico() {
                             className="text-[10px]"
                             style={{ color: "var(--text-muted)" }}
                           >
-                            {r.fecha}
+                            {formatFecha(r.fecha)}
                           </p>
                         </div>
                       </div>

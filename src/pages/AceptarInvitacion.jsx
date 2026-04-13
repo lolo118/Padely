@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
+import { formatFecha } from "../utils/formatDate";
 import {
   getTorneoById,
   getInscripciones,
@@ -135,7 +136,7 @@ export default function AceptarInvitacion() {
             <div>
               <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Fechas</span>
               <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                {torneo.fechaInicio} → {torneo.fechaFin}
+                {formatFecha(torneo.fechaInicio)} → {formatFecha(torneo.fechaFin)}
               </span>
             </div>
             <div>

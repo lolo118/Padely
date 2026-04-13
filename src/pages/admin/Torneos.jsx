@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
+import { formatFecha } from "../../utils/formatDate";
 import { getTorneosByOrganizer } from "../../services/torneoService";
 
 const estadoBadge = {
@@ -74,7 +75,7 @@ export default function Torneos() {
                     {t.sede} — {t.ciudad}, {t.provincia}
                   </p>
                   <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    {t.fechaInicio} → {t.fechaFin}
+                    {formatFecha(t.fechaInicio)} → {formatFecha(t.fechaFin)}
                   </p>
                   <div className="flex gap-2 mt-2 flex-wrap">
                     <span className="text-xs px-2 py-0.5 rounded-full capitalize" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>

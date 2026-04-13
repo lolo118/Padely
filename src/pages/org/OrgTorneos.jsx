@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
 import { getTorneosByOrganizer } from "../../services/torneoService";
+import { formatFecha } from "../../utils/formatDate";
 
 const estadoBadge = {
   inscripcion: "bg-blue-100 text-blue-700",
@@ -73,7 +74,7 @@ export default function OrgTorneos() {
                     {t.sede} — {t.ciudad}, {t.provincia}
                   </p>
                   <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    {t.fechaInicio} → {t.fechaFin}
+                    {formatFecha(t.fechaInicio)} → {formatFecha(t.fechaFin)}
                   </p>
                   <div className="flex gap-2 mt-2 flex-wrap">
                     {Array.isArray(t.categoriaGenero) &&

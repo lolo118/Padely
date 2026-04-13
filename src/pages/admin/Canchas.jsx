@@ -15,6 +15,7 @@ import {
   getTurnosFijos,
 } from "../../services/canchaService";
 import TabTurnosFijos from "./TabTurnosFijos";
+import { formatFecha } from "../../utils/formatDate";
 import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
 
 const superficies = ["Cemento", "Sintético", "Césped", "Otro"];
@@ -288,7 +289,7 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
                     {r.nombreJugador || "Sin nombre"}
                   </p>
                   <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    {getCanchaName(r.canchaId)} · {r.fecha} · {r.hora}
+                    {getCanchaName(r.canchaId)} · {formatFecha(r.fecha)} · {r.hora}
                   </p>
                   {(r.email || r.telefono) && (
                     <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>

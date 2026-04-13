@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "../../store/authStore";
 import { getTorneosByOrganizer } from "../../services/torneoService";
+import { formatFecha } from "../../utils/formatDate";
 
 export default function OrgEstadisticas() {
   const { user } = useAuthStore();
@@ -55,7 +56,7 @@ export default function OrgEstadisticas() {
               >
                 <div>
                   <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{t.nombre}</p>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{t.sede} — {t.fechaInicio}</p>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{t.sede} — {formatFecha(t.fechaInicio)}</p>
                 </div>
                 <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
                   t.status === "finalizado" ? "bg-slate-100 text-slate-500" :

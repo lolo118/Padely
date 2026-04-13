@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatFecha } from "../utils/formatDate";
 import { useNavigate } from "react-router-dom";
 import { getTodosLosTorneos } from "../services/torneoService";
 
@@ -108,7 +109,7 @@ export default function Torneos() {
                     {t.sede} — {t.ciudad}, {t.provincia}
                   </p>
                   <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    {t.fechaInicio} → {t.fechaFin}
+                    {formatFecha(t.fechaInicio)} → {formatFecha(t.fechaFin)}
                   </p>
                   <div className="flex gap-2 mt-2 flex-wrap">
                     {Array.isArray(t.categoriaGenero) &&

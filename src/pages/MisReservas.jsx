@@ -4,6 +4,7 @@ import { useAuthStore } from "../store/authStore";
 import { collection, query, where, getDocs, collectionGroup, getDoc, doc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { actualizarReserva } from "../services/canchaService";
+import { formatFecha } from "../utils/formatDate";
 
 const statusBadge = {
   confirmada: "bg-green-100 text-green-700",
@@ -122,7 +123,7 @@ export default function MisReservas() {
                       <div className="flex-1">
                         <p className="font-semibold" style={{ color: "var(--text-primary)" }}>{r.clubNombre || "Club"}</p>
                         <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-                          {r.canchaName || r.cancha} · {r.fecha} · {r.hora}
+                          {r.canchaName || r.cancha} · {formatFecha(r.fecha)} · {r.hora}
                         </p>
                       </div>
                       <div className="text-right">
@@ -161,7 +162,7 @@ export default function MisReservas() {
                       <div className="flex-1">
                         <p className="font-semibold" style={{ color: "var(--text-primary)" }}>{r.clubNombre || "Club"}</p>
                         <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-                          {r.canchaName || r.cancha} · {r.fecha} · {r.hora}
+                          {r.canchaName || r.cancha} · {formatFecha(r.fecha)} · {r.hora}
                         </p>
                       </div>
                       <div className="text-right">

@@ -4,6 +4,7 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { useAuthStore } from "../../store/authStore";
 import { getTorneosByOrganizer } from "../../services/torneoService";
+import { formatFecha } from "../../utils/formatDate";
 
 export default function OrgDashboard() {
   const { user } = useAuthStore();
@@ -116,7 +117,7 @@ export default function OrgDashboard() {
                     {t.nombre}
                   </p>
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {t.sede} — {t.fechaInicio}
+                    {t.sede} — {formatFecha(t.fechaInicio)}
                   </p>
                 </div>
                 <span

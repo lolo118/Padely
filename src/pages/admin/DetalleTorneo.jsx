@@ -6,6 +6,7 @@ import TabGrupos from "./TabGrupos";
 import TabBracket from "./TabBracket";
 import TabParejas from "./TabParejas";
 import TabReclamos from "./TabReclamos";
+import { formatFecha } from "../../utils/formatDate";
 
 const estadoBadge = {
   inscripcion: "bg-blue-100 text-blue-700",
@@ -563,13 +564,13 @@ export default function DetalleTorneo() {
               <div>
                 <span className="block" style={{ color: "var(--text-muted)" }}>Fecha inicio</span>
                 <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                  {torneo.fechaInicio}
+                  {formatFecha(torneo.fechaInicio)}
                 </span>
               </div>
               <div>
                 <span className="block" style={{ color: "var(--text-muted)" }}>Fecha fin</span>
                 <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                  {torneo.fechaFin}
+                  {formatFecha(torneo.fechaFin)}
                 </span>
               </div>
             </div>

@@ -9,6 +9,7 @@ import {
   getTurnosFijos,
   actualizarReserva,
 } from "../../services/canchaService";
+import { formatFecha } from "../../utils/formatDate";
 
 export default function Dashboard() {
   const { user } = useAuthStore();
@@ -641,7 +642,7 @@ export default function Dashboard() {
                       className="text-xs"
                       style={{ color: "var(--text-muted)" }}
                     >
-                      {t.sede} — {t.fechaInicio} → {t.fechaFin}
+                      {t.sede} — {formatFecha(t.fechaInicio)} → {formatFecha(t.fechaFin)}
                     </p>
                   </div>
                   <span
