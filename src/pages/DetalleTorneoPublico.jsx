@@ -134,6 +134,7 @@ export default function DetalleTorneoPublico() {
   const [comentarioReclamo, setComentarioReclamo] = useState("");
   const [enviandoReclamo, setEnviandoReclamo] = useState(false);
   const [descargoTexto, setDescargoTexto] = useState("");
+  const [mostrarInfoReclamos, setMostrarInfoReclamos] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -956,6 +957,38 @@ export default function DetalleTorneoPublico() {
       {/* Grupos */}
       {tab === "Grupos" && (
         <div className="flex flex-col gap-4">
+          {torneo.status === "en_curso" && torneo.habilitarReclamos && (
+            <div className="rounded-xl px-4 py-3 mb-0 flex items-start gap-2 border" style={{ backgroundColor: "var(--bg-card-hover)", borderColor: "var(--border-card)" }}>
+              <span className="text-sm mt-0.5" style={{ color: "var(--accent)" }}>*</span>
+              <div className="flex-1">
+                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  Este torneo tiene habilitado el <strong>sistema de reclamos</strong>.
+                  Si estás vinculado a una pareja, podés abrir un reclamo contra tu rival desde cada partido.
+                  {!mostrarInfoReclamos && (
+                    <button onClick={() => setMostrarInfoReclamos(true)}
+                      className="ml-1 font-semibold transition" style={{ color: "var(--accent)" }}>
+                      Más info
+                    </button>
+                  )}
+                </p>
+                {mostrarInfoReclamos && (
+                  <div className="mt-2 text-xs flex flex-col gap-1" style={{ color: "var(--text-muted)" }}>
+                    <p>• Tocá <strong>"⚠️ Abrir reclamo"</strong> debajo de tu partido para denunciar a la pareja rival.</p>
+                    <p>• Motivos: categoría incorrecta o conducta antideportiva.</p>
+                    <p>• Otras parejas del torneo pueden unirse al reclamo.</p>
+                    <p>• La pareja denunciada puede dejar un descargo.</p>
+                    <p>• El organizador toma la decisión final: desestimar o descalificar.</p>
+                    <p>• Plazo para adherirse: {torneo.plazoReclamosMinutos || 30} minutos después de abierto el reclamo.</p>
+                    <button onClick={() => setMostrarInfoReclamos(false)}
+                      className="text-xs font-semibold mt-1 self-start transition" style={{ color: "var(--accent)" }}>
+                      Cerrar
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {grupos.length === 0 ? (
             <div className="themed-card rounded-2xl p-5 border text-center py-12">
               <p style={{ color: "var(--text-muted)" }}>
@@ -1187,6 +1220,11 @@ export default function DetalleTorneoPublico() {
                         );
                       })}
                     </div>
+                    {!miPareja && torneo.status === "en_curso" && torneo.habilitarReclamos && (
+                      <p className="text-[10px] mt-2" style={{ color: "var(--text-muted)" }}>
+                        * Para abrir reclamos necesitás estar vinculado a una pareja
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

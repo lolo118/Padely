@@ -80,6 +80,7 @@ export default function CrearTorneo() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [perfilCompleto, setPerfilCompleto] = useState(true);
+  const [mostrarInfoReclamos, setMostrarInfoReclamos] = useState(false);
   const [tipoUsuario, setTipoUsuario] = useState("club");
 
   useEffect(() => {
@@ -476,7 +477,31 @@ export default function CrearTorneo() {
               <label htmlFor="habilitarReclamos" className="text-sm" style={{ color: "var(--text-secondary)" }}>
                 Habilitar sistema de reclamos de categoría
               </label>
+              <button
+                type="button"
+                onClick={() => setMostrarInfoReclamos(!mostrarInfoReclamos)}
+                className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold transition"
+                style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--accent)" }}
+                title="¿Qué es el sistema de reclamos?"
+              >
+                ⓘ
+              </button>
             </div>
+            {mostrarInfoReclamos && (
+              <div className="rounded-xl p-4 mt-2 border" style={{ backgroundColor: "var(--bg-card-hover)", borderColor: "var(--border-card)" }}>
+                <h4 className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Sistema de reclamos de categoría</h4>
+                <div className="flex flex-col gap-1.5 text-xs" style={{ color: "var(--text-secondary)" }}>
+                  <p>Permite a los jugadores denunciar a una pareja rival si consideran que no pertenece a la categoría del torneo.</p>
+                  <p><strong>¿Cómo funciona?</strong></p>
+                  <p>1. Un jugador vinculado abre un reclamo contra la pareja rival desde su vista del partido.</p>
+                  <p>2. Otras parejas del torneo pueden adherirse al reclamo dentro del plazo configurado.</p>
+                  <p>3. La pareja denunciada puede dejar un descargo (defensa).</p>
+                  <p>4. El organizador revisa el reclamo y decide: desestimar (sin efecto) o descalificar a la pareja.</p>
+                  <p><strong>Motivos disponibles:</strong> categoría incorrecta, conducta antideportiva.</p>
+                  <p className="mt-1" style={{ color: "var(--text-muted)" }}>Los jugadores deben estar vinculados a sus parejas para poder abrir reclamos.</p>
+                </div>
+              </div>
+            )}
             {form.habilitarReclamos && (
               <div>
                 <label className={labelClass} style={{ color: "var(--text-muted)" }}>Plazo para adherirse al reclamo</label>
