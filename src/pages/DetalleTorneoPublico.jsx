@@ -15,6 +15,7 @@ import {
   dejarDescargo,
 } from "../services/torneoService";
 import { getUserData } from "../services/authService";
+import { notificarInscripcionTorneo, notificarReclamoContra, notificarNuevoReclamo } from "../services/notificationService";
 
 const estadoBadge = {
   inscripcion: "bg-blue-100 text-blue-700",
@@ -246,6 +247,10 @@ export default function DetalleTorneoPublico() {
       setReclamos(reclamosData);
       setMostrarFormReclamo(null);
       setComentarioReclamo("");
+      // Notify denounced pair and organizer
+      if (parejaDenunciada.jugador1Uid) notificarReclamoContra(parejaDenunciada.jugador1Uid, torneo.nombre, id);
+      if (parejaDenunciada.jugador2Uid) notificarReclamoContra(parejaDenunciada.jugador2Uid, torneo.nombre, id);
+      if (torneo.organizerId) notificarNuevoReclamo(torneo.organizerId, torneo.nombre, id);
       alert("Reclamo enviado correctamente");
     } catch (err) {
       console.error("Error:", err);
@@ -311,6 +316,9 @@ export default function DetalleTorneoPublico() {
       setLinkInvitacion(link);
       setInscripcionEnviada(true);
       setMostrarFormInsc(false);
+      if (torneo.organizerId) {
+        notificarInscripcionTorneo(torneo.organizerId, `${nombre1} ${apellido1}`, torneo.nombre, id);
+      }
     } catch (err) {
       console.error("Error al crear inscripción:", err);
     }

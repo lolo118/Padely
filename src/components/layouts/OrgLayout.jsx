@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useState } from "react";
 import { useAuthStore } from "../../store/authStore";
 import ThemeToggle from "../ThemeToggle";
+import NotificationBell from "../NotificationBell";
 
 const navItems = [
   {
@@ -145,6 +146,7 @@ export default function OrgLayout() {
             Panel organizador
           </span>
           <ThemeToggle />
+          <NotificationBell />
           <div className="relative">
             <button onClick={() => setMenuUsuario(!menuUsuario)}
               className="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center ring-2 ring-blue-400/20">

@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuthStore } from "../../store/authStore";
 import ThemeToggle from "../ThemeToggle";
+import NotificationBell from "../NotificationBell";
 
 const navItems = [
   {
@@ -173,6 +174,7 @@ export default function PlayerLayout() {
         </div>
         <div className="flex items-center gap-3">
           <ThemeToggle />
+          <NotificationBell />
           <NavLink to="/perfil" className="flex items-center gap-2 hover:opacity-80 transition">
             <span className="text-xs text-slate-400 hidden sm:block">{nombre}</span>
             {fotoUrl ? (

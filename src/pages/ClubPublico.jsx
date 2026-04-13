@@ -18,6 +18,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { getUserData } from "../services/authService";
+import { notificarNuevaReserva } from "../services/notificationService";
 
 const horasDelDia = Array.from(
   { length: 24 },
@@ -232,6 +233,9 @@ export default function ClubPublico() {
       });
       const nuevasReservas = await getReservas(club.id, fechaSeleccionada);
       setReservas(nuevasReservas);
+      if (club.ownerUid) {
+        notificarNuevaReserva(club.ownerUid, formReserva.nombreJugador, modalData.cancha.nombre, fechaSeleccionada, modalData.hora);
+      }
       setReservaExitosa({
         cancha: modalData.cancha.nombre,
         fecha: fechaSeleccionada,

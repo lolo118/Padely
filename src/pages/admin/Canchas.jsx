@@ -15,6 +15,7 @@ import {
   getTurnosFijos,
 } from "../../services/canchaService";
 import TabTurnosFijos from "./TabTurnosFijos";
+import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
 
 const superficies = ["Cemento", "Sintético", "Césped", "Otro"];
 
@@ -149,7 +150,7 @@ const statusLabel = {
   cancelada: "Cancelada",
 };
 
-function ReservasTab({ clubId, canchas }) {
+function ReservasTab({ clubId, canchas, clubNombre }) {
   const [reservas, setReservas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState("pendiente");
@@ -172,6 +173,10 @@ function ReservasTab({ clubId, canchas }) {
   const handleConfirmar = async (reservaId) => {
     try {
       await actualizarReserva(clubId, reservaId, { status: "confirmada" });
+      const reserva = reservas.find((r) => r.id === reservaId);
+      if (reserva?.jugadorUid) {
+        notificarReservaConfirmada(reserva.jugadorUid, clubNombre, reserva.canchaName || "", reserva.fecha, reserva.hora);
+      }
       setReservas(reservas.map((r) => r.id === reservaId ? { ...r, status: "confirmada" } : r));
     } catch (err) { console.error(err); }
   };
@@ -180,6 +185,10 @@ function ReservasTab({ clubId, canchas }) {
     if (!window.confirm("¿Rechazar esta reserva?")) return;
     try {
       await actualizarReserva(clubId, reservaId, { status: "cancelada" });
+      const reserva = reservas.find((r) => r.id === reservaId);
+      if (reserva?.jugadorUid) {
+        notificarReservaRechazada(reserva.jugadorUid, clubNombre, reserva.canchaName || "", reserva.fecha, reserva.hora);
+      }
       setReservas(reservas.map((r) => r.id === reservaId ? { ...r, status: "cancelada" } : r));
     } catch (err) { console.error(err); }
   };
@@ -554,6 +563,10 @@ export default function Canchas() {
   const handleConfirmarReserva = async (reservaId) => {
     try {
       await actualizarReserva(club.id, reservaId, { status: "confirmada" });
+      const reserva = reservas.find((r) => r.id === reservaId);
+      if (reserva?.jugadorUid) {
+        notificarReservaConfirmada(reserva.jugadorUid, club.nombre, reserva.canchaName || "", reserva.fecha, reserva.hora);
+      }
       setReservas(
         reservas.map((r) =>
           r.id === reservaId ? { ...r, status: "confirmada" } : r,
@@ -1477,7 +1490,7 @@ export default function Canchas() {
       )}
 
       {tabCanchas === "Reservas" && club && (
-        <ReservasTab clubId={club.id} canchas={canchas} />
+        <ReservasTab clubId={club.id} canchas={canchas} clubNombre={club.nombre} />
       )}
 
       {tabCanchas === "Turnos fijos" && club && (
