@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuthStore } from "../../store/authStore";
 import ThemeToggle from "../ThemeToggle";
 
@@ -120,7 +120,21 @@ const menuItems = [
 export default function PlayerLayout() {
   const { user } = useAuthStore();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [fotoUrl, setFotoUrl] = useState(null);
   const nombre = user?.displayName || user?.email?.split("@")[0] || "Jugador";
+
+  useEffect(() => {
+    if (!user) return;
+    const cargarFoto = async () => {
+      try {
+        const { doc, getDoc } = await import("firebase/firestore");
+        const { db } = await import("../../lib/firebase");
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists() && snap.data().fotoUrl) setFotoUrl(snap.data().fotoUrl);
+      } catch (e) { console.error("Error cargando foto:", e); }
+    };
+    cargarFoto();
+  }, [user]);
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col">
@@ -161,9 +175,13 @@ export default function PlayerLayout() {
           <ThemeToggle />
           <NavLink to="/perfil" className="flex items-center gap-2 hover:opacity-80 transition">
             <span className="text-xs text-slate-400 hidden sm:block">{nombre}</span>
-            <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full flex items-center justify-center ring-2 ring-emerald-400/20">
-              <span className="text-white text-xs font-bold">{nombre.charAt(0).toUpperCase()}</span>
-            </div>
+            {fotoUrl ? (
+              <img src={fotoUrl} alt="" className="w-8 h-8 rounded-full object-cover ring-2 ring-emerald-400/20" />
+            ) : (
+              <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full flex items-center justify-center ring-2 ring-emerald-400/20">
+                <span className="text-white text-xs font-bold">{nombre.charAt(0).toUpperCase()}</span>
+              </div>
+            )}
           </NavLink>
         </div>
       </header>

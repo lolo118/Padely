@@ -4,6 +4,7 @@ import {
   getClubByOwner,
   actualizarClubConfig,
 } from "../../services/canchaService";
+import { uploadClubLogo } from "../../services/storageService";
 
 const inputClass =
   "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full";
@@ -38,6 +39,8 @@ export default function Configuracion() {
   const [guardando, setGuardando] = useState(false);
   const [tab, setTab] = useState("datos");
   const [mensaje, setMensaje] = useState("");
+  const [subiendoLogo, setSubiendoLogo] = useState(false);
+  const [logoUrl, setLogoUrl] = useState(null);
 
   const [form, setForm] = useState({
     nombre: "",
@@ -104,6 +107,7 @@ export default function Configuracion() {
             razonSocial: clubData.razonSocial || "",
           });
           setUsuarios(clubData.usuarios || []);
+          if (clubData.logoUrl) setLogoUrl(clubData.logoUrl);
         }
       } catch (err) {
         console.error("Error al cargar config:", err);
@@ -153,6 +157,19 @@ export default function Configuracion() {
     setUsuarios(
       usuarios.map((u) => (u.id === id ? { ...u, rol: nuevoRol } : u)),
     );
+  };
+
+  const handleSubirLogo = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { alert("La imagen no puede superar los 5MB"); return; }
+    setSubiendoLogo(true);
+    try {
+      const url = await uploadClubLogo(club.id, file);
+      await actualizarClubConfig(club.id, { logoUrl: url });
+      setLogoUrl(url);
+    } catch (err) { console.error("Error subiendo logo:", err); }
+    setSubiendoLogo(false);
   };
 
   if (loading) {
@@ -293,16 +310,28 @@ export default function Configuracion() {
               </div>
             </div>
 
-            {/* Logo placeholder */}
+            {/* Logo del club */}
             <div>
               <label className={labelClass} style={{ color: "var(--text-muted)" }}>Logo del club</label>
-              <div className="border-2 border-dashed rounded-xl p-6 text-center" style={{ borderColor: "var(--border-card)" }}>
-                <div className="w-16 h-16 rounded-xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-                  <span className="text-2xl" style={{ color: "var(--text-muted)" }}>🏟️</span>
-                </div>
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  Subida de logo disponible próximamente
-                </p>
+              <div className="flex flex-col items-center justify-center py-6 rounded-xl border-2 border-dashed" style={{ borderColor: "var(--border-card)" }}>
+                {logoUrl ? (
+                  <div className="relative group">
+                    <img src={logoUrl} alt="Logo del club" className="h-24 max-w-[200px] object-contain rounded-lg" />
+                    <label className="absolute inset-0 flex items-center justify-center rounded-lg cursor-pointer bg-black/40 opacity-0 group-hover:opacity-100 transition">
+                      <span className="text-white text-xs font-semibold">{subiendoLogo ? "Subiendo..." : "Cambiar logo"}</span>
+                      <input type="file" accept="image/*" onChange={handleSubirLogo} disabled={subiendoLogo} className="hidden" />
+                    </label>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center cursor-pointer">
+                    <div className="text-4xl mb-2">🏟️</div>
+                    <span className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
+                      {subiendoLogo ? "Subiendo logo..." : "Subir logo del club"}
+                    </span>
+                    <span className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>PNG, JPG o SVG (máx. 5MB)</span>
+                    <input type="file" accept="image/*" onChange={handleSubirLogo} disabled={subiendoLogo} className="hidden" />
+                  </label>
+                )}
               </div>
             </div>
           </div>

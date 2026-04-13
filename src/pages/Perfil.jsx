@@ -19,6 +19,7 @@ import {
   getHistorialPartidos,
 } from "../services/torneoService";
 import { getClubByOwner } from "../services/canchaService";
+import { uploadProfilePhoto } from "../services/storageService";
 
 const categoriasNivel = [
   "8va",
@@ -50,6 +51,8 @@ export default function Perfil() {
   const [historial, setHistorial] = useState([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+  const [fotoUrl, setFotoUrl] = useState(null);
   const [editForm, setEditForm] = useState({
     nombre: "",
     telefono: "",
@@ -75,6 +78,7 @@ export default function Perfil() {
         const data = await getUserData(user.uid);
         if (data) {
           setUserData(data);
+          if (data.fotoUrl) setFotoUrl(data.fotoUrl);
           const roles = data.role || ["jugador"];
 
           if (roles.includes("club")) {
@@ -171,6 +175,23 @@ export default function Perfil() {
     }
   };
 
+  const handleSubirFoto = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { alert("La imagen no puede superar los 5MB"); return; }
+    if (!file.type.startsWith("image/")) { alert("Solo se permiten archivos de imagen"); return; }
+    setSubiendoFoto(true);
+    try {
+      const url = await uploadProfilePhoto(user.uid, file);
+      await updateDoc(doc(db, "users", user.uid), { fotoUrl: url });
+      setFotoUrl(url);
+    } catch (err) {
+      console.error("Error subiendo foto:", err);
+      alert("Error al subir la foto. Intentá de nuevo.");
+    }
+    setSubiendoFoto(false);
+  };
+
   if (loading)
     return (
       <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
@@ -240,6 +261,26 @@ export default function Perfil() {
       {/* ========== PERFIL JUGADOR ========== */}
       {rol === "jugador" && (
         <>
+          {/* Foto de perfil */}
+          <div className="flex flex-col items-center mb-4">
+            <div className="relative group">
+              {fotoUrl ? (
+                <img src={fotoUrl} alt="Foto de perfil" className="w-20 h-20 rounded-full object-cover ring-2" style={{ ringColor: "var(--accent)" }} />
+              ) : (
+                <div className="w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold text-white" style={{ backgroundColor: "var(--accent)" }}>
+                  {(userData?.nombre || user?.email || "J").charAt(0).toUpperCase()}
+                </div>
+              )}
+              <label className="absolute inset-0 flex items-center justify-center rounded-full cursor-pointer bg-black/40 opacity-0 group-hover:opacity-100 transition">
+                <span className="text-white text-xs font-semibold">{subiendoFoto ? "..." : "📷"}</span>
+                <input type="file" accept="image/*" onChange={handleSubirFoto} disabled={subiendoFoto} className="hidden" />
+              </label>
+            </div>
+            <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+              {subiendoFoto ? "Subiendo foto..." : "Tocá para cambiar foto"}
+            </p>
+          </div>
+
           {userData &&
             (!userData.telefono ||
               !userData.nivel ||

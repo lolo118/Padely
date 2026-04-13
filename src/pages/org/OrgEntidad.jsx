@@ -9,6 +9,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../../lib/firebase";
+import { uploadOrgLogo } from "../../services/storageService";
 
 const inputClass =
   "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full";
@@ -20,6 +21,8 @@ export default function OrgEntidad() {
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState("");
+  const [subiendoLogo, setSubiendoLogo] = useState(false);
+  const [logoUrl, setLogoUrl] = useState(null);
   const [form, setForm] = useState({
     nombre: "",
     telefono: "",
@@ -42,6 +45,7 @@ export default function OrgEntidad() {
         if (snap.docs.length > 0) {
           const data = { id: snap.docs[0].id, ...snap.docs[0].data() };
           setEntidad(data);
+          if (data.logoUrl) setLogoUrl(data.logoUrl);
           setForm({
             nombre: data.nombre || "",
             telefono: data.telefono || "",
@@ -72,6 +76,19 @@ export default function OrgEntidad() {
       console.error("Error:", err);
     }
     setGuardando(false);
+  };
+
+  const handleSubirLogo = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { alert("La imagen no puede superar los 5MB"); return; }
+    setSubiendoLogo(true);
+    try {
+      const url = await uploadOrgLogo(entidad.id, file);
+      await updateDoc(doc(db, "organizers", entidad.id), { logoUrl: url });
+      setLogoUrl(url);
+    } catch (err) { console.error("Error subiendo logo:", err); }
+    setSubiendoLogo(false);
   };
 
   if (loading)
@@ -173,14 +190,25 @@ export default function OrgEntidad() {
           </div>
           <div>
             <label className={labelClass}>Logo de la entidad</label>
-            <div className="border-2 border-dashed rounded-xl p-6 text-center" style={{ borderColor: "var(--border-input)" }}>
-              <div className="w-16 h-16 rounded-xl mx-auto mb-2 flex items-center justify-center" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-8 h-8" style={{ color: "var(--text-muted)" }}>
-                  <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
-                </svg>
-              </div>
-              <p className="text-sm font-medium" style={{ color: "var(--text-muted)" }}>Subida de logo disponible próximamente</p>
-              <p className="text-xs mt-1" style={{ color: "var(--text-muted)", opacity: 0.6 }}>PNG o JPG, máximo 2MB</p>
+            <div className="flex flex-col items-center justify-center py-6 rounded-xl border-2 border-dashed" style={{ borderColor: "var(--border-input)" }}>
+              {logoUrl ? (
+                <div className="relative group">
+                  <img src={logoUrl} alt="Logo de la entidad" className="h-24 max-w-[200px] object-contain rounded-lg" />
+                  <label className="absolute inset-0 flex items-center justify-center rounded-lg cursor-pointer bg-black/40 opacity-0 group-hover:opacity-100 transition">
+                    <span className="text-white text-xs font-semibold">{subiendoLogo ? "Subiendo..." : "Cambiar logo"}</span>
+                    <input type="file" accept="image/*" onChange={handleSubirLogo} disabled={subiendoLogo} className="hidden" />
+                  </label>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center cursor-pointer">
+                  <div className="text-4xl mb-2">🏆</div>
+                  <span className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
+                    {subiendoLogo ? "Subiendo logo..." : "Subir logo de la entidad"}
+                  </span>
+                  <span className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>PNG, JPG o SVG (máx. 5MB)</span>
+                  <input type="file" accept="image/*" onChange={handleSubirLogo} disabled={subiendoLogo} className="hidden" />
+                </label>
+              )}
             </div>
           </div>
         </div>
