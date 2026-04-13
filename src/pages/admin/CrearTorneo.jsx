@@ -160,7 +160,7 @@ export default function CrearTorneo() {
     if (field === "formato") {
       if (val === "mini") {
         updatedForm.sets = 1;
-        updatedForm.gamesPorSet = 6;
+        updatedForm.gamesPorSet = 4;
       } else if (val === "normal") {
         updatedForm.sets = 3;
         updatedForm.gamesPorSet = 6;
@@ -391,22 +391,34 @@ export default function CrearTorneo() {
               </p>
             </div>
 
-            {(form.formato === "mini" || form.formato === "normal") && (
-              <div>
+            <div className="flex gap-3">
+              <div className="flex-1">
                 <label className={labelClass} style={{ color: "var(--text-muted)" }}>Sets por partido</label>
                 <select
                   value={form.sets}
                   onChange={set("sets")}
                   className={selectClass}
                 >
-                  {form.formato === "mini" && (
-                    <option value={1}>1 set</option>
-                  )}
+                  <option value={1}>1 set</option>
+                  <option value={2}>2 sets</option>
                   <option value={3}>3 sets</option>
                 </select>
-                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Siempre 6 games por set</p>
               </div>
-            )}
+              <div className="flex-1">
+                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Games por set</label>
+                <select
+                  value={form.gamesPorSet}
+                  onChange={set("gamesPorSet")}
+                  className={selectClass}
+                >
+                  <option value={4}>4 games</option>
+                  <option value={6}>6 games</option>
+                </select>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                  {Number(form.gamesPorSet) === 4 ? "Ideal para mini torneos rápidos" : "Formato estándar de padel"}
+                </p>
+              </div>
+            </div>
 
             {(form.formato === "mini" || form.formato === "normal") && (
               <div>
@@ -482,8 +494,7 @@ export default function CrearTorneo() {
             )}
 
             <p className={tipClass}>
-              💡 En formato "Mini torneo" se juega 1 set por partido. En "Torneo
-              normal" siempre 3 sets. Los games por set son siempre 6.
+              💡 "Mini torneo" sugiere 1 set de 4 games. "Torneo normal" sugiere 3 sets de 6 games. Podés personalizar ambos valores.
             </p>
           </div>
         </div>

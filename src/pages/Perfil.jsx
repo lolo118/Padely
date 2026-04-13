@@ -53,6 +53,8 @@ export default function Perfil() {
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
   const [subiendoFoto, setSubiendoFoto] = useState(false);
   const [fotoUrl, setFotoUrl] = useState(null);
+  const [perfilModificado, setPerfilModificado] = useState(false);
+  const [mostrarInfoPuntos, setMostrarInfoPuntos] = useState(false);
   const [editForm, setEditForm] = useState({
     nombre: "",
     telefono: "",
@@ -127,10 +129,16 @@ export default function Perfil() {
       await updateDoc(doc(db, "users", user.uid), editForm);
       setUserData({ ...userData, ...editForm });
       setEditando(false);
+      setPerfilModificado(false);
     } catch (err) {
       console.error("Error al guardar:", err);
     }
     setGuardando(false);
+  };
+
+  const setEditField = (field, value) => {
+    setEditForm({ ...editForm, [field]: value });
+    setPerfilModificado(true);
   };
 
   const handleVerificarEmail = async () => {
@@ -382,7 +390,7 @@ export default function Perfil() {
                     type="text"
                     value={editForm.nombre}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, nombre: e.target.value })
+                      setEditField("nombre", e.target.value)
                     }
                     className={inputClass}
                   />
@@ -399,7 +407,7 @@ export default function Perfil() {
                     placeholder="Ej: 385 1234567"
                     value={editForm.telefono}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, telefono: e.target.value })
+                      setEditField("telefono", e.target.value)
                     }
                     className={inputClass}
                   />
@@ -416,7 +424,7 @@ export default function Perfil() {
                       type="text"
                       value={editForm.provincia}
                       onChange={(e) =>
-                        setEditForm({ ...editForm, provincia: e.target.value })
+                        setEditField("provincia", e.target.value)
                       }
                       className={inputClass}
                     />
@@ -432,7 +440,7 @@ export default function Perfil() {
                       type="date"
                       value={editForm.nacimiento}
                       onChange={(e) =>
-                        setEditForm({ ...editForm, nacimiento: e.target.value })
+                        setEditField("nacimiento", e.target.value)
                       }
                       className={inputClass}
                     />
@@ -448,7 +456,7 @@ export default function Perfil() {
                   <select
                     value={editForm.genero}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, genero: e.target.value })
+                      setEditField("genero", e.target.value)
                     }
                     className={inputClass}
                   >
@@ -511,7 +519,7 @@ export default function Perfil() {
                   <select
                     value={editForm.nivel}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, nivel: e.target.value })
+                      setEditField("nivel", e.target.value)
                     }
                     className={inputClass}
                   >
@@ -533,7 +541,7 @@ export default function Perfil() {
                   <select
                     value={editForm.manoHabil}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, manoHabil: e.target.value })
+                      setEditField("manoHabil", e.target.value)
                     }
                     className={inputClass}
                   >
@@ -553,10 +561,7 @@ export default function Perfil() {
                   <select
                     value={editForm.posicionPreferida}
                     onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        posicionPreferida: e.target.value,
-                      })
+                      setEditField("posicionPreferida", e.target.value)
                     }
                     className={inputClass}
                   >
@@ -565,6 +570,42 @@ export default function Perfil() {
                     <option value="reves">Revés (izquierda)</option>
                     <option value="ambas">Ambas</option>
                   </select>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setMostrarInfoPuntos(!mostrarInfoPuntos)}
+              className="text-xs font-semibold px-2 py-1 rounded-lg transition mt-3"
+              style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--accent)" }}
+            >
+              {mostrarInfoPuntos ? "Cerrar" : "¿Cómo funciona?"}
+            </button>
+
+            {mostrarInfoPuntos && (
+              <div className="rounded-xl p-4 mt-3 border" style={{ backgroundColor: "var(--bg-card-hover)", borderColor: "var(--border-card)" }}>
+                <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Sistema de puntos y categorías</h3>
+                <div className="flex flex-col gap-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+                  <div>
+                    <p className="font-semibold" style={{ color: "var(--text-primary)" }}>Puntos por partido:</p>
+                    <p>Ganar partido: +10 pts · Ganar set: +3 pts · Perder partido: +2 pts</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold" style={{ color: "var(--text-primary)" }}>Bonus por torneo:</p>
+                    <p>Campeón: +50 pts · Subcampeón: +25 pts</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold" style={{ color: "var(--text-primary)" }}>Multiplicador por categoría:</p>
+                    <p>Jugar en categoría superior: x1.5 o x2</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold" style={{ color: "var(--text-primary)" }}>Ascenso automático:</p>
+                    <p>A) 150 pts + 2 victorias · B) 300 pts + 1 victoria · C) 500 pts (experiencia)</p>
+                  </div>
+                  <div>
+                    <p className="font-semibold" style={{ color: "var(--text-primary)" }}>Categorías:</p>
+                    <p>8va → 7ma → 6ta → 5ta → 4ta → 3era → 2da → 1era → Libre</p>
+                  </div>
                 </div>
               </div>
             )}
@@ -758,6 +799,22 @@ export default function Perfil() {
               </div>
             )}
           </div>
+
+          {/* Sticky save bar */}
+          {editando && perfilModificado && (
+            <div className="fixed bottom-20 left-0 right-0 z-30 px-4">
+              <div className="max-w-2xl mx-auto">
+                <button
+                  onClick={handleGuardar}
+                  disabled={guardando}
+                  className="w-full py-3 rounded-xl text-sm font-semibold text-white shadow-lg transition disabled:opacity-50"
+                  style={{ backgroundColor: "var(--accent)" }}
+                >
+                  {guardando ? "Guardando..." : "Guardar cambios"}
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
 

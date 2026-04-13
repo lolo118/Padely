@@ -112,6 +112,7 @@ const navItems = [
 
 export default function OrgLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [menuUsuario, setMenuUsuario] = useState(false);
   const { user } = useAuthStore();
   const nombre =
     user?.displayName || user?.email?.split("@")[0] || "Organizador";
@@ -144,10 +145,30 @@ export default function OrgLayout() {
             Panel organizador
           </span>
           <ThemeToggle />
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center ring-2 ring-blue-400/20">
-            <span className="text-white text-xs font-bold">
-              {nombre.charAt(0).toUpperCase()}
-            </span>
+          <div className="relative">
+            <button onClick={() => setMenuUsuario(!menuUsuario)}
+              className="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center ring-2 ring-blue-400/20">
+              <span className="text-white text-xs font-bold">{nombre.charAt(0).toUpperCase()}</span>
+            </button>
+            {menuUsuario && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setMenuUsuario(false)} />
+                <div className="absolute right-0 top-10 themed-card rounded-xl border shadow-lg p-2 z-20 w-48">
+                  <p className="text-xs px-3 py-1.5 truncate" style={{ color: "var(--text-muted)" }}>{user?.email}</p>
+                  <button
+                    onClick={async () => {
+                      const { signOut } = await import("firebase/auth");
+                      const { auth } = await import("../../lib/firebase");
+                      await signOut(auth);
+                      window.location.href = "/login";
+                    }}
+                    className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition"
+                  >
+                    Cerrar sesión
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </header>
