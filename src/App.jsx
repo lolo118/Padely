@@ -32,7 +32,6 @@ const DetalleTorneo = lazy(() => import("./pages/admin/DetalleTorneo"));
 const AdminCanchas = lazy(() => import("./pages/admin/Canchas"));
 const AdminEstadisticas = lazy(() => import("./pages/admin/Estadisticas"));
 const AdminConfiguracion = lazy(() => import("./pages/admin/Configuracion"));
-const SeedData = lazy(() => import("./pages/admin/SeedData"));
 
 // Org pages
 const OrgDashboard = lazy(() => import("./pages/org/OrgDashboard"));
@@ -199,7 +198,6 @@ export default function App() {
             <Route path="canchas" element={<AdminCanchas />} />
             <Route path="estadisticas" element={<AdminEstadisticas />} />
             <Route path="configuracion" element={<AdminConfiguracion />} />
-            <Route path="seed" element={<SeedData />} />
           </Route>
 
           {/* Rutas del organizador - solo organizadores */}
