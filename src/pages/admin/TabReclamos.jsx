@@ -16,6 +16,7 @@ export default function TabReclamos({ torneoId, torneo }) {
   const [loading, setLoading] = useState(true);
   const [motivoDecision, setMotivoDecision] = useState("");
   const [resolviendo, setResolviendo] = useState(null);
+  const [ahora] = useState(() => Date.now());
 
   useEffect(() => {
     getReclamos(torneoId).then((data) => {
@@ -87,7 +88,7 @@ export default function TabReclamos({ torneoId, torneo }) {
             {abiertos.map((r) => {
               const minutosRestantes = Math.max(0,
                 (Number(torneo.plazoReclamosMinutos) || 30) -
-                Math.floor((Date.now() - new Date(r.creadoEn).getTime()) / 60000)
+                Math.floor((ahora - new Date(r.creadoEn).getTime()) / 60000)
               );
               return (
                 <div key={r.id} className="themed-card rounded-2xl p-5 border">

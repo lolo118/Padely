@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "../../store/authStore";
 import PerfilIncompleto from "../../components/PerfilIncompleto";
 import {
@@ -30,25 +30,28 @@ const inputClass =
 const selectClass =
   "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
 const labelClass = "text-xs font-semibold mb-1 block";
+const diasLabels = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
 function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData }) {
   const [weekData, setWeekData] = useState({});
   const [loadingWeek, setLoadingWeek] = useState(true);
 
-  const diasLabels = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-  const partes = fechaBase.split("-");
-  const base = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
-  const dayOfWeek = base.getDay();
-  const monday = new Date(base);
-  monday.setDate(base.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  const dias = useMemo(() => {
+    const partes = fechaBase.split("-");
+    const base = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
+    const dayOfWeek = base.getDay();
+    const monday = new Date(base);
+    monday.setDate(base.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
 
-  const dias = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    const str = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    dias.push({ date: str, label: diasLabels[d.getDay()], dayNum: d.getDate() });
-  }
+    const lista = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const str = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      lista.push({ date: str, label: diasLabels[d.getDay()], dayNum: d.getDate() });
+    }
+    return lista;
+  }, [fechaBase]);
 
   useEffect(() => {
     const cargar = async () => {
@@ -62,7 +65,7 @@ function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData
       setLoadingWeek(false);
     };
     cargar();
-  }, [fechaBase, canchas.length]);
+  }, [fechaBase, canchas.length, dias, getReservasForDate]);
 
   const esTurnoFijoSemana = (canchaId, hora, fechaStr) => {
     const p = fechaStr.split("-");
@@ -379,6 +382,12 @@ export default function Canchas() {
     reservaDirecta: true,
     diasAnticipacion: 7,
   });
+
+  const clubId = club?.id;
+  const getReservasForDate = useCallback(async (fecha) => {
+    if (!clubId) return [];
+    try { return await getReservas(clubId, fecha); } catch { return []; }
+  }, [clubId]);
 
   useEffect(() => {
     if (!user) return;
@@ -1479,9 +1488,7 @@ export default function Canchas() {
                   canchas={canchas}
                   clubId={club.id}
                   fechaBase={fechaSeleccionada}
-                  getReservasForDate={async (fecha) => {
-                    try { return await getReservas(club.id, fecha); } catch { return []; }
-                  }}
+                  getReservasForDate={getReservasForDate}
                   getTurnosFijosData={turnosFijos}
                 />
               )}

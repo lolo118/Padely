@@ -24,7 +24,6 @@ export default function Hub() {
   const [filtroTechada, setFiltroTechada] = useState("");
   const [favoritos, setFavoritos] = useState([]);
   const [ciudadJugador, setCiudadJugador] = useState("");
-  const [ciudadCargada, setCiudadCargada] = useState(false);
   const [verTodasCiudades, setVerTodasCiudades] = useState(false);
   const [horaDesde, setHoraDesde] = useState("");
   const [horaHasta, setHoraHasta] = useState("");
@@ -35,32 +34,23 @@ export default function Hub() {
       try {
         const snap = await getDoc(doc(db, "users", user.uid));
         if (snap.exists()) setFavoritos(snap.data().favoritos || []);
-      } catch {}
+      } catch (err) { console.error(err); }
     };
     cargarFavoritos();
   }, [user]);
 
   useEffect(() => {
     const cargarCiudad = async () => {
-      if (!user) { setCiudadCargada(true); return; }
+      if (!user) return;
       try {
         const { getUserData } = await import("../services/authService");
         const userData = await getUserData(user.uid);
         if (userData?.ciudad) setCiudadJugador(userData.ciudad);
         else if (userData?.provincia) setCiudadJugador(userData.provincia);
       } catch (err) { console.error("Error cargando ciudad:", err); }
-      setCiudadCargada(true);
     };
     cargarCiudad();
   }, [user]);
-
-  useEffect(() => {
-    if (horaDesde && horaHasta && horaHasta <= horaDesde) {
-      const h = parseInt(horaDesde.split(":")[0]) + 3;
-      setHoraHasta(h <= 23 ? `${h.toString().padStart(2, "0")}:00` : "23:00");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [horaDesde]);
 
   useEffect(() => {
     const cargar = async () => {
@@ -248,7 +238,8 @@ export default function Hub() {
             <select value={horaDesde}
               onChange={(e) => {
                 setHoraDesde(e.target.value);
-                if (e.target.value && !horaHasta) {
+                // Si "Hasta" queda vacío o antes/igual que "Desde", lo corremos 3 horas (antes se hacía en un useEffect)
+                if (e.target.value && (!horaHasta || horaHasta <= e.target.value)) {
                   const h = parseInt(e.target.value.split(":")[0]) + 3;
                   setHoraHasta(h <= 23 ? `${h.toString().padStart(2, "0")}:00` : "23:00");
                 }

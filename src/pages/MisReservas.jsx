@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
-import { collection, query, where, getDocs, collectionGroup, getDoc, doc } from "firebase/firestore";
+import { query, where, getDocs, collectionGroup, getDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { actualizarReserva } from "../services/canchaService";
 import { formatFecha } from "../utils/formatDate";
@@ -24,8 +24,10 @@ export default function MisReservas() {
   const [reservas, setReservas] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const hoy = new Date();
-  const hoyStr = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+  const [hoyStr] = useState(() => {
+    const hoy = new Date();
+    return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -45,7 +47,7 @@ export default function MisReservas() {
             if (clubSnap.exists()) {
               clubNombre = clubSnap.data().nombre || clubSnap.data().name || "";
             }
-          } catch {}
+          } catch (err) { console.error(err); }
           datos.push({ id: d.id, clubId, clubNombre, ...data });
         }
 
@@ -65,7 +67,7 @@ export default function MisReservas() {
       setLoading(false);
     };
     cargar();
-  }, [user]);
+  }, [user, hoyStr]);
 
   const cancelarReserva = async (reserva) => {
     if (!window.confirm("¿Cancelar esta reserva?")) return;
