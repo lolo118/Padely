@@ -10,6 +10,7 @@ import {
   where,
   orderBy,
   serverTimestamp,
+  runTransaction,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
@@ -50,10 +51,24 @@ export const actualizarClubConfig = async (clubId, datos) => {
 
 // --- RESERVAS ---
 
+// Id determinístico por turno: una cancha + fecha + hora = un solo documento posible
+export const slotId = (canchaId, fecha, hora) => `${canchaId}_${fecha}_${hora.replace(":", "")}`;
+
+export class SlotTakenError extends Error {
+  constructor() {
+    super("SLOT_TAKEN");
+    this.code = "SLOT_TAKEN";
+  }
+}
+
+// Crea la reserva dentro de una transacción: si el turno ya tiene una reserva
+// no cancelada, falla con SlotTakenError (evita la doble reserva).
 export const crearReserva = async (clubId, reserva) => {
-  const ref = await addDoc(collection(db, "clubs", clubId, "reservas"), {
-    ...reserva,
-    createdAt: serverTimestamp(),
+  const ref = doc(db, "clubs", clubId, "reservas", slotId(reserva.canchaId, reserva.fecha, reserva.hora));
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists() && snap.data().status !== "cancelada") throw new SlotTakenError();
+    tx.set(ref, { ...reserva, createdAt: serverTimestamp() });
   });
   return ref.id;
 };

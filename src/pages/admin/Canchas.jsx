@@ -373,6 +373,7 @@ export default function Canchas() {
   const [modalManualData, setModalManualData] = useState(null);
   const [formManual, setFormManual] = useState({ nombreJugador: "", telefono: "" });
   const [guardandoManual, setGuardandoManual] = useState(false);
+  const [errorTurno, setErrorTurno] = useState("");
 
   // Config club
   const [mostrarConfig, setMostrarConfig] = useState(false);
@@ -1293,6 +1294,18 @@ export default function Canchas() {
                 />
               </div>
 
+              {errorTurno && !mostrarModalManual && !mostrarModalBloqueo && (
+                <div
+                  className="rounded-xl px-4 py-3 mb-4 text-sm font-medium text-red-600 border flex items-center justify-between gap-3"
+                  style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.2)" }}
+                >
+                  <span>{errorTurno}</span>
+                  <button type="button" onClick={() => setErrorTurno("")} className="text-xs font-semibold hover:underline">
+                    Cerrar
+                  </button>
+                </div>
+              )}
+
               {vistaGrilla === "dia" && (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -1450,6 +1463,7 @@ export default function Canchas() {
                                     onClick={() => {
                                       setModalManualData({ cancha, hora, precio: precioHora });
                                       setFormManual({ nombreJugador: "", telefono: "" });
+                                      setErrorTurno("");
                                       setMostrarModalManual(true);
                                     }}
                                     className="w-full rounded-lg px-2 py-1 transition hover:ring-2 hover:ring-green-400"
@@ -1463,6 +1477,7 @@ export default function Canchas() {
                                       e.stopPropagation();
                                       setBloqueoData({ cancha, hora });
                                       setMotivoBloqueo("Mantenimiento");
+                                      setErrorTurno("");
                                       setMostrarModalBloqueo(true);
                                     }}
                                     className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition"
@@ -1523,6 +1538,12 @@ export default function Canchas() {
               <span className="text-sm" style={{ color: "var(--text-muted)" }}>Precio</span>
               <span className="text-lg font-bold" style={{ color: "var(--accent)" }}>${modalManualData.precio}</span>
             </div>
+            {errorTurno && (
+              <div className="rounded-lg px-3 py-2 mb-3 text-xs text-red-600 border"
+                style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.2)" }}>
+                {errorTurno}
+              </div>
+            )}
 
             <div className="flex flex-col gap-3">
               <div>
@@ -1551,6 +1572,7 @@ export default function Canchas() {
                 onClick={async () => {
                   if (!formManual.nombreJugador.trim()) return;
                   setGuardandoManual(true);
+                  setErrorTurno("");
                   try {
                     await crearReserva(club.id, {
                       canchaId: modalManualData.cancha.id,
@@ -1567,7 +1589,16 @@ export default function Canchas() {
                     const nuevasReservas = await getReservas(club.id, fechaSeleccionada);
                     setReservas(nuevasReservas);
                     setMostrarModalManual(false);
-                  } catch (err) { console.error("Error al crear reserva manual:", err); }
+                  } catch (err) {
+                    if (err?.code === "SLOT_TAKEN") {
+                      setErrorTurno("Ese turno acaba de ser reservado por otra persona");
+                      try { setReservas(await getReservas(club.id, fechaSeleccionada)); } catch (e) { console.error(e); }
+                      setMostrarModalManual(false);
+                    } else {
+                      console.error("Error al crear reserva manual:", err);
+                      setErrorTurno("No pudimos crear la reserva. Intentá de nuevo.");
+                    }
+                  }
                   setGuardandoManual(false);
                 }}
                 disabled={guardandoManual || !formManual.nombreJugador.trim()}
@@ -1608,6 +1639,12 @@ export default function Canchas() {
                 </select>
               </div>
             </div>
+            {errorTurno && (
+              <div className="rounded-lg px-3 py-2 mt-3 text-xs text-red-600 border"
+                style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.2)" }}>
+                {errorTurno}
+              </div>
+            )}
 
             <div className="flex gap-2 mt-4">
               <button onClick={() => setMostrarModalBloqueo(false)}
@@ -1618,6 +1655,7 @@ export default function Canchas() {
               <button
                 onClick={async () => {
                   setGuardandoBloqueo(true);
+                  setErrorTurno("");
                   try {
                     await crearReserva(club.id, {
                       canchaId: bloqueoData.cancha.id,
@@ -1634,7 +1672,16 @@ export default function Canchas() {
                     const nuevasReservas = await getReservas(club.id, fechaSeleccionada);
                     setReservas(nuevasReservas);
                     setMostrarModalBloqueo(false);
-                  } catch (err) { console.error("Error al bloquear horario:", err); }
+                  } catch (err) {
+                    if (err?.code === "SLOT_TAKEN") {
+                      setErrorTurno("Ese turno acaba de ser reservado por otra persona");
+                      try { setReservas(await getReservas(club.id, fechaSeleccionada)); } catch (e) { console.error(e); }
+                      setMostrarModalBloqueo(false);
+                    } else {
+                      console.error("Error al bloquear horario:", err);
+                      setErrorTurno("No pudimos crear la reserva. Intentá de nuevo.");
+                    }
+                  }
                   setGuardandoBloqueo(false);
                 }}
                 disabled={guardandoBloqueo}

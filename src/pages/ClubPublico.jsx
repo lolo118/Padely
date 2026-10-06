@@ -97,6 +97,7 @@ export default function ClubPublico() {
     telefono: "",
   });
   const [guardando, setGuardando] = useState(false);
+  const [errorReserva, setErrorReserva] = useState("");
   const [tab, setTab] = useState("canchas");
 
   // Reviews
@@ -196,6 +197,7 @@ export default function ClubPublico() {
   };
 
   const abrirModal = async (cancha, hora, precio) => {
+    setErrorReserva("");
     if (user) {
       const userData = await getUserData(user.uid);
       const registradoConGoogle = user.providerData?.some(p => p.providerId === "google.com");
@@ -227,6 +229,7 @@ export default function ClubPublico() {
     e.preventDefault();
     if (!modalData || !club) return;
     setGuardando(true);
+    setErrorReserva("");
     try {
       await crearReserva(club.id, {
         canchaId: modalData.cancha.id,
@@ -255,7 +258,19 @@ export default function ClubPublico() {
       });
       setMostrarModal(false);
     } catch (err) {
-      console.error("Error:", err);
+      if (err?.code === "SLOT_TAKEN") {
+        // Otro jugador ganó el turno mientras completábamos el formulario
+        setErrorReserva("Ese turno acaba de ser reservado por otra persona");
+        try {
+          setReservas(await getReservas(club.id, fechaSeleccionada));
+        } catch (e) {
+          console.error("Error recargando reservas:", e);
+        }
+        setMostrarModal(false);
+      } else {
+        console.error("Error:", err);
+        setErrorReserva("No pudimos crear la reserva. Intentá de nuevo.");
+      }
     }
     setGuardando(false);
   };
@@ -290,6 +305,7 @@ export default function ClubPublico() {
   const fechaMax = addDaysLocal(fechaMin, club?.diasAnticipacion ?? 7);
   const cambiarFecha = (valor) => {
     if (!valor) return;
+    setErrorReserva("");
     if (valor < fechaMin) return setFechaSeleccionada(fechaMin);
     if (valor > fechaMax) return setFechaSeleccionada(fechaMax);
     setFechaSeleccionada(valor);
@@ -426,6 +442,18 @@ export default function ClubPublico() {
               style={{ color: "var(--text-primary)" }}
             />
           </div>
+
+          {errorReserva && !mostrarModal && (
+            <div
+              className="rounded-xl px-4 py-3 mb-4 text-sm font-medium text-red-600 border flex items-center justify-between gap-3"
+              style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.2)" }}
+            >
+              <span>{errorReserva}</span>
+              <button type="button" onClick={() => setErrorReserva("")} className="text-xs font-semibold hover:underline">
+                Cerrar
+              </button>
+            </div>
+          )}
 
           <div className="themed-card rounded-2xl border overflow-hidden">
             <div className="overflow-x-auto">
@@ -1060,6 +1088,14 @@ export default function ClubPublico() {
                 ${modalData.precio}
               </span>
             </div>
+            {errorReserva && (
+              <div
+                className="rounded-lg px-3 py-2 mb-3 text-xs text-red-600 border"
+                style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.2)" }}
+              >
+                {errorReserva}
+              </div>
+            )}
             <form onSubmit={handleReservar} className="flex flex-col gap-3">
               <div>
                 <label
