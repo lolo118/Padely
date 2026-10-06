@@ -1,0 +1,23 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function isImage() {
+      return request.resource.size < 5 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+    }
+    match /profile-photos/{userId}/{file} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == userId && isImage();
+    }
+    match /club-logos/{clubId}/{file} {
+      allow read: if signedIn();
+      allow write: if signedIn() && isImage()
+        && firestore.get(/databases/(default)/documents/clubs/$(clubId)).data.ownerUid == request.auth.uid;
+    }
+    match /org-logos/{orgId}/{file} {
+      allow read: if signedIn();
+      allow write: if signedIn() && isImage()
+        && firestore.get(/databases/(default)/documents/organizers/$(orgId)).data.ownerUid == request.auth.uid;
+    }
+  }
+}
