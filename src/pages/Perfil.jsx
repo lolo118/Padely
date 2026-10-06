@@ -22,6 +22,7 @@ import { getClubByOwner } from "../services/canchaService";
 import { uploadProfilePhoto } from "../services/storageService";
 import { toast } from "../components/Toast";
 import { confirmar } from "../components/ConfirmDialog";
+import { formatFecha } from "../utils/formatDate";
 
 const inputClass =
   "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
@@ -40,6 +41,7 @@ export default function Perfil() {
 
   // Jugador
   const [inscripciones, setInscripciones] = useState([]);
+  const [cargandoInscripciones, setCargandoInscripciones] = useState(false);
   const [historial, setHistorial] = useState([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
   const [mostrarHistorial, setMostrarHistorial] = useState(false);
@@ -69,48 +71,64 @@ export default function Perfil() {
   useEffect(() => {
     if (!user) return;
     const cargar = async () => {
+      let data = null;
       try {
-        const data = await getUserData(user.uid);
-        if (data) {
-          setUserData(data);
-          if (data.fotoUrl) setFotoUrl(data.fotoUrl);
-          const roles = data.role || ["jugador"];
-
-          if (roles.includes("club")) {
-            setRol("club");
-            const clubData = await getClubByOwner(user.uid);
-            if (clubData) setClub(clubData);
-          } else if (roles.includes("organizador")) {
-            setRol("organizador");
-            const q = query(
-              collection(db, "organizers"),
-              where("ownerUid", "==", user.uid),
-            );
-            const snap = await getDocs(q);
-            if (snap.docs.length > 0)
-              setEntidad({ id: snap.docs[0].id, ...snap.docs[0].data() });
-            const torneos = await getTorneosByOrganizer(user.uid);
-            setTorneosOrg(torneos);
-          } else {
-            setRol("jugador");
-            setEditForm({
-              nombre: data.nombre || "",
-              telefono: data.telefono || "",
-              ciudad: data.ciudad || "",
-              provincia: data.provincia || "",
-              nacimiento: data.nacimiento || "",
-              genero: data.genero || "",
-              manoHabil: data.manoHabil || "",
-              posicionPreferida: data.posicionPreferida || "",
-            });
-            const insc = await getInscripcionesByJugador(user.uid);
-            setInscripciones(insc);
-          }
-        }
+        data = await getUserData(user.uid);
       } catch (err) {
         console.error("Error al cargar perfil:", err);
       }
+      if (!data) {
+        setLoading(false);
+        return;
+      }
+
+      setUserData(data);
+      if (data.fotoUrl) setFotoUrl(data.fotoUrl);
+      const roles = data.role || ["jugador"];
+      const rolActual = roles.includes("club")
+        ? "club"
+        : roles.includes("organizador")
+          ? "organizador"
+          : "jugador";
+      setRol(rolActual);
+      if (rolActual === "jugador") {
+        setEditForm({
+          nombre: data.nombre || "",
+          telefono: data.telefono || "",
+          ciudad: data.ciudad || "",
+          provincia: data.provincia || "",
+          nacimiento: data.nacimiento || "",
+          genero: data.genero || "",
+          manoHabil: data.manoHabil || "",
+          posicionPreferida: data.posicionPreferida || "",
+        });
+      }
+      // El perfil se muestra ya; el resto (club, entidad, inscripciones) se carga después
       setLoading(false);
+
+      try {
+        if (rolActual === "club") {
+          const clubData = await getClubByOwner(user.uid);
+          if (clubData) setClub(clubData);
+        } else if (rolActual === "organizador") {
+          const q = query(
+            collection(db, "organizers"),
+            where("ownerUid", "==", user.uid),
+          );
+          const snap = await getDocs(q);
+          if (snap.docs.length > 0)
+            setEntidad({ id: snap.docs[0].id, ...snap.docs[0].data() });
+          const torneos = await getTorneosByOrganizer(user.uid);
+          setTorneosOrg(torneos);
+        } else {
+          setCargandoInscripciones(true);
+          const insc = await getInscripcionesByJugador(user.uid);
+          setInscripciones(insc);
+        }
+      } catch (err) {
+        console.error("Error al cargar datos del perfil:", err);
+      }
+      setCargandoInscripciones(false);
     };
     cargar();
   }, [user]);
@@ -365,7 +383,7 @@ export default function Perfil() {
                   ["Teléfono", userData.telefono],
                   ["Ciudad", userData.ciudad],
                   ["Provincia", userData.provincia],
-                  ["Nacimiento", userData.nacimiento],
+                  ["Nacimiento", formatFecha(userData.nacimiento)],
                   ["Género", userData.genero],
                 ].map(([label, val]) => (
                   <div key={label}>
@@ -376,7 +394,7 @@ export default function Perfil() {
                       {label}
                     </span>
                     <span
-                      className="font-medium capitalize"
+                      className={`font-medium${label === "Género" ? " capitalize" : ""}`}
                       style={{ color: "var(--text-primary)" }}
                     >
                       {val || "—"}
@@ -663,6 +681,11 @@ export default function Perfil() {
           </div>
 
           {/* Inscripciones y torneos */}
+          {cargandoInscripciones && (
+            <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
+              Cargando inscripciones...
+            </p>
+          )}
           {inscPendientes.length > 0 && (
             <div className="themed-card rounded-2xl p-5 border border-orange-200 mb-4">
               <h2 className="font-semibold text-orange-700 mb-3">

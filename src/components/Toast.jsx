@@ -35,7 +35,7 @@ export function Toaster() {
 
   return (
     <div
-      className="fixed z-[100] bottom-4 left-1/2 -translate-x-1/2 md:left-auto md:right-4 md:translate-x-0 flex flex-col gap-2 w-[calc(100%-2rem)] max-w-sm pointer-events-none"
+      className="fixed z-[100] bottom-20 md:bottom-4 left-1/2 -translate-x-1/2 md:left-auto md:right-4 md:translate-x-0 flex flex-col gap-2 w-[calc(100%-2rem)] max-w-sm pointer-events-none"
       aria-live="polite"
     >
       {toasts.map((t) => {

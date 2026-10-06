@@ -173,8 +173,16 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
   const [parejas, setParejas] = useState([]);
   const [grupos, setGrupos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [parejasXGrupo, setParejasXGrupo] = useState(3);
+  const [parejasXGrupo, setParejasXGrupo] = useState(2);
   const [modoGeneracion, setModoGeneracion] = useState("aleatorio");
+  // Opciones de "parejas por grupo" según el modo de generación
+  const opcionesParejasXGrupo = (modo) => (modo === "aleatorio" ? [2, 4, 6] : [2, 3, 4, 5, 6]);
+  const cambiarModoGeneracion = (modo) => {
+    setModoGeneracion(modo);
+    const opciones = opcionesParejasXGrupo(modo);
+    // Si el valor actual no existe en el nuevo modo, el select mostraría otra cosa que el estado
+    if (!opciones.includes(parejasXGrupo)) setParejasXGrupo(opciones[0]);
+  };
   const [gruposGenerados, setGruposGenerados] = useState(false);
   const [editandoResultado, setEditandoResultado] = useState(null);
   const [setsInput, setSetsInput] = useState([]);
@@ -575,7 +583,7 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
                 onChange={(e) => setParejasXGrupo(Number(e.target.value))}
                 className="w-full border border-[var(--border-card)] rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
               >
-                {(modoGeneracion === "aleatorio" ? [2, 4, 6] : [2, 3, 4, 5, 6]).map((n) => (
+                {opcionesParejasXGrupo(modoGeneracion).map((n) => (
                   <option key={n} value={n}>
                     {n} parejas por grupo ({Math.ceil(parejas.length / n)}{" "}
                     grupos)
@@ -592,13 +600,13 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
               <label className="text-sm block mb-1" style={{ color: "var(--text-muted)" }}>Modo</label>
               <div className="flex gap-2">
                 <button
-                  onClick={() => setModoGeneracion("aleatorio")}
+                  onClick={() => cambiarModoGeneracion("aleatorio")}
                   className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "aleatorio" ? "bg-green-600 text-white" : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"}`}
                 >
                   Aleatorio
                 </button>
                 <button
-                  onClick={() => setModoGeneracion("manual")}
+                  onClick={() => cambiarModoGeneracion("manual")}
                   className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "manual" ? "bg-green-600 text-white" : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"}`}
                 >
                   Manual
@@ -672,7 +680,7 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
         <div className="themed-card rounded-2xl p-5 border">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
-              Vista previa ({grupos.length} grupos)
+              Vista previa ({grupos.length} {grupos.length === 1 ? "grupo" : "grupos"})
             </h2>
             <div className="flex gap-2">
               {modoGeneracion === "aleatorio" && (
@@ -1150,7 +1158,7 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
                   Cancelar
                 </button>
                 <button
-                  onClick={guardarResultado}
+                  onClick={() => guardarResultado(false)}
                   className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition"
                 >
                   Guardar

@@ -101,7 +101,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: "var(--bg-primary)" }}>
       <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md border border-slate-200" data-theme="light">
         <div className="flex items-center justify-center mb-6">
-          <img src="/logo.png" alt="Padely" className="h-9" />
+          <img src="/logo-dark.png" alt="Padely" className="h-9" />
         </div>
         <h2 className="text-lg font-semibold text-slate-700 mb-4 text-center">
           Iniciar sesión

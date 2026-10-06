@@ -242,13 +242,16 @@ export default function DetalleTorneoPublico() {
     }
   };
 
-  const yaInscripto = user
-    ? inscripciones.some(
-        (i) =>
-          (i.jugador1Uid === user.uid || i.jugador2Uid === user.uid) &&
-          i.status !== "rechazada",
-      )
-    : false;
+  // Un jugador ya vinculado a una pareja (miPareja) cuenta como inscripto
+  const yaInscripto =
+    !!miPareja ||
+    (user
+      ? inscripciones.some(
+          (i) =>
+            (i.jugador1Uid === user.uid || i.jugador2Uid === user.uid) &&
+            i.status !== "rechazada",
+        )
+      : false);
 
   const categorias = listaCategorias(torneo);
   const cupoCompleto = !!torneo && parejas.length >= Number(torneo.maxParejas || 0);
@@ -394,7 +397,7 @@ export default function DetalleTorneoPublico() {
             className="text-sm font-semibold text-center"
             style={{ color: "var(--accent)" }}
           >
-            Ya estás inscripto en este torneo
+            Ya estás inscripto en este torneo{miPareja?.nombrePareja ? ` · ${miPareja.nombrePareja}` : ""}
           </p>
         </div>
       )}

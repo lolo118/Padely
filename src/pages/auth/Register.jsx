@@ -100,9 +100,9 @@ export default function Register() {
         className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md"
         data-theme="light"
       >
-        <h1 className="text-2xl font-bold text-center text-green-700 mb-6">
-          Padely
-        </h1>
+        <div className="flex items-center justify-center mb-6">
+          <img src="/logo-dark.png" alt="Padely" className="h-9" />
+        </div>
         <h2 className="text-lg font-semibold text-gray-700 mb-4">
           Crear cuenta
         </h2>

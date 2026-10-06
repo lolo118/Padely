@@ -1029,7 +1029,7 @@ export default function TabBracket({ torneoId, torneo }) {
                   Cancelar
                 </button>
                 <button
-                  onClick={guardarResultado}
+                  onClick={() => guardarResultado(false)}
                   className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition"
                 >
                   Guardar
