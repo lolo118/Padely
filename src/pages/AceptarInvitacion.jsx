@@ -11,12 +11,19 @@ import {
 export default function AceptarInvitacion() {
   const { torneoId, inscripcionId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, loading: authLoading } = useAuthStore();
   const [torneo, setTorneo] = useState(null);
   const [inscripcion, setInscripcion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [procesando, setProcesando] = useState(false);
-  const [estado, setEstado] = useState(null); // "aceptada", "pagada", "error"
+  const [estado, setEstado] = useState(null); // "pendiente_aprobacion", "confirmada", "rechazada", "error"
+
+  // Aceptar la invitación requiere estar logueado: guardamos a dónde volver y vamos al login
+  useEffect(() => {
+    if (authLoading || user) return;
+    localStorage.setItem("padely-vincular-redirect", window.location.pathname);
+    navigate("/login");
+  }, [authLoading, user, navigate]);
 
   useEffect(() => {
     const cargar = async () => {
@@ -42,15 +49,17 @@ export default function AceptarInvitacion() {
   }, [torneoId, inscripcionId]);
 
   const aceptarInvitacion = async () => {
+    if (!user) return;
     setProcesando(true);
     try {
+      // Una sola actualización con exactamente las claves que permiten las reglas
       await actualizarInscripcion(torneoId, inscripcionId, {
-        status: "pendiente_pago",
-        jugador2Uid: user?.uid || null,
+        status: "pendiente_aprobacion",
+        jugador2Uid: user.uid,
         jugador2Confirmado: true,
       });
-      setInscripcion({ ...inscripcion, status: "pendiente_pago" });
-      setEstado("pendiente_pago");
+      setInscripcion({ ...inscripcion, status: "pendiente_aprobacion", jugador2Uid: user.uid, jugador2Confirmado: true });
+      setEstado("pendiente_aprobacion");
     } catch (err) {
       console.error("Error al aceptar:", err);
       setEstado("error");
@@ -58,24 +67,7 @@ export default function AceptarInvitacion() {
     setProcesando(false);
   };
 
-  const simularPago = async () => {
-    setProcesando(true);
-    try {
-      await actualizarInscripcion(torneoId, inscripcionId, {
-        status: "pendiente_aprobacion",
-        pagado: true,
-        fechaPago: new Date().toISOString(),
-      });
-      setInscripcion({ ...inscripcion, status: "pendiente_aprobacion" });
-      setEstado("pendiente_aprobacion");
-    } catch (err) {
-      console.error("Error al procesar pago:", err);
-      setEstado("error");
-    }
-    setProcesando(false);
-  };
-
-  if (loading) {
+  if (loading || authLoading || !user) {
     return (
       <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
         Cargando invitación...
@@ -196,7 +188,7 @@ export default function AceptarInvitacion() {
           <div className="flex flex-col gap-2">
             <button
               onClick={aceptarInvitacion}
-              disabled={procesando}
+              disabled={procesando || !user}
               className="w-full bg-green-600 text-white font-semibold py-3 rounded-xl hover:bg-green-700 transition disabled:opacity-50"
             >
               {procesando ? "Aceptando..." : "Aceptar invitación"}
@@ -210,54 +202,13 @@ export default function AceptarInvitacion() {
           </div>
         )}
 
-        {/* Estado: pendiente de pago */}
-        {estado === "pendiente_pago" && (
-          <div className="flex flex-col gap-3">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
-              <p className="text-yellow-700 font-semibold">
-                Invitación aceptada
-              </p>
-              <p className="text-yellow-600 text-sm mt-1">
-                Ahora necesitan completar el pago de inscripción
-              </p>
-            </div>
-            {torneo.inscripcion > 0 ? (
-              <div className="themed-card border rounded-xl p-4">
-                <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
-                  Total a pagar: ${torneo.inscripcion}
-                </p>
-                <button
-                  onClick={simularPago}
-                  disabled={procesando}
-                  className="w-full bg-green-600 text-white font-semibold py-3 rounded-xl hover:bg-green-700 transition disabled:opacity-50"
-                >
-                  {procesando ? "Procesando..." : "Simular pago"}
-                </button>
-                <p className="text-xs mt-2 text-center" style={{ color: "var(--text-muted)" }}>
-                  En producción esto se conectaría a MercadoPago
-                </p>
-              </div>
-            ) : (
-              <button
-                onClick={simularPago}
-                disabled={procesando}
-                className="w-full bg-green-600 text-white font-semibold py-3 rounded-xl hover:bg-green-700 transition disabled:opacity-50"
-              >
-                {procesando
-                  ? "Procesando..."
-                  : "Confirmar inscripción gratuita"}
-              </button>
-            )}
-          </div>
-        )}
-
         {/* Estado: pendiente de aprobación */}
         {estado === "pendiente_aprobacion" && (
           <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
             <div className="text-3xl mb-2">⏳</div>
-            <p className="text-orange-700 font-semibold">Pago registrado</p>
+            <p className="text-orange-700 font-semibold">Invitación aceptada</p>
             <p className="text-orange-600 text-sm mt-1">
-              Tu inscripción está pendiente de aprobación por el organizador. Te
+              Tu inscripción quedó pendiente de aprobación del organizador. Te
               notificaremos cuando sea confirmada.
             </p>
             <button

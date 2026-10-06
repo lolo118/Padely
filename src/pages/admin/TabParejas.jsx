@@ -11,7 +11,6 @@ import { listaCategorias } from "../../utils/torneo";
 
 const inscripcionBadge = {
   esperando_companero: "bg-[var(--bg-card-hover)] text-[var(--text-muted)]",
-  pendiente_pago: "bg-yellow-100 text-yellow-700",
   pendiente_aprobacion: "bg-orange-100 text-orange-700",
   confirmada: "bg-green-100 text-green-700",
   rechazada: "bg-red-100 text-red-500",
@@ -19,7 +18,6 @@ const inscripcionBadge = {
 
 const inscripcionLabel = {
   esperando_companero: "Esperando compañero",
-  pendiente_pago: "Pendiente de pago",
   pendiente_aprobacion: "Pendiente de aprobación",
   confirmada: "Confirmada",
   rechazada: "Rechazada",
@@ -185,9 +183,6 @@ export default function TabParejas({ torneoId, torneo }) {
   const pendientesAprobacion = inscripciones.filter(
     (i) => i.status === "pendiente_aprobacion",
   );
-  const pendientesPago = inscripciones.filter(
-    (i) => i.status === "pendiente_pago",
-  );
   const procesadas = inscripciones.filter(
     (i) => i.status === "confirmada" || i.status === "rechazada",
   );
@@ -244,7 +239,7 @@ export default function TabParejas({ torneoId, torneo }) {
                     )}
                   </div>
                   <span className="text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-700">
-                    Pago ✓
+                    Pareja completa ✓
                   </span>
                 </div>
                 {rechazandoId === insc.id ? (
@@ -321,35 +316,6 @@ export default function TabParejas({ torneoId, torneo }) {
                 </div>
                 <span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
                   Esperando
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Pendientes de pago */}
-      {pendientesPago.length > 0 && (
-        <div className="themed-card border rounded-2xl p-5 border-yellow-200">
-          <h2 className="font-semibold text-yellow-700 mb-3">
-            Pendientes de pago ({pendientesPago.length})
-          </h2>
-          <div className="flex flex-col gap-2">
-            {pendientesPago.map((insc) => (
-              <div
-                key={insc.id}
-                className="flex items-center justify-between bg-yellow-50 rounded-xl px-4 py-3"
-              >
-                <div>
-                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                    {insc.apellido1}-{insc.apellido2}
-                  </p>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Ambos confirmados, esperando pago
-                  </p>
-                </div>
-                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">
-                  Sin pago
                 </span>
               </div>
             ))}
