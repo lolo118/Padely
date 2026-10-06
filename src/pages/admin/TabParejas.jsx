@@ -8,6 +8,8 @@ import {
 } from "../../services/torneoService";
 import { notificarInscripcionConfirmada, notificarInscripcionRechazada } from "../../services/notificationService";
 import { listaCategorias } from "../../utils/torneo";
+import { toast } from "../../components/Toast";
+import { confirmar } from "../../components/ConfirmDialog";
 
 const inscripcionBadge = {
   esperando_companero: "bg-[var(--bg-card-hover)] text-[var(--text-muted)]",
@@ -89,19 +91,24 @@ export default function TabParejas({ torneoId, torneo }) {
       setParejas([...parejas, { id: nuevaId, ...nuevaPareja }]);
       setNombre1(""); setApellido1(""); setNombre2(""); setApellido2("");
       setWhatsapp1(""); setWhatsapp2("");
+      toast.success("Pareja agregada");
     } catch (err) {
       console.error("Error al agregar pareja:", err);
+      toast.error("No pudimos agregar la pareja. Intentá de nuevo.");
     }
     setGuardando(false);
   };
 
   const handleEliminarPareja = async (parejaId) => {
-    if (!window.confirm("¿Eliminar esta pareja?")) return;
+    const ok = await confirmar({ titulo: "Eliminar pareja", mensaje: "¿Eliminar esta pareja del torneo?", confirmText: "Eliminar", danger: true });
+    if (!ok) return;
     try {
       await eliminarPareja(torneoId, parejaId);
       setParejas(parejas.filter((p) => p.id !== parejaId));
+      toast.success("Pareja eliminada");
     } catch (err) {
       console.error("Error al eliminar pareja:", err);
+      toast.error("No pudimos eliminar la pareja. Intentá de nuevo.");
     }
   };
 
@@ -136,8 +143,10 @@ export default function TabParejas({ torneoId, torneo }) {
       const torneoNombre = torneo?.nombre || "torneo";
       if (insc.jugador1Uid) notificarInscripcionConfirmada(insc.jugador1Uid, torneoNombre, torneoId);
       if (insc.jugador2Uid) notificarInscripcionConfirmada(insc.jugador2Uid, torneoNombre, torneoId);
+      toast.success("Inscripción confirmada");
     } catch (err) {
       console.error("Error al confirmar inscripción:", err);
+      toast.error("No pudimos confirmar la inscripción. Intentá de nuevo.");
     }
   };
 
@@ -163,8 +172,10 @@ export default function TabParejas({ torneoId, torneo }) {
       const torneoNombre = torneo?.nombre || "torneo";
       if (insc?.jugador1Uid) notificarInscripcionRechazada(insc.jugador1Uid, torneoNombre, torneoId, motivo);
       if (insc?.jugador2Uid) notificarInscripcionRechazada(insc.jugador2Uid, torneoNombre, torneoId, motivo);
+      toast.success("Inscripción rechazada");
     } catch (err) {
       console.error("Error al rechazar inscripción:", err);
+      toast.error("No pudimos rechazar la inscripción. Intentá de nuevo.");
     }
   };
 
@@ -469,7 +480,7 @@ export default function TabParejas({ torneoId, torneo }) {
                     </div>
                     {!p.jugador1Uid && (
                       <div className="flex gap-1">
-                        <button onClick={() => { navigator.clipboard.writeText(linkJ1); alert("Link copiado"); }}
+                        <button onClick={() => { navigator.clipboard.writeText(linkJ1); toast.success("Link copiado"); }}
                           className="text-[10px] px-2 py-1 rounded-lg transition" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border-card)" }}>
                           🔗 Link
                         </button>
@@ -495,7 +506,7 @@ export default function TabParejas({ torneoId, torneo }) {
                     </div>
                     {!p.jugador2Uid && (
                       <div className="flex gap-1">
-                        <button onClick={() => { navigator.clipboard.writeText(linkJ2); alert("Link copiado"); }}
+                        <button onClick={() => { navigator.clipboard.writeText(linkJ2); toast.success("Link copiado"); }}
                           className="text-[10px] px-2 py-1 rounded-lg transition" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border-card)" }}>
                           🔗 Link
                         </button>

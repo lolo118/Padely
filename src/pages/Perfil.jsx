@@ -20,6 +20,8 @@ import {
 } from "../services/torneoService";
 import { getClubByOwner } from "../services/canchaService";
 import { uploadProfilePhoto } from "../services/storageService";
+import { toast } from "../components/Toast";
+import { confirmar } from "../components/ConfirmDialog";
 
 const categoriasNivel = [
   "8va",
@@ -130,8 +132,10 @@ export default function Perfil() {
       setUserData({ ...userData, ...editForm });
       setEditando(false);
       setPerfilModificado(false);
+      toast.success("Perfil guardado");
     } catch (err) {
       console.error("Error al guardar:", err);
+      toast.error("No pudimos guardar tu perfil. Intentá de nuevo.");
     }
     setGuardando(false);
   };
@@ -164,11 +168,20 @@ export default function Perfil() {
   };
 
   const handleEliminarCuenta = async () => {
-    if (!window.confirm("¿Estás seguro? Esta acción es irreversible.")) return;
-    if (
-      !window.confirm("¿Realmente querés eliminar tu cuenta permanentemente?")
-    )
-      return;
+    const ok = await confirmar({
+      titulo: "Eliminar cuenta",
+      mensaje: "¿Estás seguro? Esta acción es irreversible.",
+      confirmText: "Continuar",
+      danger: true,
+    });
+    if (!ok) return;
+    const seguro = await confirmar({
+      titulo: "Última confirmación",
+      mensaje: "¿Realmente querés eliminar tu cuenta permanentemente?",
+      confirmText: "Eliminar mi cuenta",
+      danger: true,
+    });
+    if (!seguro) return;
     try {
       await deleteDoc(doc(db, "users", user.uid));
       await deleteUser(auth.currentUser);
@@ -176,26 +189,28 @@ export default function Perfil() {
       navigate("/login");
     } catch (err) {
       console.error("Error:", err);
-      if (err.code === "auth/requires-recent-login")
-        alert(
-          "Necesitás cerrar sesión e iniciar sesión de nuevo antes de eliminar tu cuenta.",
-        );
+      if (err.code === "auth/requires-recent-login") {
+        toast.error("Necesitás cerrar sesión e iniciar sesión de nuevo antes de eliminar tu cuenta.");
+      } else {
+        toast.error("No pudimos eliminar tu cuenta. Intentá de nuevo.");
+      }
     }
   };
 
   const handleSubirFoto = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { alert("La imagen no puede superar los 5MB"); return; }
-    if (!file.type.startsWith("image/")) { alert("Solo se permiten archivos de imagen"); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error("La imagen no puede superar los 5MB"); return; }
+    if (!file.type.startsWith("image/")) { toast.error("Solo se permiten archivos de imagen"); return; }
     setSubiendoFoto(true);
     try {
       const url = await uploadProfilePhoto(user.uid, file);
       await updateDoc(doc(db, "users", user.uid), { fotoUrl: url });
       setFotoUrl(url);
+      toast.success("Foto actualizada");
     } catch (err) {
       console.error("Error subiendo foto:", err);
-      alert("Error al subir la foto. Intentá de nuevo.");
+      toast.error("Error al subir la foto. Intentá de nuevo.");
     }
     setSubiendoFoto(false);
   };

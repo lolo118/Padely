@@ -5,6 +5,7 @@ import {
   getUserData,
 } from "../../services/authService";
 import { useNavigate, Link } from "react-router-dom";
+import { toast } from "../../components/Toast";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -47,6 +48,7 @@ export default function Login() {
       await redirigirSegunRol(user);
     } catch {
       setError("Email o contraseña incorrectos");
+      toast.error("Email o contraseña incorrectos");
       setLoading(false);
     }
   };
@@ -59,6 +61,7 @@ export default function Login() {
       await redirigirSegunRol(user);
     } catch {
       setError("Error al iniciar sesión con Google");
+      toast.error("Error al iniciar sesión con Google");
       setLoading(false);
     }
   };

@@ -10,6 +10,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { uploadOrgLogo } from "../../services/storageService";
+import { toast } from "../../components/Toast";
 
 const inputClass =
   "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full";
@@ -81,13 +82,17 @@ export default function OrgEntidad() {
   const handleSubirLogo = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { alert("La imagen no puede superar los 5MB"); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error("La imagen no puede superar los 5MB"); return; }
     setSubiendoLogo(true);
     try {
       const url = await uploadOrgLogo(entidad.id, file);
       await updateDoc(doc(db, "organizers", entidad.id), { logoUrl: url });
       setLogoUrl(url);
-    } catch (err) { console.error("Error subiendo logo:", err); }
+      toast.success("Logo actualizado");
+    } catch (err) {
+      console.error("Error subiendo logo:", err);
+      toast.error("No pudimos subir el logo. Intentá de nuevo.");
+    }
     setSubiendoLogo(false);
   };
 

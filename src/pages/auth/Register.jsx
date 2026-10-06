@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { registerUser, loginWithGoogle, getUserData } from "../../services/authService";
 import { useNavigate, Link } from "react-router-dom";
+import { toast } from "../../components/Toast";
 
 const provincias = [
   "Buenos Aires",
@@ -77,8 +78,13 @@ export default function Register() {
       } else {
         navigate("/inicio");
       }
-    } catch {
-      setError("Error al registrarse. Verificá los datos.");
+    } catch (err) {
+      console.error("Error al registrarse:", err);
+      const msg = err?.code === "auth/email-already-in-use"
+        ? "Ese email ya está registrado. Iniciá sesión o usá otro."
+        : "Error al registrarse. Verificá los datos.";
+      setError(msg);
+      toast.error(msg);
     }
   };
 

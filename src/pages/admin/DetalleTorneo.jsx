@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getTorneoById, actualizarTorneo, getParejas, getGrupos, getBracket, actualizarPuntosTorneo } from "../../services/torneoService";
 import { calcularTabla, nivelDeCategoria } from "../../utils/torneo";
+import { toast } from "../../components/Toast";
+import { confirmar } from "../../components/ConfirmDialog";
 
 import TabGrupos from "./TabGrupos";
 import TabBracket from "./TabBracket";
@@ -247,8 +249,16 @@ export default function DetalleTorneo() {
   }, [id]);
 
   const cambiarEstado = async (nuevoEstado) => {
-    await actualizarTorneo(id, { status: nuevoEstado });
+    try {
+      await actualizarTorneo(id, { status: nuevoEstado });
+    } catch (err) {
+      console.error("Error al cambiar el estado:", err);
+      toast.error("No pudimos cambiar el estado del torneo. Intentá de nuevo.");
+      return;
+    }
     setTorneo({ ...torneo, status: nuevoEstado });
+    const etiqueta = { en_curso: "Torneo iniciado", finalizado: "Torneo finalizado", cancelado: "Torneo cancelado" };
+    toast.success(etiqueta[nuevoEstado] || "Estado actualizado");
 
     // Liga: bonus de campeón y subcampeón al finalizar, una sola vez.
     // Un error acá nunca bloquea el cambio de estado.
@@ -305,8 +315,10 @@ export default function DetalleTorneo() {
       setTorneo({ ...torneo, ...datosActualizar });
       setEditando(false);
       setEditForm(null);
+      toast.success("Cambios guardados");
     } catch (err) {
       console.error("Error al guardar:", err);
+      toast.error("No pudimos guardar los cambios. Intentá de nuevo.");
     }
     setGuardandoEdit(false);
   };
@@ -754,12 +766,20 @@ export default function DetalleTorneo() {
             {/* Acción principal según estado */}
             {torneo.status === "inscripcion" && (
               <button
-                onClick={() => {
-                  if (window.confirm("¿Cerrar inscripciones y comenzar el torneo?")) {
-                    if (window.confirm("¿Estás seguro? Una vez iniciado, no se pueden modificar las inscripciones.")) {
-                      cambiarEstado("en_curso");
-                    }
-                  }
+                onClick={async () => {
+                  const ok = await confirmar({
+                    titulo: "Iniciar torneo",
+                    mensaje: "¿Cerrar inscripciones y comenzar el torneo?",
+                    confirmText: "Iniciar",
+                  });
+                  if (!ok) return;
+                  const seguro = await confirmar({
+                    titulo: "¿Estás seguro?",
+                    mensaje: "Una vez iniciado, no se pueden modificar las inscripciones.",
+                    confirmText: "Sí, iniciar",
+                    danger: true,
+                  });
+                  if (seguro) cambiarEstado("en_curso");
                 }}
                 className="w-full py-2.5 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition mb-3"
               >
@@ -768,12 +788,20 @@ export default function DetalleTorneo() {
             )}
             {torneo.status === "en_curso" && (
               <button
-                onClick={() => {
-                  if (window.confirm("¿Finalizar el torneo?")) {
-                    if (window.confirm("¿Estás seguro? Esta acción no se puede deshacer. Se asignarán los puntos finales.")) {
-                      cambiarEstado("finalizado");
-                    }
-                  }
+                onClick={async () => {
+                  const ok = await confirmar({
+                    titulo: "Finalizar torneo",
+                    mensaje: "¿Finalizar el torneo?",
+                    confirmText: "Finalizar",
+                  });
+                  if (!ok) return;
+                  const seguro = await confirmar({
+                    titulo: "¿Estás seguro?",
+                    mensaje: "Esta acción no se puede deshacer. Se asignarán los puntos finales.",
+                    confirmText: "Sí, finalizar",
+                    danger: true,
+                  });
+                  if (seguro) cambiarEstado("finalizado");
                 }}
                 className="w-full py-2.5 rounded-xl text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 transition mb-3"
               >
@@ -819,10 +847,15 @@ export default function DetalleTorneo() {
             {/* Cancelar */}
             {torneo.status !== "cancelado" && torneo.status !== "finalizado" && (
               <button
-                onClick={() => {
-                  if (window.confirm("¿Cancelar el torneo? Esta acción no se puede deshacer.")) {
-                    cambiarEstado("cancelado");
-                  }
+                onClick={async () => {
+                  const ok = await confirmar({
+                    titulo: "Cancelar torneo",
+                    mensaje: "¿Cancelar el torneo? Esta acción no se puede deshacer.",
+                    confirmText: "Cancelar torneo",
+                    cancelText: "Volver",
+                    danger: true,
+                  });
+                  if (ok) cambiarEstado("cancelado");
                 }}
                 className="w-full py-2 rounded-xl text-xs font-semibold border border-red-200 text-red-400 hover:bg-red-50 transition"
               >

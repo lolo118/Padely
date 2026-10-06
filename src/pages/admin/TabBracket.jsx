@@ -7,6 +7,8 @@ import {
 } from "../../services/torneoService";
 import { notificarResultadoCargado } from "../../services/notificationService";
 import { calcularTabla, getGanador, getNombrePareja, nivelDeCategoria } from "../../utils/torneo";
+import { toast } from "../../components/Toast";
+import { confirmar } from "../../components/ConfirmDialog";
 
 function getNombreRonda(totalRondas, rondaIdx) {
   const faltantes = totalRondas - rondaIdx;
@@ -350,8 +352,10 @@ export default function TabBracket({ torneoId, torneo }) {
     try {
       await guardarBracket(torneoId, { rondas });
       setBracketGenerado(true);
+      toast.success("Bracket confirmado");
     } catch (err) {
       console.error("Error al guardar bracket:", err);
+      toast.error("No pudimos guardar el bracket. Intentá de nuevo.");
     }
   };
 
@@ -532,8 +536,10 @@ export default function TabBracket({ torneoId, torneo }) {
 
     try {
       await guardarBracket(torneoId, { rondas: rondasActualizadas });
+      toast.success("Resultado guardado");
     } catch (e) {
       console.error("Error al guardar resultado:", e);
+      toast.error("No pudimos guardar el resultado. Intentá de nuevo.");
     }
 
     // Actualizar puntos de los jugadores (solo la primera vez que se carga el resultado)
@@ -634,12 +640,14 @@ export default function TabBracket({ torneoId, torneo }) {
       {bracketGenerado && (
         <div className="flex justify-end">
           <button
-            onClick={() => {
-              if (
-                window.confirm(
-                  "¿Regenerar el bracket? Se perderán todos los resultados.",
-                )
-              ) {
+            onClick={async () => {
+              const ok = await confirmar({
+                titulo: "Regenerar bracket",
+                mensaje: "Se perderán todos los resultados del bracket.",
+                confirmText: "Regenerar",
+                danger: true,
+              });
+              if (ok) {
                 setBracketGenerado(false);
                 setRondas([]);
               }

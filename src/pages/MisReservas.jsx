@@ -6,6 +6,8 @@ import { db } from "../lib/firebase";
 import { actualizarReserva } from "../services/canchaService";
 import { notificarReservaCanceladaPorJugador } from "../services/notificationService";
 import { formatFecha, getTodayLocal } from "../utils/formatDate";
+import { toast } from "../components/Toast";
+import { confirmar } from "../components/ConfirmDialog";
 
 const statusBadge = {
   confirmada: "bg-green-100 text-green-700",
@@ -24,7 +26,6 @@ export default function MisReservas() {
   const navigate = useNavigate();
   const [reservas, setReservas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [errorCancelacion, setErrorCancelacion] = useState("");
 
   const [hoyStr] = useState(() => getTodayLocal());
 
@@ -81,12 +82,18 @@ export default function MisReservas() {
   };
 
   const cancelarReserva = async (reserva) => {
-    setErrorCancelacion("");
     if (!puedeCancelar(reserva)) {
-      setErrorCancelacion("Las reservas se pueden cancelar hasta 2 horas antes");
+      toast.error("Las reservas se pueden cancelar hasta 2 horas antes");
       return;
     }
-    if (!window.confirm("¿Cancelar esta reserva?")) return;
+    const ok = await confirmar({
+      titulo: "Cancelar reserva",
+      mensaje: `¿Cancelar la reserva de ${reserva.canchaName || reserva.cancha || "la cancha"} el ${formatFecha(reserva.fecha)} a las ${reserva.hora}?`,
+      confirmText: "Cancelar reserva",
+      cancelText: "Volver",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await actualizarReserva(reserva.clubId, reserva.id, { status: "cancelada" });
       setReservas(reservas.map((r) => r.id === reserva.id ? { ...r, status: "cancelada" } : r));
@@ -94,9 +101,10 @@ export default function MisReservas() {
         const nombreJugador = reserva.nombreJugador || user?.displayName || user?.email || "Un jugador";
         notificarReservaCanceladaPorJugador(reserva.clubOwnerUid, nombreJugador, reserva.canchaName || reserva.cancha || "la cancha", reserva.fecha, reserva.hora);
       }
+      toast.success("Reserva cancelada");
     } catch (err) {
       console.error("Error al cancelar:", err);
-      setErrorCancelacion("No pudimos cancelar la reserva. Intentá de nuevo.");
+      toast.error("No pudimos cancelar la reserva. Intentá de nuevo.");
     }
   };
 
@@ -118,17 +126,6 @@ export default function MisReservas() {
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>Tus reservas de canchas</p>
       </div>
 
-      {errorCancelacion && (
-        <div
-          className="rounded-xl px-4 py-3 mb-4 text-sm font-medium text-red-600 border flex items-center justify-between gap-3"
-          style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.2)" }}
-        >
-          <span>{errorCancelacion}</span>
-          <button type="button" onClick={() => setErrorCancelacion("")} className="text-xs font-semibold hover:underline">
-            Cerrar
-          </button>
-        </div>
-      )}
 
       {reservas.length === 0 ? (
         <div className="themed-card rounded-2xl p-8 border text-center">

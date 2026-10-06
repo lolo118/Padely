@@ -12,6 +12,8 @@ import {
 } from "../../services/canchaService";
 import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
 import { formatFecha } from "../../utils/formatDate";
+import { toast } from "../../components/Toast";
+import { confirmar } from "../../components/ConfirmDialog";
 
 export default function Dashboard() {
   const { user } = useAuthStore();
@@ -146,11 +148,16 @@ export default function Dashboard() {
       }
       setReservasPendientes(reservasPendientes.filter((r) => r.id !== reservaId));
       setReservasHoy(reservasHoy.map((r) => r.id === reservaId ? { ...r, status: "confirmada" } : r));
-    } catch (err) { console.error(err); }
+      toast.success("Reserva confirmada");
+    } catch (err) {
+      console.error(err);
+      toast.error("No pudimos confirmar la reserva. Intentá de nuevo.");
+    }
   };
 
   const handleRechazarReserva = async (reservaId) => {
-    if (!window.confirm("¿Rechazar esta reserva?")) return;
+    const ok = await confirmar({ titulo: "Rechazar reserva", mensaje: "¿Rechazar esta reserva? Se le avisará al jugador.", confirmText: "Rechazar", danger: true });
+    if (!ok) return;
     try {
       await actualizarReserva(club.id, reservaId, { status: "cancelada" });
       const reserva = reservasPendientes.find((r) => r.id === reservaId);
@@ -159,7 +166,11 @@ export default function Dashboard() {
       }
       setReservasPendientes(reservasPendientes.filter((r) => r.id !== reservaId));
       setReservasHoy(reservasHoy.map((r) => r.id === reservaId ? { ...r, status: "cancelada" } : r));
-    } catch (err) { console.error(err); }
+      toast.success("Reserva rechazada");
+    } catch (err) {
+      console.error(err);
+      toast.error("No pudimos rechazar la reserva. Intentá de nuevo.");
+    }
   };
 
   const cardStyle =

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getReclamos, resolverReclamo } from "../../services/torneoService";
 import { getNombrePareja } from "../../utils/torneo";
+import { toast } from "../../components/Toast";
 
 const motivoLabel = {
   categoria_incorrecta: "Categoría incorrecta",
@@ -23,7 +24,7 @@ export default function TabReclamos({ torneoId, torneo }) {
 
   const handleResolver = async (reclamoId, decision) => {
     if (!motivoDecision.trim() && decision === "descalificar") {
-      alert("Ingresá un motivo para la descalificación");
+      toast.error("Ingresá un motivo para la descalificación");
       return;
     }
     setResolviendo(reclamoId);
@@ -32,8 +33,10 @@ export default function TabReclamos({ torneoId, torneo }) {
       const actualizados = await getReclamos(torneoId);
       setReclamos(actualizados);
       setMotivoDecision("");
+      toast.success("Reclamo resuelto");
     } catch (err) {
       console.error("Error al resolver:", err);
+      toast.error("No pudimos resolver el reclamo. Intentá de nuevo.");
     }
     setResolviendo(null);
   };

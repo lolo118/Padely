@@ -18,6 +18,7 @@ import { getUserData } from "../services/authService";
 import { formatFecha } from "../utils/formatDate";
 import { calcularTabla, getGanador, getNombrePareja, listaCategorias } from "../utils/torneo";
 import { notificarInscripcionTorneo, notificarReclamoContra, notificarNuevoReclamo } from "../services/notificationService";
+import { toast } from "../components/Toast";
 
 const estadoBadge = {
   inscripcion: "bg-blue-100 text-blue-700",
@@ -200,9 +201,10 @@ export default function DetalleTorneoPublico() {
       if (parejaDenunciada.jugador1Uid) notificarReclamoContra(parejaDenunciada.jugador1Uid, torneo.nombre, id);
       if (parejaDenunciada.jugador2Uid) notificarReclamoContra(parejaDenunciada.jugador2Uid, torneo.nombre, id);
       if (torneo.organizerId) notificarNuevoReclamo(torneo.organizerId, torneo.nombre, id);
-      alert("Reclamo enviado correctamente");
+      toast.success("Reclamo enviado correctamente");
     } catch (err) {
       console.error("Error:", err);
+      toast.error("No pudimos enviar el reclamo. Intentá de nuevo.");
     }
     setEnviandoReclamo(false);
   };
@@ -218,8 +220,10 @@ export default function DetalleTorneoPublico() {
       });
       const reclamosData = await getReclamos(id);
       setReclamos(reclamosData);
+      toast.success("Te adheriste al reclamo");
     } catch (err) {
       console.error("Error:", err);
+      toast.error("No pudimos registrar tu adhesión. Intentá de nuevo.");
     }
   };
 
@@ -230,8 +234,10 @@ export default function DetalleTorneoPublico() {
       const reclamosData = await getReclamos(id);
       setReclamos(reclamosData);
       setDescargoTexto("");
+      toast.success("Descargo enviado");
     } catch (err) {
       console.error("Error:", err);
+      toast.error("No pudimos enviar el descargo. Intentá de nuevo.");
     }
   };
 
@@ -275,6 +281,7 @@ export default function DetalleTorneoPublico() {
       }
     } catch (err) {
       console.error("Error al crear inscripción:", err);
+      toast.error("No pudimos enviar la inscripción. Intentá de nuevo.");
     }
     setEnviando(false);
   };
@@ -885,7 +892,7 @@ export default function DetalleTorneoPublico() {
                 navigator.clipboard.writeText(
                   `${window.location.origin}/torneos/${id}`,
                 );
-                alert("Link copiado");
+                toast.success("Link copiado");
               }}
               className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
               style={{

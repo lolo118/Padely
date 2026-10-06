@@ -7,6 +7,8 @@ import {
 } from "../../services/torneoService";
 import { notificarResultadoCargado } from "../../services/notificationService";
 import { calcularTabla, getGanador, nivelDeCategoria } from "../../utils/torneo";
+import { toast } from "../../components/Toast";
+import { confirmar } from "../../components/ConfirmDialog";
 
 function generarPartidos(parejas) {
   const partidos = [];
@@ -222,8 +224,10 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
       const ids = await guardarGrupos(torneoId, grupos);
       setGrupos(grupos.map((g, i) => ({ ...g, id: ids[i] })));
       setGruposGenerados(true);
+      toast.success(modoLiga ? "Fixture confirmado" : "Grupos confirmados");
     } catch (err) {
       console.error("Error al guardar grupos:", err);
+      toast.error("No pudimos guardar los grupos. Intentá de nuevo.");
     }
   };
 
@@ -384,8 +388,10 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
     if (grupo.id) {
       try {
         await actualizarGrupo(torneoId, grupo.id, { partidos });
+        toast.success("Resultado guardado");
       } catch (e) {
         console.error("Error al guardar resultado:", e);
+        toast.error("No pudimos guardar el resultado. Intentá de nuevo.");
       }
     }
 
@@ -498,8 +504,14 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
               </span>
             ) : (
               <button
-                onClick={() => {
-                  if (window.confirm("¿Regenerar grupos? Se perderán los grupos actuales.")) {
+                onClick={async () => {
+                  const ok = await confirmar({
+                    titulo: "Regenerar grupos",
+                    mensaje: "Se perderán los grupos actuales.",
+                    confirmText: "Regenerar",
+                    danger: true,
+                  });
+                  if (ok) {
                     setGruposGenerados(false);
                     setGrupos([]);
                   }

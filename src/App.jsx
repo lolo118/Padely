@@ -8,6 +8,8 @@ import useThemeStore from "./store/themeStore";
 import PlayerLayout from "./components/layouts/PlayerLayout";
 import ClubLayout from "./components/layouts/ClubLayout";
 import OrgLayout from "./components/layouts/OrgLayout";
+import { Toaster } from "./components/Toast";
+import { ConfirmHost } from "./components/ConfirmDialog";
 
 // Auth
 const Login = lazy(() => import("./pages/auth/Login"));
@@ -152,6 +154,8 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <Toaster />
+      <ConfirmHost />
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/login" element={<Login />} />

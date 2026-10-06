@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "../../store/authStore";
+import { confirmar } from "../../components/ConfirmDialog";
 import {
   collection,
   query,
@@ -91,8 +92,9 @@ export default function OrgEquipo() {
     setNuevo({ nombre: "", email: "", telefono: "", rol: "asistente" });
   };
 
-  const eliminar = (id) => {
-    if (!window.confirm("¿Eliminar este miembro?")) return;
+  const eliminar = async (id) => {
+    const ok = await confirmar({ titulo: "Eliminar miembro", mensaje: "¿Eliminar este miembro del equipo?", confirmText: "Eliminar", danger: true });
+    if (!ok) return;
     guardar(equipo.filter((m) => m.id !== id));
   };
 

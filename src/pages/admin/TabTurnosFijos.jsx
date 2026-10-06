@@ -6,6 +6,8 @@ import {
   actualizarTurnoFijo,
   eliminarTurnoFijo,
 } from "../../services/canchaService";
+import { toast } from "../../components/Toast";
+import { confirmar } from "../../components/ConfirmDialog";
 
 const diasSemana = [
   "Lunes",
@@ -171,12 +173,15 @@ export default function TabTurnosFijos({ clubId }) {
   };
 
   const handleEliminar = async (turnoId) => {
-    if (!window.confirm("¿Eliminar este turno fijo permanentemente?")) return;
+    const ok = await confirmar({ titulo: "Eliminar turno fijo", mensaje: "¿Eliminar este turno fijo permanentemente?", confirmText: "Eliminar", danger: true });
+    if (!ok) return;
     try {
       await eliminarTurnoFijo(clubId, turnoId);
       setTurnosFijos(turnosFijos.filter((t) => t.id !== turnoId));
+      toast.success("Turno fijo eliminado");
     } catch (err) {
       console.error("Error al eliminar:", err);
+      toast.error("No pudimos eliminar el turno fijo. Intentá de nuevo.");
     }
   };
 

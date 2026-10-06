@@ -5,6 +5,8 @@ import {
   actualizarClubConfig,
 } from "../../services/canchaService";
 import { uploadClubLogo } from "../../services/storageService";
+import { toast } from "../../components/Toast";
+import { confirmar } from "../../components/ConfirmDialog";
 
 const inputClass =
   "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full";
@@ -126,9 +128,11 @@ export default function Configuracion() {
       setClub({ ...club, ...form, usuarios });
       setMensaje("Configuración guardada");
       setTimeout(() => setMensaje(""), 3000);
+      toast.success("Configuración guardada");
     } catch (err) {
       console.error("Error al guardar:", err);
       setMensaje("Error al guardar");
+      toast.error("No pudimos guardar la configuración. Intentá de nuevo.");
     }
     setGuardando(false);
   };
@@ -148,8 +152,9 @@ export default function Configuracion() {
     setNuevoUsuario({ email: "", nombre: "", rol: "encargado", telefono: "" });
   };
 
-  const eliminarUsuario = (id) => {
-    if (!window.confirm("¿Eliminar este usuario?")) return;
+  const eliminarUsuario = async (id) => {
+    const ok = await confirmar({ titulo: "Eliminar usuario", mensaje: "¿Eliminar este usuario del club?", confirmText: "Eliminar", danger: true });
+    if (!ok) return;
     setUsuarios(usuarios.filter((u) => u.id !== id));
   };
 
@@ -162,13 +167,17 @@ export default function Configuracion() {
   const handleSubirLogo = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { alert("La imagen no puede superar los 5MB"); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error("La imagen no puede superar los 5MB"); return; }
     setSubiendoLogo(true);
     try {
       const url = await uploadClubLogo(club.id, file);
       await actualizarClubConfig(club.id, { logoUrl: url });
       setLogoUrl(url);
-    } catch (err) { console.error("Error subiendo logo:", err); }
+      toast.success("Logo actualizado");
+    } catch (err) {
+      console.error("Error subiendo logo:", err);
+      toast.error("No pudimos subir el logo. Intentá de nuevo.");
+    }
     setSubiendoLogo(false);
   };
 
