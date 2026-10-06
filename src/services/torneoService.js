@@ -316,13 +316,18 @@ export const actualizarPuntosTorneo = async (jugadorUid, posicion, categoriaTorn
 
 // ========== VINCULACIÓN DE JUGADORES ==========
 
+// Devuelve "ok" (vinculado), "ya_vinculado" (ese lugar ya es de este uid),
+// "ocupado" (otra cuenta ya ocupó el lugar) o "no_existe".
 export const vincularJugadorAPareja = async (torneoId, parejaId, posicion, uid) => {
   const ref = doc(db, "tournaments", torneoId, "pairs", parejaId);
   const snap = await getDoc(ref);
-  if (!snap.exists()) return false;
-  const campo = posicion === 1 ? "jugador1Uid" : "jugador2Uid";
+  if (!snap.exists()) return "no_existe";
+  const campo = Number(posicion) === 2 ? "jugador2Uid" : "jugador1Uid";
+  const actual = snap.data()[campo] || null;
+  if (actual && actual !== uid) return "ocupado";
+  if (actual === uid) return "ya_vinculado";
   await updateDoc(ref, { [campo]: uid });
-  return true;
+  return "ok";
 };
 
 export const getParejaById = async (torneoId, parejaId) => {

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from "react-router-dom";
 import { onAuthChange, getUserData, handleRedirectResult } from "./services/authService";
 import { useAuthStore } from "./store/authStore";
 import useThemeStore from "./store/themeStore";
@@ -45,6 +45,7 @@ const OrgEstadisticas = lazy(() => import("./pages/org/OrgEstadisticas"));
 // Misc
 const AceptarInvitacion = lazy(() => import("./pages/AceptarInvitacion"));
 const VincularJugador = lazy(() => import("./pages/VincularJugador"));
+const NoEncontrado = lazy(() => import("./pages/NoEncontrado"));
 
 function LoadingFallback() {
   return (
@@ -92,6 +93,25 @@ function RedirigirPorRol() {
   if (rol === "club") return <Navigate to="/admin" />;
   if (rol === "organizador") return <Navigate to="/org" />;
   return <Inicio />;
+}
+
+// Link neutro a un torneo (/t/:id): manda a la vista que corresponde según el rol
+function RedirigirTorneo() {
+  const { id } = useParams();
+  const location = useLocation();
+  const { user, loading, rol } = useAuthStore();
+
+  if (loading || (user && !rol)) {
+    return <div className="min-h-screen flex items-center justify-center" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
+  }
+  if (!user) {
+    // Después del login volvemos a este mismo link
+    localStorage.setItem("padely-vincular-redirect", location.pathname);
+    return <Navigate to="/login" />;
+  }
+  if (rol === "club") return <Navigate to={`/admin/torneos/${id}`} replace />;
+  if (rol === "organizador") return <Navigate to={`/org/torneos/${id}`} replace />;
+  return <Navigate to={`/torneos/${id}`} replace />;
 }
 
 export default function App() {
@@ -144,6 +164,7 @@ export default function App() {
             element={<AceptarInvitacion />}
           />
           <Route path="vincular/:torneoId/:parejaId/:posicion" element={<VincularJugador />} />
+          <Route path="/t/:id" element={<RedirigirTorneo />} />
 
           {/* Rutas del jugador - accesibles por todos los logueados */}
           <Route
@@ -200,7 +221,7 @@ export default function App() {
             <Route path="equipo" element={<OrgEquipo />} />
           </Route>
 
-          <Route path="*" element={<Navigate to="/inicio" />} />
+          <Route path="*" element={<NoEncontrado />} />
         </Routes>
       </Suspense>
     </BrowserRouter>

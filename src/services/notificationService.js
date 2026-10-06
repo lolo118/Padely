@@ -135,7 +135,7 @@ export const notificarInscripcionTorneo = async (organizadorUid, jugadorNombre, 
     tipo: "nueva_inscripcion",
     titulo: "Nueva inscripción",
     mensaje: `${jugadorNombre} se inscribió al torneo "${torneoNombre}".`,
-    link: `/admin/torneos/${torneoId}`,
+    link: `/t/${torneoId}`,
     icono: "📝",
   });
 };
@@ -175,7 +175,7 @@ export const notificarNuevoReclamo = async (organizadorUid, torneoNombre, torneo
     tipo: "nuevo_reclamo",
     titulo: "Nuevo reclamo",
     mensaje: `Se abrió un nuevo reclamo en el torneo "${torneoNombre}".`,
-    link: `/admin/torneos/${torneoId}`,
+    link: `/t/${torneoId}`,
     icono: "⚠️",
   });
 };
