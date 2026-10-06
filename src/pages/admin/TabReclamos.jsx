@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react";
 import { getReclamos, resolverReclamo } from "../../services/torneoService";
-
-function getNombrePareja(p) {
-  if (!p) return "—";
-  return p.nombrePareja || `${p.jugador1} / ${p.jugador2}`;
-}
+import { getNombrePareja } from "../../utils/torneo";
 
 const motivoLabel = {
   categoria_incorrecta: "Categoría incorrecta",

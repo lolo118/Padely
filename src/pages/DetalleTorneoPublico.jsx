@@ -16,6 +16,7 @@ import {
 } from "../services/torneoService";
 import { getUserData } from "../services/authService";
 import { formatFecha } from "../utils/formatDate";
+import { calcularTabla, getGanador, getNombrePareja } from "../utils/torneo";
 import { notificarInscripcionTorneo, notificarReclamoContra, notificarNuevoReclamo } from "../services/notificationService";
 
 const estadoBadge = {
@@ -38,67 +39,6 @@ const formatoLabel = {
   liga: "Liga",
   eliminacion: "Eliminación directa",
 };
-
-function getNombrePareja(p) {
-  if (!p) return "Por definir";
-  return p.nombrePareja || `${p.jugador1} / ${p.jugador2}`;
-}
-
-function getGanador(resultado) {
-  if (!resultado) return null;
-  let setsP1 = 0, setsP2 = 0;
-  resultado.sets.forEach((s) => {
-    let g1 = s.g1, g2 = s.g2;
-    if (s.tb1 !== undefined || s.tb2 !== undefined) {
-      if ((s.tb1 ?? 0) > (s.tb2 ?? 0)) g1 += 1;
-      else if ((s.tb2 ?? 0) > (s.tb1 ?? 0)) g2 += 1;
-    }
-    if (g1 > g2) setsP1++;
-    else if (g2 > g1) setsP2++;
-  });
-  return setsP1 > setsP2 ? 1 : setsP2 > setsP1 ? 2 : null;
-}
-
-function calcularTabla(grupo) {
-  const stats = {};
-  grupo.parejas.forEach((p) => {
-    stats[p.id] = {
-      id: p.id,
-      nombre: p.nombrePareja || `${p.jugador1} / ${p.jugador2}`,
-      pj: 0, pg: 0, pp: 0, sf: 0, sc: 0, gf: 0, gc: 0,
-    };
-  });
-
-  (grupo.partidos || []).forEach((m) => {
-    if (!m.resultado) return;
-    const s1 = stats[m.pareja1.id];
-    const s2 = stats[m.pareja2.id];
-    if (!s1 || !s2) return;
-    let setsP1 = 0, setsP2 = 0, gamesP1 = 0, gamesP2 = 0;
-    m.resultado.sets.forEach((set) => {
-      let g1 = set.g1, g2 = set.g2;
-      if (set.tb1 !== undefined || set.tb2 !== undefined) {
-        if ((set.tb1 ?? 0) > (set.tb2 ?? 0)) g1 += 1;
-        else if ((set.tb2 ?? 0) > (set.tb1 ?? 0)) g2 += 1;
-      }
-      gamesP1 += g1; gamesP2 += g2;
-      if (g1 > g2) setsP1++; else if (g2 > g1) setsP2++;
-    });
-    s1.pj++; s2.pj++;
-    s1.sf += setsP1; s1.sc += setsP2;
-    s2.sf += setsP2; s2.sc += setsP1;
-    s1.gf += gamesP1; s1.gc += gamesP2;
-    s2.gf += gamesP2; s2.gc += gamesP1;
-    if (setsP1 > setsP2) { s1.pg++; s2.pp++; }
-    else { s2.pg++; s1.pp++; }
-  });
-
-  return Object.values(stats).sort((a, b) => {
-    if (b.pg !== a.pg) return b.pg - a.pg;
-    if (b.sf - b.sc !== a.sf - a.sc) return b.sf - b.sc - (a.sf - a.sc);
-    return b.gf - b.gc - (a.gf - a.gc);
-  });
-}
 
 const getTabs = (formato) => {
   if (formato === "liga") return ["Info", "Parejas", "Liga"];
