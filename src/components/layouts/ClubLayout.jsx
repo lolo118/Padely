@@ -113,8 +113,8 @@ const navItems = [
 export default function ClubLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [menuUsuario, setMenuUsuario] = useState(false);
-  const { user } = useAuthStore();
-  const nombre = user?.displayName || user?.email?.split("@")[0] || "Admin";
+  const { user, perfil } = useAuthStore();
+  const nombre = perfil?.nombre || user?.email?.split("@")[0] || "Admin";
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col">

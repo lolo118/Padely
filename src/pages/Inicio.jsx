@@ -1,28 +1,34 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
-import { getUserData } from "../services/authService";
 import { getInscripcionesByJugador } from "../services/torneoService";
+import { getProximaReservaJugador } from "../services/canchaService";
+import { formatFecha } from "../utils/formatDate";
+import { formatPrecio } from "../utils/format";
 
 export default function Inicio() {
-  const { user } = useAuthStore();
+  const { user, perfil } = useAuthStore();
   const navigate = useNavigate();
-  const [userData, setUserData] = useState(null);
   const [inscripciones, setInscripciones] = useState([]);
+  const [proximaReserva, setProximaReserva] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const nombre = user?.displayName || user?.email?.split("@")[0] || "Jugador";
+  // Nombre real del perfil (users/{uid}); si no hay, el prefijo del email
+  const nombre = perfil?.nombre || user?.email?.split("@")[0] || "Jugador";
 
   useEffect(() => {
     if (!user) return;
     const cargar = async () => {
       try {
-        const [data, insc] = await Promise.all([
-          getUserData(user.uid),
+        const [insc, proxima] = await Promise.all([
           getInscripcionesByJugador(user.uid),
+          getProximaReservaJugador(user.uid).catch((err) => {
+            console.error("Error cargando la próxima reserva:", err);
+            return null;
+          }),
         ]);
-        if (data) setUserData(data);
         setInscripciones(insc);
+        setProximaReserva(proxima);
       } catch (err) {
         console.error("Error:", err);
       }
@@ -39,7 +45,7 @@ export default function Inicio() {
     (i) => i.status !== "confirmada" && i.status !== "rechazada"
   );
   const inscConfirmadas = inscripciones.filter((i) => i.status === "confirmada");
-  const perfilIncompleto = userData && (!userData.telefono || !userData.nivel || !userData.genero);
+  const perfilIncompleto = perfil && (!perfil.telefono || !perfil.nivel || !perfil.genero);
 
   const hora = new Date().getHours();
   const saludo = hora < 12 ? "Buenos días" : hora < 19 ? "Buenas tardes" : "Buenas noches";
@@ -67,6 +73,46 @@ export default function Inicio() {
                 Necesitamos tus datos para inscribirte a torneos
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {proximaReserva && (
+        <div
+          onClick={() => navigate("/mis-reservas")}
+          className="themed-card rounded-2xl p-4 mb-4 border cursor-pointer card-hover"
+          style={{ borderColor: "var(--accent)" }}
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--accent)" }}>
+            Tu próxima reserva
+          </p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "var(--accent-light)" }}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5" style={{ color: "var(--accent)" }}>
+                  <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-sm truncate" style={{ color: "var(--text-primary)" }}>
+                  {proximaReserva.clubNombre || "Club"} · {proximaReserva.canchaName || "Cancha"}
+                </p>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  {formatFecha(proximaReserva.fecha)} · {proximaReserva.hora}
+                  {proximaReserva.precio != null && ` · ${formatPrecio(proximaReserva.precio)}`}
+                </p>
+              </div>
+            </div>
+            <span
+              className="text-xs font-semibold px-2 py-1 rounded-full shrink-0"
+              style={
+                proximaReserva.status === "confirmada"
+                  ? { backgroundColor: "var(--accent-light)", color: "var(--accent)" }
+                  : { backgroundColor: "rgba(245,158,11,0.12)", color: "#d97706" }
+              }
+            >
+              {proximaReserva.status === "confirmada" ? "Confirmada" : "Pendiente"}
+            </span>
           </div>
         </div>
       )}
@@ -161,7 +207,7 @@ export default function Inicio() {
 
       {inscPendientes.length === 0 && inscConfirmadas.length === 0 && (
         <div className="themed-card rounded-2xl p-8 border text-center">
-          <div className="text-4xl mb-3">🏸</div>
+          <div className="text-4xl mb-3">🎾</div>
           <p className="font-semibold" style={{ color: "var(--text-primary)" }}>¡Bienvenido a Padely!</p>
           <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
             Reservá una cancha o inscribite a un torneo para empezar

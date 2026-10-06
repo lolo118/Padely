@@ -1,5 +1,6 @@
 import {
   collection,
+  collectionGroup,
   addDoc,
   getDocs,
   getDoc,
@@ -13,6 +14,7 @@ import {
   runTransaction,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { getTodayLocal, horaActualStr } from "../utils/formatDate";
 
 // --- CANCHAS ---
 
@@ -104,6 +106,33 @@ export const actualizarReserva = async (clubId, reservaId, datos) => {
 
 export const eliminarReserva = async (clubId, reservaId) => {
   await deleteDoc(doc(db, "clubs", clubId, "reservas", reservaId));
+};
+
+// Próxima reserva del jugador (misma consulta de grupo que "Mis reservas"), o null
+export const getProximaReservaJugador = async (uid) => {
+  const q = query(collectionGroup(db, "reservas"), where("jugadorUid", "==", uid));
+  const snap = await getDocs(q);
+  const hoy = getTodayLocal();
+  const horaAhora = horaActualStr();
+  const proximas = snap.docs
+    .map((d) => ({ id: d.id, clubId: d.ref.parent.parent.id, ...d.data() }))
+    .filter(
+      (r) =>
+        r.status !== "cancelada" &&
+        r.fecha &&
+        (r.fecha > hoy || (r.fecha === hoy && (r.hora || "") >= horaAhora)),
+    )
+    .sort((a, b) => (a.fecha + (a.hora || "")).localeCompare(b.fecha + (b.hora || "")));
+  const proxima = proximas[0];
+  if (!proxima) return null;
+  try {
+    const clubSnap = await getDoc(doc(db, "clubs", proxima.clubId));
+    proxima.clubNombre = clubSnap.exists() ? clubSnap.data().nombre || "" : "";
+  } catch (err) {
+    console.error("Error cargando el club de la próxima reserva:", err);
+    proxima.clubNombre = "";
+  }
+  return proxima;
 };
 
 // --- CANCHAS PÚBLICAS (para el hub del jugador) ---

@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuthStore } from "../../store/authStore";
 import ThemeToggle from "../ThemeToggle";
 import NotificationBell from "../NotificationBell";
@@ -68,8 +68,8 @@ const navItems = [
     ),
   },
   {
-    to: "/marketplace",
-    label: "Tienda",
+    to: "/mis-reservas",
+    label: "Mis reservas",
     icon: (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -81,9 +81,11 @@ const navItems = [
         strokeLinejoin="round"
         className="w-5 h-5"
       >
-        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
-        <line x1="3" y1="6" x2="21" y2="6" />
-        <path d="M16 10a4 4 0 01-8 0" />
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+        <polyline points="9 16 11 18 15 14" />
       </svg>
     ),
   },
@@ -119,23 +121,11 @@ const menuItems = [
 ];
 
 export default function PlayerLayout() {
-  const { user } = useAuthStore();
+  const { user, perfil } = useAuthStore();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [fotoUrl, setFotoUrl] = useState(null);
-  const nombre = user?.displayName || user?.email?.split("@")[0] || "Jugador";
-
-  useEffect(() => {
-    if (!user) return;
-    const cargarFoto = async () => {
-      try {
-        const { doc, getDoc } = await import("firebase/firestore");
-        const { db } = await import("../../lib/firebase");
-        const snap = await getDoc(doc(db, "users", user.uid));
-        if (snap.exists() && snap.data().fotoUrl) setFotoUrl(snap.data().fotoUrl);
-      } catch (e) { console.error("Error cargando foto:", e); }
-    };
-    cargarFoto();
-  }, [user]);
+  // Nombre y foto salen del perfil cargado en el store (users/{uid})
+  const nombre = perfil?.nombre || user?.email?.split("@")[0] || "Jugador";
+  const fotoUrl = perfil?.fotoUrl || null;
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col">
