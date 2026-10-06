@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getTorneoById, actualizarTorneo, getParejas, getGrupos, getBracket } from "../../services/torneoService";
+import { getTorneoById, actualizarTorneo, getParejas, getGrupos, getBracket, actualizarPuntosTorneo } from "../../services/torneoService";
+import { calcularTabla, nivelDeCategoria } from "../../utils/torneo";
 
 import TabGrupos from "./TabGrupos";
 import TabBracket from "./TabBracket";
@@ -248,6 +249,36 @@ export default function DetalleTorneo() {
   const cambiarEstado = async (nuevoEstado) => {
     await actualizarTorneo(id, { status: nuevoEstado });
     setTorneo({ ...torneo, status: nuevoEstado });
+
+    // Liga: bonus de campeón y subcampeón al finalizar, una sola vez.
+    // Un error acá nunca bloquea el cambio de estado.
+    if (
+      nuevoEstado === "finalizado" &&
+      torneo.formato === "liga" &&
+      gruposStepper.length > 0 &&
+      !torneo.puntosFinalesOtorgados
+    ) {
+      try {
+        // Releemos los grupos: los resultados cargados en la pestaña no actualizan gruposStepper
+        const gruposActuales = await getGrupos(id);
+        const grupoLiga = gruposActuales[0] || gruposStepper[0];
+        const tabla = calcularTabla(grupoLiga);
+        const nivelTorneo = torneo.categoriasConfig ? Object.values(torneo.categoriasConfig).flat()[0] || "8va" : "8va";
+        const premiar = async (fila, posicion) => {
+          if (!fila) return;
+          const nivel = nivelDeCategoria(fila.categoria) || nivelTorneo;
+          if (fila.jugador1Uid) await actualizarPuntosTorneo(fila.jugador1Uid, posicion, nivel);
+          if (fila.jugador2Uid) await actualizarPuntosTorneo(fila.jugador2Uid, posicion, nivel);
+        };
+        await premiar(tabla[0], 1);
+        await premiar(tabla[1], 2);
+        await actualizarTorneo(id, { puntosFinalesOtorgados: true });
+        setGruposStepper(gruposActuales);
+        setTorneo((t) => ({ ...t, status: nuevoEstado, puntosFinalesOtorgados: true }));
+      } catch (err) {
+        console.error("Error otorgando los puntos finales de la liga:", err);
+      }
+    }
   };
 
   const iniciarEdicion = () => {
