@@ -230,6 +230,8 @@ export default function ClubPublico() {
     if (!modalData || !club) return;
     setGuardando(true);
     setErrorReserva("");
+    // Sin configuración explícita, el club acepta reserva directa (mismo default que las reglas de Firestore)
+    const reservaDirecta = club.reservaDirecta ?? true;
     try {
       await crearReserva(club.id, {
         canchaId: modalData.cancha.id,
@@ -241,7 +243,7 @@ export default function ClubPublico() {
         nombreJugador: formReserva.nombreJugador,
         email: formReserva.email,
         telefono: formReserva.telefono,
-        status: club.reservaDirecta ? "confirmada" : "pendiente",
+        status: reservaDirecta ? "confirmada" : "pendiente",
       });
       const nuevasReservas = await getReservas(club.id, fechaSeleccionada);
       setReservas(nuevasReservas);
@@ -253,7 +255,7 @@ export default function ClubPublico() {
         fecha: fechaSeleccionada,
         hora: modalData.hora,
         precio: modalData.precio,
-        status: club.reservaDirecta ? "confirmada" : "pendiente",
+        status: reservaDirecta ? "confirmada" : "pendiente",
         clubNombre: club.nombre,
       });
       setMostrarModal(false);
