@@ -8,14 +8,13 @@ import {
 } from "../services/canchaService";
 import { doc, updateDoc, getDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { getTodayLocal, addDaysLocal, horaActualStr } from "../utils/formatDate";
 
 export default function Hub() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [clubes, setClubes] = useState([]);
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(getTodayLocal());
   const [reservasPorClub, setReservasPorClub] = useState({});
   const [turnosFijosPorClub, setTurnosFijosPorClub] = useState({});
   const [cargando, setCargando] = useState(true);
@@ -101,7 +100,20 @@ export default function Hub() {
     );
   };
 
+  // Ventana de reserva: desde hoy hasta 30 días
+  const fechaMin = getTodayLocal();
+  const fechaMax = addDaysLocal(fechaMin, 30);
+  const cambiarFecha = (valor) => {
+    if (!valor) return;
+    if (valor < fechaMin) return setFechaSeleccionada(fechaMin);
+    if (valor > fechaMax) return setFechaSeleccionada(fechaMax);
+    setFechaSeleccionada(valor);
+  };
+
   const getInfoClub = (club) => {
+    // Si es hoy, una hora que ya empezó no se puede reservar
+    const esHoy = fechaSeleccionada === getTodayLocal();
+    const horaAhora = horaActualStr();
     let libres = 0;
     let libresEnRango = 0;
     let precioMin = Infinity;
@@ -119,6 +131,7 @@ export default function Hub() {
       let canchaLibresEnRango = 0;
       const horasLibres = [];
       (cancha.horariosDisponibles || []).forEach((hora) => {
+        if (esHoy && hora <= horaAhora) return;
         if (!estaOcupado(club.id, cancha.id, hora) && !esTurnoFijoHub(club.id, cancha.id, hora)) {
           canchaLibres++;
           libres++;
@@ -228,7 +241,7 @@ export default function Hub() {
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4" style={{ color: "var(--accent)" }}>
               <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
             </svg>
-            <input type="date" value={fechaSeleccionada} onChange={(e) => setFechaSeleccionada(e.target.value)}
+            <input type="date" value={fechaSeleccionada} min={fechaMin} max={fechaMax} onChange={(e) => cambiarFecha(e.target.value)}
               className="text-sm bg-transparent focus:outline-none" style={{ color: "var(--text-primary)" }} />
           </div>
           <div className="themed-card rounded-xl border px-3 py-2 flex items-center gap-2">

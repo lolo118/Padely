@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
-import { formatFecha } from "../utils/formatDate";
+import { formatFecha, getTodayLocal, addDaysLocal, horaActualStr } from "../utils/formatDate";
 import {
   getCanchas,
   getReservas,
@@ -82,9 +82,12 @@ export default function ClubPublico() {
   const [reservas, setReservas] = useState([]);
   const [turnosFijos, setTurnosFijos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(
-    location.state?.fecha || new Date().toISOString().split("T")[0],
-  );
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(() => {
+    // Si venimos del hub con una fecha pasada, arrancamos en hoy
+    const hoy = getTodayLocal();
+    const f = location.state?.fecha;
+    return f && f >= hoy ? f : hoy;
+  });
   const [mostrarModal, setMostrarModal] = useState(false);
   const [modalData, setModalData] = useState(null);
   const [reservaExitosa, setReservaExitosa] = useState(null);
@@ -112,7 +115,14 @@ export default function ClubPublico() {
       try {
         const snap = await getDoc(doc(db, "clubs", id));
         if (snap.exists()) {
-          setClub({ id: snap.id, ...snap.data() });
+          const clubData = { id: snap.id, ...snap.data() };
+          setClub(clubData);
+          // Ventana de reserva del club: si la fecha quedó fuera, la ajustamos (el efecto vuelve a correr)
+          const maxPermitida = addDaysLocal(getTodayLocal(), clubData.diasAnticipacion ?? 7);
+          if (fechaSeleccionada > maxPermitida) {
+            setFechaSeleccionada(maxPermitida);
+            return;
+          }
           const [canchasData, reservasData, turnosData] = await Promise.all([
             getCanchas(id),
             getReservas(id, fechaSeleccionada),
@@ -259,7 +269,7 @@ export default function ClubPublico() {
         nombre: user.displayName || user.email?.split("@")[0] || "Anónimo",
         estrellas: reviewForm.estrellas,
         comentario: reviewForm.comentario,
-        fecha: new Date().toISOString().split("T")[0],
+        fecha: getTodayLocal(),
       });
       const reviewsSnap = await getDocs(
         collection(db, "clubs", club.id, "reviews"),
@@ -274,6 +284,18 @@ export default function ClubPublico() {
     }
     setGuardandoReview(false);
   };
+
+  // Ventana de reserva: desde hoy hasta hoy + diasAnticipacion (7 por defecto)
+  const fechaMin = getTodayLocal();
+  const fechaMax = addDaysLocal(fechaMin, club?.diasAnticipacion ?? 7);
+  const cambiarFecha = (valor) => {
+    if (!valor) return;
+    if (valor < fechaMin) return setFechaSeleccionada(fechaMin);
+    if (valor > fechaMax) return setFechaSeleccionada(fechaMax);
+    setFechaSeleccionada(valor);
+  };
+  const esHoy = fechaSeleccionada === fechaMin;
+  const horaAhora = horaActualStr();
 
   const promedioEstrellas =
     reviews.length > 0
@@ -397,7 +419,9 @@ export default function ClubPublico() {
             <input
               type="date"
               value={fechaSeleccionada}
-              onChange={(e) => setFechaSeleccionada(e.target.value)}
+              min={fechaMin}
+              max={fechaMax}
+              onChange={(e) => cambiarFecha(e.target.value)}
               className="text-sm bg-transparent focus:outline-none"
               style={{ color: "var(--text-primary)" }}
             />
@@ -442,6 +466,8 @@ export default function ClubPublico() {
                 </thead>
                 <tbody>
                   {horasDelDia.map((hora) => {
+                    // Hoy: una hora que ya empezó no se puede reservar
+                    if (esHoy && hora <= horaAhora) return null;
                     const algunaLibre = canchas.some((c) => {
                       const disp = (c.horariosDisponibles || []).includes(hora);
                       return (

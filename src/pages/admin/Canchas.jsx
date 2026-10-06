@@ -15,7 +15,7 @@ import {
   getTurnosFijos,
 } from "../../services/canchaService";
 import TabTurnosFijos from "./TabTurnosFijos";
-import { formatFecha } from "../../utils/formatDate";
+import { formatFecha, getTodayLocal } from "../../utils/formatDate";
 import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
 
 const superficies = ["Cemento", "Sintético", "Césped", "Otro"];
@@ -343,9 +343,7 @@ export default function Canchas() {
   const [turnosFijos, setTurnosFijos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tabCanchas, setTabCanchas] = useState("Canchas");
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(
-    new Date().toISOString().split("T")[0],
-  );
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(getTodayLocal());
 
   // Form nueva cancha
   const [mostrarForm, setMostrarForm] = useState(false);

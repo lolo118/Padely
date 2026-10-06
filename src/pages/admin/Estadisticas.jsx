@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getTodayLocal } from "../../utils/formatDate";
 import { useAuthStore } from "../../store/authStore";
 import {
   getClubByOwner,
@@ -92,7 +93,7 @@ export default function Estadisticas() {
       Number(partes[2]),
     );
     if (periodo === "dia") {
-      return r.fecha === hoy.toISOString().split("T")[0];
+      return r.fecha === getTodayLocal();
     }
     if (periodo === "semana") {
       const hace7 = new Date(hoy);
