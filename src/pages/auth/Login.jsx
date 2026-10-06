@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../../lib/firebase";
 import { loginUser, loginWithGoogle } from "../../services/authService";
@@ -14,6 +14,20 @@ export default function Login() {
   const navigate = useNavigate();
 
   const refreshPerfil = useAuthStore((s) => s.refreshPerfil);
+  const usuarioActual = useAuthStore((s) => s.user);
+  const rolActual = useAuthStore((s) => s.rol);
+
+  // Ya logueado (por ejemplo al volver del redirect de Google): salimos del login según el rol
+  useEffect(() => {
+    if (!usuarioActual || !rolActual) return;
+    const vincularRedirect = localStorage.getItem("padely-vincular-redirect");
+    if (vincularRedirect) {
+      localStorage.removeItem("padely-vincular-redirect");
+      navigate(vincularRedirect, { replace: true });
+      return;
+    }
+    navigate(rolActual === "club" ? "/admin" : rolActual === "organizador" ? "/org" : "/inicio", { replace: true });
+  }, [usuarioActual, rolActual, navigate]);
 
   const redirigirSegunRol = async (user) => {
     const vincularRedirect = localStorage.getItem("padely-vincular-redirect");
