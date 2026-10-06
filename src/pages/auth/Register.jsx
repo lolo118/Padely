@@ -138,12 +138,14 @@ export default function Register() {
               onClick={async () => {
                 try {
                   const user = await loginWithGoogle();
+                  if (!user) return; // popup bloqueado: sigue por redirect
                   const data = await getUserData(user.uid);
                   if (data) {
                     navigate("/inicio");
                   }
                 } catch {
                   setError("Error al registrarse con Google");
+                  toast.error("Error al registrarse con Google");
                 }
               }}
               className="w-full border-2 border-green-600 text-green-700 py-3 rounded-xl text-sm font-bold hover:bg-green-50 transition flex items-center justify-center gap-3 mb-4"
@@ -217,6 +219,30 @@ export default function Register() {
                     <option value="femenino">Femenino</option>
                     <option value="otro">Otro</option>
                   </select>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-xs text-gray-500 mb-1 block">Ciudad</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Santiago del Estero"
+                    value={form.ciudad}
+                    onChange={set("ciudad")}
+                    className={inputClass}
+                    required
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs text-gray-500 mb-1 block">Teléfono</label>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="Ej: 3851234567"
+                    value={form.telefono}
+                    onChange={(e) => setForm({ ...form, telefono: e.target.value.replace(/\D/g, "") })}
+                    className={inputClass}
+                  />
                 </div>
               </div>
               <select

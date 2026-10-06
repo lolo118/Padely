@@ -45,7 +45,8 @@ export default function Inicio() {
     (i) => i.status !== "confirmada" && i.status !== "rechazada"
   );
   const inscConfirmadas = inscripciones.filter((i) => i.status === "confirmada");
-  const perfilIncompleto = perfil && (!perfil.telefono || !perfil.nivel || !perfil.genero);
+  // La categoría (nivel) la asigna el sistema de puntos, no cuenta como dato faltante
+  const perfilIncompleto = perfil && (!perfil.telefono || !perfil.genero);
 
   const hora = new Date().getHours();
   const saludo = hora < 12 ? "Buenos días" : hora < 19 ? "Buenas tardes" : "Buenas noches";

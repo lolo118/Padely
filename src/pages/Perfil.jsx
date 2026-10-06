@@ -23,16 +23,6 @@ import { uploadProfilePhoto } from "../services/storageService";
 import { toast } from "../components/Toast";
 import { confirmar } from "../components/ConfirmDialog";
 
-const categoriasNivel = [
-  "8va",
-  "7ma",
-  "6ta",
-  "5ta",
-  "4ta",
-  "3era",
-  "2da",
-  "1era",
-];
 const inputClass =
   "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
 const labelClass = "text-xs font-semibold mb-1 block";
@@ -57,13 +47,14 @@ export default function Perfil() {
   const [fotoUrl, setFotoUrl] = useState(null);
   const [perfilModificado, setPerfilModificado] = useState(false);
   const [mostrarInfoPuntos, setMostrarInfoPuntos] = useState(false);
+  // La categoría (nivel) no se edita: la mueve el sistema de puntos
   const [editForm, setEditForm] = useState({
     nombre: "",
     telefono: "",
+    ciudad: "",
     provincia: "",
     nacimiento: "",
     genero: "",
-    nivel: "",
     manoHabil: "",
     posicionPreferida: "",
   });
@@ -105,10 +96,10 @@ export default function Perfil() {
             setEditForm({
               nombre: data.nombre || "",
               telefono: data.telefono || "",
+              ciudad: data.ciudad || "",
               provincia: data.provincia || "",
               nacimiento: data.nacimiento || "",
               genero: data.genero || "",
-              nivel: data.nivel || "",
               manoHabil: data.manoHabil || "",
               posicionPreferida: data.posicionPreferida || "",
             });
@@ -308,7 +299,6 @@ export default function Perfil() {
 
           {userData &&
             (!userData.telefono ||
-              !userData.nivel ||
               !userData.genero ||
               !userData.nacimiento) && (
               <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4">
@@ -318,7 +308,6 @@ export default function Perfil() {
                 <p className="text-blue-600 text-xs mt-0.5">
                   Necesitamos tus datos para inscribirte a torneos.
                   {!userData.telefono && " Falta: teléfono."}
-                  {!userData.nivel && " Falta: categoría."}
                   {!userData.genero && " Falta: género."}
                   {!userData.nacimiento && " Falta: nacimiento."}
                 </p>
@@ -374,6 +363,7 @@ export default function Perfil() {
                   ["Nombre", userData.nombre],
                   ["Email", userData.email],
                   ["Teléfono", userData.telefono],
+                  ["Ciudad", userData.ciudad],
                   ["Provincia", userData.provincia],
                   ["Nacimiento", userData.nacimiento],
                   ["Género", userData.genero],
@@ -425,6 +415,23 @@ export default function Perfil() {
                     value={editForm.telefono}
                     onChange={(e) =>
                       setEditField("telefono", e.target.value)
+                    }
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label
+                    className={labelClass}
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Ciudad
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Santiago del Estero"
+                    value={editForm.ciudad}
+                    onChange={(e) =>
+                      setEditField("ciudad", e.target.value)
                     }
                     className={inputClass}
                   />
@@ -495,10 +502,30 @@ export default function Perfil() {
             >
               Datos de juego
             </h2>
+
+            {/* Categoría: solo lectura, la define el sistema de puntos */}
+            <div className="rounded-xl p-3 mb-4 border" style={{ backgroundColor: "var(--bg-card-hover)", borderColor: "var(--border-card)" }}>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>Categoría</span>
+                <span className="text-sm font-bold px-3 py-1 rounded-full" style={{ backgroundColor: "var(--accent-light)", color: "var(--accent)" }}>
+                  {userData.nivel || "Sin asignar"}
+                </span>
+                <button
+                  onClick={() => setMostrarInfoPuntos(!mostrarInfoPuntos)}
+                  className="text-xs font-semibold px-2 py-1 rounded-lg transition"
+                  style={{ backgroundColor: "var(--bg-card)", color: "var(--accent)", border: "1px solid var(--border-card)" }}
+                >
+                  {mostrarInfoPuntos ? "Cerrar" : "¿Cómo funciona?"}
+                </button>
+              </div>
+              <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+                Tu categoría cambia automáticamente con tus resultados
+              </p>
+            </div>
+
             {!editando ? (
               <div className="grid grid-cols-2 gap-3 text-sm">
                 {[
-                  ["Categoría", userData.nivel || "Sin asignar"],
                   ["Mano hábil", userData.manoHabil],
                   ["Posición", userData.posicionPreferida],
                   ["Puntos", userData.puntos || 0],
@@ -526,28 +553,6 @@ export default function Perfil() {
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                <div>
-                  <label
-                    className={labelClass}
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Categoría
-                  </label>
-                  <select
-                    value={editForm.nivel}
-                    onChange={(e) =>
-                      setEditField("nivel", e.target.value)
-                    }
-                    className={inputClass}
-                  >
-                    <option value="">Sin asignar</option>
-                    {categoriasNivel.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                </div>
                 <div>
                   <label
                     className={labelClass}
@@ -590,14 +595,6 @@ export default function Perfil() {
                 </div>
               </div>
             )}
-
-            <button
-              onClick={() => setMostrarInfoPuntos(!mostrarInfoPuntos)}
-              className="text-xs font-semibold px-2 py-1 rounded-lg transition mt-3"
-              style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--accent)" }}
-            >
-              {mostrarInfoPuntos ? "Cerrar" : "¿Cómo funciona?"}
-            </button>
 
             {mostrarInfoPuntos && (
               <div className="rounded-xl p-4 mt-3 border" style={{ backgroundColor: "var(--bg-card-hover)", borderColor: "var(--border-card)" }}>

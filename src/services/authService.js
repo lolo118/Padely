@@ -20,6 +20,8 @@ export const registerUser = async (email, password, datos) => {
     email,
     role: [datos.tipo],
     provincia: datos.provincia || "",
+    ciudad: datos.ciudad || "",
+    telefono: datos.telefono || "",
     nacimiento: datos.nacimiento || "",
     genero: datos.genero || "",
     nivel: datos.nivel || "",
