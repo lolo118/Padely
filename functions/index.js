@@ -298,3 +298,130 @@ exports.onTournamentUpdated = onDocumentUpdated("tournaments/{tid}", async (even
   }
 });
 
+// ============================================================================
+// MANTENIMIENTO — reservas pendientes vencidas y limpieza de cuentas eliminadas
+// ============================================================================
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const functionsV1 = require("firebase-functions/v1");
+
+const EXPIRA_PENDIENTE_HORAS = 2; // más adelante configurable por club
+const ZONA_HORARIA = "America/Argentina/Buenos_Aires";
+const BATCH_MAX = 400;
+
+// "YYYY-MM-DD" de hoy en Argentina (misma convención que getTodayLocal() en el cliente)
+function fechaLocalArgentina(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: ZONA_HORARIA,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+// Aplica operaciones (batch) => void en lotes de hasta BATCH_MAX escrituras, en orden
+async function escribirEnLotes(ops) {
+  for (let i = 0; i < ops.length; i += BATCH_MAX) {
+    const batch = db.batch();
+    ops.slice(i, i + BATCH_MAX).forEach((op) => op(batch));
+    await batch.commit();
+  }
+}
+
+// Cada 15 minutos: las reservas pendientes de aprobación con más de EXPIRA_PENDIENTE_HORAS
+// pasan a cancelada (motivo "expirada") y se avisa al jugador y al club.
+exports.expirarReservasPendientes = onSchedule(
+  { schedule: "every 15 minutes", timeZone: ZONA_HORARIA },
+  async () => {
+    const limite = Timestamp.fromMillis(Date.now() - EXPIRA_PENDIENTE_HORAS * 60 * 60 * 1000);
+    const snap = await db
+      .collectionGroup("reservas")
+      .where("status", "==", "pendiente")
+      .where("createdAt", "<=", limite)
+      .get();
+    if (snap.empty) {
+      logger.info("expirarReservasPendientes: sin reservas vencidas");
+      return;
+    }
+
+    const clubs = new Map();
+    const ops = [];
+    for (const doc of snap.docs) {
+      const reserva = doc.data();
+      const clubRef = doc.ref.parent.parent;
+      if (!clubRef) continue;
+      if (!clubs.has(clubRef.id)) {
+        const clubSnap = await clubRef.get();
+        clubs.set(clubRef.id, clubSnap.exists ? clubSnap.data() : {});
+      }
+      const club = clubs.get(clubRef.id);
+      const clubNombre = club.nombre || "el club";
+      const cancha = reserva.canchaName || reserva.canchaId || "cancha";
+      const fecha = reserva.fecha || "";
+      const hora = reserva.hora || "";
+
+      ops.push((b) => b.update(doc.ref, { status: "cancelada", motivo: "expirada" }));
+      if (reserva.jugadorUid) {
+        ops.push((b) =>
+          b.set(nuevaNotificacionRef(reserva.jugadorUid), {
+            tipo: "reserva_expirada",
+            titulo: "Tu reserva venció",
+            mensaje: `Tu reserva en ${clubNombre} (${cancha}, ${fecha} ${hora}) venció sin respuesta del club y fue cancelada.`,
+            link: "/mis-reservas",
+            icono: "⏰",
+            leida: false,
+            createdAt: FieldValue.serverTimestamp(),
+          }),
+        );
+      }
+      if (club.ownerUid) {
+        ops.push((b) =>
+          b.set(nuevaNotificacionRef(club.ownerUid), {
+            tipo: "reserva_expirada_club",
+            titulo: "Reserva vencida sin respuesta",
+            mensaje: `La reserva de ${reserva.nombreJugador || "un jugador"} (${cancha}, ${fecha} ${hora}) venció sin confirmar y fue cancelada.`,
+            link: "/admin/canchas",
+            icono: "⏰",
+            leida: false,
+            createdAt: FieldValue.serverTimestamp(),
+          }),
+        );
+      }
+    }
+    await escribirEnLotes(ops);
+    logger.info(`expirarReservasPendientes: ${snap.size} reservas vencidas`);
+  },
+);
+
+// Cuenta eliminada en Auth (v1): borra users/{uid} con sus subcolecciones, desvincula al jugador
+// de las parejas de torneos y cancela sus reservas futuras.
+exports.onUserDeleted = functionsV1
+  .region(REGION)
+  .auth.user()
+  .onDelete(async (user) => {
+    const uid = user.uid;
+    await db.recursiveDelete(userRef(uid));
+
+    const ops = [];
+    let parejas = 0;
+    for (const campo of ["jugador1Uid", "jugador2Uid"]) {
+      const snap = await db.collectionGroup("pairs").where(campo, "==", uid).get();
+      snap.docs.forEach((d) => ops.push((b) => b.update(d.ref, { [campo]: null })));
+      parejas += snap.size;
+    }
+
+    const hoy = fechaLocalArgentina();
+    const reservasSnap = await db
+      .collectionGroup("reservas")
+      .where("jugadorUid", "==", uid)
+      .where("fecha", ">=", hoy)
+      .get();
+    let reservas = 0;
+    reservasSnap.docs.forEach((d) => {
+      if (d.data().status === "cancelada") return;
+      ops.push((b) => b.update(d.ref, { status: "cancelada", motivo: "cuenta eliminada" }));
+      reservas++;
+    });
+
+    await escribirEnLotes(ops);
+    logger.info(`onUserDeleted ${uid}: ${parejas} parejas desvinculadas, ${reservas} reservas canceladas`);
+  });
