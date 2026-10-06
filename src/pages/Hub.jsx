@@ -9,6 +9,7 @@ import {
 import { doc, updateDoc, getDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { getTodayLocal, addDaysLocal, horaActualStr } from "../utils/formatDate";
+import { formatPrecio } from "../utils/format";
 
 export default function Hub() {
   const { user } = useAuthStore();
@@ -469,7 +470,7 @@ export default function Hub() {
               </div>
               {club.precioMin > 0 && (
                 <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                  Desde <span style={{ color: "var(--accent)" }}>${club.precioMin.toLocaleString()}</span>
+                  Desde <span style={{ color: "var(--accent)" }}>{formatPrecio(club.precioMin)}</span>
                 </span>
               )}
             </div>

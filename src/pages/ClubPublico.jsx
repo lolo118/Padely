@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { formatFecha, getTodayLocal, addDaysLocal, horaActualStr } from "../utils/formatDate";
+import { formatPrecio } from "../utils/format";
 import {
   getCanchas,
   getReservas,
@@ -559,7 +560,7 @@ export default function ClubPublico() {
                               >
                                 Libre
                                 <span className="block font-bold mt-0.5">
-                                  ${precio}
+                                  {formatPrecio(precio)}
                                 </span>
                               </button>
                             </td>
@@ -828,7 +829,7 @@ export default function ClubPublico() {
                     className="text-xs font-semibold"
                     style={{ color: "var(--accent)" }}
                   >
-                    Desde ${c.precioBase || 0}
+                    Desde {formatPrecio(c.precioBase || 0)}
                   </span>
                 </div>
               ))}
@@ -1079,7 +1080,7 @@ export default function ClubPublico() {
                 className="text-lg font-bold"
                 style={{ color: "var(--accent)" }}
               >
-                ${modalData.precio}
+                {formatPrecio(modalData.precio)}
               </span>
             </div>
             <form onSubmit={handleReservar} className="flex flex-col gap-3">
@@ -1207,7 +1208,7 @@ export default function ClubPublico() {
               </div>
               <div className="flex justify-between">
                 <span className="text-xs" style={{ color: "var(--text-muted)" }}>Precio</span>
-                <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>${reservaExitosa.precio}</span>
+                <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>{formatPrecio(reservaExitosa.precio)}</span>
               </div>
             </div>
 

@@ -10,6 +10,7 @@ import TabBracket from "./TabBracket";
 import TabParejas from "./TabParejas";
 import TabReclamos from "./TabReclamos";
 import { formatFecha } from "../../utils/formatDate";
+import { formatPrecio } from "../../utils/format";
 
 const estadoBadge = {
   inscripcion: "bg-blue-100 text-blue-700",
@@ -437,7 +438,7 @@ export default function DetalleTorneo() {
                 )}
                 <button
                   onClick={() => {
-                    const msg = encodeURIComponent(`📢 Información del torneo "${torneo.nombre}"\n📍 Sede: ${torneo.sede}\n📅 Fecha: ${torneo.fechaInicio}\n🔗 Más info: ${window.location.origin}/torneos/${id}`);
+                    const msg = encodeURIComponent(`📢 Información del torneo "${torneo.nombre}"\n📍 Sede: ${torneo.sede}\n📅 Fecha: ${formatFecha(torneo.fechaInicio)}\n🔗 Más info: ${window.location.origin}/torneos/${id}`);
                     window.open(`https://wa.me/?text=${msg}`, "_blank");
                     setMostrarNotificar(false);
                   }}
@@ -450,7 +451,7 @@ export default function DetalleTorneo() {
                   <button
                     onClick={() => {
                       const cats = torneo.categoriasConfig ? Object.values(torneo.categoriasConfig).flat().join(", ") : "";
-                      const msg = encodeURIComponent(`🏆 ¡Inscripciones abiertas!\n\nTorneo: ${torneo.nombre}\n📍 ${torneo.sede}, ${torneo.ciudad}\n📅 ${torneo.fechaInicio}\n🎾 Categorías: ${cats}\n💰 Inscripción: $${torneo.inscripcion || "Gratis"}\n\n✍️ Inscribite acá: ${window.location.origin}/torneos/${id}`);
+                      const msg = encodeURIComponent(`🏆 ¡Inscripciones abiertas!\n\nTorneo: ${torneo.nombre}\n📍 ${torneo.sede}, ${torneo.ciudad}\n📅 ${formatFecha(torneo.fechaInicio)}\n🎾 Categorías: ${cats}\n💰 Inscripción: ${torneo.inscripcion > 0 ? formatPrecio(torneo.inscripcion) : "Gratis"}\n\n✍️ Inscribite acá: ${window.location.origin}/torneos/${id}`);
                       window.open(`https://wa.me/?text=${msg}`, "_blank");
                       setMostrarNotificar(false);
                     }}
@@ -639,7 +640,7 @@ export default function DetalleTorneo() {
                 <span className="block" style={{ color: "var(--text-muted)" }}>Inscripción</span>
                 <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                   {torneo.inscripcion > 0
-                    ? `$${torneo.inscripcion}`
+                    ? formatPrecio(torneo.inscripcion)
                     : "Gratuita"}
                 </span>
               </div>
@@ -857,7 +858,8 @@ export default function DetalleTorneo() {
                   });
                   if (ok) cambiarEstado("cancelado");
                 }}
-                className="w-full py-2 rounded-xl text-xs font-semibold border border-red-200 text-red-400 hover:bg-red-50 transition"
+                className="w-full py-2 rounded-xl text-xs font-semibold border text-red-400 hover:bg-red-500/10 transition"
+                style={{ borderColor: "rgba(239,68,68,0.3)" }}
               >
                 Cancelar torneo
               </button>
@@ -866,17 +868,17 @@ export default function DetalleTorneo() {
 
           {/* Tip contextual */}
           {torneo.status === "inscripcion" && (
-            <div className="rounded-xl px-4 py-3 text-sm border border-blue-200" style={{ backgroundColor: "rgba(59,130,246,0.07)", color: "var(--text-secondary)" }}>
+            <div className="rounded-xl px-4 py-3 text-sm border" style={{ backgroundColor: "rgba(59,130,246,0.07)", borderColor: "rgba(59,130,246,0.25)", color: "var(--text-secondary)" }}>
               💡 <strong>Tip:</strong> Podés iniciar el torneo cuando hayas confirmado todas las parejas. Las inscripciones se cerrarán automáticamente.
             </div>
           )}
           {torneo.status === "en_curso" && (
-            <div className="rounded-xl px-4 py-3 text-sm border border-green-200" style={{ backgroundColor: "rgba(34,197,94,0.07)", color: "var(--text-secondary)" }}>
+            <div className="rounded-xl px-4 py-3 text-sm border" style={{ backgroundColor: "rgba(34,197,94,0.07)", borderColor: "rgba(34,197,94,0.25)", color: "var(--text-secondary)" }}>
               💡 <strong>Tip:</strong> Cargá los resultados desde la pestaña Grupos o Bracket. Al finalizar, se otorgarán puntos automáticamente.
             </div>
           )}
           {torneo.status === "finalizado" && (
-            <div className="rounded-xl px-4 py-3 text-sm border border-slate-200" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
+            <div className="rounded-xl px-4 py-3 text-sm border" style={{ backgroundColor: "var(--bg-card-hover)", borderColor: "var(--border-card)", color: "var(--text-muted)" }}>
               ✅ El torneo ha finalizado. Podés revisar los reclamos desde la pestaña correspondiente.
             </div>
           )}
@@ -922,9 +924,9 @@ export default function DetalleTorneo() {
       {/* MODO EDICIÓN */}
       {tab === "Info" && editando && (
         <div className="flex flex-col gap-4">
-          <div className="themed-card rounded-2xl p-5 border border-green-200">
+          <div className="themed-card rounded-2xl p-5 border" style={{ borderColor: "rgba(34,197,94,0.35)" }}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-green-700">Editando torneo</h2>
+              <h2 className="font-semibold" style={{ color: "#22c55e" }}>Editando torneo</h2>
               <div className="flex gap-2">
                 <button
                   onClick={cancelarEdicion}

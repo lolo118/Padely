@@ -108,7 +108,7 @@ export default function OrgEquipo() {
       </h1>
 
       {mensaje && (
-        <div className="bg-emerald-50 text-emerald-600 text-sm p-3 rounded-lg mb-4 border border-emerald-200">
+        <div className="text-sm p-3 rounded-lg mb-4 border" style={{ color: "#10b981", backgroundColor: "rgba(16,185,129,0.08)", borderColor: "rgba(16,185,129,0.25)" }}>
           {mensaje}
         </div>
       )}

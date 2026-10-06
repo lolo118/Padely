@@ -247,13 +247,13 @@ export default function Perfil() {
 
       {/* Verificación de email */}
       {!emailVerificado && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 mb-4">
+        <div className="rounded-2xl p-4 mb-4 border" style={{ backgroundColor: "rgba(234,179,8,0.08)", borderColor: "rgba(234,179,8,0.3)" }}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-yellow-700 font-semibold text-sm">
+              <p className="font-semibold text-sm" style={{ color: "#ca8a04" }}>
                 Email no verificado
               </p>
-              <p className="text-yellow-600 text-xs mt-0.5">
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
                 Verificá tu email para mayor seguridad
               </p>
             </div>
@@ -301,11 +301,11 @@ export default function Perfil() {
             (!userData.telefono ||
               !userData.genero ||
               !userData.nacimiento) && (
-              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4">
-                <p className="text-blue-700 font-semibold text-sm">
+              <div className="rounded-2xl p-4 mb-4 border" style={{ backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.25)" }}>
+                <p className="font-semibold text-sm" style={{ color: "#3b82f6" }}>
                   Completá tu perfil
                 </p>
-                <p className="text-blue-600 text-xs mt-0.5">
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
                   Necesitamos tus datos para inscribirte a torneos.
                   {!userData.telefono && " Falta: teléfono."}
                   {!userData.genero && " Falta: género."}
@@ -1056,7 +1056,8 @@ export default function Perfil() {
           </button>
           <button
             onClick={handleEliminarCuenta}
-            className="w-full py-2 rounded-xl text-sm font-semibold bg-red-50 text-red-500 hover:bg-red-100 transition"
+            className="w-full py-2 rounded-xl text-sm font-semibold text-red-500 transition hover:opacity-80"
+            style={{ backgroundColor: "rgba(239,68,68,0.08)" }}
           >
             Eliminar cuenta
           </button>

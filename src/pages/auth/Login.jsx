@@ -84,15 +84,10 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: "var(--bg-primary)" }}>
       <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md border border-slate-200" data-theme="light">
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-green-600 rounded-xl flex items-center justify-center shadow-md shadow-green-900/20">
-            <span className="text-white font-bold text-lg">P</span>
-          </div>
-          <span className="text-slate-800 font-bold text-2xl tracking-tight">
-            Padely
-          </span>
+        <div className="flex items-center justify-center mb-6">
+          <img src="/logo.png" alt="Padely" className="h-9" />
         </div>
         <h2 className="text-lg font-semibold text-slate-700 mb-4 text-center">
           Iniciar sesión

@@ -216,8 +216,8 @@ export default function TabTurnosFijos({ clubId }) {
 
       {/* Formulario */}
       {mostrarForm && (
-        <div className="themed-card border rounded-2xl p-5 border-green-200">
-          <h3 className="font-semibold text-green-700 mb-3">
+        <div className="themed-card border rounded-2xl p-5" style={{ borderColor: "rgba(34,197,94,0.35)" }}>
+          <h3 className="font-semibold mb-3" style={{ color: "#22c55e" }}>
             {editandoId ? "Editar turno fijo" : "Nuevo turno fijo"}
           </h3>
           <form onSubmit={handleGuardar} className="flex flex-col gap-3">
@@ -371,7 +371,8 @@ export default function TabTurnosFijos({ clubId }) {
                             : sug,
                         })
                       }
-                      className="px-2 py-1 rounded-lg text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
+                      className="px-2 py-1 rounded-lg text-xs transition hover:opacity-80"
+                      style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "#3b82f6" }}
                     >
                       + {sug}
                     </button>
@@ -454,8 +455,8 @@ export default function TabTurnosFijos({ clubId }) {
                       </p>
                     )}
                     {turno.packDescripcion && (
-                      <div className="mt-2 bg-blue-50 border border-blue-100 rounded-lg p-3">
-                        <p className="text-xs font-semibold text-blue-600 mb-1">
+                      <div className="mt-2 rounded-lg p-3 border" style={{ backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.2)" }}>
+                        <p className="text-xs font-semibold mb-1" style={{ color: "#3b82f6" }}>
                           Pack/Combo:
                         </p>
                         <p className="text-xs text-blue-700 whitespace-pre-line">

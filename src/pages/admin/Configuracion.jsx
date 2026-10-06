@@ -11,8 +11,8 @@ import { confirmar } from "../../components/ConfirmDialog";
 const inputClass =
   "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full";
 const labelClass = "text-xs font-semibold mb-1 block";
-const tipClass =
-  "text-xs text-blue-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mt-2";
+const tipClass = "text-xs rounded-lg px-3 py-2 mt-2 border";
+const tipStyle = { color: "#3b82f6", backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.2)" };
 
 const diasSemana = [
   "Lunes",
@@ -219,11 +219,12 @@ export default function Configuracion() {
 
       {mensaje && (
         <div
-          className={`rounded-lg px-4 py-2 text-sm mb-4 ${
+          className="rounded-lg px-4 py-2 text-sm mb-4 border"
+          style={
             mensaje.includes("Error")
-              ? "bg-red-50 text-red-600 border border-red-200"
-              : "bg-emerald-50 text-emerald-600 border border-emerald-200"
-          }`}
+              ? { color: "#ef4444", backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)" }
+              : { color: "#10b981", backgroundColor: "rgba(16,185,129,0.08)", borderColor: "rgba(16,185,129,0.25)" }
+          }
         >
           {mensaje}
         </div>
@@ -399,7 +400,7 @@ export default function Configuracion() {
               </div>
             </div>
 
-            <p className={tipClass}>
+            <p className={tipClass} style={tipStyle}>
               💡 Estos horarios se muestran a los jugadores en el hub de
               canchas. Los horarios específicos de cada cancha se configuran en
               la sección Canchas.
@@ -519,7 +520,7 @@ export default function Configuracion() {
               />
             </div>
 
-            <p className={tipClass}>
+            <p className={tipClass} style={tipStyle}>
               💡 Estos datos se usan para generar comprobantes y recibir pagos
               de inscripciones y reservas. Mantenelos actualizados.
             </p>
@@ -692,7 +693,7 @@ export default function Configuracion() {
             </div>
           </div>
 
-          <p className={tipClass}>
+          <p className={tipClass} style={tipStyle}>
             💡 Recordá hacer clic en "Guardar cambios" arriba para que los
             usuarios y roles se guarden correctamente.
           </p>

@@ -194,7 +194,7 @@ export default function OrgLayout() {
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${
                     isActive
-                      ? "bg-blue-50 md:bg-[var(--sidebar-active-bg)] text-blue-400 md:text-[var(--sidebar-active-text)] font-semibold"
+                      ? "bg-blue-500/15 md:bg-[var(--sidebar-active-bg)] text-blue-400 md:text-[var(--sidebar-active-text)] font-semibold"
                       : "text-slate-400 md:text-[var(--text-muted)] hover:bg-slate-700/50 md:hover:bg-[var(--bg-card-hover)] hover:text-white md:hover:text-[var(--text-primary)]"
                   }`
                 }
@@ -213,7 +213,7 @@ export default function OrgLayout() {
                 await signOut(auth);
                 window.location.href = "/login";
               }}
-              className="flex items-center gap-3 text-sm text-red-400 hover:text-red-300 transition px-3 py-2 rounded-xl hover:bg-slate-700/50 md:hover:bg-red-50 w-full"
+              className="flex items-center gap-3 text-sm text-red-400 hover:text-red-300 transition px-3 py-2 rounded-xl hover:bg-slate-700/50 md:hover:bg-red-500/10 w-full"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                 <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />

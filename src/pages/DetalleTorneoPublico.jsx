@@ -16,6 +16,7 @@ import {
 } from "../services/torneoService";
 import { getUserData } from "../services/authService";
 import { formatFecha } from "../utils/formatDate";
+import { formatPrecio } from "../utils/format";
 import { calcularTabla, getGanador, getNombrePareja, listaCategorias } from "../utils/torneo";
 import { notificarInscripcionTorneo, notificarReclamoContra, notificarNuevoReclamo } from "../services/notificationService";
 import { toast } from "../components/Toast";
@@ -400,16 +401,16 @@ export default function DetalleTorneoPublico() {
 
       {/* Solicitud enviada */}
       {inscripcionEnviada && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
-          <p className="text-green-700 font-semibold text-center">
+        <div className="rounded-xl p-4 mb-4 border" style={{ backgroundColor: "rgba(34,197,94,0.08)", borderColor: "rgba(34,197,94,0.25)" }}>
+          <p className="font-semibold text-center" style={{ color: "#22c55e" }}>
             Solicitud creada
           </p>
-          <p className="text-green-600 text-sm mt-1 text-center">
+          <p className="text-sm mt-1 text-center" style={{ color: "var(--text-secondary)" }}>
             Enviá este link a tu compañero/a para que acepte la invitación:
           </p>
           <div
-            className="themed-card border border-green-300 rounded-lg mt-3 p-3 text-sm break-all"
-            style={{ color: "var(--text-primary)" }}
+            className="themed-card border rounded-lg mt-3 p-3 text-sm break-all"
+            style={{ color: "var(--text-primary)", borderColor: "rgba(34,197,94,0.4)" }}
           >
             {linkInvitacion}
           </div>
@@ -440,8 +441,8 @@ export default function DetalleTorneoPublico() {
 
       {/* Formulario inscripción */}
       {mostrarFormInsc && (
-        <div className="themed-card rounded-2xl p-5 border border-green-200 mb-4">
-          <h2 className="font-semibold text-green-700 mb-3">Inscripción</h2>
+        <div className="themed-card rounded-2xl p-5 border mb-4" style={{ borderColor: "rgba(34,197,94,0.35)" }}>
+          <h2 className="font-semibold mb-3" style={{ color: "#22c55e" }}>Inscripción</h2>
           <form onSubmit={handleInscripcion} className="flex flex-col gap-3">
             <p
               className="text-xs font-semibold"
@@ -711,7 +712,7 @@ export default function DetalleTorneoPublico() {
                   style={{ color: "var(--text-primary)" }}
                 >
                   {torneo.inscripcion > 0
-                    ? `$${torneo.inscripcion}`
+                    ? formatPrecio(torneo.inscripcion)
                     : "Gratuita"}
                 </span>
               </div>
@@ -904,7 +905,7 @@ export default function DetalleTorneoPublico() {
               🔗 Copiar link
             </button>
             <a
-              href={`https://wa.me/?text=${encodeURIComponent(`🏆 ${torneo.nombre}\n📍 ${torneo.sede} - ${torneo.ciudad}\n📅 ${torneo.fechaInicio} → ${torneo.fechaFin}\n${torneo.inscripcion > 0 ? `💰 $${torneo.inscripcion}` : "🆓 Gratis"}\n\n${window.location.origin}/torneos/${id}`)}`}
+              href={`https://wa.me/?text=${encodeURIComponent(`🏆 ${torneo.nombre}\n📍 ${torneo.sede} - ${torneo.ciudad}\n📅 ${formatFecha(torneo.fechaInicio)} → ${formatFecha(torneo.fechaFin)}\n${torneo.inscripcion > 0 ? `💰 ${formatPrecio(torneo.inscripcion)}` : "🆓 Gratis"}\n\n${window.location.origin}/torneos/${id}`)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2 bg-green-600 text-white hover:bg-green-700"
@@ -1255,8 +1256,8 @@ export default function DetalleTorneoPublico() {
 
           {/* Reclamos abiertos visibles para todos */}
           {reclamos.filter((r) => r.estado === "abierto").length > 0 && (
-            <div className="themed-card rounded-2xl p-5 border border-red-200">
-              <h2 className="font-semibold mb-3 text-red-600">
+            <div className="themed-card rounded-2xl p-5 border" style={{ borderColor: "rgba(239,68,68,0.35)" }}>
+              <h2 className="font-semibold mb-3" style={{ color: "#ef4444" }}>
                 Reclamos abiertos
               </h2>
               <div className="flex flex-col gap-3">

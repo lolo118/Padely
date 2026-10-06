@@ -12,6 +12,7 @@ import {
 } from "../../services/canchaService";
 import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
 import { formatFecha } from "../../utils/formatDate";
+import { formatPrecio } from "../../utils/format";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
 
@@ -328,7 +329,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-3xl font-bold" style={{ color: "#3b82f6" }}>
-                ${ingresosHoy.toLocaleString()}
+                {formatPrecio(ingresosHoy)}
               </p>
               <p
                 className="text-xs mt-1"
@@ -443,7 +444,7 @@ export default function Dashboard() {
                       {r.nombreJugador || "Jugador"}
                     </p>
                     <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {r.canchaName || "Cancha"} · {formatFecha(r.fecha)} · {r.hora} {r.precio != null && <span style={{ color: "var(--accent)" }}> · ${r.precio}</span>}
+                      {r.canchaName || "Cancha"} · {formatFecha(r.fecha)} · {r.hora} {r.precio != null && <span style={{ color: "var(--accent)" }}> · {formatPrecio(r.precio)}</span>}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -514,7 +515,7 @@ export default function Dashboard() {
                   className="text-xs font-semibold"
                   style={{ color: "var(--accent)" }}
                 >
-                  ${r.precio || 0}
+                  {formatPrecio(r.precio || 0)}
                 </span>
               </div>
             ))}

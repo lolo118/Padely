@@ -6,6 +6,7 @@ import { db } from "../lib/firebase";
 import { actualizarReserva } from "../services/canchaService";
 import { notificarReservaCanceladaPorJugador } from "../services/notificationService";
 import { formatFecha, getTodayLocal } from "../utils/formatDate";
+import { formatPrecio } from "../utils/format";
 import { toast } from "../components/Toast";
 import { confirmar } from "../components/ConfirmDialog";
 
@@ -160,7 +161,7 @@ export default function MisReservas() {
                       </div>
                       <div className="text-right">
                         {r.precio != null && (
-                          <p className="font-bold text-sm" style={{ color: "var(--accent)" }}>${r.precio}</p>
+                          <p className="font-bold text-sm" style={{ color: "var(--accent)" }}>{formatPrecio(r.precio)}</p>
                         )}
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full mt-1 inline-block ${statusBadge[r.status] || statusBadge.pendiente}`}>
                           {statusLabel[r.status] || "Pendiente"}
@@ -199,7 +200,7 @@ export default function MisReservas() {
                       </div>
                       <div className="text-right">
                         {r.precio != null && (
-                          <p className="font-bold text-sm" style={{ color: "var(--accent)" }}>${r.precio}</p>
+                          <p className="font-bold text-sm" style={{ color: "var(--accent)" }}>{formatPrecio(r.precio)}</p>
                         )}
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full mt-1 inline-block ${statusBadge[r.status] || statusBadge.pendiente}`}>
                           {statusLabel[r.status] || "Pendiente"}

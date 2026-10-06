@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getTodayLocal } from "../../utils/formatDate";
+import { formatPrecio } from "../../utils/format";
 import { useAuthStore } from "../../store/authStore";
 import {
   getClubByOwner,
@@ -236,7 +237,7 @@ export default function Estadisticas() {
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div className="themed-card rounded-2xl p-5 border text-center">
           <p className="text-3xl font-bold text-green-600">
-            ${ingresosTotales.toLocaleString()}
+            {formatPrecio(ingresosTotales)}
           </p>
           <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
             Ingresos ({periodoLabel})
@@ -406,7 +407,7 @@ export default function Estadisticas() {
                 <p className="text-xs" style={{ color: "var(--text-muted)" }}>{c.reservas} reservas</p>
               </div>
               <p className="text-sm font-bold text-green-600">
-                ${c.ingresos.toLocaleString()}
+                {formatPrecio(c.ingresos)}
               </p>
             </div>
           ))}

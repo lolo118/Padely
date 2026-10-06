@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { formatFecha } from "../utils/formatDate";
+import { formatPrecio } from "../utils/format";
 import {
   getTorneoById,
   getInscripciones,
@@ -134,7 +135,7 @@ export default function AceptarInvitacion() {
             <div>
               <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Inscripción</span>
               <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                {torneo.inscripcion > 0 ? `$${torneo.inscripcion}` : "Gratuita"}
+                {torneo.inscripcion > 0 ? formatPrecio(torneo.inscripcion) : "Gratuita"}
               </span>
             </div>
             <div>
@@ -204,10 +205,10 @@ export default function AceptarInvitacion() {
 
         {/* Estado: pendiente de aprobación */}
         {estado === "pendiente_aprobacion" && (
-          <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
+          <div className="rounded-xl p-4 text-center border" style={{ backgroundColor: "rgba(249,115,22,0.08)", borderColor: "rgba(249,115,22,0.25)" }}>
             <div className="text-3xl mb-2">⏳</div>
-            <p className="text-orange-700 font-semibold">Invitación aceptada</p>
-            <p className="text-orange-600 text-sm mt-1">
+            <p className="font-semibold" style={{ color: "#f97316" }}>Invitación aceptada</p>
+            <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
               Tu inscripción quedó pendiente de aprobación del organizador. Te
               notificaremos cuando sea confirmada.
             </p>
@@ -222,12 +223,12 @@ export default function AceptarInvitacion() {
 
         {/* Estado: confirmada */}
         {estado === "confirmada" && (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+          <div className="rounded-xl p-4 text-center border" style={{ backgroundColor: "rgba(34,197,94,0.08)", borderColor: "rgba(34,197,94,0.25)" }}>
             <div className="text-3xl mb-2">✅</div>
-            <p className="text-green-700 font-semibold">
+            <p className="font-semibold" style={{ color: "#22c55e" }}>
               Inscripción confirmada
             </p>
-            <p className="text-green-600 text-sm mt-1">
+            <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
               Ya están inscriptos en el torneo. ¡Éxitos!
             </p>
             <button
@@ -241,11 +242,11 @@ export default function AceptarInvitacion() {
 
         {/* Estado: rechazada */}
         {estado === "rechazada" && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+          <div className="rounded-xl p-4 text-center border" style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)" }}>
             <div className="text-3xl mb-2">❌</div>
-            <p className="text-red-700 font-semibold">Inscripción rechazada</p>
+            <p className="font-semibold" style={{ color: "#ef4444" }}>Inscripción rechazada</p>
             {inscripcion.motivoRechazo && (
-              <p className="text-red-600 text-sm mt-1">
+              <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
                 Motivo: {inscripcion.motivoRechazo}
               </p>
             )}
@@ -259,8 +260,8 @@ export default function AceptarInvitacion() {
         )}
 
         {estado === "error" && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
-            <p className="text-red-600 text-sm">
+          <div className="rounded-xl p-4 text-center border" style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)" }}>
+            <p className="text-sm" style={{ color: "#ef4444" }}>
               Hubo un error. Intentá de nuevo.
             </p>
           </div>

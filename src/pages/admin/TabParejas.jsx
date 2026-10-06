@@ -229,7 +229,8 @@ export default function TabParejas({ torneoId, torneo }) {
             {pendientesAprobacion.map((insc) => (
               <div
                 key={insc.id}
-                className="bg-orange-50 rounded-xl px-4 py-3 border border-orange-100"
+                className="rounded-xl px-4 py-3 border"
+                style={{ backgroundColor: "rgba(249,115,22,0.08)", borderColor: "rgba(249,115,22,0.2)" }}
               >
                 <div className="flex items-center justify-between mb-2">
                   <div>
@@ -260,7 +261,8 @@ export default function TabParejas({ torneoId, torneo }) {
                       placeholder="Motivo del rechazo..."
                       value={motivoRechazo}
                       onChange={(e) => setMotivoRechazo(e.target.value)}
-                      className="w-full border border-red-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                      className="themed-input w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                      style={{ borderColor: "rgba(239,68,68,0.35)" }}
                     />
                     <div className="flex gap-2">
                       <button
@@ -421,7 +423,7 @@ export default function TabParejas({ torneoId, torneo }) {
               </p>
             )}
 
-            <div className="text-xs text-blue-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+            <div className="text-xs rounded-lg px-3 py-2 border" style={{ color: "#3b82f6", backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.2)" }}>
               💡 Agregá el WhatsApp de cada jugador para enviarles un link de vinculación. Así podrán usar la app, recibir puntos y participar de reclamos.
             </div>
 

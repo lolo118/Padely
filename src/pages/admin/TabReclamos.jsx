@@ -73,7 +73,7 @@ export default function TabReclamos({ torneoId, torneo }) {
   return (
     <div className="flex flex-col gap-4">
       {/* Tip */}
-      <div className="text-xs text-blue-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+      <div className="text-xs rounded-lg px-3 py-2 border" style={{ color: "#3b82f6", backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.2)" }}>
         💡 Revisá cada reclamo, leé el descargo de la pareja denunciada y las parejas adheridas antes de tomar una decisión. Tu decisión es final.
       </div>
 
@@ -125,7 +125,7 @@ export default function TabReclamos({ torneoId, torneo }) {
                       </p>
                       <div className="flex flex-wrap gap-1">
                         {r.adheridos.map((a, i) => (
-                          <span key={i} className="text-xs px-2 py-1 rounded-full bg-red-50 text-red-600">
+                          <span key={i} className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
                             {getNombrePareja(a)}
                           </span>
                         ))}

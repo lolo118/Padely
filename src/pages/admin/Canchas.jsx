@@ -16,6 +16,7 @@ import {
 } from "../../services/canchaService";
 import TabTurnosFijos from "./TabTurnosFijos";
 import { formatFecha, getTodayLocal } from "../../utils/formatDate";
+import { formatPrecio } from "../../utils/format";
 import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
@@ -343,7 +344,7 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
                     {statusLabel[r.status] || "Pendiente"}
                   </span>
                   {r.precio != null && (
-                    <p className="font-bold text-sm" style={{ color: "var(--accent)" }}>${r.precio}</p>
+                    <p className="font-bold text-sm" style={{ color: "var(--accent)" }}>{formatPrecio(r.precio)}</p>
                   )}
                   <div className="flex gap-2 mt-1">
                     {r.status === "pendiente" && (
@@ -799,8 +800,8 @@ export default function Canchas() {
 
           {/* Formulario nueva cancha */}
           {mostrarForm && (
-            <div className="themed-card rounded-2xl p-5 border border-green-200 mb-4">
-              <h2 className="font-semibold text-green-700 mb-3">
+            <div className="themed-card rounded-2xl p-5 border mb-4" style={{ borderColor: "rgba(34,197,94,0.35)" }}>
+              <h2 className="font-semibold mb-3" style={{ color: "#22c55e" }}>
                 Nueva cancha
               </h2>
               <form
@@ -1297,11 +1298,11 @@ export default function Canchas() {
                               {cancha.techada ? "Techada" : "Al aire libre"}
                             </span>
                             <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
-                              Desde $
-                              {cancha.precioBase ||
-                                Math.min(
-                                  ...Object.values(cancha.horarios || { 0: 0 }),
-                                )}
+                              Desde{" "}
+                              {formatPrecio(
+                                cancha.precioBase ||
+                                  Math.min(...Object.values(cancha.horarios || { 0: 0 })),
+                              )}
                               /turno
                             </span>
                             <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">
@@ -1527,7 +1528,7 @@ export default function Canchas() {
                                     style={{ backgroundColor: "rgba(34,197,94,0.06)" }}
                                   >
                                     <span className="text-xs text-green-500 font-semibold block">Libre</span>
-                                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>${precioHora}</span>
+                                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>{formatPrecio(precioHora)}</span>
                                   </button>
                                   <button
                                     onClick={(e) => {
@@ -1592,7 +1593,7 @@ export default function Canchas() {
 
             <div className="rounded-xl p-3 mb-4 flex items-center justify-between" style={{ backgroundColor: "var(--bg-card-hover)" }}>
               <span className="text-sm" style={{ color: "var(--text-muted)" }}>Precio</span>
-              <span className="text-lg font-bold" style={{ color: "var(--accent)" }}>${modalManualData.precio}</span>
+              <span className="text-lg font-bold" style={{ color: "var(--accent)" }}>{formatPrecio(modalManualData.precio)}</span>
             </div>
 
             <div className="flex flex-col gap-3">

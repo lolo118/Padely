@@ -95,7 +95,7 @@ export default function Register() {
   ];
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-8 px-4">
+    <div className="min-h-screen flex items-center justify-center py-8 px-4" style={{ backgroundColor: "var(--bg-primary)" }}>
       <div
         className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md"
         data-theme="light"
