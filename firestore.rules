@@ -1,0 +1,150 @@
+rules_version = '2';
+// Padely rules v2 — ownership model (deployed from the repo with `npx firebase deploy --only firestore:rules`)
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    function clubOwner(clubId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/clubs/$(clubId)).data.ownerUid == request.auth.uid;
+    }
+    function clubReservaDirecta(clubId) {
+      return get(/databases/$(database)/documents/clubs/$(clubId)).data.get('reservaDirecta', true) == true;
+    }
+    function tournamentOrganizer(tid) {
+      return signedIn()
+        && get(/databases/$(database)/documents/tournaments/$(tid)).data.organizerId == request.auth.uid;
+    }
+    function changedOnly(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+    function pairMember(tid, pairId) {
+      let p = get(/databases/$(database)/documents/tournaments/$(tid)/pairs/$(pairId)).data;
+      return p.get('jugador1Uid', null) == request.auth.uid || p.get('jugador2Uid', null) == request.auth.uid;
+    }
+
+    // "Mis reservas": a player reads his reservations across clubs (collection group query)
+    match /{path=**}/reservas/{reservaId} {
+      allow read: if signedIn();
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create: if isSelf(userId);
+      allow delete: if isSelf(userId);
+      // Own profile: anything except role and ranking fields
+      allow update: if isSelf(userId)
+        && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['role', 'puntos', 'nivel', 'partidosGanados', 'partidosPerdidos',
+                     'torneosJugados', 'torneosGanados', 'torneosGanadosEnCategoria', 'ascensos']);
+      // TEMPORARY until the points system moves to Cloud Functions:
+      // any signed-in user may update ranking fields only (the client awards points after a result).
+      allow update: if signedIn()
+        && changedOnly(['puntos', 'nivel', 'partidosGanados', 'partidosPerdidos',
+                        'torneosJugados', 'torneosGanados', 'torneosGanadosEnCategoria', 'ascensos']);
+
+      match /notifications/{notifId} {
+        allow read: if isSelf(userId);
+        allow create: if signedIn();
+        allow update: if isSelf(userId) && changedOnly(['leida']);
+        allow delete: if isSelf(userId);
+      }
+    }
+
+    match /organizers/{orgId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    match /clubs/{clubId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      match /canchas/{canchaId} {
+        allow read: if signedIn();
+        allow create, update, delete: if clubOwner(clubId);
+      }
+
+      match /turnosFijos/{turnoId} {
+        allow read: if signedIn();
+        allow create, update, delete: if clubOwner(clubId);
+      }
+
+      match /reservas/{reservaId} {
+        allow read: if signedIn();
+        // The club books manually or blocks a slot; a player books for himself with the status the club's config dictates
+        allow create: if clubOwner(clubId)
+          || (signedIn()
+              && request.resource.data.jugadorUid == request.auth.uid
+              && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
+                  || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente')));
+        // The club manages; a player may cancel his own, or re-book a slot whose previous reservation was cancelled
+        allow update: if clubOwner(clubId)
+          || (signedIn() && resource.data.get('jugadorUid', null) == request.auth.uid
+              && changedOnly(['status']) && request.resource.data.status == 'cancelada')
+          || (signedIn() && resource.data.status == 'cancelada'
+              && request.resource.data.jugadorUid == request.auth.uid
+              && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
+                  || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente')));
+        allow delete: if clubOwner(clubId);
+      }
+
+      match /reviews/{reviewId} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+        allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
+      }
+    }
+
+    match /tournaments/{tid} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.organizerId == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.organizerId == request.auth.uid;
+
+      match /pairs/{pairId} {
+        allow read: if signedIn();
+        allow create, delete: if tournamentOrganizer(tid);
+        // The organizer edits; a player links his own account into an empty slot (vinculación)
+        allow update: if tournamentOrganizer(tid)
+          || (signedIn() && changedOnly(['jugador1Uid'])
+              && resource.data.get('jugador1Uid', null) == null
+              && request.resource.data.jugador1Uid == request.auth.uid)
+          || (signedIn() && changedOnly(['jugador2Uid'])
+              && resource.data.get('jugador2Uid', null) == null
+              && request.resource.data.jugador2Uid == request.auth.uid);
+      }
+
+      match /groups/{groupId} {
+        allow read: if signedIn();
+        allow create, update, delete: if tournamentOrganizer(tid);
+      }
+
+      match /inscripciones/{inscId} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.resource.data.jugador1Uid == request.auth.uid;
+        // The organizer confirms/rejects; the invited partner accepts (must be logged in)
+        allow update: if tournamentOrganizer(tid)
+          || (signedIn()
+              && resource.data.status == 'esperando_companero'
+              && changedOnly(['status', 'jugador2Uid', 'jugador2Confirmado'])
+              && request.resource.data.jugador2Uid == request.auth.uid
+              && request.resource.data.status == 'pendiente_aprobacion');
+        allow delete: if tournamentOrganizer(tid);
+      }
+
+      match /reclamos/{reclamoId} {
+        allow read: if signedIn();
+        // Only a player linked to the denouncing pair can open a reclamo
+        allow create: if signedIn() && pairMember(tid, request.resource.data.parejaDenunciante.id);
+        // The organizer resolves; any linked player may adhere or leave a descargo
+        allow update: if tournamentOrganizer(tid)
+          || (signedIn() && changedOnly(['adheridos']))
+          || (signedIn() && changedOnly(['descargo']));
+        allow delete: if tournamentOrganizer(tid);
+      }
+    }
+  }
+}
