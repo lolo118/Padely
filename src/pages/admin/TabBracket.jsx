@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   getGrupos,
+  getParejas,
   guardarBracket,
   getBracket,
 } from "../../services/torneoService";
@@ -17,75 +18,96 @@ function getNombreRonda(totalRondas, rondaIdx) {
   return `Ronda ${rondaIdx + 1}`;
 }
 
-function generarCrucesAutomaticos(grupos, parejasQueAvanzan) {
-  const clasificados = [];
-  const tablas = grupos
-    .map((g) => ({
-      nombre: g.nombre,
-      tabla: calcularTabla(g),
-    }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre));
-
-  tablas.forEach((g) => {
-    for (let i = 0; i < parejasQueAvanzan && i < g.tabla.length; i++) {
-      clasificados.push({ ...g.tabla[i], posGrupo: i + 1, grupo: g.nombre });
-    }
-  });
-
-  const primeros = clasificados.filter((c) => c.posGrupo === 1);
-  const segundos = clasificados.filter((c) => c.posGrupo === 2);
-  const terceros = clasificados.filter((c) => c.posGrupo === 3);
-
-  const partidos = [];
-  const cantCruces = Math.min(primeros.length, segundos.length);
-
-  for (let i = 0; i < cantCruces; i++) {
-    const segundoIdx = (cantCruces - 1 - i) % segundos.length;
-    partidos.push({
-      pareja1: primeros[i],
-      pareja2: segundos[segundoIdx],
-      resultado: null,
-      hora: "",
-      cancha: "",
-    });
-  }
-
-  const usados = new Set(partidos.flatMap((p) => [p.pareja1.id, p.pareja2.id]));
-  const restantes = [
-    ...terceros,
-    ...clasificados.filter((c) => !usados.has(c.id)),
-  ].filter((c) => !usados.has(c.id));
-  for (let i = 0; i < restantes.length; i += 2) {
-    if (restantes[i + 1]) {
-      partidos.push({
-        pareja1: restantes[i],
-        pareja2: restantes[i + 1],
-        resultado: null,
-        hora: "",
-        cancha: "",
-      });
-    }
-  }
-
-  return { clasificados, partidos };
+// Menor potencia de 2 >= n (n parejas -> tamaño del cuadro)
+function siguientePotenciaDe2(n) {
+  let p = 1;
+  while (p < n) p *= 2;
+  return p;
 }
 
+function nuevoPartido(pareja1, pareja2) {
+  return { pareja1: pareja1 || null, pareja2: pareja2 || null, resultado: null, hora: "", cancha: "" };
+}
+
+function mismoGrupo(a, b) {
+  return !!(a && b && a.grupo && b.grupo && a.grupo === b.grupo);
+}
+
+// Completa las semillas con null hasta la próxima potencia de 2 y cruza la semilla i con la n-1-i
+// (las mejores semillas reciben los byes). Después intenta evitar cruces entre parejas del mismo grupo.
+function emparejarConByes(seeds) {
+  const n = siguientePotenciaDe2(seeds.length);
+  const rellenas = [...seeds];
+  while (rellenas.length < n) rellenas.push(null);
+  const partidos = [];
+  for (let i = 0; i < n / 2; i++) {
+    partidos.push(nuevoPartido(rellenas[i], rellenas[n - 1 - i]));
+  }
+
+  // Fix-up: mientras haya un cruce del mismo grupo, intercambiamos su pareja2 con la de otro partido
+  // siempre que el cambio no genere un nuevo cruce del mismo grupo. Máximo dos pasadas.
+  for (let pasada = 0; pasada < 2; pasada++) {
+    let huboClash = false;
+    for (let i = 0; i < partidos.length; i++) {
+      const m = partidos[i];
+      if (!mismoGrupo(m.pareja1, m.pareja2)) continue;
+      huboClash = true;
+      for (let j = 0; j < partidos.length; j++) {
+        if (j === i) continue;
+        const o = partidos[j];
+        if (!o.pareja2) continue;
+        if (mismoGrupo(m.pareja1, o.pareja2) || mismoGrupo(o.pareja1, m.pareja2)) continue;
+        const tmp = m.pareja2;
+        m.pareja2 = o.pareja2;
+        o.pareja2 = tmp;
+        break;
+      }
+    }
+    if (!huboClash) break;
+  }
+  return partidos;
+}
+
+// Semillas desde los grupos: todos los 1° (en orden de nombre de grupo), después todos los 2°, etc.
+function seedsDesdeGrupos(grupos, parejasQueAvanzan) {
+  const tablas = grupos
+    .map((g) => ({ nombre: g.nombre, tabla: calcularTabla(g) }))
+    .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+  const seeds = [];
+  for (let pos = 0; pos < parejasQueAvanzan; pos++) {
+    tablas.forEach((g) => {
+      if (g.tabla[pos]) seeds.push({ ...g.tabla[pos], posGrupo: pos + 1, grupo: g.nombre });
+    });
+  }
+  return seeds;
+}
+
+function generarCrucesAutomaticos(grupos, parejasQueAvanzan) {
+  return emparejarConByes(seedsDesdeGrupos(grupos, parejasQueAvanzan));
+}
+
+// Primera ronda = los cruces recibidos (cantidad potencia de 2); cada ronda siguiente tiene la mitad
 function generarRondas(partidosIniciales) {
   const rondas = [partidosIniciales];
-  let cantSiguiente = Math.floor(partidosIniciales.length / 2);
+  let cantSiguiente = partidosIniciales.length / 2;
   while (cantSiguiente >= 1) {
-    rondas.push(
-      Array.from({ length: cantSiguiente }, () => ({
-        pareja1: null,
-        pareja2: null,
-        resultado: null,
-        hora: "",
-        cancha: "",
-      })),
-    );
-    cantSiguiente = Math.floor(cantSiguiente / 2);
+    rondas.push(Array.from({ length: cantSiguiente }, () => nuevoPartido(null, null)));
+    cantSiguiente = cantSiguiente / 2;
   }
   return rondas;
+}
+
+// Un partido es "bye" si tiene exactamente una pareja, no tiene resultado y el lugar vacío
+// no puede llenarse (primera ronda, o el partido que lo alimenta está vacío).
+function esBye(rondas, rondaIdx, partidoIdx) {
+  const partido = rondas[rondaIdx]?.[partidoIdx];
+  if (!partido || partido.resultado) return false;
+  const tieneUna = (partido.pareja1 && !partido.pareja2) || (!partido.pareja1 && partido.pareja2);
+  if (!tieneUna) return false;
+  if (rondaIdx === 0) return true;
+  const feederIdx = partido.pareja1 ? partidoIdx * 2 + 1 : partidoIdx * 2;
+  const feeder = rondas[rondaIdx - 1]?.[feederIdx];
+  return !feeder || (!feeder.pareja1 && !feeder.pareja2);
 }
 
 function avanzarGanadores(rondas) {
@@ -93,9 +115,14 @@ function avanzarGanadores(rondas) {
   for (let ri = 0; ri < nuevasRondas.length - 1; ri++) {
     for (let pi = 0; pi < nuevasRondas[ri].length; pi++) {
       const partido = nuevasRondas[ri][pi];
-      if (!partido.resultado) continue;
-      const g = getGanador(partido.resultado);
-      const ganador = g === 1 ? partido.pareja1 : partido.pareja2;
+      let ganador = null;
+      if (partido.resultado) {
+        const g = getGanador(partido.resultado);
+        ganador = g === 1 ? partido.pareja1 : partido.pareja2;
+      } else if (esBye(nuevasRondas, ri, pi)) {
+        ganador = partido.pareja1 || partido.pareja2;
+      }
+      if (!ganador) continue;
       const siguienteIdx = Math.floor(pi / 2);
       const posicion = pi % 2 === 0 ? "pareja1" : "pareja2";
       if (nuevasRondas[ri + 1][siguienteIdx]) {
@@ -121,30 +148,11 @@ function obtenerCampeonYSub(rondas) {
   };
 }
 
-function ManualBracketBuilder({ grupos, parejasQueAvanzan, onConfirm }) {
-  const clasificados = [];
-  const tablas = grupos
-    .map((g) => ({
-      nombre: g.nombre,
-      tabla: calcularTabla(g),
-    }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre));
-
-  tablas.forEach((g) => {
-    for (let i = 0; i < parejasQueAvanzan && i < g.tabla.length; i++) {
-      clasificados.push({ ...g.tabla[i], posGrupo: i + 1, grupo: g.nombre });
-    }
-  });
-
-  const cantPartidos = Math.floor(clasificados.length / 2);
+function ManualBracketBuilder({ clasificados, onConfirm }) {
+  // Tamaño del cuadro: próxima potencia de 2; una llave con un solo lugar ocupado es un bye
+  const cantPartidos = Math.max(1, siguientePotenciaDe2(clasificados.length) / 2);
   const [llaves, setLlaves] = useState(
-    Array.from({ length: cantPartidos }, () => ({
-      pareja1: null,
-      pareja2: null,
-      resultado: null,
-      hora: "",
-      cancha: "",
-    })),
+    Array.from({ length: cantPartidos }, () => nuevoPartido(null, null)),
   );
 
   const asignadasIds = new Set(
@@ -170,9 +178,11 @@ function ManualBracketBuilder({ grupos, parejasQueAvanzan, onConfirm }) {
                   <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                     {getNombrePareja(p)}
                   </span>
-                  <span className="text-xs ml-2" style={{ color: "var(--text-muted)" }}>
-                    ({p.grupo} — {p.posGrupo}°)
-                  </span>
+                  {p.grupo && (
+                    <span className="text-xs ml-2" style={{ color: "var(--text-muted)" }}>
+                      ({p.grupo} — {p.posGrupo}°)
+                    </span>
+                  )}
                 </div>
                 <div className="flex gap-1 flex-wrap">
                   {llaves.map((l, li) => (
@@ -213,6 +223,9 @@ function ManualBracketBuilder({ grupos, parejasQueAvanzan, onConfirm }) {
       )}
       <div>
         <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>Llaves</p>
+        <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
+          Si una llave queda con una sola pareja, esa pareja pasa directo (bye).
+        </p>
         <div className="flex flex-col gap-2">
           {llaves.map((l, li) => (
             <div key={li} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
@@ -281,6 +294,7 @@ function ManualBracketBuilder({ grupos, parejasQueAvanzan, onConfirm }) {
 
 export default function TabBracket({ torneoId, torneo }) {
   const [grupos, setGrupos] = useState([]);
+  const [parejas, setParejas] = useState([]);
   const [rondas, setRondas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [bracketGenerado, setBracketGenerado] = useState(false);
@@ -291,17 +305,21 @@ export default function TabBracket({ torneoId, torneo }) {
   const [errorModal, setErrorModal] = useState("");
 
   const parejasQueAvanzan = Number(torneo.parejasQueAvanzan) || 2;
+  // Eliminación directa: el cuadro se arma con todas las parejas inscriptas, sin fase de grupos
+  const esEliminacionDirecta = torneo.formato === "eliminacion";
 
   useEffect(() => {
     const cargar = async () => {
       try {
-        const [gruposData, bracketData] = await Promise.all([
+        const [gruposData, bracketData, parejasData] = await Promise.all([
           getGrupos(torneoId),
           getBracket(torneoId),
+          torneo.formato === "eliminacion" ? getParejas(torneoId) : Promise.resolve([]),
         ]);
         setGrupos(gruposData);
+        setParejas(parejasData);
         if (bracketData && bracketData.rondas) {
-          setRondas(bracketData.rondas);
+          setRondas(avanzarGanadores(bracketData.rondas));
           setBracketGenerado(true);
         }
       } catch (err) {
@@ -310,12 +328,22 @@ export default function TabBracket({ torneoId, torneo }) {
       setLoading(false);
     };
     cargar();
-  }, [torneoId]);
+  }, [torneoId, torneo.formato]);
+
+  // Parejas que entran al cuadro: las clasificadas de los grupos, o todas en eliminación directa
+  const clasificados = esEliminacionDirecta ? parejas : seedsDesdeGrupos(grupos, parejasQueAvanzan);
 
   const generarBracketAutomatico = () => {
-    if (grupos.length === 0) return;
-    const { partidos } = generarCrucesAutomaticos(grupos, parejasQueAvanzan);
-    setRondas(generarRondas(partidos));
+    let partidos;
+    if (esEliminacionDirecta) {
+      if (parejas.length < 2) return;
+      const sorteadas = [...parejas].sort(() => Math.random() - 0.5);
+      partidos = emparejarConByes(sorteadas);
+    } else {
+      if (grupos.length === 0) return;
+      partidos = generarCrucesAutomaticos(grupos, parejasQueAvanzan);
+    }
+    setRondas(avanzarGanadores(generarRondas(partidos)));
   };
 
   const confirmarBracket = async () => {
@@ -571,13 +599,25 @@ export default function TabBracket({ torneoId, torneo }) {
       <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando bracket...</div>
     );
 
-  if (grupos.length === 0) {
+  if (!esEliminacionDirecta && grupos.length === 0) {
     return (
       <div className="themed-card rounded-2xl p-5 border text-center py-12">
         <div className="text-4xl mb-3">📋</div>
         <p className="font-medium" style={{ color: "var(--text-muted)" }}>Primero generá los grupos</p>
         <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
           Necesitás tener grupos confirmados con resultados cargados
+        </p>
+      </div>
+    );
+  }
+
+  if (esEliminacionDirecta && parejas.length < 2 && rondas.length === 0) {
+    return (
+      <div className="themed-card rounded-2xl p-5 border text-center py-12">
+        <div className="text-4xl mb-3">👥</div>
+        <p className="font-medium" style={{ color: "var(--text-muted)" }}>Necesitás al menos 2 parejas inscriptas</p>
+        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+          Actualmente hay {parejas.length} pareja{parejas.length !== 1 ? "s" : ""}
         </p>
       </div>
     );
@@ -649,15 +689,16 @@ export default function TabBracket({ torneoId, torneo }) {
             Generar bracket eliminatorio
           </h2>
           <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
-            Avanzan {parejasQueAvanzan} pareja
-            {parejasQueAvanzan !== 1 ? "s" : ""} de cada grupo
+            {esEliminacionDirecta
+              ? `Entran las ${parejas.length} parejas inscriptas; si no son potencia de 2, algunas pasan directo (bye)`
+              : `Avanzan ${parejasQueAvanzan} pareja${parejasQueAvanzan !== 1 ? "s" : ""} de cada grupo`}
           </p>
           <div className="flex gap-2 mb-3">
             <button
               onClick={() => setModoGeneracion("automatico")}
               className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "automatico" ? "bg-green-600 text-white" : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"}`}
             >
-              Automático (cruzado)
+              {esEliminacionDirecta ? "Automático (sorteo)" : "Automático (cruzado)"}
             </button>
             <button
               onClick={() => setModoGeneracion("manual")}
@@ -671,14 +712,14 @@ export default function TabBracket({ torneoId, torneo }) {
               onClick={generarBracketAutomatico}
               className="w-full bg-green-600 text-white font-semibold py-2 rounded-xl hover:bg-green-700 transition"
             >
-              Generar cruces automáticos
+              {esEliminacionDirecta ? "Sortear cruces" : "Generar cruces automáticos"}
             </button>
           )}
           {modoGeneracion === "manual" && (
             <ManualBracketBuilder
-              grupos={grupos}
-              parejasQueAvanzan={parejasQueAvanzan}
-              onConfirm={(llaves) => setRondas(generarRondas(llaves))}
+              key={clasificados.length}
+              clasificados={clasificados}
+              onConfirm={(llaves) => setRondas(avanzarGanadores(generarRondas(llaves)))}
             />
           )}
         </div>
@@ -778,6 +819,11 @@ export default function TabBracket({ torneoId, torneo }) {
                                 Iniciá el torneo primero
                               </span>
                             )
+                          ) : esBye(rondas, ri, pi) ? (
+                            <span className="text-xs font-semibold px-2 py-1 rounded-full"
+                              style={{ backgroundColor: "var(--accent-light)", color: "var(--accent)" }}>
+                              Pasa directo (bye)
+                            </span>
                           ) : (
                             <span className="text-xs" style={{ color: "var(--text-muted)", opacity: 0.4 }}>—</span>
                           )}
