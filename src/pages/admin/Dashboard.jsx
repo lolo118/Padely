@@ -6,9 +6,11 @@ import {
   getClubByOwner,
   getCanchas,
   getReservas,
+  getReservasPendientes,
   getTurnosFijos,
   actualizarReserva,
 } from "../../services/canchaService";
+import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
 import { formatFecha } from "../../utils/formatDate";
 
 export default function Dashboard() {
@@ -20,6 +22,8 @@ export default function Dashboard() {
   const [reservasHoy, setReservasHoy] = useState([]);
   const [turnosFijos, setTurnosFijos] = useState([]);
   const [reservasManana, setReservasManana] = useState([]);
+  // Pendientes de aprobación de todas las fechas (no solo hoy)
+  const [reservasPendientes, setReservasPendientes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mostrarAyuda, setMostrarAyuda] = useState(true);
 
@@ -42,16 +46,18 @@ export default function Dashboard() {
         setTorneos(torneosData);
         if (clubData) {
           setClub(clubData);
-          const [canchasData, reservasData, turnosData, reservasMananaData] = await Promise.all([
+          const [canchasData, reservasData, turnosData, reservasMananaData, pendientesData] = await Promise.all([
             getCanchas(clubData.id),
             getReservas(clubData.id, hoyStr),
             getTurnosFijos(clubData.id),
             getReservas(clubData.id, mananaStr),
+            getReservasPendientes(clubData.id),
           ]);
           setCanchas(canchasData);
           setReservasHoy(reservasData);
           setTurnosFijos(turnosData);
           setReservasManana(reservasMananaData);
+          setReservasPendientes(pendientesData);
         }
       } catch (err) {
         console.error("Error al cargar dashboard:", err);
@@ -75,9 +81,6 @@ export default function Dashboard() {
 
   const reservasConfirmadas = reservasHoy.filter(
     (r) => r.status === "confirmada",
-  );
-  const reservasPendientes = reservasHoy.filter(
-    (r) => r.status === "pendiente",
   );
   const ingresosHoy = reservasConfirmadas.reduce(
     (sum, r) => sum + (Number(r.precio) || 0),
@@ -137,6 +140,11 @@ export default function Dashboard() {
   const handleConfirmarReserva = async (reservaId) => {
     try {
       await actualizarReserva(club.id, reservaId, { status: "confirmada" });
+      const reserva = reservasPendientes.find((r) => r.id === reservaId);
+      if (reserva?.jugadorUid) {
+        notificarReservaConfirmada(reserva.jugadorUid, club.nombre, reserva.canchaName || "", reserva.fecha, reserva.hora);
+      }
+      setReservasPendientes(reservasPendientes.filter((r) => r.id !== reservaId));
       setReservasHoy(reservasHoy.map((r) => r.id === reservaId ? { ...r, status: "confirmada" } : r));
     } catch (err) { console.error(err); }
   };
@@ -145,6 +153,11 @@ export default function Dashboard() {
     if (!window.confirm("¿Rechazar esta reserva?")) return;
     try {
       await actualizarReserva(club.id, reservaId, { status: "cancelada" });
+      const reserva = reservasPendientes.find((r) => r.id === reservaId);
+      if (reserva?.jugadorUid) {
+        notificarReservaRechazada(reserva.jugadorUid, club.nombre, reserva.canchaName || "", reserva.fecha, reserva.hora);
+      }
+      setReservasPendientes(reservasPendientes.filter((r) => r.id !== reservaId));
       setReservasHoy(reservasHoy.map((r) => r.id === reservaId ? { ...r, status: "cancelada" } : r));
     } catch (err) { console.error(err); }
   };
@@ -419,7 +432,7 @@ export default function Dashboard() {
                       {r.nombreJugador || "Jugador"}
                     </p>
                     <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {r.canchaName || "Cancha"} · {r.hora} {r.precio != null && <span style={{ color: "var(--accent)" }}> · ${r.precio}</span>}
+                      {r.canchaName || "Cancha"} · {formatFecha(r.fecha)} · {r.hora} {r.precio != null && <span style={{ color: "var(--accent)" }}> · ${r.precio}</span>}
                     </p>
                   </div>
                   <div className="flex gap-2">

@@ -146,12 +146,14 @@ const statusBadge = {
   pendiente: "bg-yellow-100 text-yellow-700",
   confirmada: "bg-green-100 text-green-700",
   cancelada: "bg-red-100 text-red-500",
+  bloqueado: "bg-red-100 text-red-600",
 };
 
 const statusLabel = {
   pendiente: "Pendiente",
   confirmada: "Confirmada",
   cancelada: "Cancelada",
+  bloqueado: "Bloqueado",
 };
 
 function ReservasTab({ clubId, canchas, clubNombre }) {
@@ -197,6 +199,14 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
     } catch (err) { console.error(err); }
   };
 
+  const handleDesbloquear = async (reservaId) => {
+    if (!window.confirm("¿Desbloquear este horario?")) return;
+    try {
+      await actualizarReserva(clubId, reservaId, { status: "cancelada" });
+      setReservas(reservas.map((r) => r.id === reservaId ? { ...r, status: "cancelada" } : r));
+    } catch (err) { console.error(err); }
+  };
+
   const handleEliminar = async (reservaId) => {
     if (!window.confirm("¿Eliminar esta reserva definitivamente?")) return;
     try {
@@ -233,10 +243,11 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
     { key: "pendiente", label: `Pendientes (${pendientes})`, active: "bg-yellow-100 text-yellow-700" },
     { key: "confirmada", label: `Confirmadas (${confirmadas})`, active: "bg-green-100 text-green-700" },
     { key: "cancelada", label: "Canceladas", active: "bg-red-100 text-red-500" },
+    { key: "bloqueado", label: "Bloqueados", active: "bg-red-100 text-red-600" },
     { key: "todas", label: "Todas", active: "bg-[var(--bg-card-hover)] text-[var(--text-primary)]" },
   ];
 
-  const filtroLabel = { pendiente: "pendientes", confirmada: "confirmadas", cancelada: "canceladas", todas: "" };
+  const filtroLabel = { pendiente: "pendientes", confirmada: "confirmadas", cancelada: "canceladas", bloqueado: "bloqueadas", todas: "" };
 
   return (
     <div className="flex flex-col gap-4">
@@ -319,6 +330,10 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
                     {r.status === "confirmada" && (
                       <button onClick={() => handleRechazar(r.id)}
                         className="text-xs font-semibold text-red-400 hover:text-red-600">Cancelar</button>
+                    )}
+                    {r.status === "bloqueado" && (
+                      <button onClick={() => handleDesbloquear(r.id)}
+                        className="text-xs font-semibold text-red-400 hover:text-red-600">Desbloquear</button>
                     )}
                     {r.status === "cancelada" && (
                       <button onClick={() => handleEliminar(r.id)}
@@ -559,11 +574,22 @@ export default function Canchas() {
     );
   };
 
+  // Cancelar desde la grilla: la reserva queda "cancelada" (no se borra) y se avisa al jugador.
+  // Borrar definitivamente solo existe en la pestaña Reservas ("Eliminar").
   const handleCancelarReserva = async (reservaId) => {
-    if (!window.confirm("¿Cancelar esta reserva?")) return;
+    const reserva = reservas.find((r) => r.id === reservaId);
+    const esBloqueo = reserva?.status === "bloqueado";
+    if (!window.confirm(esBloqueo ? "¿Desbloquear este horario?" : "¿Cancelar esta reserva?")) return;
     try {
-      await eliminarReserva(club.id, reservaId);
-      setReservas(reservas.filter((r) => r.id !== reservaId));
+      await actualizarReserva(club.id, reservaId, { status: "cancelada" });
+      if (reserva?.jugadorUid) {
+        notificarReservaRechazada(reserva.jugadorUid, club.nombre, reserva.canchaName || "", reserva.fecha, reserva.hora);
+      }
+      setReservas(
+        reservas.map((r) =>
+          r.id === reservaId ? { ...r, status: "cancelada" } : r,
+        ),
+      );
     } catch (err) {
       console.error("Error al cancelar reserva:", err);
     }

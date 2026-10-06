@@ -87,6 +87,17 @@ export const getReservas = async (clubId, fecha) => {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
+// Reservas pendientes de aprobación de todas las fechas (índice compuesto status + fecha)
+export const getReservasPendientes = async (clubId) => {
+  const q = query(
+    collection(db, "clubs", clubId, "reservas"),
+    where("status", "==", "pendiente"),
+    orderBy("fecha", "asc"),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
 export const actualizarReserva = async (clubId, reservaId, datos) => {
   await updateDoc(doc(db, "clubs", clubId, "reservas", reservaId), datos);
 };

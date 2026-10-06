@@ -110,6 +110,16 @@ export const notificarReservaRechazada = async (jugadorUid, clubNombre, cancha, 
   });
 };
 
+export const notificarReservaCanceladaPorJugador = async (ownerUid, nombreJugador, cancha, fecha, hora) => {
+  await crearNotificacion(ownerUid, {
+    tipo: "reserva_cancelada_jugador",
+    titulo: "Reserva cancelada por el jugador",
+    mensaje: `${nombreJugador || "Un jugador"} canceló su reserva de ${cancha} (${fecha} ${hora}).`,
+    link: "/admin/canchas",
+    icono: "🚫",
+  });
+};
+
 export const notificarNuevaReserva = async (clubOwnerUid, jugadorNombre, cancha, fecha, hora) => {
   await crearNotificacion(clubOwnerUid, {
     tipo: "nueva_reserva",

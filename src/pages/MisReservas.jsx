@@ -4,7 +4,8 @@ import { useAuthStore } from "../store/authStore";
 import { query, where, getDocs, collectionGroup, getDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { actualizarReserva } from "../services/canchaService";
-import { formatFecha } from "../utils/formatDate";
+import { notificarReservaCanceladaPorJugador } from "../services/notificationService";
+import { formatFecha, getTodayLocal } from "../utils/formatDate";
 
 const statusBadge = {
   confirmada: "bg-green-100 text-green-700",
@@ -23,11 +24,9 @@ export default function MisReservas() {
   const navigate = useNavigate();
   const [reservas, setReservas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [errorCancelacion, setErrorCancelacion] = useState("");
 
-  const [hoyStr] = useState(() => {
-    const hoy = new Date();
-    return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
-  });
+  const [hoyStr] = useState(() => getTodayLocal());
 
   useEffect(() => {
     if (!user) return;
@@ -42,13 +41,15 @@ export default function MisReservas() {
           const clubRef = d.ref.parent.parent;
           const clubId = clubRef.id;
           let clubNombre = "";
+          let clubOwnerUid = null;
           try {
             const clubSnap = await getDoc(clubRef);
             if (clubSnap.exists()) {
               clubNombre = clubSnap.data().nombre || clubSnap.data().name || "";
+              clubOwnerUid = clubSnap.data().ownerUid || null;
             }
           } catch (err) { console.error(err); }
-          datos.push({ id: d.id, clubId, clubNombre, ...data });
+          datos.push({ id: d.id, clubId, clubNombre, clubOwnerUid, ...data });
         }
 
         // Separar y ordenar
@@ -69,13 +70,33 @@ export default function MisReservas() {
     cargar();
   }, [user, hoyStr]);
 
+  // Hoy, con menos de 2 horas de anticipación, ya no se puede cancelar
+  const puedeCancelar = (reserva) => {
+    if (reserva.fecha !== getTodayLocal()) return true;
+    const [h, m] = String(reserva.hora || "00:00").split(":").map(Number);
+    const ahora = new Date();
+    const inicio = new Date(ahora);
+    inicio.setHours(h || 0, m || 0, 0, 0);
+    return inicio.getTime() - ahora.getTime() >= 2 * 60 * 60 * 1000;
+  };
+
   const cancelarReserva = async (reserva) => {
+    setErrorCancelacion("");
+    if (!puedeCancelar(reserva)) {
+      setErrorCancelacion("Las reservas se pueden cancelar hasta 2 horas antes");
+      return;
+    }
     if (!window.confirm("¿Cancelar esta reserva?")) return;
     try {
       await actualizarReserva(reserva.clubId, reserva.id, { status: "cancelada" });
       setReservas(reservas.map((r) => r.id === reserva.id ? { ...r, status: "cancelada" } : r));
+      if (reserva.clubOwnerUid) {
+        const nombreJugador = reserva.nombreJugador || user?.displayName || user?.email || "Un jugador";
+        notificarReservaCanceladaPorJugador(reserva.clubOwnerUid, nombreJugador, reserva.canchaName || reserva.cancha || "la cancha", reserva.fecha, reserva.hora);
+      }
     } catch (err) {
       console.error("Error al cancelar:", err);
+      setErrorCancelacion("No pudimos cancelar la reserva. Intentá de nuevo.");
     }
   };
 
@@ -96,6 +117,18 @@ export default function MisReservas() {
         <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Mis reservas</h1>
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>Tus reservas de canchas</p>
       </div>
+
+      {errorCancelacion && (
+        <div
+          className="rounded-xl px-4 py-3 mb-4 text-sm font-medium text-red-600 border flex items-center justify-between gap-3"
+          style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.2)" }}
+        >
+          <span>{errorCancelacion}</span>
+          <button type="button" onClick={() => setErrorCancelacion("")} className="text-xs font-semibold hover:underline">
+            Cerrar
+          </button>
+        </div>
+      )}
 
       {reservas.length === 0 ? (
         <div className="themed-card rounded-2xl p-8 border text-center">
