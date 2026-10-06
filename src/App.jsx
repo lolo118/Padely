@@ -1,6 +1,6 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { onAuthChange, getUserData } from "./services/authService";
+import { onAuthChange, getUserData, handleRedirectResult } from "./services/authService";
 import { useAuthStore } from "./store/authStore";
 import useThemeStore from "./store/themeStore";
 
@@ -70,30 +70,13 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+// El rol vive en el store (se carga junto con el perfil en onAuthChange); rol === null significa "todavía cargando"
 function RoleRoute({ allowedRoles, children }) {
-  const { user, loading } = useAuthStore();
-  const [rol, setRol] = useState(null);
-  const [checking, setChecking] = useState(true);
-
-  useEffect(() => {
-    if (loading) return;
-    const verificar = async () => {
-      if (!user) { setChecking(false); return; }
-      try {
-        const data = await getUserData(user.uid);
-        const roles = data?.role || ["jugador"];
-        if (roles.includes("club")) setRol("club");
-        else if (roles.includes("organizador")) setRol("organizador");
-        else setRol("jugador");
-      } catch { setRol("jugador"); }
-      setChecking(false);
-    };
-    verificar();
-  }, [user, loading]);
+  const { user, loading, rol } = useAuthStore();
 
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
   if (!user) return <Navigate to="/login" />;
-  if (checking) return <div className="min-h-screen flex items-center justify-center" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
+  if (!rol) return <div className="min-h-screen flex items-center justify-center" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
   if (!allowedRoles.includes(rol)) {
     if (rol === "club") return <Navigate to="/admin" />;
     if (rol === "organizador") return <Navigate to="/org" />;
@@ -103,33 +86,16 @@ function RoleRoute({ allowedRoles, children }) {
 }
 
 function RedirigirPorRol() {
-  const { user } = useAuthStore();
-  const [rol, setRol] = useState(null);
-  const [checking, setChecking] = useState(true);
+  const { user, rol } = useAuthStore();
 
-  useEffect(() => {
-    const verificar = async () => {
-      if (!user) { setChecking(false); return; }
-      try {
-        const data = await getUserData(user.uid);
-        const roles = data?.role || ["jugador"];
-        if (roles.includes("club")) setRol("club");
-        else if (roles.includes("organizador")) setRol("organizador");
-        else setRol("jugador");
-      } catch { setRol("jugador"); }
-      setChecking(false);
-    };
-    verificar();
-  }, [user]);
-
-  if (checking) return <div className="min-h-screen flex items-center justify-center" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
+  if (user && !rol) return <div className="min-h-screen flex items-center justify-center" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
   if (rol === "club") return <Navigate to="/admin" />;
   if (rol === "organizador") return <Navigate to="/org" />;
   return <Inicio />;
 }
 
 export default function App() {
-  const { setUser, setLoading } = useAuthStore();
+  const { setUser, setPerfil, setLoading } = useAuthStore();
   const { initTheme } = useThemeStore();
 
   useEffect(() => {
@@ -138,8 +104,20 @@ export default function App() {
 
   useEffect(() => {
     let first = true;
-    const unsub = onAuthChange((user) => {
+    // Si venimos de un login con Google por redirect (popup bloqueado), lo completamos acá
+    handleRedirectResult().catch((err) => console.error("Error en el redirect de Google:", err));
+
+    const unsub = onAuthChange(async (user) => {
       setUser(user);
+      if (user) {
+        // El perfil (users/{uid}) y el rol quedan en el store antes de dar por terminada la carga
+        try {
+          setPerfil(await getUserData(user.uid));
+        } catch (err) {
+          console.error("Error cargando el perfil:", err);
+          setPerfil(null);
+        }
+      }
       setLoading(false);
       first = false;
     });
@@ -150,7 +128,7 @@ export default function App() {
       unsub();
       clearTimeout(timeout);
     };
-  }, [setUser, setLoading]);
+  }, [setUser, setPerfil, setLoading]);
 
   return (
     <BrowserRouter>

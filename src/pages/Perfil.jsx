@@ -38,7 +38,7 @@ const inputClass =
 const labelClass = "text-xs font-semibold mb-1 block";
 
 export default function Perfil() {
-  const { user, setUser } = useAuthStore();
+  const { user, setUser, refreshPerfil } = useAuthStore();
   const navigate = useNavigate();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -132,6 +132,7 @@ export default function Perfil() {
       setUserData({ ...userData, ...editForm });
       setEditando(false);
       setPerfilModificado(false);
+      refreshPerfil();
       toast.success("Perfil guardado");
     } catch (err) {
       console.error("Error al guardar:", err);
@@ -207,6 +208,7 @@ export default function Perfil() {
       const url = await uploadProfilePhoto(user.uid, file);
       await updateDoc(doc(db, "users", user.uid), { fotoUrl: url });
       setFotoUrl(url);
+      refreshPerfil();
       toast.success("Foto actualizada");
     } catch (err) {
       console.error("Error subiendo foto:", err);

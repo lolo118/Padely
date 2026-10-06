@@ -1,9 +1,8 @@
 import { useState } from "react";
-import {
-  loginUser,
-  loginWithGoogle,
-  getUserData,
-} from "../../services/authService";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "../../lib/firebase";
+import { loginUser, loginWithGoogle } from "../../services/authService";
+import { useAuthStore } from "../../store/authStore";
 import { useNavigate, Link } from "react-router-dom";
 import { toast } from "../../components/Toast";
 
@@ -14,6 +13,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  const refreshPerfil = useAuthStore((s) => s.refreshPerfil);
+
   const redirigirSegunRol = async (user) => {
     const vincularRedirect = localStorage.getItem("padely-vincular-redirect");
     if (vincularRedirect) {
@@ -21,22 +22,12 @@ export default function Login() {
       navigate(vincularRedirect);
       return;
     }
-    try {
-      const data = await getUserData(user.uid);
-      if (data && data.role) {
-        if (data.role.includes("club")) {
-          navigate("/admin");
-        } else if (data.role.includes("organizador")) {
-          navigate("/org");
-        } else {
-          navigate("/inicio");
-        }
-      } else {
-        navigate("/inicio");
-      }
-    } catch {
-      navigate("/inicio");
-    }
+    // Cargamos el perfil en el store y usamos el rol que queda ahí (única fuente de verdad)
+    await refreshPerfil(user.uid);
+    const rol = useAuthStore.getState().rol;
+    if (rol === "club") navigate("/admin");
+    else if (rol === "organizador") navigate("/org");
+    else navigate("/inicio");
   };
 
   const handleLogin = async (e) => {
@@ -58,11 +49,37 @@ export default function Login() {
     setLoading(true);
     try {
       const user = await loginWithGoogle();
+      if (!user) return; // popup bloqueado: seguimos por redirect, la página navega a Google
       await redirigirSegunRol(user);
-    } catch {
-      setError("Error al iniciar sesión con Google");
-      toast.error("Error al iniciar sesión con Google");
+    } catch (err) {
+      const msg =
+        err?.code === "auth/popup-blocked"
+          ? "Tu navegador bloqueó la ventana de Google. Habilitá los pop-ups o ingresá con email y contraseña."
+          : err?.code === "auth/popup-closed-by-user"
+            ? "Cerraste la ventana de Google antes de terminar."
+            : "Error al iniciar sesión con Google";
+      setError(msg);
+      toast.error(msg);
       setLoading(false);
+    }
+  };
+
+  const handleOlvide = async () => {
+    const mail = email.trim();
+    if (!mail) {
+      toast.error("Ingresá tu email para restablecer la contraseña");
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, mail);
+      toast.success("Te enviamos un email para restablecer tu contraseña");
+    } catch (err) {
+      console.error("Error enviando el reset de contraseña:", err);
+      toast.error(
+        err?.code === "auth/invalid-email"
+          ? "El email no es válido"
+          : "No encontramos una cuenta con ese email",
+      );
     }
   };
 
@@ -104,6 +121,13 @@ export default function Login() {
             className="border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             required
           />
+          <button
+            type="button"
+            onClick={handleOlvide}
+            className="text-xs text-emerald-600 font-semibold hover:underline self-end -mt-2"
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
           <button
             type="submit"
             disabled={loading}

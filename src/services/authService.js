@@ -5,6 +5,8 @@ import {
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
 } from "firebase/auth";
 import { doc, setDoc, getDoc, addDoc, collection } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
@@ -65,21 +67,51 @@ export const registerUser = async (email, password, datos) => {
 export const loginUser = (email, password) =>
   signInWithEmailAndPassword(auth, email, password);
 
-export const loginWithGoogle = async () => {
-  const provider = new GoogleAuthProvider();
-  const { user } = await signInWithPopup(auth, provider);
+// Crea users/{uid} (rol jugador) si todavía no existe, por ejemplo al entrar con Google por primera vez
+export const ensureUserDoc = async (user) => {
   const ref = doc(db, "users", user.uid);
   const snap = await getDoc(ref);
   if (!snap.exists()) {
     await setDoc(ref, {
       uid: user.uid,
-      nombre: user.displayName,
-      email: user.email,
+      nombre: user.displayName || "",
+      email: user.email || "",
       role: ["jugador"],
       createdAt: new Date(),
     });
   }
   return user;
+};
+
+// Devuelve el usuario, o null si el navegador bloqueó el popup y se inició el flujo por redirect
+// (la página navega a Google; al volver, handleRedirectResult completa el login).
+export const loginWithGoogle = async () => {
+  const provider = new GoogleAuthProvider();
+  try {
+    const { user } = await signInWithPopup(auth, provider);
+    await ensureUserDoc(user);
+    return user;
+  } catch (err) {
+    if (err?.code !== "auth/popup-blocked") throw err;
+    try {
+      await signInWithRedirect(auth, provider);
+      return null;
+    } catch (redirectErr) {
+      console.error("Error iniciando el redirect de Google:", redirectErr);
+      const e = new Error("popup-and-redirect-failed");
+      e.code = "auth/popup-blocked";
+      throw e;
+    }
+  }
+};
+
+export const handleRedirectResult = async () => {
+  const result = await getRedirectResult(auth);
+  if (result?.user) {
+    await ensureUserDoc(result.user);
+    return result.user;
+  }
+  return null;
 };
 
 export const logoutUser = () => signOut(auth);
