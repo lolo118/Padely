@@ -16,7 +16,7 @@ import {
 } from "../services/torneoService";
 import { getUserData } from "../services/authService";
 import { formatFecha } from "../utils/formatDate";
-import { calcularTabla, getGanador, getNombrePareja } from "../utils/torneo";
+import { calcularTabla, getGanador, getNombrePareja, listaCategorias } from "../utils/torneo";
 import { notificarInscripcionTorneo, notificarReclamoContra, notificarNuevoReclamo } from "../services/notificationService";
 
 const estadoBadge = {
@@ -73,6 +73,7 @@ export default function DetalleTorneoPublico() {
   const [linkInvitacion, setLinkInvitacion] = useState("");
   const [restriccionCategoria, setRestriccionCategoria] = useState(null);
   const [categoriaJugador, setCategoriaJugador] = useState("");
+  const [categoriaInsc, setCategoriaInsc] = useState("");
 
   const [reclamos, setReclamos] = useState([]);
   const [mostrarFormReclamo, setMostrarFormReclamo] = useState(null);
@@ -108,6 +109,9 @@ export default function DetalleTorneoPublico() {
           ]);
         setTorneo(torneoData);
         setParejas(parejasData);
+        // Con una sola categoría se asigna sola; con varias el jugador la elige en el formulario
+        const cats = listaCategorias(torneoData);
+        if (cats.length === 1) setCategoriaInsc(cats[0].id);
         setGrupos(
           gruposData.sort((a, b) =>
             (a.nombre || "").localeCompare(b.nombre || ""),
@@ -239,10 +243,14 @@ export default function DetalleTorneoPublico() {
       )
     : false;
 
+  const categorias = listaCategorias(torneo);
+  const cupoCompleto = !!torneo && parejas.length >= Number(torneo.maxParejas || 0);
+
   const handleInscripcion = async (e) => {
     e.preventDefault();
     if (!apellido1.trim() || !apellido2.trim()) return;
     if (!email2.trim() && !whatsapp2.trim()) return;
+    if (categorias.length > 1 && !categoriaInsc) return;
     setEnviando(true);
     try {
       const inscId = await crearSolicitudInscripcion(id, {
@@ -256,6 +264,7 @@ export default function DetalleTorneoPublico() {
         email2: email2.trim(),
         whatsapp2: whatsapp2.trim(),
         jugador2Uid: null,
+        categoria: categorias.length === 1 ? categorias[0].id : categoriaInsc || null,
       });
       const link = `${window.location.origin}/invitacion/${id}/${inscId}`;
       setLinkInvitacion(link);
@@ -340,6 +349,18 @@ export default function DetalleTorneoPublico() {
                     </p>
                   </div>
                 </div>
+              </div>
+            ) : cupoCompleto ? (
+              <div
+                className="rounded-xl p-4 mb-4 border text-center"
+                style={{ backgroundColor: "var(--bg-card-hover)", borderColor: "var(--border-card)" }}
+              >
+                <p className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>
+                  Cupo completo
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  Ya se inscribieron {parejas.length} de {torneo.maxParejas} parejas
+                </p>
               </div>
             ) : (
               <button
@@ -501,6 +522,36 @@ export default function DetalleTorneoPublico() {
               invitación
             </p>
 
+            {categorias.length > 1 && (
+              <div>
+                <label
+                  className="text-xs font-semibold mb-1 block"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Categoría *
+                </label>
+                <select
+                  value={categoriaInsc}
+                  onChange={(e) => setCategoriaInsc(e.target.value)}
+                  required
+                  className="themed-input w-full rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="">Elegí una categoría</option>
+                  {categorias.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {categorias.length === 1 && (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Categoría:{" "}
+                <span className="font-semibold">{categorias[0].label}</span>
+              </p>
+            )}
+
             {apellido1.trim() && apellido2.trim() && (
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                 Nombre de pareja:{" "}
@@ -528,7 +579,8 @@ export default function DetalleTorneoPublico() {
                   enviando ||
                   !apellido1.trim() ||
                   !apellido2.trim() ||
-                  (!email2.trim() && !whatsapp2.trim())
+                  (!email2.trim() && !whatsapp2.trim()) ||
+                  (categorias.length > 1 && !categoriaInsc)
                 }
                 className="flex-1 bg-green-600 text-white font-semibold py-2 rounded-xl hover:bg-green-700 transition disabled:opacity-50"
               >
@@ -887,12 +939,22 @@ export default function DetalleTorneoPublico() {
                     {index + 1}
                   </span>
                   <div>
-                    <p
-                      className="text-sm font-semibold"
-                      style={{ color: "var(--text-primary)" }}
-                    >
-                      {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
-                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p
+                        className="text-sm font-semibold"
+                        style={{ color: "var(--text-primary)" }}
+                      >
+                        {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
+                      </p>
+                      {categorias.find((cat) => cat.id === p.categoria) && (
+                        <span
+                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                          style={{ backgroundColor: "var(--accent-light)", color: "var(--accent)" }}
+                        >
+                          {categorias.find((cat) => cat.id === p.categoria).label}
+                        </span>
+                      )}
+                    </div>
                     <p
                       className="text-xs"
                       style={{ color: "var(--text-muted)" }}

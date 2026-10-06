@@ -6,7 +6,7 @@ import {
   actualizarGrupo,
 } from "../../services/torneoService";
 import { notificarResultadoCargado } from "../../services/notificationService";
-import { calcularTabla, getGanador } from "../../utils/torneo";
+import { calcularTabla, getGanador, nivelDeCategoria } from "../../utils/torneo";
 
 function generarPartidos(parejas) {
   const partidos = [];
@@ -394,7 +394,10 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
       const { actualizarPuntosPartido } = await import("../../services/torneoService");
       const p1 = partidos[partidoIdx].pareja1;
       const p2 = partidos[partidoIdx].pareja2;
-      const categoriaTorneo = torneo.categoriasConfig ? Object.values(torneo.categoriasConfig).flat()[0] || "8va" : "8va";
+      // Categoría del torneo: la de la pareja puntuada si la tiene, si no la primera configurada
+      const categoriaFallback = torneo.categoriasConfig ? Object.values(torneo.categoriasConfig).flat()[0] || "8va" : "8va";
+      const categoriaP1 = nivelDeCategoria(p1.categoria) || categoriaFallback;
+      const categoriaP2 = nivelDeCategoria(p2.categoria) || categoriaFallback;
       let setsP1Final = 0, setsP2Final = 0;
       setsFinales.forEach((s) => {
         let g1 = s.g1, g2 = s.g2;
@@ -404,10 +407,10 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
         if (g1 > g2) setsP1Final++; else if (g2 > g1) setsP2Final++;
       });
       const ganoP1 = setsP1Final > setsP2Final;
-      if (p1.jugador1Uid) await actualizarPuntosPartido(p1.jugador1Uid, ganoP1 ? setsP1Final : setsP2Final, ganoP1, categoriaTorneo);
-      if (p1.jugador2Uid) await actualizarPuntosPartido(p1.jugador2Uid, ganoP1 ? setsP1Final : setsP2Final, ganoP1, categoriaTorneo);
-      if (p2.jugador1Uid) await actualizarPuntosPartido(p2.jugador1Uid, ganoP1 ? setsP2Final : setsP1Final, !ganoP1, categoriaTorneo);
-      if (p2.jugador2Uid) await actualizarPuntosPartido(p2.jugador2Uid, ganoP1 ? setsP2Final : setsP1Final, !ganoP1, categoriaTorneo);
+      if (p1.jugador1Uid) await actualizarPuntosPartido(p1.jugador1Uid, ganoP1 ? setsP1Final : setsP2Final, ganoP1, categoriaP1);
+      if (p1.jugador2Uid) await actualizarPuntosPartido(p1.jugador2Uid, ganoP1 ? setsP1Final : setsP2Final, ganoP1, categoriaP1);
+      if (p2.jugador1Uid) await actualizarPuntosPartido(p2.jugador1Uid, ganoP1 ? setsP2Final : setsP1Final, !ganoP1, categoriaP2);
+      if (p2.jugador2Uid) await actualizarPuntosPartido(p2.jugador2Uid, ganoP1 ? setsP2Final : setsP1Final, !ganoP1, categoriaP2);
     } catch (err) { console.error("Error actualizando puntos:", err); }
 
     // Notify players about result

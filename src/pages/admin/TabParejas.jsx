@@ -6,6 +6,8 @@ import {
   getInscripciones,
   actualizarInscripcion,
 } from "../../services/torneoService";
+import { notificarInscripcionConfirmada, notificarInscripcionRechazada } from "../../services/notificationService";
+import { listaCategorias } from "../../utils/torneo";
 
 const inscripcionBadge = {
   esperando_companero: "bg-[var(--bg-card-hover)] text-[var(--text-muted)]",
@@ -36,6 +38,13 @@ export default function TabParejas({ torneoId, torneo }) {
   const [whatsapp2, setWhatsapp2] = useState("");
   const [motivoRechazo, setMotivoRechazo] = useState("");
   const [rechazandoId, setRechazandoId] = useState(null);
+  // Categorías del torneo (género|nivel); con una sola se asigna automáticamente
+  const categorias = listaCategorias(torneo);
+  const [categoriaManual, setCategoriaManual] = useState(() => {
+    const lista = listaCategorias(torneo);
+    return lista.length === 1 ? lista[0].id : "";
+  });
+  const labelCategoria = (id) => categorias.find((cat) => cat.id === id)?.label || null;
 
   useEffect(() => {
     let cancelled = false;
@@ -63,19 +72,23 @@ export default function TabParejas({ torneoId, torneo }) {
   const handleAgregarPareja = async (e) => {
     e.preventDefault();
     if (!apellido1.trim() || !apellido2.trim()) return;
+    if (categorias.length > 1 && !categoriaManual) return;
     setGuardando(true);
     try {
       const jugador1 = `${nombre1.trim()} ${apellido1.trim()}`.trim();
       const jugador2 = `${nombre2.trim()} ${apellido2.trim()}`.trim();
       const nombrePareja = `${apellido1.trim()}-${apellido2.trim()}`;
-      const nuevaId = await agregarPareja(torneoId, {
+      const categoria = categorias.length === 1 ? categorias[0].id : categoriaManual || null;
+      const nuevaPareja = {
         jugador1, jugador2, nombrePareja,
         whatsapp1: whatsapp1.trim(),
         whatsapp2: whatsapp2.trim(),
         jugador1Uid: null,
         jugador2Uid: null,
-      });
-      setParejas([...parejas, { id: nuevaId, jugador1, jugador2, nombrePareja, whatsapp1: whatsapp1.trim(), whatsapp2: whatsapp2.trim(), jugador1Uid: null, jugador2Uid: null }]);
+        categoria,
+      };
+      const nuevaId = await agregarPareja(torneoId, nuevaPareja);
+      setParejas([...parejas, { id: nuevaId, ...nuevaPareja }]);
       setNombre1(""); setApellido1(""); setNombre2(""); setApellido2("");
       setWhatsapp1(""); setWhatsapp2("");
     } catch (err) {
@@ -97,25 +110,34 @@ export default function TabParejas({ torneoId, torneo }) {
   const confirmarInscripcion = async (insc) => {
     try {
       await actualizarInscripcion(torneoId, insc.id, { status: "confirmada" });
-      // Agregar como pareja confirmada
+      // Agregar como pareja confirmada: la pareja conserva los uids y contactos de la inscripción
       const nombrePareja = `${insc.apellido1}-${insc.apellido2}`;
       const jugador1 = `${insc.nombre1} ${insc.apellido1}`;
       const jugador2 = `${insc.nombre2} ${insc.apellido2}`;
-      const nuevaId = await agregarPareja(torneoId, {
+      const nuevaPareja = {
         jugador1,
         jugador2,
         nombrePareja,
+        jugador1Uid: insc.jugador1Uid ?? null,
+        jugador2Uid: insc.jugador2Uid ?? null,
+        whatsapp1: insc.whatsapp1 || "",
+        whatsapp2: insc.whatsapp2 || "",
+        email1: insc.email1 || "",
+        email2: insc.email2 || "",
+        categoria: insc.categoria || null,
         inscripcionId: insc.id,
-      });
-      setParejas([
-        ...parejas,
-        { id: nuevaId, jugador1, jugador2, nombrePareja },
-      ]);
+      };
+      const nuevaId = await agregarPareja(torneoId, nuevaPareja);
+      setParejas([...parejas, { id: nuevaId, ...nuevaPareja }]);
       setInscripciones(
         inscripciones.map((i) =>
           i.id === insc.id ? { ...i, status: "confirmada" } : i,
         ),
       );
+      // Avisar a los jugadores vinculados
+      const torneoNombre = torneo?.nombre || "torneo";
+      if (insc.jugador1Uid) notificarInscripcionConfirmada(insc.jugador1Uid, torneoNombre, torneoId);
+      if (insc.jugador2Uid) notificarInscripcionConfirmada(insc.jugador2Uid, torneoNombre, torneoId);
     } catch (err) {
       console.error("Error al confirmar inscripción:", err);
     }
@@ -123,20 +145,26 @@ export default function TabParejas({ torneoId, torneo }) {
 
   const rechazarInscripcion = async (inscId) => {
     if (!motivoRechazo.trim()) return;
+    const motivo = motivoRechazo.trim();
+    const insc = inscripciones.find((i) => i.id === inscId);
     try {
       await actualizarInscripcion(torneoId, inscId, {
         status: "rechazada",
-        motivoRechazo: motivoRechazo.trim(),
+        motivoRechazo: motivo,
       });
       setInscripciones(
         inscripciones.map((i) =>
           i.id === inscId
-            ? { ...i, status: "rechazada", motivoRechazo: motivoRechazo.trim() }
+            ? { ...i, status: "rechazada", motivoRechazo: motivo }
             : i,
         ),
       );
       setRechazandoId(null);
       setMotivoRechazo("");
+      // Avisar a los jugadores vinculados con el motivo
+      const torneoNombre = torneo?.nombre || "torneo";
+      if (insc?.jugador1Uid) notificarInscripcionRechazada(insc.jugador1Uid, torneoNombre, torneoId, motivo);
+      if (insc?.jugador2Uid) notificarInscripcionRechazada(insc.jugador2Uid, torneoNombre, torneoId, motivo);
     } catch (err) {
       console.error("Error al rechazar inscripción:", err);
     }
@@ -392,6 +420,24 @@ export default function TabParejas({ torneoId, torneo }) {
             <input type="tel" placeholder="WhatsApp Jugador 2 (ej: 5493851234567)" value={whatsapp2} onChange={(e) => setWhatsapp2(e.target.value.replace(/\D/g, ""))}
               className="themed-input rounded-xl px-4 py-2 text-sm" />
 
+            {categorias.length > 1 && (
+              <div>
+                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>Categoría *</label>
+                <select value={categoriaManual} onChange={(e) => setCategoriaManual(e.target.value)} required
+                  className="themed-input rounded-xl px-4 py-2 text-sm w-full">
+                  <option value="">Elegí una categoría</option>
+                  {categorias.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {categorias.length === 1 && (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Categoría: <span className="font-semibold">{categorias[0].label}</span>
+              </p>
+            )}
+
             {apellido1.trim() && apellido2.trim() && (
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                 Nombre de pareja: <span className="font-semibold">{apellido1.trim()}-{apellido2.trim()}</span>
@@ -402,7 +448,7 @@ export default function TabParejas({ torneoId, torneo }) {
               💡 Agregá el WhatsApp de cada jugador para enviarles un link de vinculación. Así podrán usar la app, recibir puntos y participar de reclamos.
             </div>
 
-            <button type="submit" disabled={guardando || !apellido1.trim() || !apellido2.trim()}
+            <button type="submit" disabled={guardando || !apellido1.trim() || !apellido2.trim() || (categorias.length > 1 && !categoriaManual)}
               className="text-white font-semibold py-2 rounded-xl transition disabled:opacity-50"
               style={{ backgroundColor: "var(--accent)" }}>
               {guardando ? "Agregando..." : "Agregar pareja"}
@@ -434,6 +480,12 @@ export default function TabParejas({ torneoId, torneo }) {
                       <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                         {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
                       </p>
+                      {labelCategoria(p.categoria) && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                          style={{ backgroundColor: "var(--accent-light)", color: "var(--accent)" }}>
+                          {labelCategoria(p.categoria)}
+                        </span>
+                      )}
                     </div>
                     <button onClick={() => handleEliminarPareja(p.id)}
                       className="text-red-400 hover:text-red-600 text-xs font-semibold transition">Eliminar</button>

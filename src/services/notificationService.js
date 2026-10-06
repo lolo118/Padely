@@ -130,6 +130,26 @@ export const notificarInscripcionTorneo = async (organizadorUid, jugadorNombre, 
   });
 };
 
+export const notificarInscripcionConfirmada = async (uid, torneoNombre, torneoId) => {
+  await crearNotificacion(uid, {
+    tipo: "inscripcion_confirmada",
+    titulo: "Inscripción confirmada",
+    mensaje: `Tu inscripción al torneo "${torneoNombre}" fue confirmada por el organizador.`,
+    link: `/torneos/${torneoId}`,
+    icono: "✅",
+  });
+};
+
+export const notificarInscripcionRechazada = async (uid, torneoNombre, torneoId, motivo) => {
+  await crearNotificacion(uid, {
+    tipo: "inscripcion_rechazada",
+    titulo: "Inscripción rechazada",
+    mensaje: `Tu inscripción al torneo "${torneoNombre}" fue rechazada${motivo ? `. Motivo: ${motivo}` : "."}`,
+    link: `/torneos/${torneoId}`,
+    icono: "❌",
+  });
+};
+
 export const notificarReclamoContra = async (jugadorUid, torneoNombre, torneoId) => {
   await crearNotificacion(jugadorUid, {
     tipo: "reclamo",
