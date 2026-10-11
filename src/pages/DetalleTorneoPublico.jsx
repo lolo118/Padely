@@ -15,6 +15,7 @@ import {
   dejarDescargo,
 } from "../services/torneoService";
 import { getUserData } from "../services/authService";
+import { logEvento } from "../lib/firebase";
 import { formatFecha } from "../utils/formatDate";
 import { formatPrecio } from "../utils/format";
 import { calcularTabla, getGanador, getNombrePareja, listaCategorias } from "../utils/torneo";
@@ -277,6 +278,7 @@ export default function DetalleTorneoPublico() {
         jugador2Uid: null,
         categoria: categorias.length === 1 ? categorias[0].id : categoriaInsc || null,
       });
+      logEvento("inscripcion_creada", { torneoId: id });
       const link = `${window.location.origin}/invitacion/${id}/${inscId}`;
       setLinkInvitacion(link);
       setInscripcionEnviada(true);

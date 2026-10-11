@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, query, where, getDocs } from "firebase/firestore";
-import { db } from "../../lib/firebase";
+import { db, logEvento } from "../../lib/firebase";
 import { useAuthStore } from "../../store/authStore";
 import { crearTorneo } from "../../services/torneoService";
 import { getClubByOwner } from "../../services/canchaService";
@@ -255,6 +255,7 @@ export default function CrearTorneo() {
     setLoading(true);
     try {
       const id = await crearTorneo(form, user.uid);
+      logEvento("torneo_creado", { torneoId: id, formato: form.formato || "" });
       navigate(`/admin/torneos/${id}`);
     } catch {
       setError("Error al crear el torneo. Intentá de nuevo.");

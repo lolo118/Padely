@@ -16,7 +16,7 @@ import {
   getDocs,
   addDoc,
 } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { db, logEvento } from "../lib/firebase";
 import { getUserData } from "../services/authService";
 import { notificarNuevaReserva } from "../services/notificationService";
 import { toast } from "../components/Toast";
@@ -250,6 +250,7 @@ export default function ClubPublico() {
         telefono: formReserva.telefono,
         status: reservaDirecta ? "confirmada" : "pendiente",
       });
+      logEvento("reserva_creada", { clubId: club.id, status: reservaDirecta ? "confirmada" : "pendiente" });
       const nuevasReservas = await getReservas(club.id, fechaSeleccionada);
       setReservas(nuevasReservas);
       if (club.ownerUid) {
