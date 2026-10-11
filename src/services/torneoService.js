@@ -225,27 +225,11 @@ export const resolverReclamo = async (
   });
 };
 
-// ========== SISTEMA DE PUNTOS Y RANKING ==========
+// ========== CATEGORÍAS ==========
+// Los puntos, bonus y ascensos los otorgan las Cloud Functions (functions/puntos.js) al cargar
+// resultados; el cliente solo valida en qué categoría puede inscribirse un jugador.
 
 const CATEGORIAS_ORDEN = ["8va", "7ma", "6ta", "5ta", "4ta", "3era", "2da", "1era", "Libre"];
-
-const PUNTOS = {
-  ganarPartido: 10,
-  ganarSet: 3,
-  perderPartido: 2,
-  campeon: 50,
-  subcampeon: 25,
-};
-
-function getMultiplicadorCategoria(categoriaJugador, categoriaTorneo) {
-  const idxJugador = CATEGORIAS_ORDEN.indexOf(categoriaJugador);
-  const idxTorneo = CATEGORIAS_ORDEN.indexOf(categoriaTorneo);
-  if (idxJugador === -1 || idxTorneo === -1) return 1;
-  const diff = idxTorneo - idxJugador;
-  if (diff >= 2) return 2;
-  if (diff === 1) return 1.5;
-  return 1;
-}
 
 export function puedeInscribirse(categoriaJugador, categoriaTorneo) {
   const idxJugador = CATEGORIAS_ORDEN.indexOf(categoriaJugador);
@@ -254,65 +238,6 @@ export function puedeInscribirse(categoriaJugador, categoriaTorneo) {
   // No puede inscribirse en categoría menor
   return idxTorneo >= idxJugador;
 }
-
-export const actualizarPuntosPartido = async (jugadorUid, setsGanados, ganoPartido, categoriaTorneo) => {
-  if (!jugadorUid) return;
-  try {
-    const userRef = doc(db, "users", jugadorUid);
-    const snap = await getDoc(userRef);
-    if (!snap.exists()) return;
-    const data = snap.data();
-
-    const multiplicador = getMultiplicadorCategoria(data.nivel || "8va", categoriaTorneo || "8va");
-
-    let puntosPartido = 0;
-    puntosPartido += setsGanados * PUNTOS.ganarSet;
-    puntosPartido += ganoPartido ? PUNTOS.ganarPartido : PUNTOS.perderPartido;
-    puntosPartido = Math.round(puntosPartido * multiplicador);
-
-    const updates = {
-      puntos: (data.puntos || 0) + puntosPartido,
-      partidosGanados: (data.partidosGanados || 0) + (ganoPartido ? 1 : 0),
-      partidosPerdidos: (data.partidosPerdidos || 0) + (ganoPartido ? 0 : 1),
-    };
-
-    await updateDoc(userRef, updates);
-  } catch (err) {
-    console.error("Error actualizando puntos:", err);
-  }
-};
-
-export const actualizarPuntosTorneo = async (jugadorUid, posicion, categoriaTorneo) => {
-  if (!jugadorUid) return;
-  try {
-    const userRef = doc(db, "users", jugadorUid);
-    const snap = await getDoc(userRef);
-    if (!snap.exists()) return;
-    const data = snap.data();
-
-    const multiplicador = getMultiplicadorCategoria(data.nivel || "8va", categoriaTorneo || "8va");
-
-    let bonus = 0;
-    if (posicion === 1) bonus = Math.round(PUNTOS.campeon * multiplicador);
-    else if (posicion === 2) bonus = Math.round(PUNTOS.subcampeon * multiplicador);
-
-    const torneosGanadosEnCategoria = (data.torneosGanadosEnCategoria || 0) + (posicion === 1 ? 1 : 0);
-
-    const updates = {
-      puntos: (data.puntos || 0) + bonus,
-      torneosJugados: (data.torneosJugados || 0) + 1,
-      torneosGanados: (data.torneosGanados || 0) + (posicion === 1 ? 1 : 0),
-      torneosGanadosEnCategoria,
-    };
-
-    await updateDoc(userRef, updates);
-
-    // Evaluar ascenso
-    await evaluarAscenso(jugadorUid);
-  } catch (err) {
-    console.error("Error actualizando puntos torneo:", err);
-  }
-};
 
 // ========== VINCULACIÓN DE JUGADORES ==========
 
@@ -334,49 +259,6 @@ export const getParejaById = async (torneoId, parejaId) => {
   const snap = await getDoc(doc(db, "tournaments", torneoId, "pairs", parejaId));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() };
-};
-
-export const evaluarAscenso = async (jugadorUid) => {
-  try {
-    const userRef = doc(db, "users", jugadorUid);
-    const snap = await getDoc(userRef);
-    if (!snap.exists()) return;
-    const data = snap.data();
-
-    const categoriaActual = data.nivel || "";
-    const puntos = data.puntos || 0;
-    const torneosGanadosEnCategoria = data.torneosGanadosEnCategoria || 0;
-
-    const idxActual = CATEGORIAS_ORDEN.indexOf(categoriaActual);
-    if (idxActual === -1 || idxActual >= CATEGORIAS_ORDEN.length - 1) return;
-
-    // Vía A: 150+ puntos + 2 torneos ganados en categoría
-    const viaA = puntos >= 150 && torneosGanadosEnCategoria >= 2;
-    // Vía B: 300+ puntos + 1 torneo ganado en categoría
-    const viaB = puntos >= 300 && torneosGanadosEnCategoria >= 1;
-    // Vía C: 500+ puntos sin necesidad de ganar torneos (ascenso por experiencia)
-    const viaC = puntos >= 500;
-
-    if (viaA || viaB || viaC) {
-      const nuevaCategoria = CATEGORIAS_ORDEN[idxActual + 1];
-      const via = viaA ? "A (puntos + victorias)" : viaB ? "B (puntos + victoria)" : "C (experiencia)";
-      await updateDoc(userRef, {
-        nivel: nuevaCategoria,
-        torneosGanadosEnCategoria: 0,
-        ascensos: [...(data.ascensos || []), {
-          de: categoriaActual,
-          a: nuevaCategoria,
-          fecha: new Date().toISOString(),
-          puntos,
-          torneosGanados: torneosGanadosEnCategoria,
-          via,
-        }],
-      });
-      console.log(`Jugador ${jugadorUid} ascendió de ${categoriaActual} a ${nuevaCategoria} por vía ${via}`);
-    }
-  } catch (err) {
-    console.error("Error evaluando ascenso:", err);
-  }
 };
 
 // ========== HISTORIAL DE PARTIDOS ==========

@@ -6,7 +6,7 @@ import {
   getBracket,
 } from "../../services/torneoService";
 import { notificarResultadoCargado } from "../../services/notificationService";
-import { calcularTabla, getGanador, getNombrePareja, nivelDeCategoria } from "../../utils/torneo";
+import { calcularTabla, getGanador, getNombrePareja } from "../../utils/torneo";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
 
@@ -501,8 +501,6 @@ export default function TabBracket({ torneoId, torneo }) {
     const { rondaIdx, partidoIdx } = editandoResultado;
     const cantSets = Number(torneo.sets) || 1;
     const setsParaGanar = Math.ceil(cantSets / 2);
-    // Los puntos (y el bonus de campeón/subcampeón) se otorgan una sola vez
-    const esPrimerResultado = !rondas[rondaIdx][partidoIdx].resultado;
 
     let setsP1 = 0,
       setsP2 = 0;
@@ -540,46 +538,6 @@ export default function TabBracket({ torneoId, torneo }) {
     } catch (e) {
       console.error("Error al guardar resultado:", e);
       toast.error("No pudimos guardar el resultado. Intentá de nuevo.");
-    }
-
-    // Actualizar puntos de los jugadores (solo la primera vez que se carga el resultado)
-    if (esPrimerResultado) {
-      try {
-        const { actualizarPuntosPartido, actualizarPuntosTorneo } = await import("../../services/torneoService");
-        const partido = rondasActualizadas[rondaIdx][partidoIdx];
-        const p1 = partido.pareja1;
-        const p2 = partido.pareja2;
-        // Categoría del torneo: la de la pareja puntuada si la tiene, si no la primera configurada
-        const categoriaFallback = torneo.categoriasConfig ? Object.values(torneo.categoriasConfig).flat()[0] || "8va" : "8va";
-        const categoriaP1 = nivelDeCategoria(p1.categoria) || categoriaFallback;
-        const categoriaP2 = nivelDeCategoria(p2.categoria) || categoriaFallback;
-        let sP1 = 0, sP2 = 0;
-        setsFinales.forEach((s) => {
-          let g1 = s.g1, g2 = s.g2;
-          if (s.tb1 !== undefined && s.tb2 !== undefined) {
-            if (s.tb1 > s.tb2) g1++; else if (s.tb2 > s.tb1) g2++;
-          }
-          if (g1 > g2) sP1++; else if (g2 > g1) sP2++;
-        });
-        const ganoP1 = sP1 > sP2;
-        if (p1.jugador1Uid) await actualizarPuntosPartido(p1.jugador1Uid, ganoP1 ? sP1 : sP2, ganoP1, categoriaP1);
-        if (p1.jugador2Uid) await actualizarPuntosPartido(p1.jugador2Uid, ganoP1 ? sP1 : sP2, ganoP1, categoriaP1);
-        if (p2.jugador1Uid) await actualizarPuntosPartido(p2.jugador1Uid, ganoP1 ? sP2 : sP1, !ganoP1, categoriaP2);
-        if (p2.jugador2Uid) await actualizarPuntosPartido(p2.jugador2Uid, ganoP1 ? sP2 : sP1, !ganoP1, categoriaP2);
-
-        // Si es la final, dar bonus
-        const esFinal = rondaIdx === rondasActualizadas.length - 1;
-        if (esFinal) {
-          const campeon = ganoP1 ? p1 : p2;
-          const sub = ganoP1 ? p2 : p1;
-          const categoriaCampeon = ganoP1 ? categoriaP1 : categoriaP2;
-          const categoriaSub = ganoP1 ? categoriaP2 : categoriaP1;
-          if (campeon.jugador1Uid) await actualizarPuntosTorneo(campeon.jugador1Uid, 1, categoriaCampeon);
-          if (campeon.jugador2Uid) await actualizarPuntosTorneo(campeon.jugador2Uid, 1, categoriaCampeon);
-          if (sub.jugador1Uid) await actualizarPuntosTorneo(sub.jugador1Uid, 2, categoriaSub);
-          if (sub.jugador2Uid) await actualizarPuntosTorneo(sub.jugador2Uid, 2, categoriaSub);
-        }
-      } catch (err) { console.error("Error actualizando puntos:", err); }
     }
 
     // Notify players about result
@@ -639,24 +597,33 @@ export default function TabBracket({ torneoId, torneo }) {
       {/* Regenerar arriba */}
       {bracketGenerado && (
         <div className="flex justify-end">
-          <button
-            onClick={async () => {
-              const ok = await confirmar({
-                titulo: "Regenerar bracket",
-                mensaje: "Se perderán todos los resultados del bracket.",
-                confirmText: "Regenerar",
-                danger: true,
-              });
-              if (ok) {
-                setBracketGenerado(false);
-                setRondas([]);
-              }
-            }}
-            className="px-3 py-1 rounded-lg text-xs font-semibold text-red-500 transition"
-            style={{ backgroundColor: "rgba(239,68,68,0.08)" }}
-          >
-            Regenerar bracket desde cero
-          </button>
+          {(() => {
+            const tieneResultados = rondas.some((r) => (r || []).some((p) => p && p.resultado));
+            return tieneResultados ? (
+              <span className="px-3 py-1 rounded-lg text-xs font-semibold" style={{ color: "var(--text-muted)", backgroundColor: "var(--bg-card-hover)" }}>
+                No podés regenerar el bracket después de cargar resultados
+              </span>
+            ) : (
+              <button
+                onClick={async () => {
+                  const ok = await confirmar({
+                    titulo: "Regenerar bracket",
+                    mensaje: "Se descarta el cuadro actual y se arma uno nuevo.",
+                    confirmText: "Regenerar",
+                    danger: true,
+                  });
+                  if (ok) {
+                    setBracketGenerado(false);
+                    setRondas([]);
+                  }
+                }}
+                className="px-3 py-1 rounded-lg text-xs font-semibold text-red-500 transition"
+                style={{ backgroundColor: "rgba(239,68,68,0.08)" }}
+              >
+                Regenerar bracket desde cero
+              </button>
+            );
+          })()}
         </div>
       )}
 

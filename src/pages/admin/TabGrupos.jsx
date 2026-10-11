@@ -6,7 +6,7 @@ import {
   actualizarGrupo,
 } from "../../services/torneoService";
 import { notificarResultadoCargado } from "../../services/notificationService";
-import { calcularTabla, getGanador, nivelDeCategoria } from "../../utils/torneo";
+import { calcularTabla, getGanador } from "../../utils/torneo";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
 
@@ -356,8 +356,6 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
     const { grupoIdx, partidoIdx } = editandoResultado;
     const cantSets = Number(torneo.sets) || 1;
     const setsParaGanar = Math.ceil(cantSets / 2);
-    // Los puntos se otorgan una sola vez: al cargar el primer resultado del partido
-    const esPrimerResultado = !grupos[grupoIdx].partidos[partidoIdx].resultado;
 
     // Solo guardar sets necesarios
     let setsP1 = 0,
@@ -404,32 +402,6 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
     }
 
     setGrupos(nuevosGrupos);
-
-    // Actualizar puntos de los jugadores (solo la primera vez que se carga el resultado)
-    if (esPrimerResultado) {
-      try {
-        const { actualizarPuntosPartido } = await import("../../services/torneoService");
-        const p1 = partidos[partidoIdx].pareja1;
-        const p2 = partidos[partidoIdx].pareja2;
-        // Categoría del torneo: la de la pareja puntuada si la tiene, si no la primera configurada
-        const categoriaFallback = torneo.categoriasConfig ? Object.values(torneo.categoriasConfig).flat()[0] || "8va" : "8va";
-        const categoriaP1 = nivelDeCategoria(p1.categoria) || categoriaFallback;
-        const categoriaP2 = nivelDeCategoria(p2.categoria) || categoriaFallback;
-        let setsP1Final = 0, setsP2Final = 0;
-        setsFinales.forEach((s) => {
-          let g1 = s.g1, g2 = s.g2;
-          if (s.tb1 !== undefined && s.tb2 !== undefined) {
-            if (s.tb1 > s.tb2) g1++; else if (s.tb2 > s.tb1) g2++;
-          }
-          if (g1 > g2) setsP1Final++; else if (g2 > g1) setsP2Final++;
-        });
-        const ganoP1 = setsP1Final > setsP2Final;
-        if (p1.jugador1Uid) await actualizarPuntosPartido(p1.jugador1Uid, ganoP1 ? setsP1Final : setsP2Final, ganoP1, categoriaP1);
-        if (p1.jugador2Uid) await actualizarPuntosPartido(p1.jugador2Uid, ganoP1 ? setsP1Final : setsP2Final, ganoP1, categoriaP1);
-        if (p2.jugador1Uid) await actualizarPuntosPartido(p2.jugador1Uid, ganoP1 ? setsP2Final : setsP1Final, !ganoP1, categoriaP2);
-        if (p2.jugador2Uid) await actualizarPuntosPartido(p2.jugador2Uid, ganoP1 ? setsP2Final : setsP1Final, !ganoP1, categoriaP2);
-      } catch (err) { console.error("Error actualizando puntos:", err); }
-    }
 
     // Notify players about result
     try {

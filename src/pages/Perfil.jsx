@@ -5,7 +5,6 @@ import { getUserData } from "../services/authService";
 import {
   doc,
   updateDoc,
-  deleteDoc,
   collection,
   query,
   where,
@@ -193,7 +192,7 @@ export default function Perfil() {
     });
     if (!seguro) return;
     try {
-      await deleteDoc(doc(db, "users", user.uid));
+      // users/{uid} y sus subcolecciones los borra la Cloud Function onUserDeleted
       await deleteUser(auth.currentUser);
       setUser(null);
       navigate("/login");

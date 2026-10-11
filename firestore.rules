@@ -36,13 +36,8 @@ service cloud.firestore {
       // Own profile: anything except role and ranking fields
       allow update: if isSelf(userId)
         && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['role', 'puntos', 'nivel', 'partidosGanados', 'partidosPerdidos',
+            .hasAny(['role', 'puntos', 'nivel', 'partidosGanados', 'partidosPerdidos', 'partidosJugados',
                      'torneosJugados', 'torneosGanados', 'torneosGanadosEnCategoria', 'ascensos']);
-      // TEMPORARY until the points system moves to Cloud Functions:
-      // any signed-in user may update ranking fields only (the client awards points after a result).
-      allow update: if signedIn()
-        && changedOnly(['puntos', 'nivel', 'partidosGanados', 'partidosPerdidos',
-                        'torneosJugados', 'torneosGanados', 'torneosGanadosEnCategoria', 'ascensos']);
 
       match /notifications/{notifId} {
         allow read: if isSelf(userId);
@@ -115,6 +110,11 @@ service cloud.firestore {
           || (signedIn() && changedOnly(['jugador2Uid'])
               && resource.data.get('jugador2Uid', null) == null
               && request.resource.data.jugador2Uid == request.auth.uid);
+      }
+
+      // Marcadores de puntos otorgados: los escriben solo las Cloud Functions
+      match /puntosOtorgados/{markerId} {
+        allow read: if signedIn();
       }
 
       match /groups/{groupId} {
