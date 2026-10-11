@@ -8,6 +8,7 @@ import useThemeStore from "./store/themeStore";
 import PlayerLayout from "./components/layouts/PlayerLayout";
 import ClubLayout from "./components/layouts/ClubLayout";
 import OrgLayout from "./components/layouts/OrgLayout";
+import PublicLayout from "./components/layouts/PublicLayout";
 import { Toaster } from "./components/Toast";
 import { ConfirmHost } from "./components/ConfirmDialog";
 
@@ -166,6 +167,16 @@ export default function App() {
           <Route path="vincular/:torneoId/:parejaId/:posicion" element={<VincularJugador />} />
           <Route path="/t/:id" element={<RedirigirTorneo />} />
 
+          {/* Páginas públicas: sin sesión se ven con el header Ingresar/Registrarse; con sesión, igual que hoy (PlayerLayout) */}
+          <Route element={<PublicLayout />}>
+            <Route path="/clubes" element={<Hub />} />
+            <Route path="/torneos" element={<Torneos />} />
+            <Route path="/torneos/:id" element={<DetalleTorneoPublico />} />
+            <Route path="/club/:id" element={<ClubPublico />} />
+          </Route>
+          {/* Alias viejo del hub de canchas */}
+          <Route path="/hub" element={<Navigate to="/clubes" replace />} />
+
           {/* Rutas del jugador - accesibles por todos los logueados */}
           <Route
             element={
@@ -175,14 +186,10 @@ export default function App() {
             }
           >
             <Route path="/inicio" element={<RedirigirPorRol />} />
-            <Route path="/hub" element={<Hub />} />
             <Route path="/mis-reservas" element={<MisReservas />} />
-            <Route path="/torneos" element={<Torneos />} />
-            <Route path="/torneos/:id" element={<DetalleTorneoPublico />} />
             <Route path="/noticias" element={<Noticias />} />
             <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/perfil" element={<Perfil />} />
-            <Route path="/club/:id" element={<ClubPublico />} />
           </Route>
 
           {/* Rutas del admin club - solo clubs */}

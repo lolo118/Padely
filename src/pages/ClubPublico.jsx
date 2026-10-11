@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { formatFecha, getTodayLocal, addDaysLocal, horaActualStr } from "../utils/formatDate";
 import { formatPrecio } from "../utils/format";
@@ -126,10 +126,11 @@ export default function ClubPublico() {
             setFechaSeleccionada(maxPermitida);
             return;
           }
+          // Reservas y turnos fijos no son públicos: sin sesión solo se cargan las canchas
           const [canchasData, reservasData, turnosData] = await Promise.all([
             getCanchas(id),
-            getReservas(id, fechaSeleccionada),
-            getTurnosFijos(id),
+            user ? getReservas(id, fechaSeleccionada) : Promise.resolve([]),
+            user ? getTurnosFijos(id) : Promise.resolve([]),
           ]);
           setCanchas(canchasData);
           setReservas(reservasData);
@@ -355,7 +356,7 @@ export default function ClubPublico() {
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
         <button
-          onClick={() => navigate("/hub")}
+          onClick={() => navigate("/clubes")}
           className="p-1 rounded-lg transition"
           style={{ color: "var(--text-muted)" }}
         >
@@ -421,8 +422,63 @@ export default function ClubPublico() {
         ))}
       </div>
 
+      {/* Tab: Canchas sin sesión: la grilla y las reservas no son públicas */}
+      {tab === "canchas" && !user && (
+        <div className="flex flex-col gap-4">
+          <div className="themed-card rounded-2xl border p-5 text-center">
+            <div className="text-3xl mb-2">🔒</div>
+            <p className="font-semibold" style={{ color: "var(--text-primary)" }}>
+              Iniciá sesión para ver disponibilidad y reservar
+            </p>
+            <p className="text-sm mt-1 mb-4" style={{ color: "var(--text-muted)" }}>
+              La grilla de horarios y las reservas están disponibles con tu cuenta de Padely.
+            </p>
+            <div className="flex gap-2 justify-center flex-wrap">
+              <Link
+                to={`/login?next=${encodeURIComponent(`/club/${id}`)}`}
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:opacity-90"
+                style={{ backgroundColor: "var(--accent)" }}
+              >
+                Iniciar sesión
+              </Link>
+              <Link
+                to="/register"
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition hover:opacity-80"
+                style={{ color: "var(--accent)", borderColor: "var(--accent)" }}
+              >
+                Crear cuenta
+              </Link>
+            </div>
+          </div>
+          <div className="themed-card rounded-2xl border p-5">
+            <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
+              Canchas ({canchas.length})
+            </h2>
+            <div className="flex flex-col gap-2">
+              {canchas.map((c) => (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between rounded-xl px-4 py-3"
+                  style={{ backgroundColor: "var(--bg-card-hover)" }}
+                >
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{c.nombre}</p>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      {c.superficie} · {c.techada ? "Techada" : "Aire libre"}
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>
+                    Desde {formatPrecio(c.precioBase || 0)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tab: Canchas */}
-      {tab === "canchas" && (
+      {tab === "canchas" && user && (
         <>
           <div className="themed-card rounded-xl border px-3 py-2 flex items-center gap-2 mb-4 w-fit">
             <svg

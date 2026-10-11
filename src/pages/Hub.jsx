@@ -60,17 +60,20 @@ export default function Hub() {
         setClubes(data);
         const reservasMap = {};
         const turnosMap = {};
-        for (const club of data) {
-          try {
-            const [reservas, tf] = await Promise.all([
-              getReservas(club.id, fechaSeleccionada),
-              getTurnosFijos(club.id),
-            ]);
-            reservasMap[club.id] = reservas;
-            turnosMap[club.id] = tf;
-          } catch {
-            reservasMap[club.id] = [];
-            turnosMap[club.id] = [];
+        // Sin sesión no se leen reservas ni turnos fijos (no son públicos): no hay disponibilidad para mostrar
+        if (user) {
+          for (const club of data) {
+            try {
+              const [reservas, tf] = await Promise.all([
+                getReservas(club.id, fechaSeleccionada),
+                getTurnosFijos(club.id),
+              ]);
+              reservasMap[club.id] = reservas;
+              turnosMap[club.id] = tf;
+            } catch {
+              reservasMap[club.id] = [];
+              turnosMap[club.id] = [];
+            }
           }
         }
         setReservasPorClub(reservasMap);
@@ -132,6 +135,12 @@ export default function Hub() {
       let canchaLibresEnRango = 0;
       const horasLibres = [];
       (cancha.horariosDisponibles || []).forEach((hora) => {
+        if (!user) {
+          // Sin sesión: solo el precio mínimo; la disponibilidad se ve al iniciar sesión
+          const precio = (cancha.horarios || {})[hora] ?? cancha.precioBase ?? 0;
+          if (precio < precioMin) precioMin = precio;
+          return;
+        }
         if (esHoy && hora <= horaAhora) return;
         if (!estaOcupado(club.id, cancha.id, hora) && !esTurnoFijoHub(club.id, cancha.id, hora)) {
           canchaLibres++;
@@ -206,6 +215,7 @@ export default function Hub() {
   }
 
   clubesConInfo.sort((a, b) => {
+    if (!user) return (a.nombre || "").localeCompare(b.nombre || "");
     if (a.esFavorito && !b.esFavorito) return -1;
     if (!a.esFavorito && b.esFavorito) return 1;
     if (horaDesde && horaHasta) return b.libresEnRango - a.libresEnRango;
@@ -237,6 +247,8 @@ export default function Hub() {
 
       {/* Filtros principales */}
       <div className="flex flex-col gap-3 mb-4">
+        {/* Fecha y rango horario: solo con sesión (sin ella no hay disponibilidad) */}
+        {user && (
         <div className="flex gap-2 flex-wrap">
           <div className="themed-card rounded-xl border px-3 py-2 flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4" style={{ color: "var(--accent)" }}>
@@ -278,6 +290,7 @@ export default function Hub() {
             </select>
           </div>
         </div>
+        )}
 
         <div className="flex gap-2 flex-wrap">
           <div className="themed-card rounded-xl border px-3 py-2 flex items-center gap-2 flex-1 min-w-[150px]">
@@ -368,6 +381,7 @@ export default function Hub() {
                     {club.ciudad}{club.direccion && ` · ${club.direccion}`}
                   </p>
                 </div>
+                {user && (
                 <button
                   onClick={(e) => { e.stopPropagation(); toggleFavorito(club.id); }}
                   className="p-1.5 rounded-lg transition hover:scale-110"
@@ -382,6 +396,7 @@ export default function Hub() {
                     </svg>
                   )}
                 </button>
+                )}
               </div>
 
               {/* Badges */}
@@ -418,7 +433,7 @@ export default function Hub() {
                       </span>
                     </div>
                     <div className="text-right">
-                      {(horaDesde && horaHasta) ? (
+                      {!user ? null : (horaDesde && horaHasta) ? (
                         cancha.canchaLibresEnRango > 0 ? (
                           <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>
                             {cancha.canchaLibresEnRango} libre{cancha.canchaLibresEnRango !== 1 ? "s" : ""}
@@ -444,7 +459,9 @@ export default function Hub() {
             {/* Footer */}
             <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--border-card)" }}>
               <div>
-                {(horaDesde && horaHasta) ? (
+                {!user ? (
+                  <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>Ingresá para ver horarios</span>
+                ) : (horaDesde && horaHasta) ? (
                   club.libresEnRango > 0 ? (
                     <>
                       <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>{club.libresEnRango}</span>

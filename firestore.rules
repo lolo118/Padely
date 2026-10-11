@@ -1,5 +1,7 @@
 rules_version = '2';
 // Padely rules v2 — ownership model (deployed from the repo with `npx firebase deploy --only firestore:rules`)
+// Lectura pública (sin sesión): torneos, parejas, grupos, clubes, canchas, reviews y organizadores.
+// Reservas, turnos fijos, inscripciones, reclamos, usuarios y notificaciones siguen requiriendo sesión.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -48,18 +50,18 @@ service cloud.firestore {
     }
 
     match /organizers/{orgId} {
-      allow read: if signedIn();
+      allow read: if true;
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
       allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
     match /clubs/{clubId} {
-      allow read: if signedIn();
+      allow read: if true;
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
       allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
 
       match /canchas/{canchaId} {
-        allow read: if signedIn();
+        allow read: if true;
         allow create, update, delete: if clubOwner(clubId);
       }
 
@@ -88,19 +90,19 @@ service cloud.firestore {
       }
 
       match /reviews/{reviewId} {
-        allow read: if signedIn();
+        allow read: if true;
         allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
         allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
       }
     }
 
     match /tournaments/{tid} {
-      allow read: if signedIn();
+      allow read: if true;
       allow create: if signedIn() && request.resource.data.organizerId == request.auth.uid;
       allow update, delete: if signedIn() && resource.data.organizerId == request.auth.uid;
 
       match /pairs/{pairId} {
-        allow read: if signedIn();
+        allow read: if true;
         allow create, delete: if tournamentOrganizer(tid);
         // The organizer edits; a player links his own account into an empty slot (vinculación)
         allow update: if tournamentOrganizer(tid)
@@ -118,7 +120,7 @@ service cloud.firestore {
       }
 
       match /groups/{groupId} {
-        allow read: if signedIn();
+        allow read: if true;
         allow create, update, delete: if tournamentOrganizer(tid);
       }
 

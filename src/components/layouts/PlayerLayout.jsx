@@ -25,7 +25,7 @@ const navItems = [
     ),
   },
   {
-    to: "/hub",
+    to: "/clubes",
     label: "Canchas",
     icon: (
       <svg
@@ -112,7 +112,7 @@ const navItems = [
 
 const menuItems = [
   { to: "/inicio", label: "Inicio" },
-  { to: "/hub", label: "Canchas disponibles" },
+  { to: "/clubes", label: "Canchas disponibles" },
   { to: "/mis-reservas", label: "Mis reservas" },
   { to: "/torneos", label: "Torneos" },
   { to: "/noticias", label: "Noticias" },

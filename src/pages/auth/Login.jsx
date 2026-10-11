@@ -3,7 +3,7 @@ import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../../lib/firebase";
 import { loginUser, loginWithGoogle } from "../../services/authService";
 import { useAuthStore } from "../../store/authStore";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { toast } from "../../components/Toast";
 
 export default function Login() {
@@ -12,6 +12,10 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  // ?next=/ruta: volver a la página pública desde la que se pidió iniciar sesión (solo rutas internas)
+  const [searchParams] = useSearchParams();
+  const nextParam = searchParams.get("next");
+  const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
 
   const refreshPerfil = useAuthStore((s) => s.refreshPerfil);
   const usuarioActual = useAuthStore((s) => s.user);
@@ -26,14 +30,22 @@ export default function Login() {
       navigate(vincularRedirect, { replace: true });
       return;
     }
+    if (next) {
+      navigate(next, { replace: true });
+      return;
+    }
     navigate(rolActual === "club" ? "/admin" : rolActual === "organizador" ? "/org" : "/inicio", { replace: true });
-  }, [usuarioActual, rolActual, navigate]);
+  }, [usuarioActual, rolActual, next, navigate]);
 
   const redirigirSegunRol = async (user) => {
     const vincularRedirect = localStorage.getItem("padely-vincular-redirect");
     if (vincularRedirect) {
       localStorage.removeItem("padely-vincular-redirect");
       navigate(vincularRedirect);
+      return;
+    }
+    if (next) {
+      navigate(next, { replace: true });
       return;
     }
     // Cargamos el perfil en el store y usamos el rol que queda ahí (única fuente de verdad)

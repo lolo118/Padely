@@ -134,7 +134,7 @@ export default function MisReservas() {
           <p className="font-semibold" style={{ color: "var(--text-primary)" }}>No tenés reservas</p>
           <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Cuando reserves una cancha, aparecerá acá</p>
           <button
-            onClick={() => navigate("/hub")}
+            onClick={() => navigate("/clubes")}
             className="mt-4 px-5 py-2 rounded-xl text-sm font-semibold text-white transition"
             style={{ backgroundColor: "var(--accent)" }}
           >

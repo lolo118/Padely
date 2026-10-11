@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import {
   getTorneoById,
@@ -107,7 +107,8 @@ export default function DetalleTorneoPublico() {
             getParejas(id),
             getGrupos(id),
             getBracket(id),
-            getInscripciones(id),
+            // Las inscripciones no son públicas: sin sesión no se leen
+            user ? getInscripciones(id) : Promise.resolve([]),
           ]);
         setTorneo(torneoData);
         setParejas(parejasData);
@@ -131,8 +132,8 @@ export default function DetalleTorneoPublico() {
           setTab(torneoData.formato === "liga" ? "Liga" : "Grupos");
         }
 
-        // Cargar reclamos
-        try {
+        // Cargar reclamos (no son públicos: solo con sesión)
+        if (user) try {
           const reclamosData = await getReclamos(id);
           setReclamos(reclamosData);
         } catch (e) {
@@ -333,8 +334,40 @@ export default function DetalleTorneoPublico() {
         </span>
       </div>
 
+      {/* Sin sesión: inscripción, reclamos y vinculación requieren cuenta */}
+      {!user && (
+        <div className="themed-card rounded-2xl border p-5 mb-4 text-center">
+          <div className="text-3xl mb-2">🎾</div>
+          <p className="font-semibold" style={{ color: "var(--text-primary)" }}>
+            Iniciá sesión para inscribirte
+          </p>
+          <p className="text-sm mt-1 mb-4" style={{ color: "var(--text-muted)" }}>
+            {torneo.status === "inscripcion" && torneo.inscripcionAbierta
+              ? "Con tu cuenta podés anotarte con tu pareja, seguir tus partidos y abrir reclamos."
+              : "Con tu cuenta podés seguir tus partidos, tus reclamos y tu ranking."}
+          </p>
+          <div className="flex gap-2 justify-center flex-wrap">
+            <Link
+              to={`/login?next=${encodeURIComponent(`/torneos/${id}`)}`}
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:opacity-90"
+              style={{ backgroundColor: "var(--accent)" }}
+            >
+              Iniciar sesión
+            </Link>
+            <Link
+              to="/register"
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition hover:opacity-80"
+              style={{ color: "var(--accent)", borderColor: "var(--accent)" }}
+            >
+              Crear cuenta
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Botón inscripción */}
-      {torneo.status === "inscripcion" &&
+      {user &&
+        torneo.status === "inscripcion" &&
         torneo.inscripcionAbierta &&
         !yaInscripto &&
         !inscripcionEnviada && (
@@ -1246,7 +1279,7 @@ export default function DetalleTorneoPublico() {
                         );
                       })}
                     </div>
-                    {!miPareja && torneo.status === "en_curso" && torneo.habilitarReclamos && (
+                    {user && !miPareja && torneo.status === "en_curso" && torneo.habilitarReclamos && (
                       <p className="text-[10px] mt-2" style={{ color: "var(--text-muted)" }}>
                         * Para abrir reclamos necesitás estar vinculado a una pareja
                       </p>

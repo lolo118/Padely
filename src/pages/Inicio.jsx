@@ -120,7 +120,7 @@ export default function Inicio() {
 
       <div className="grid grid-cols-2 gap-3 mb-6">
         {[
-          { to: "/hub", label: "Reservar cancha", sub: "Ver canchas disponibles", color: "#059669", bgColor: "rgba(5, 150, 105, 0.1)", icon: (
+          { to: "/clubes", label: "Reservar cancha", sub: "Ver canchas disponibles", color: "#059669", bgColor: "rgba(5, 150, 105, 0.1)", icon: (
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="1.8" className="w-5 h-5">
               <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="12" y1="3" x2="12" y2="21" /><line x1="3" y1="12" x2="21" y2="12" />
             </svg>
