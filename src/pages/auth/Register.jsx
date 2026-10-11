@@ -61,6 +61,7 @@ export default function Register() {
     bio: "",
   });
   const [error, setError] = useState("");
+  const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const navigate = useNavigate();
 
   const set = (field) => (e) => setForm({ ...form, [field]: e.target.value });
@@ -68,6 +69,10 @@ export default function Register() {
   const handleRegister = async (e) => {
     e.preventDefault();
     setError("");
+    if (!aceptaTerminos) {
+      setError("Tenés que aceptar los Términos y la Política de privacidad para crear la cuenta.");
+      return;
+    }
     try {
       await registerUser(form.email, form.password, { tipo, ...form });
       const vincularRedirect = localStorage.getItem("padely-vincular-redirect");
@@ -135,12 +140,36 @@ export default function Register() {
           ))}
         </div>
 
+        {/* Aceptación de términos: requerida para el formulario y para el registro con Google */}
+        <label className="flex items-start gap-2 text-xs text-gray-600 mb-4 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={aceptaTerminos}
+            onChange={(e) => setAceptaTerminos(e.target.checked)}
+            className="mt-0.5 w-4 h-4 accent-green-600"
+            required
+          />
+          <span>
+            Acepto los{" "}
+            <Link to="/terminos" target="_blank" rel="noopener noreferrer" className="text-green-600 font-semibold hover:underline">
+              Términos
+            </Link>{" "}
+            y la{" "}
+            <Link to="/privacidad" target="_blank" rel="noopener noreferrer" className="text-green-600 font-semibold hover:underline">
+              Política de privacidad
+            </Link>
+          </span>
+        </label>
+
         {/* Registro rápido con Google - solo para jugadores */}
         {tipo === "jugador" && (
           <>
             <button
               type="button"
+              disabled={!aceptaTerminos}
+              title={aceptaTerminos ? "" : "Primero aceptá los Términos y la Política de privacidad"}
               onClick={async () => {
+                if (!aceptaTerminos) return;
                 try {
                   const user = await loginWithGoogle();
                   if (!user) return; // popup bloqueado: sigue por redirect
@@ -153,7 +182,7 @@ export default function Register() {
                   toast.error("Error al registrarse con Google");
                 }
               }}
-              className="w-full border-2 border-green-600 text-green-700 py-3 rounded-xl text-sm font-bold hover:bg-green-50 transition flex items-center justify-center gap-3 mb-4"
+              className="w-full border-2 border-green-600 text-green-700 py-3 rounded-xl text-sm font-bold hover:bg-green-50 transition flex items-center justify-center gap-3 mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg viewBox="0 0 24 24" className="w-5 h-5">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
@@ -381,7 +410,8 @@ export default function Register() {
 
           <button
             type="submit"
-            className="bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition mt-1"
+            disabled={!aceptaTerminos}
+            className="bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Registrarse como{" "}
             {tipo === "organizador" ? "organizador de torneos" : tipo}

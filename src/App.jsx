@@ -45,6 +45,8 @@ const OrgEstadisticas = lazy(() => import("./pages/org/OrgEstadisticas"));
 
 // Landing pública en /
 const Landing = lazy(() => import("./pages/Landing"));
+const Terminos = lazy(() => import("./pages/Terminos"));
+const Privacidad = lazy(() => import("./pages/Privacidad"));
 
 // Misc
 const AceptarInvitacion = lazy(() => import("./pages/AceptarInvitacion"));
@@ -177,6 +179,8 @@ export default function App() {
             <Route path="/torneos" element={<Torneos />} />
             <Route path="/torneos/:id" element={<DetalleTorneoPublico />} />
             <Route path="/club/:id" element={<ClubPublico />} />
+            <Route path="/terminos" element={<Terminos />} />
+            <Route path="/privacidad" element={<Privacidad />} />
           </Route>
           {/* Alias viejo del hub de canchas */}
           <Route path="/hub" element={<Navigate to="/clubes" replace />} />
