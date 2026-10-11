@@ -43,6 +43,9 @@ const OrgEntidad = lazy(() => import("./pages/org/OrgEntidad"));
 const OrgEquipo = lazy(() => import("./pages/org/OrgEquipo"));
 const OrgEstadisticas = lazy(() => import("./pages/org/OrgEstadisticas"));
 
+// Landing pública en /
+const Landing = lazy(() => import("./pages/Landing"));
+
 // Misc
 const AceptarInvitacion = lazy(() => import("./pages/AceptarInvitacion"));
 const VincularJugador = lazy(() => import("./pages/VincularJugador"));
@@ -157,6 +160,7 @@ export default function App() {
       <ConfirmHost />
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 

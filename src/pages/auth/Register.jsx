@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { registerUser, loginWithGoogle, getUserData } from "../../services/authService";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { toast } from "../../components/Toast";
 
 const provincias = [
@@ -35,8 +35,13 @@ const inputClass =
 const selectClass =
   "border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full bg-white";
 
+const TIPOS_VALIDOS = ["jugador", "organizador", "club"];
+
 export default function Register() {
-  const [tipo, setTipo] = useState("jugador");
+  // ?tipo=club|organizador|jugador preselecciona la pestaña (desde la landing)
+  const [searchParams] = useSearchParams();
+  const tipoInicial = searchParams.get("tipo");
+  const [tipo, setTipo] = useState(TIPOS_VALIDOS.includes(tipoInicial) ? tipoInicial : "jugador");
   const [form, setForm] = useState({
     nombre: "",
     email: "",
