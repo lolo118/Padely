@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useAuthStore } from "../../store/authStore";
 import ThemeToggle from "../ThemeToggle";
 import NotificationBell from "../NotificationBell";
+import InstallBanner from "../InstallBanner";
 
 const navItems = [
   {
@@ -226,6 +227,9 @@ export default function PlayerLayout() {
       <main className="flex-1 overflow-y-auto pb-24 px-4 sm:px-6 pt-5 max-w-4xl mx-auto w-full">
         <Outlet />
       </main>
+
+      {/* Banner de instalación (solo móvil, solo si el navegador lo permite) */}
+      <InstallBanner />
 
       {/* Bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-20 border-t" style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border-card)", boxShadow: "0 -4px 20px rgba(0,0,0,0.06)" }}>
