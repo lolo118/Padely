@@ -12,6 +12,8 @@ import {
   orderBy,
   serverTimestamp,
   runTransaction,
+  setDoc,
+  deleteField,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { getTodayLocal, horaActualStr } from "../utils/formatDate";
@@ -47,8 +49,29 @@ export const getClubConfig = async (clubId) => {
   return { id: snap.id, ...snap.data() };
 };
 
+// El documento clubs/{clubId} es de lectura pública: estos campos viven en clubs/{clubId}/privado/datos
+// (solo el dueño) y se borran del documento público si alguna vez estuvieron ahí.
+export const CAMPOS_CLUB_PRIVADOS = ["cbu", "alias", "titularCuenta", "cuit", "razonSocial", "usuarios"];
+
 export const actualizarClubConfig = async (clubId, datos) => {
-  await updateDoc(doc(db, "clubs", clubId), datos);
+  const publicos = { ...datos };
+  CAMPOS_CLUB_PRIVADOS.forEach((k) => {
+    publicos[k] = deleteField();
+  });
+  await updateDoc(doc(db, "clubs", clubId), publicos);
+};
+
+export const getClubPrivado = async (clubId) => {
+  const snap = await getDoc(doc(db, "clubs", clubId, "privado", "datos"));
+  return snap.exists() ? snap.data() : {};
+};
+
+export const actualizarClubPrivado = async (clubId, datos) => {
+  await setDoc(
+    doc(db, "clubs", clubId, "privado", "datos"),
+    { ...datos, actualizadoEn: serverTimestamp() },
+    { merge: true },
+  );
 };
 
 // --- RESERVAS ---

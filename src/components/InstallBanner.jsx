@@ -1,43 +1,35 @@
 import { useEffect, useState } from "react";
+import { getInstallPrompt, consumirInstallPrompt, suscribirInstallPrompt } from "../lib/installPrompt";
 
 const CLAVE_DESCARTADO = "padely-install-dismissed";
 
+function fueDescartado() {
+  try {
+    return localStorage.getItem(CLAVE_DESCARTADO) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function esMobile() {
+  return (
+    window.matchMedia("(max-width: 767px)").matches ||
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  );
+}
+
 // Banner "Instalá Padely": solo en móvil y solo cuando el navegador dispara beforeinstallprompt
-// (Chrome/Edge en Android). Se puede cerrar y el cierre queda guardado en localStorage.
+// (Chrome/Edge en Android). El evento se captura en src/lib/installPrompt.js desde el arranque, porque
+// puede llegar antes de que se monte este componente. Se puede cerrar y el cierre queda en localStorage.
 export default function InstallBanner() {
-  const [promptEvent, setPromptEvent] = useState(null);
-  const [visible, setVisible] = useState(false);
+  const [habilitado] = useState(() => !fueDescartado() && esMobile());
+  const [promptEvent, setPromptEvent] = useState(() => (habilitado ? getInstallPrompt() : null));
+  const [cerrado, setCerrado] = useState(false);
 
   useEffect(() => {
-    let descartado = false;
-    try {
-      descartado = localStorage.getItem(CLAVE_DESCARTADO) === "1";
-    } catch {
-      descartado = false;
-    }
-    if (descartado) return;
-
-    const esMobile =
-      window.matchMedia("(max-width: 767px)").matches ||
-      /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (!esMobile) return;
-
-    const onPrompt = (e) => {
-      e.preventDefault();
-      setPromptEvent(e);
-      setVisible(true);
-    };
-    const onInstalled = () => {
-      setVisible(false);
-      setPromptEvent(null);
-    };
-    window.addEventListener("beforeinstallprompt", onPrompt);
-    window.addEventListener("appinstalled", onInstalled);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onPrompt);
-      window.removeEventListener("appinstalled", onInstalled);
-    };
-  }, []);
+    if (!habilitado) return undefined;
+    return suscribirInstallPrompt((e) => setPromptEvent(e));
+  }, [habilitado]);
 
   const cerrar = () => {
     try {
@@ -45,16 +37,16 @@ export default function InstallBanner() {
     } catch {
       // sin localStorage (modo privado): solo se oculta en esta visita
     }
-    setVisible(false);
+    setCerrado(true);
   };
 
   const instalar = async () => {
     if (!promptEvent) return;
+    consumirInstallPrompt();
     try {
       promptEvent.prompt();
       const { outcome } = await promptEvent.userChoice;
-      if (outcome === "accepted") setVisible(false);
-      else cerrar();
+      if (outcome !== "accepted") cerrar();
     } catch (err) {
       console.error("Error al instalar la app:", err);
       cerrar();
@@ -62,7 +54,7 @@ export default function InstallBanner() {
     setPromptEvent(null);
   };
 
-  if (!visible) return null;
+  if (!habilitado || cerrado || !promptEvent) return null;
 
   return (
     <div className="fixed left-3 right-3 bottom-[76px] z-30 md:hidden">

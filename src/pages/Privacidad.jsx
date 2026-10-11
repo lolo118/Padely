@@ -85,9 +85,11 @@ export default function Privacidad() {
 
       <Seccion titulo="7. Cookies y almacenamiento local">
         <p>
-          Padely no usa cookies de seguimiento ni de publicidad. Guardamos en el almacenamiento local de tu
-          navegador solo preferencias (por ejemplo, el modo claro u oscuro y si cerraste el aviso de instalación)
-          y la sesión necesaria para mantenerte conectado.
+          Padely no usa cookies de publicidad. Guardamos en el almacenamiento local de tu navegador solo
+          preferencias (por ejemplo, el modo claro u oscuro y si cerraste el aviso de instalación) y la sesión
+          necesaria para mantenerte conectado. Si está activa la medición de uso con Google Analytics, Google
+          puede guardar cookies estadísticas (por ejemplo, _ga) para contar visitas de forma agregada; no las
+          usamos para identificarte ni para publicidad.
         </p>
       </Seccion>
 

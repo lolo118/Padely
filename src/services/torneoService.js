@@ -10,8 +10,33 @@ import {
   where,
   orderBy,
   serverTimestamp,
+  setDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { parejaPublica, partidoPublico } from "../utils/torneo";
+
+// pairs, groups y el bracket del torneo son de lectura pública: los contactos de una pareja se guardan
+// aparte en tournaments/{tid}/contactos/{pairId} (solo organizador) y nunca en esos documentos.
+const CAMPOS_CONTACTO = ["whatsapp1", "whatsapp2", "email1", "email2"];
+
+function separarContactos(pareja) {
+  const publica = { ...pareja };
+  const contactos = {};
+  CAMPOS_CONTACTO.forEach((k) => {
+    if (publica[k] !== undefined) {
+      if (publica[k]) contactos[k] = publica[k];
+      delete publica[k];
+    }
+  });
+  return { publica, contactos };
+}
+
+function grupoPublico(grupo) {
+  const publico = { ...grupo };
+  if (Array.isArray(publico.parejas)) publico.parejas = publico.parejas.map(parejaPublica);
+  if (Array.isArray(publico.partidos)) publico.partidos = publico.partidos.map(partidoPublico);
+  return publico;
+}
 
 export const crearTorneo = async (datos, userId) => {
   const ref = await addDoc(collection(db, "tournaments"), {
@@ -44,11 +69,28 @@ export const actualizarTorneo = async (id, datos) => {
 };
 
 export const agregarPareja = async (torneoId, pareja) => {
+  const { publica, contactos } = separarContactos(pareja);
   const ref = await addDoc(collection(db, "tournaments", torneoId, "pairs"), {
-    ...pareja,
+    ...publica,
     createdAt: serverTimestamp(),
   });
+  if (Object.keys(contactos).length > 0) {
+    await setDoc(doc(db, "tournaments", torneoId, "contactos", ref.id), {
+      ...contactos,
+      actualizadoEn: serverTimestamp(),
+    });
+  }
   return ref.id;
+};
+
+// Contactos de las parejas del torneo ({ [pairId]: { whatsapp1, whatsapp2, email1, email2 } }), solo organizador
+export const getContactosParejas = async (torneoId) => {
+  const snap = await getDocs(collection(db, "tournaments", torneoId, "contactos"));
+  const contactos = {};
+  snap.docs.forEach((d) => {
+    contactos[d.id] = d.data();
+  });
+  return contactos;
 };
 
 export const getParejas = async (torneoId) => {
@@ -58,6 +100,11 @@ export const getParejas = async (torneoId) => {
 
 export const eliminarPareja = async (torneoId, parejaId) => {
   await deleteDoc(doc(db, "tournaments", torneoId, "pairs", parejaId));
+  try {
+    await deleteDoc(doc(db, "tournaments", torneoId, "contactos", parejaId));
+  } catch (err) {
+    console.error("Error al borrar los contactos de la pareja:", err);
+  }
 };
 
 export const guardarGrupos = async (torneoId, grupos) => {
@@ -69,7 +116,7 @@ export const guardarGrupos = async (torneoId, grupos) => {
 
   const createPromises = grupos.map((grupo) =>
     addDoc(collection(db, "tournaments", torneoId, "groups"), {
-      ...grupo,
+      ...grupoPublico(grupo),
       createdAt: serverTimestamp(),
     }),
   );
@@ -83,13 +130,17 @@ export const getGrupos = async (torneoId) => {
 };
 
 export const actualizarGrupo = async (torneoId, grupoId, datos) => {
-  await updateDoc(doc(db, "tournaments", torneoId, "groups", grupoId), datos);
+  await updateDoc(doc(db, "tournaments", torneoId, "groups", grupoId), grupoPublico(datos));
 };
 
 // ✅ Modificadas: almacenan el bracket como JSON string
 export const guardarBracket = async (torneoId, bracket) => {
   const ref = doc(db, "tournaments", torneoId);
-  await updateDoc(ref, { bracketJson: JSON.stringify(bracket) });
+  // El bracket vive en el documento del torneo (lectura pública): solo la proyección pública de cada pareja
+  const rondas = Array.isArray(bracket?.rondas)
+    ? bracket.rondas.map((ronda) => (Array.isArray(ronda) ? ronda.map(partidoPublico) : ronda))
+    : bracket?.rondas;
+  await updateDoc(ref, { bracketJson: JSON.stringify({ ...bracket, rondas }) });
 };
 
 export const getBracket = async (torneoId) => {

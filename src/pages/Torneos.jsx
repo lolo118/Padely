@@ -27,6 +27,7 @@ export default function Torneos() {
   useEffect(() => {
     getTodosLosTorneos()
       .then(setTorneos)
+      .catch((err) => console.error("Error al cargar torneos:", err))
       .finally(() => setLoading(false));
   }, []);
 

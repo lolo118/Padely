@@ -4,6 +4,7 @@ import {
   getParejas,
   eliminarPareja,
   getInscripciones,
+  getContactosParejas,
   actualizarInscripcion,
 } from "../../services/torneoService";
 import { notificarInscripcionConfirmada, notificarInscripcionRechazada } from "../../services/notificationService";
@@ -28,6 +29,8 @@ const inscripcionLabel = {
 export default function TabParejas({ torneoId, torneo }) {
   const [parejas, setParejas] = useState([]);
   const [inscripciones, setInscripciones] = useState([]);
+  // Contactos por pareja ({ [pairId]: { whatsapp1, whatsapp2, ... } }): viven aparte, solo los ve el organizador
+  const [contactos, setContactos] = useState({});
   const [nombre1, setNombre1] = useState("");
   const [apellido1, setApellido1] = useState("");
   const [nombre2, setNombre2] = useState("");
@@ -50,13 +53,18 @@ export default function TabParejas({ torneoId, torneo }) {
     let cancelled = false;
     const cargar = async () => {
       try {
-        const [parejasData, inscData] = await Promise.all([
+        const [parejasData, inscData, contactosData] = await Promise.all([
           getParejas(torneoId),
           getInscripciones(torneoId),
+          getContactosParejas(torneoId).catch((err) => {
+            console.error("Error al cargar los contactos de las parejas:", err);
+            return {};
+          }),
         ]);
         if (!cancelled) {
           setParejas(parejasData);
           setInscripciones(inscData);
+          setContactos(contactosData);
         }
       } catch (err) {
         console.error("Error al cargar parejas:", err);
@@ -89,6 +97,7 @@ export default function TabParejas({ torneoId, torneo }) {
       };
       const nuevaId = await agregarPareja(torneoId, nuevaPareja);
       setParejas([...parejas, { id: nuevaId, ...nuevaPareja }]);
+      setContactos({ ...contactos, [nuevaId]: { whatsapp1: whatsapp1.trim(), whatsapp2: whatsapp2.trim() } });
       setNombre1(""); setApellido1(""); setNombre2(""); setApellido2("");
       setWhatsapp1(""); setWhatsapp2("");
       toast.success("Pareja agregada");
@@ -134,6 +143,15 @@ export default function TabParejas({ torneoId, torneo }) {
       };
       const nuevaId = await agregarPareja(torneoId, nuevaPareja);
       setParejas([...parejas, { id: nuevaId, ...nuevaPareja }]);
+      setContactos({
+        ...contactos,
+        [nuevaId]: {
+          whatsapp1: insc.whatsapp1 || "",
+          whatsapp2: insc.whatsapp2 || "",
+          email1: insc.email1 || "",
+          email2: insc.email2 || "",
+        },
+      });
       setInscripciones(
         inscripciones.map((i) =>
           i.id === insc.id ? { ...i, status: "confirmada" } : i,
@@ -450,6 +468,8 @@ export default function TabParejas({ torneoId, torneo }) {
               const linkJ2 = `${window.location.origin}/vincular/${torneoId}/${p.id}/2`;
               const msgJ1 = `¡Hola ${p.jugador1}! Estás inscripto en el torneo "${torneo.nombre}". Vinculá tu cuenta de Padely para recibir puntos y notificaciones: ${linkJ1}`;
               const msgJ2 = `¡Hola ${p.jugador2}! Estás inscripto en el torneo "${torneo.nombre}". Vinculá tu cuenta de Padely para recibir puntos y notificaciones: ${linkJ2}`;
+              const wa1 = contactos[p.id]?.whatsapp1 || p.whatsapp1 || "";
+              const wa2 = contactos[p.id]?.whatsapp2 || p.whatsapp2 || "";
 
               return (
                 <div key={p.id} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
@@ -486,8 +506,8 @@ export default function TabParejas({ torneoId, torneo }) {
                           className="text-[10px] px-2 py-1 rounded-lg transition" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border-card)" }}>
                           🔗 Link
                         </button>
-                        {p.whatsapp1 && (
-                          <a href={`https://wa.me/${p.whatsapp1}?text=${encodeURIComponent(msgJ1)}`} target="_blank" rel="noopener noreferrer"
+                        {wa1 && (
+                          <a href={`https://wa.me/${wa1}?text=${encodeURIComponent(msgJ1)}`} target="_blank" rel="noopener noreferrer"
                             className="text-[10px] px-2 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition">
                             📱 WA
                           </a>
@@ -512,8 +532,8 @@ export default function TabParejas({ torneoId, torneo }) {
                           className="text-[10px] px-2 py-1 rounded-lg transition" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border-card)" }}>
                           🔗 Link
                         </button>
-                        {p.whatsapp2 && (
-                          <a href={`https://wa.me/${p.whatsapp2}?text=${encodeURIComponent(msgJ2)}`} target="_blank" rel="noopener noreferrer"
+                        {wa2 && (
+                          <a href={`https://wa.me/${wa2}?text=${encodeURIComponent(msgJ2)}`} target="_blank" rel="noopener noreferrer"
                             className="text-[10px] px-2 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition">
                             📱 WA
                           </a>

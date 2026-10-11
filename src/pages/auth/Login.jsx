@@ -6,6 +6,20 @@ import { useAuthStore } from "../../store/authStore";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { toast } from "../../components/Toast";
 
+// Solo rutas internas para ?next=: se resuelve contra el origen y se exige el mismo origen
+// (rechaza "//", barras invertidas y esquemas), y nunca vuelve a /login o /register.
+function rutaInternaSegura(valor) {
+  if (!valor || typeof valor !== "string" || !valor.startsWith("/") || valor.includes("\\")) return null;
+  try {
+    const u = new URL(valor, window.location.origin);
+    if (u.origin !== window.location.origin) return null;
+    if (u.pathname === "/login" || u.pathname === "/register") return null;
+    return u.pathname + u.search + u.hash;
+  } catch {
+    return null;
+  }
+}
+
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -14,8 +28,7 @@ export default function Login() {
   const navigate = useNavigate();
   // ?next=/ruta: volver a la página pública desde la que se pidió iniciar sesión (solo rutas internas)
   const [searchParams] = useSearchParams();
-  const nextParam = searchParams.get("next");
-  const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
+  const next = rutaInternaSegura(searchParams.get("next"));
 
   const refreshPerfil = useAuthStore((s) => s.refreshPerfil);
   const usuarioActual = useAuthStore((s) => s.user);
@@ -24,28 +37,31 @@ export default function Login() {
   // Ya logueado (por ejemplo al volver del redirect de Google): salimos del login según el rol
   useEffect(() => {
     if (!usuarioActual || !rolActual) return;
+    // ?next= explícito manda sobre un redirect de vinculación guardado de una visita anterior
+    if (next) {
+      localStorage.removeItem("padely-vincular-redirect");
+      navigate(next, { replace: true });
+      return;
+    }
     const vincularRedirect = localStorage.getItem("padely-vincular-redirect");
     if (vincularRedirect) {
       localStorage.removeItem("padely-vincular-redirect");
       navigate(vincularRedirect, { replace: true });
       return;
     }
-    if (next) {
-      navigate(next, { replace: true });
-      return;
-    }
     navigate(rolActual === "club" ? "/admin" : rolActual === "organizador" ? "/org" : "/inicio", { replace: true });
   }, [usuarioActual, rolActual, next, navigate]);
 
   const redirigirSegunRol = async (user) => {
+    if (next) {
+      localStorage.removeItem("padely-vincular-redirect");
+      navigate(next, { replace: true });
+      return;
+    }
     const vincularRedirect = localStorage.getItem("padely-vincular-redirect");
     if (vincularRedirect) {
       localStorage.removeItem("padely-vincular-redirect");
       navigate(vincularRedirect);
-      return;
-    }
-    if (next) {
-      navigate(next, { replace: true });
       return;
     }
     // Cargamos el perfil en el store y usamos el rol que queda ahí (única fuente de verdad)

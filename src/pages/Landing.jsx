@@ -41,18 +41,19 @@ const pasos = [
 ];
 
 export default function Landing() {
-  const { user, rol } = useAuthStore();
+  const { user, rol, loading } = useAuthStore();
   const whatsapp = (import.meta.env.VITE_WHATSAPP_CONTACTO || "").replace(/\D/g, "");
 
-  // Con sesión, al inicio que corresponde según el rol (igual que /inicio)
+  // Mientras se resuelve la sesión (o el rol) no se muestra la landing: con sesión se va directo
+  // al inicio que corresponde según el rol, igual que /inicio.
+  if (loading || (user && !rol)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ color: "var(--text-muted)" }}>
+        Cargando...
+      </div>
+    );
+  }
   if (user) {
-    if (!rol) {
-      return (
-        <div className="min-h-screen flex items-center justify-center" style={{ color: "var(--text-muted)" }}>
-          Cargando...
-        </div>
-      );
-    }
     return <Navigate to={rol === "club" ? "/admin" : rol === "organizador" ? "/org" : "/inicio"} replace />;
   }
 

@@ -60,6 +60,12 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
       allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
 
+      // Datos privados del club (CBU, alias, CUIT, razón social, usuarios del club): solo el dueño.
+      // El documento clubs/{clubId} es de lectura pública y no debe contenerlos.
+      match /privado/{docId} {
+        allow read, write: if clubOwner(clubId);
+      }
+
       match /canchas/{canchaId} {
         allow read: if true;
         allow create, update, delete: if clubOwner(clubId);
@@ -112,6 +118,12 @@ service cloud.firestore {
           || (signedIn() && changedOnly(['jugador2Uid'])
               && resource.data.get('jugador2Uid', null) == null
               && request.resource.data.jugador2Uid == request.auth.uid);
+      }
+
+      // Contactos de las parejas (WhatsApp/email): solo el organizador. Nunca van en pairs, groups ni en el
+      // bracket del torneo, que son de lectura pública.
+      match /contactos/{pairId} {
+        allow read, write: if tournamentOrganizer(tid);
       }
 
       // Marcadores de puntos otorgados: los escriben solo las Cloud Functions

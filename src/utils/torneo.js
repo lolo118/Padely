@@ -104,6 +104,27 @@ export function listaCategorias(torneo) {
   return lista;
 }
 
+// Proyección pública de una pareja: lo único que puede ir en groups y en el bracket, que son documentos de
+// lectura pública. Los contactos (whatsapp1/2, email1/2) viven en tournaments/{tid}/contactos/{pairId},
+// que solo lee el organizador.
+const CAMPOS_PAREJA_PUBLICA = [
+  "id", "nombrePareja", "jugador1", "jugador2", "jugador1Uid", "jugador2Uid", "categoria", "grupo", "posGrupo",
+];
+export function parejaPublica(p) {
+  if (!p || typeof p !== "object") return null;
+  const publica = {};
+  CAMPOS_PAREJA_PUBLICA.forEach((k) => {
+    if (p[k] !== undefined) publica[k] = p[k];
+  });
+  return publica;
+}
+
+// Un partido con sus dos parejas en proyección pública (las demás claves: resultado, hora, cancha, fecha)
+export function partidoPublico(partido) {
+  if (!partido || typeof partido !== "object") return partido ?? null;
+  return { ...partido, pareja1: parejaPublica(partido.pareja1), pareja2: parejaPublica(partido.pareja2) };
+}
+
 // "masculino|7ma" -> "7ma"; null si no hay categoría
 export function nivelDeCategoria(categoriaId) {
   if (typeof categoriaId !== "string" || !categoriaId.includes("|")) return null;

@@ -3,6 +3,8 @@ import { useAuthStore } from "../../store/authStore";
 import {
   getClubByOwner,
   actualizarClubConfig,
+  getClubPrivado,
+  actualizarClubPrivado,
 } from "../../services/canchaService";
 import { uploadClubLogo } from "../../services/storageService";
 import { toast } from "../../components/Toast";
@@ -88,6 +90,11 @@ export default function Configuracion() {
         const clubData = await getClubByOwner(user.uid);
         if (clubData) {
           setClub(clubData);
+          // Datos privados (CBU, CUIT, usuarios): en clubs/{id}/privado/datos; los del documento viejo son el respaldo
+          const privado = await getClubPrivado(clubData.id).catch((err) => {
+            console.error("Error al cargar los datos privados del club:", err);
+            return {};
+          });
           setForm({
             nombre: clubData.nombre || "",
             direccion: clubData.direccion || "",
@@ -102,13 +109,13 @@ export default function Configuracion() {
             horarioApertura: clubData.horarioApertura || "08:00",
             horarioCierre: clubData.horarioCierre || "23:00",
             diasAbiertos: clubData.diasAbiertos || diasSemana,
-            cbu: clubData.cbu || "",
-            alias: clubData.alias || "",
-            titularCuenta: clubData.titularCuenta || "",
-            cuit: clubData.cuit || "",
-            razonSocial: clubData.razonSocial || "",
+            cbu: privado.cbu || clubData.cbu || "",
+            alias: privado.alias || clubData.alias || "",
+            titularCuenta: privado.titularCuenta || clubData.titularCuenta || "",
+            cuit: privado.cuit || clubData.cuit || "",
+            razonSocial: privado.razonSocial || clubData.razonSocial || "",
           });
-          setUsuarios(clubData.usuarios || []);
+          setUsuarios(privado.usuarios || clubData.usuarios || []);
           if (clubData.logoUrl) setLogoUrl(clubData.logoUrl);
         }
       } catch (err) {
@@ -124,8 +131,11 @@ export default function Configuracion() {
     setGuardando(true);
     setMensaje("");
     try {
-      await actualizarClubConfig(club.id, { ...form, usuarios });
-      setClub({ ...club, ...form, usuarios });
+      // Lo público va al documento del club; CBU, alias, CUIT, razón social y usuarios, al subdocumento privado
+      const { cbu, alias, titularCuenta, cuit, razonSocial, ...publicos } = form;
+      await actualizarClubConfig(club.id, publicos);
+      await actualizarClubPrivado(club.id, { cbu, alias, titularCuenta, cuit, razonSocial, usuarios });
+      setClub({ ...club, ...publicos });
       setMensaje("Configuración guardada");
       setTimeout(() => setMensaje(""), 3000);
       toast.success("Configuración guardada");
