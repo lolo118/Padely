@@ -264,8 +264,9 @@ exports.onTournamentUpdated = onDocumentUpdated("tournaments/{tid}", async (even
     }
   }
 
-  // B2: torneo finalizado
-  if (after.status === "finalizado" && before.status !== "finalizado") {
+  // B2: torneo finalizado. Se evalúa en cada escritura mientras el torneo esté finalizado (no solo en la
+  // transición): los marcadores garantizan una sola vez, y así una invocación perdida se recupera sola.
+  if (after.status === "finalizado") {
     // Liga: bonus de campeón y subcampeón según la tabla del (único) grupo
     if (after.formato === "liga") {
       if (after.puntosFinalesOtorgados) {
@@ -307,6 +308,7 @@ const functionsV1 = require("firebase-functions/v1");
 const EXPIRA_PENDIENTE_HORAS = 2; // más adelante configurable por club
 const ZONA_HORARIA = "America/Argentina/Buenos_Aires";
 const BATCH_MAX = 400;
+const CONCURRENCIA_EXPIRACION = 20;
 
 // "YYYY-MM-DD" de hoy en Argentina (misma convención que getTodayLocal() en el cliente)
 function fechaLocalArgentina(date = new Date()) {
@@ -344,51 +346,66 @@ exports.expirarReservasPendientes = onSchedule(
     }
 
     const clubs = new Map();
-    const ops = [];
-    for (const doc of snap.docs) {
-      const reserva = doc.data();
-      const clubRef = doc.ref.parent.parent;
-      if (!clubRef) continue;
+    const cargarClub = (clubRef) => {
       if (!clubs.has(clubRef.id)) {
-        const clubSnap = await clubRef.get();
-        clubs.set(clubRef.id, clubSnap.exists ? clubSnap.data() : {});
+        clubs.set(clubRef.id, clubRef.get().then((s) => (s.exists ? s.data() : {})));
       }
-      const club = clubs.get(clubRef.id);
-      const clubNombre = club.nombre || "el club";
-      const cancha = reserva.canchaName || reserva.canchaId || "cancha";
-      const fecha = reserva.fecha || "";
-      const hora = reserva.hora || "";
+      return clubs.get(clubRef.id);
+    };
 
-      ops.push((b) => b.update(doc.ref, { status: "cancelada", motivo: "expirada" }));
-      if (reserva.jugadorUid) {
-        ops.push((b) =>
-          b.set(nuevaNotificacionRef(reserva.jugadorUid), {
-            tipo: "reserva_expirada",
-            titulo: "Tu reserva venció",
-            mensaje: `Tu reserva en ${clubNombre} (${cancha}, ${fecha} ${hora}) venció sin respuesta del club y fue cancelada.`,
-            link: "/mis-reservas",
-            icono: "⏰",
-            leida: false,
-            createdAt: FieldValue.serverTimestamp(),
-          }),
-        );
-      }
-      if (club.ownerUid) {
-        ops.push((b) =>
-          b.set(nuevaNotificacionRef(club.ownerUid), {
-            tipo: "reserva_expirada_club",
-            titulo: "Reserva vencida sin respuesta",
-            mensaje: `La reserva de ${reserva.nombreJugador || "un jugador"} (${cancha}, ${fecha} ${hora}) venció sin confirmar y fue cancelada.`,
-            link: "/admin/canchas",
-            icono: "⏰",
-            leida: false,
-            createdAt: FieldValue.serverTimestamp(),
-          }),
-        );
-      }
+    // Una transacción por reserva: si el club la confirmó (o el jugador la canceló) entre la consulta
+    // y la escritura, no se pisa. Se procesan de a CONCURRENCIA_EXPIRACION en paralelo.
+    let vencidas = 0;
+    for (let i = 0; i < snap.docs.length; i += CONCURRENCIA_EXPIRACION) {
+      const resultados = await Promise.all(
+        snap.docs.slice(i, i + CONCURRENCIA_EXPIRACION).map(async (doc) => {
+          try {
+            const clubRef = doc.ref.parent.parent;
+            if (!clubRef) return false;
+            const club = await cargarClub(clubRef);
+            return await db.runTransaction(async (tx) => {
+              const fresh = await tx.get(doc.ref);
+              if (!fresh.exists) return false;
+              const reserva = fresh.data();
+              if (reserva.status !== "pendiente") return false;
+              const clubNombre = club.nombre || "el club";
+              const cancha = reserva.canchaName || reserva.canchaId || "cancha";
+              const fecha = reserva.fecha || "";
+              const hora = reserva.hora || "";
+              tx.update(doc.ref, { status: "cancelada", motivo: "expirada" });
+              if (reserva.jugadorUid) {
+                tx.set(nuevaNotificacionRef(reserva.jugadorUid), {
+                  tipo: "reserva_expirada",
+                  titulo: "Tu reserva venció",
+                  mensaje: `Tu reserva en ${clubNombre} (${cancha}, ${fecha} ${hora}) venció sin respuesta del club y fue cancelada.`,
+                  link: "/mis-reservas",
+                  icono: "⏰",
+                  leida: false,
+                  createdAt: FieldValue.serverTimestamp(),
+                });
+              }
+              if (club.ownerUid) {
+                tx.set(nuevaNotificacionRef(club.ownerUid), {
+                  tipo: "reserva_expirada_club",
+                  titulo: "Reserva vencida sin respuesta",
+                  mensaje: `La reserva de ${reserva.nombreJugador || "un jugador"} (${cancha}, ${fecha} ${hora}) venció sin confirmar y fue cancelada.`,
+                  link: "/admin/canchas",
+                  icono: "⏰",
+                  leida: false,
+                  createdAt: FieldValue.serverTimestamp(),
+                });
+              }
+              return true;
+            });
+          } catch (err) {
+            logger.error(`No se pudo vencer la reserva ${doc.ref.path}`, err);
+            return false;
+          }
+        }),
+      );
+      vencidas += resultados.filter(Boolean).length;
     }
-    await escribirEnLotes(ops);
-    logger.info(`expirarReservasPendientes: ${snap.size} reservas vencidas`);
+    logger.info(`expirarReservasPendientes: ${vencidas} de ${snap.size} reservas vencidas`);
   },
 );
 
@@ -402,12 +419,17 @@ exports.onUserDeleted = functionsV1
     await db.recursiveDelete(userRef(uid));
 
     const ops = [];
-    let parejas = 0;
+    // Una sola actualización por pareja aunque el uid esté en los dos lugares
+    const parejas = new Map();
     for (const campo of ["jugador1Uid", "jugador2Uid"]) {
       const snap = await db.collectionGroup("pairs").where(campo, "==", uid).get();
-      snap.docs.forEach((d) => ops.push((b) => b.update(d.ref, { [campo]: null })));
-      parejas += snap.size;
+      snap.docs.forEach((d) => {
+        const entry = parejas.get(d.ref.path) || { ref: d.ref, campos: {} };
+        entry.campos[campo] = null;
+        parejas.set(d.ref.path, entry);
+      });
     }
+    parejas.forEach(({ ref, campos }) => ops.push((b) => b.update(ref, campos)));
 
     const hoy = fechaLocalArgentina();
     const reservasSnap = await db
@@ -423,5 +445,5 @@ exports.onUserDeleted = functionsV1
     });
 
     await escribirEnLotes(ops);
-    logger.info(`onUserDeleted ${uid}: ${parejas} parejas desvinculadas, ${reservas} reservas canceladas`);
+    logger.info(`onUserDeleted ${uid}: ${parejas.size} parejas desvinculadas, ${reservas} reservas canceladas`);
   });
