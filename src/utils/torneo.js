@@ -130,3 +130,55 @@ export function nivelDeCategoria(categoriaId) {
   if (typeof categoriaId !== "string" || !categoriaId.includes("|")) return null;
   return categoriaId.split("|")[1] || null;
 }
+
+// ===== Cuadros =====
+// Un "cuadro" es un sorteo independiente dentro del torneo: una categoría con sus propios grupos (o fixture
+// de liga), su propio bracket (tournaments/{tid}/cuadros/{cuadroId}), sus campeones y sus puntos.
+// El id del cuadro es el id de la categoría ("masculino|7ma") o "general" cuando el torneo no tiene categorías.
+// functions/puntos.js tiene una copia servidor de cuadrosDeTorneo y cuadroDeGrupo: mantenerlas iguales.
+export const CUADRO_GENERAL = { id: "general", label: "General", genero: null, nivel: null };
+
+export function cuadrosDeTorneo(torneo) {
+  const categorias = listaCategorias(torneo);
+  if (categorias.length === 0) return [{ ...CUADRO_GENERAL }];
+  return categorias.map((c) => ({ id: c.id, label: c.label, genero: c.genero, nivel: c.nivel }));
+}
+
+// Cuadro de una pareja: su categoría si es una del torneo; el único cuadro cuando el torneo tiene uno solo
+// (parejas con categoria null en torneos de una categoría o sin categorías); si no, null = "sin cuadro".
+export function cuadroDePareja(pareja, torneo) {
+  const cuadros = cuadrosDeTorneo(torneo);
+  const categoria = pareja?.categoria;
+  if (typeof categoria === "string" && cuadros.some((c) => c.id === categoria)) return categoria;
+  if (cuadros.length === 1) return cuadros[0].id;
+  return null;
+}
+
+export function parejasDeCuadro(parejas, cuadroId, torneo) {
+  return (parejas || []).filter((p) => cuadroDePareja(p, torneo) === cuadroId);
+}
+
+export function parejasSinCuadro(parejas, torneo) {
+  return (parejas || []).filter((p) => cuadroDePareja(p, torneo) === null);
+}
+
+// Cuadro de un grupo: su campo `cuadro`, o el primer cuadro del torneo si falta (datos viejos)
+export function cuadroDeGrupo(grupo, torneo) {
+  if (grupo && typeof grupo.cuadro === "string" && grupo.cuadro) return grupo.cuadro;
+  return cuadrosDeTorneo(torneo)[0].id;
+}
+
+export function labelDeCuadro(cuadroId, torneo) {
+  return cuadrosDeTorneo(torneo).find((c) => c.id === cuadroId)?.label || cuadroId || "";
+}
+
+// Nombre de una ronda del bracket según cuántas faltan para la final
+export function nombreRonda(totalRondas, rondaIdx) {
+  const faltantes = totalRondas - rondaIdx;
+  if (faltantes === 1) return "Final";
+  if (faltantes === 2) return "Semifinales";
+  if (faltantes === 3) return "Cuartos de final";
+  if (faltantes === 4) return "Octavos de final";
+  if (faltantes === 5) return "16avos de final";
+  return `Ronda ${rondaIdx + 1}`;
+}

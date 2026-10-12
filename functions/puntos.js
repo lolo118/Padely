@@ -31,6 +31,34 @@ function nivelDeCategoria(categoriaId) {
   return categoriaId.split("|")[1] || null;
 }
 
+// ===== Cuadros (copia servidor de src/utils/torneo.js: listaCategorias, cuadrosDeTorneo, cuadroDeGrupo) =====
+// Categorías del torneo a partir de categoriasConfig ({ masculino: ["7ma", ...], femenino: [...] })
+function listaCategorias(torneo) {
+  const config = torneo && torneo.categoriasConfig;
+  if (!config || typeof config !== "object") return [];
+  const lista = [];
+  Object.entries(config).forEach(([genero, niveles]) => {
+    (Array.isArray(niveles) ? niveles : []).forEach((nivel) => {
+      const Genero = genero.charAt(0).toUpperCase() + genero.slice(1);
+      lista.push({ id: `${genero}|${nivel}`, genero, nivel, label: `${nivel} ${Genero}` });
+    });
+  });
+  return lista;
+}
+
+// Un cuadro por categoría; sin categorías, un único cuadro "general"
+function cuadrosDeTorneo(torneo) {
+  const categorias = listaCategorias(torneo);
+  if (categorias.length === 0) return [{ id: "general", label: "General", genero: null, nivel: null }];
+  return categorias.map((c) => ({ id: c.id, label: c.label, genero: c.genero, nivel: c.nivel }));
+}
+
+// Cuadro de un grupo: su campo `cuadro`, o el primer cuadro del torneo si falta (datos viejos)
+function cuadroDeGrupo(grupo, torneo) {
+  if (grupo && typeof grupo.cuadro === "string" && grupo.cuadro) return grupo.cuadro;
+  return cuadrosDeTorneo(torneo)[0].id;
+}
+
 // Primera categoría configurada del torneo ("8va" si no hay ninguna). Se usa cuando la pareja
 // no tiene categoría propia, igual que en TabGrupos/TabBracket.
 function categoriaFallbackDeTorneo(torneo) {
@@ -206,6 +234,9 @@ module.exports = {
   PUNTOS,
   getMultiplicadorCategoria,
   nivelDeCategoria,
+  listaCategorias,
+  cuadrosDeTorneo,
+  cuadroDeGrupo,
   categoriaFallbackDeTorneo,
   gamesDeSet,
   contarSets,

@@ -14,7 +14,14 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { parejaPublica, partidoPublico } from "../utils/torneo";
+import {
+  parejaPublica,
+  partidoPublico,
+  cuadrosDeTorneo,
+  cuadroDeGrupo,
+  labelDeCuadro,
+  nombreRonda,
+} from "../utils/torneo";
 
 // pairs, groups y el bracket del torneo son de lectura pública, y las inscripciones las lee cualquier jugador
 // con sesión: los contactos de una pareja se guardan aparte en tournaments/{tid}/contactos/{pairId} y los de
@@ -38,6 +45,24 @@ function grupoPublico(grupo) {
   if (Array.isArray(publico.parejas)) publico.parejas = publico.parejas.map(parejaPublica);
   if (Array.isArray(publico.partidos)) publico.partidos = publico.partidos.map(partidoPublico);
   return publico;
+}
+
+// Rondas del bracket con la proyección pública de cada pareja
+function rondasPublicas(rondas) {
+  if (!Array.isArray(rondas)) return rondas;
+  return rondas.map((ronda) => (Array.isArray(ronda) ? ronda.map(partidoPublico) : ronda));
+}
+
+// bracketJson es un string porque `rondas` es un array de arrays, que Firestore no guarda nativo
+function parseBracketJson(bracketJson) {
+  if (typeof bracketJson !== "string" || !bracketJson) return null;
+  try {
+    const data = JSON.parse(bracketJson);
+    return data && Array.isArray(data.rondas) ? { ...data, rondas: data.rondas } : null;
+  } catch (err) {
+    console.error("bracketJson inválido:", err);
+    return null;
+  }
 }
 
 export const crearTorneo = async (datos, userId) => {
@@ -100,6 +125,12 @@ export const getParejas = async (torneoId) => {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
+// El organizador cambia datos de una pareja (por ejemplo su categoría, para moverla de cuadro)
+export const actualizarPareja = async (torneoId, parejaId, datos) => {
+  const { publica } = separarContactos(datos);
+  await updateDoc(doc(db, "tournaments", torneoId, "pairs", parejaId), publica);
+};
+
 export const eliminarPareja = async (torneoId, parejaId) => {
   await deleteDoc(doc(db, "tournaments", torneoId, "pairs", parejaId));
   try {
@@ -109,16 +140,25 @@ export const eliminarPareja = async (torneoId, parejaId) => {
   }
 };
 
-export const guardarGrupos = async (torneoId, grupos) => {
-  const snap = await getDocs(collection(db, "tournaments", torneoId, "groups"));
-  const deletePromises = snap.docs.map((d) =>
-    deleteDoc(doc(db, "tournaments", torneoId, "groups", d.id)),
-  );
-  await Promise.all(deletePromises);
+// Guarda los grupos (o el fixture de liga) de UN cuadro: borra solo los grupos de ese cuadro (y los grupos
+// viejos sin campo `cuadro` cuando se guarda el primer cuadro del torneo) y crea los nuevos con `cuadro`.
+// Nunca toca los grupos de otro cuadro.
+export const guardarGrupos = async (torneoId, grupos, cuadroId) => {
+  const [torneo, snap] = await Promise.all([
+    getTorneoById(torneoId),
+    getDocs(collection(db, "tournaments", torneoId, "groups")),
+  ]);
+  const primerCuadro = cuadrosDeTorneo(torneo || {})[0].id;
+  const aBorrar = snap.docs.filter((d) => {
+    const cuadro = d.data().cuadro;
+    return cuadro === cuadroId || (!cuadro && cuadroId === primerCuadro);
+  });
+  await Promise.all(aBorrar.map((d) => deleteDoc(d.ref)));
 
   const createPromises = grupos.map((grupo) =>
     addDoc(collection(db, "tournaments", torneoId, "groups"), {
       ...grupoPublico(grupo),
+      cuadro: cuadroId,
       createdAt: serverTimestamp(),
     }),
   );
@@ -131,26 +171,50 @@ export const getGrupos = async (torneoId) => {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
+// Grupos de un cuadro (los que no tienen campo `cuadro` cuentan para el primer cuadro)
+export const getGruposDeCuadro = async (torneoId, cuadroId, torneo) => {
+  const grupos = await getGrupos(torneoId);
+  return grupos.filter((g) => cuadroDeGrupo(g, torneo) === cuadroId);
+};
+
 export const actualizarGrupo = async (torneoId, grupoId, datos) => {
   await updateDoc(doc(db, "tournaments", torneoId, "groups", grupoId), grupoPublico(datos));
 };
 
-// ✅ Modificadas: almacenan el bracket como JSON string
-export const guardarBracket = async (torneoId, bracket) => {
-  const ref = doc(db, "tournaments", torneoId);
-  // El bracket vive en el documento del torneo (lectura pública): solo la proyección pública de cada pareja
-  const rondas = Array.isArray(bracket?.rondas)
-    ? bracket.rondas.map((ronda) => (Array.isArray(ronda) ? ronda.map(partidoPublico) : ronda))
-    : bracket?.rondas;
-  await updateDoc(ref, { bracketJson: JSON.stringify({ ...bracket, rondas }) });
+// ========== CUADROS (un bracket por categoría) ==========
+// tournaments/{tid}/cuadros/{cuadroId} = { label, bracketJson, actualizadoEn }. Lectura pública, como los grupos:
+// las parejas van siempre en proyección pública.
+
+// Todos los cuadros con bracket: { [cuadroId]: { label, rondas } } (rondas null si el documento no tiene bracket)
+export const getCuadros = async (torneoId) => {
+  const snap = await getDocs(collection(db, "tournaments", torneoId, "cuadros"));
+  const cuadros = {};
+  snap.docs.forEach((d) => {
+    const data = d.data();
+    const bracket = parseBracketJson(data.bracketJson);
+    cuadros[d.id] = { label: data.label || d.id, rondas: bracket ? bracket.rondas : null };
+  });
+  return cuadros;
 };
 
-export const getBracket = async (torneoId) => {
-  const snap = await getDoc(doc(db, "tournaments", torneoId));
+// Bracket de un cuadro: { rondas } o null
+export const getBracket = async (torneoId, cuadroId) => {
+  const snap = await getDoc(doc(db, "tournaments", torneoId, "cuadros", cuadroId));
   if (!snap.exists()) return null;
-  const data = snap.data();
-  if (data.bracketJson) return JSON.parse(data.bracketJson);
-  return null;
+  return parseBracketJson(snap.data().bracketJson);
+};
+
+export const guardarBracket = async (torneoId, cuadroId, bracket, label) => {
+  const rondas = rondasPublicas(bracket?.rondas);
+  await setDoc(
+    doc(db, "tournaments", torneoId, "cuadros", cuadroId),
+    {
+      label: label || cuadroId,
+      bracketJson: JSON.stringify({ ...bracket, rondas }),
+      actualizadoEn: serverTimestamp(),
+    },
+    { merge: true },
+  );
 };
 // La inscripción y sus contactos se escriben en el mismo batch: las reglas aceptan el contacto solo si la
 // inscripción que queda es del jugador que lo escribe.
@@ -246,11 +310,14 @@ export const getTodosLosTorneos = async () => {
 };
 // ========== RECLAMOS ==========
 
+// reclamo puede traer cuadroId / cuadroLabel (el cuadro del partido del que nace el reclamo)
 export const crearReclamo = async (torneoId, reclamo) => {
   const ref = await addDoc(
     collection(db, "tournaments", torneoId, "reclamos"),
     {
       ...reclamo,
+      cuadroId: reclamo.cuadroId ?? null,
+      cuadroLabel: reclamo.cuadroLabel ?? null,
       estado: "abierto",
       adheridos: [],
       descargo: null,
@@ -354,40 +421,56 @@ export const getHistorialPartidos = async (jugadorUid) => {
 
     if (!miPareja) continue;
     const parejaData = { id: miPareja.id, ...miPareja.data() };
+    // Con más de un cuadro, la fase lleva el nombre del cuadro ("7ma Masculino · Grupo A")
+    const variosCuadros = cuadrosDeTorneo(torneoData).length > 1;
+    const prefijoCuadro = (cuadroId) => (variosCuadros ? `${labelDeCuadro(cuadroId, torneoData)} · ` : "");
+
+    const agregarPartido = (partido, fase) => {
+      if (!partido || !partido.resultado) return;
+      if (partido.pareja1?.id !== parejaData.id && partido.pareja2?.id !== parejaData.id) return;
+      const esPar1 = partido.pareja1?.id === parejaData.id;
+      let setsGanados = 0, setsPerdidos = 0;
+      (partido.resultado.sets || []).forEach((s) => {
+        let g1 = s.g1, g2 = s.g2;
+        if (s.tb1 !== undefined || s.tb2 !== undefined) {
+          if ((s.tb1 ?? 0) > (s.tb2 ?? 0)) g1++;
+          else if ((s.tb2 ?? 0) > (s.tb1 ?? 0)) g2++;
+        }
+        if (esPar1) { if (g1 > g2) setsGanados++; else setsPerdidos++; }
+        else { if (g2 > g1) setsGanados++; else setsPerdidos++; }
+      });
+      historial.push({
+        torneoNombre: torneoData.nombre,
+        torneoId: torneoData.id,
+        fase,
+        miPareja: parejaData.nombrePareja || `${parejaData.jugador1} / ${parejaData.jugador2}`,
+        rival: esPar1
+          ? (partido.pareja2?.nombrePareja || `${partido.pareja2?.jugador1} / ${partido.pareja2?.jugador2}`)
+          : (partido.pareja1?.nombrePareja || `${partido.pareja1?.jugador1} / ${partido.pareja1?.jugador2}`),
+        resultado: partido.resultado,
+        gane: setsGanados > setsPerdidos,
+        setsGanados,
+        setsPerdidos,
+        fecha: torneoData.fechaInicio || "",
+      });
+    };
 
     const gruposSnap = await getDocs(collection(db, "tournaments", torneoDoc.id, "groups"));
     for (const grupoDoc of gruposSnap.docs) {
       const grupo = grupoDoc.data();
-      (grupo.partidos || []).forEach((partido) => {
-        if (partido.pareja1?.id === parejaData.id || partido.pareja2?.id === parejaData.id) {
-          if (partido.resultado) {
-            const esPar1 = partido.pareja1?.id === parejaData.id;
-            let setsGanados = 0, setsPerdidos = 0;
-            partido.resultado.sets.forEach((s) => {
-              let g1 = s.g1, g2 = s.g2;
-              if (s.tb1 !== undefined || s.tb2 !== undefined) {
-                if ((s.tb1 ?? 0) > (s.tb2 ?? 0)) g1++;
-                else if ((s.tb2 ?? 0) > (s.tb1 ?? 0)) g2++;
-              }
-              if (esPar1) { if (g1 > g2) setsGanados++; else setsPerdidos++; }
-              else { if (g2 > g1) setsGanados++; else setsPerdidos++; }
-            });
-            historial.push({
-              torneoNombre: torneoData.nombre,
-              torneoId: torneoData.id,
-              fase: grupo.nombre || "Grupos",
-              miPareja: parejaData.nombrePareja || `${parejaData.jugador1} / ${parejaData.jugador2}`,
-              rival: esPar1
-                ? (partido.pareja2?.nombrePareja || `${partido.pareja2?.jugador1} / ${partido.pareja2?.jugador2}`)
-                : (partido.pareja1?.nombrePareja || `${partido.pareja1?.jugador1} / ${partido.pareja1?.jugador2}`),
-              resultado: partido.resultado,
-              gane: setsGanados > setsPerdidos,
-              setsGanados,
-              setsPerdidos,
-              fecha: torneoData.fechaInicio || "",
-            });
-          }
-        }
+      const fase = `${prefijoCuadro(cuadroDeGrupo(grupo, torneoData))}${grupo.nombre || "Grupos"}`;
+      (grupo.partidos || []).forEach((partido) => agregarPartido(partido, fase));
+    }
+
+    // Partidos del bracket de cada cuadro (tournaments/{tid}/cuadros)
+    const cuadrosSnap = await getDocs(collection(db, "tournaments", torneoDoc.id, "cuadros"));
+    for (const cuadroDoc of cuadrosSnap.docs) {
+      const bracket = parseBracketJson(cuadroDoc.data().bracketJson);
+      if (!bracket) continue;
+      bracket.rondas.forEach((ronda, ri) => {
+        if (!Array.isArray(ronda)) return;
+        const fase = `${prefijoCuadro(cuadroDoc.id)}${nombreRonda(bracket.rondas.length, ri)}`;
+        ronda.forEach((partido) => agregarPartido(partido, fase));
       });
     }
   }

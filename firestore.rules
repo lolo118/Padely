@@ -162,6 +162,12 @@ service cloud.firestore {
         allow create, update, delete: if tournamentOrganizer(tid);
       }
 
+      // Un cuadro por categoría: el bracket de cada una ({ label, bracketJson, actualizadoEn }). Público, como los grupos.
+      match /cuadros/{cuadroId} {
+        allow read: if true;
+        allow create, update, delete: if tournamentOrganizer(tid);
+      }
+
       match /inscripciones/{inscId} {
         allow read: if signedIn();
         // Email y WhatsApp de los jugadores van en contactosInscripciones/{inscId}, nunca acá
