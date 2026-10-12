@@ -21,7 +21,8 @@ const db = getFirestore();
 //   b_{cid}_{ri}_{pi}                partido pi de la ronda ri del bracket del cuadro cid (tipo "partido")
 //   b_{cid}_final_campeon / _sub      bonus de la final del cuadro cid (tipo "campeon" / "subcampeon")
 //   liga_{cid}_campeon / _sub         bonus de la liga del cuadro cid al finalizar (tipo "campeon" / "subcampeon")
-//   fin_{uid}                        torneosJugados al finalizar (tipo "torneoJugado")
+//   fin_{uid}                        torneosJugados contado: al finalizar, o antes con el primer bonus del uid
+//                                    (tipo "torneoJugado"); un jugador en dos cuadros cuenta un solo torneo
 // ============================================================================
 const { onDocumentWritten, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const puntos = require("./puntos");
@@ -88,7 +89,7 @@ async function otorgarPartido(tid, markerId, partido, torneo) {
 }
 
 // Otorga bonus de campeón/subcampeón (una sola vez por marcador), suma torneosJugados (salvo que
-// el uid ya haya sido contado por el marcador fin_{uid}), torneosGanados y torneosGanadosEnCategoria
+// el uid ya haya sido contado por el marcador fin_{uid}; si no, lo escribe), torneosGanados y torneosGanadosEnCategoria
 // a los campeones, y evalúa el ascenso de cada jugador premiado dentro de la misma transacción.
 // premios: [{ markerId, tipo, pareja, posicion }]. Devuelve los markerIds creados en esta llamada.
 async function otorgarBonus(tid, premios, torneo) {
@@ -146,6 +147,14 @@ async function otorgarBonus(tid, premios, torneo) {
         logger.info(`Jugador ${j.uid} ascendió de ${ascenso.de} a ${ascenso.a} por vía ${ascenso.via}`, { tid });
       }
       tx.update(snap.ref, updates);
+      if (!yaContado) {
+        // Este bonus es el que cuenta el torneo jugado: el marcador evita que otro cuadro lo sume de nuevo
+        tx.set(markerRef(tid, `fin_${j.uid}`), {
+          tipo: "torneoJugado",
+          creadoEn: FieldValue.serverTimestamp(),
+          detalle: { [j.uid]: 0 },
+        });
+      }
       detalles[j.markerId][j.uid] = bonus;
     });
 
