@@ -5,7 +5,7 @@ import {
   getTorneoById,
   getParejas,
   getGrupos,
-  getBracket,
+  getCuadros,
   crearSolicitudInscripcion,
   getInscripciones,
   puedeInscribirse,
@@ -18,7 +18,19 @@ import { getUserData } from "../services/authService";
 import { logEvento } from "../lib/firebase";
 import { formatFecha } from "../utils/formatDate";
 import { formatPrecio } from "../utils/format";
-import { calcularTabla, getGanador, getNombrePareja, listaCategorias } from "../utils/torneo";
+import {
+  calcularTabla,
+  getGanador,
+  getNombrePareja,
+  listaCategorias,
+  cuadrosDeTorneo,
+  cuadroDePareja,
+  parejasDeCuadro,
+  parejasSinCuadro,
+  cuadroDeGrupo,
+  labelDeCuadro,
+  nombreRonda,
+} from "../utils/torneo";
 import { notificarInscripcionTorneo, notificarReclamoContra, notificarNuevoReclamo } from "../services/notificationService";
 import { toast } from "../components/Toast";
 
@@ -43,6 +55,8 @@ const formatoLabel = {
   eliminacion: "Eliminación directa",
 };
 
+const textoParejas = (n) => `${n} ${n === 1 ? "pareja" : "parejas"}`;
+
 const getTabs = (formato) => {
   if (formato === "liga") return ["Info", "Parejas", "Liga"];
   if (formato === "eliminacion") return ["Info", "Parejas", "Bracket"];
@@ -58,7 +72,11 @@ export default function DetalleTorneoPublico() {
   const [tab, setTab] = useState("Info");
   const [parejas, setParejas] = useState([]);
   const [grupos, setGrupos] = useState([]);
-  const [bracket, setBracket] = useState(null);
+  // { [cuadroId]: { label, rondas } } — un bracket por cuadro
+  const [cuadrosData, setCuadrosData] = useState({});
+  // Cuadro elegido a mano con las pastillas; mientras no se elija, se calcula uno por defecto
+  const [cuadroSel, setCuadroSel] = useState(null);
+  const [cuadroElegido, setCuadroElegido] = useState(false);
   const [inscripciones, setInscripciones] = useState([]);
 
   // Formulario inscripción
@@ -102,12 +120,12 @@ export default function DetalleTorneoPublico() {
   useEffect(() => {
     const cargar = async () => {
       try {
-        const [torneoData, parejasData, gruposData, bracketData, inscData] =
+        const [torneoData, parejasData, gruposData, cuadrosCargados, inscData] =
           await Promise.all([
             getTorneoById(id),
             getParejas(id),
             getGrupos(id),
-            getBracket(id),
+            getCuadros(id),
             // Las inscripciones no son públicas: sin sesión no se leen
             user ? getInscripciones(id) : Promise.resolve([]),
           ]);
@@ -121,7 +139,7 @@ export default function DetalleTorneoPublico() {
             (a.nombre || "").localeCompare(b.nombre || ""),
           ),
         );
-        if (bracketData) setBracket(bracketData);
+        setCuadrosData(cuadrosCargados || {});
         setInscripciones(inscData);
 
         // Si el torneo está en curso, mostrar grupos por defecto
@@ -173,12 +191,63 @@ export default function DetalleTorneoPublico() {
     (p) => p.jugador1Uid === user?.uid || p.jugador2Uid === user?.uid,
   );
 
-  const handleReclamo = async (partido, grupoNombre) => {
+  // ===== Cuadros =====
+  // Sin setState en efectos: el cuadro por defecto se deriva en el render y solo las pastillas lo pisan.
+  const cuadros = torneo ? cuadrosDeTorneo(torneo) : [];
+  const variosCuadros = cuadros.length > 1;
+  const cuadroPorDefecto = (() => {
+    if (cuadros.length === 0) return null;
+    const mio = miPareja ? cuadroDePareja(miPareja, torneo) : null;
+    if (mio && cuadros.some((c) => c.id === mio)) return mio;
+    const conParejas = cuadros.find(
+      (c) => parejasDeCuadro(parejas, c.id, torneo).length > 0,
+    );
+    return conParejas ? conParejas.id : cuadros[0].id;
+  })();
+  const cuadroActual =
+    cuadroElegido && cuadroSel && cuadros.some((c) => c.id === cuadroSel)
+      ? cuadroSel
+      : cuadroPorDefecto;
+  const gruposDelCuadro = grupos.filter(
+    (g) => cuadroDeGrupo(g, torneo) === cuadroActual,
+  );
+  const rondas = cuadrosData[cuadroActual]?.rondas || null;
+
+  // Pastillas para cambiar de cuadro (solo con más de un cuadro)
+  const selectorCuadros = variosCuadros ? (
+    <div className="flex flex-wrap gap-2 mb-2">
+      {cuadros.map((c) => {
+        const activo = c.id === cuadroActual;
+        const n = parejasDeCuadro(parejas, c.id, torneo).length;
+        return (
+          <button
+            key={c.id}
+            onClick={() => {
+              setCuadroSel(c.id);
+              setCuadroElegido(true);
+            }}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition whitespace-nowrap ${
+              activo ? "text-white" : "themed-card border"
+            }`}
+            style={{
+              backgroundColor: activo ? "var(--accent)" : undefined,
+              color: activo ? "white" : "var(--text-secondary)",
+            }}
+          >
+            {c.label} ({textoParejas(n)})
+          </button>
+        );
+      })}
+    </div>
+  ) : null;
+
+  const handleReclamo = async (partido, grupoNombre, grupo) => {
     if (!miPareja) return;
     setEnviandoReclamo(true);
     try {
       const parejaDenunciada =
         partido.pareja1.id === miPareja.id ? partido.pareja2 : partido.pareja1;
+      const cuadroReclamo = grupo ? cuadroDeGrupo(grupo, torneo) : null;
       await crearReclamo(id, {
         parejaDenunciante: {
           id: miPareja.id,
@@ -195,6 +264,12 @@ export default function DetalleTorneoPublico() {
         motivo: motivoReclamo,
         comentario: comentarioReclamo,
         grupoNombre,
+        ...(grupo
+          ? {
+              cuadroId: cuadroReclamo,
+              cuadroLabel: labelDeCuadro(cuadroReclamo, torneo),
+            }
+          : {}),
       });
       const reclamosData = await getReclamos(id);
       setReclamos(reclamosData);
@@ -970,54 +1045,101 @@ export default function DetalleTorneoPublico() {
             >
               No hay parejas inscriptas todavía
             </p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {parejas.map((p, index) => (
-                <div
-                  key={p.id}
-                  className="flex items-center gap-3 rounded-xl px-4 py-3"
-                  style={{ backgroundColor: "var(--bg-card-hover)" }}
+          ) : (() => {
+            const renderPareja = (p, index) => (
+              <div
+                key={p.id}
+                className="flex items-center gap-3 rounded-xl px-4 py-3"
+                style={{ backgroundColor: "var(--bg-card-hover)" }}
+              >
+                <span
+                  className="text-xs font-bold w-6"
+                  style={{ color: "var(--text-muted)" }}
                 >
-                  <span
-                    className="text-xs font-bold w-6"
+                  {index + 1}
+                </span>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p
+                      className="text-sm font-semibold"
+                      style={{ color: "var(--text-primary)" }}
+                    >
+                      {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
+                    </p>
+                    {categorias.find((cat) => cat.id === p.categoria) && (
+                      <span
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{ backgroundColor: "var(--accent-light)", color: "var(--accent)" }}
+                      >
+                        {categorias.find((cat) => cat.id === p.categoria).label}
+                      </span>
+                    )}
+                  </div>
+                  <p
+                    className="text-xs"
                     style={{ color: "var(--text-muted)" }}
                   >
-                    {index + 1}
-                  </span>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p
-                        className="text-sm font-semibold"
-                        style={{ color: "var(--text-primary)" }}
-                      >
-                        {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
-                      </p>
-                      {categorias.find((cat) => cat.id === p.categoria) && (
-                        <span
-                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                          style={{ backgroundColor: "var(--accent-light)", color: "var(--accent)" }}
-                        >
-                          {categorias.find((cat) => cat.id === p.categoria).label}
-                        </span>
-                      )}
-                    </div>
+                    {p.jugador1} — {p.jugador2}
+                  </p>
+                </div>
+              </div>
+            );
+
+            // Con un solo cuadro: lista plana. Con varios: una sección por cuadro y "Sin categoría" al final.
+            if (!variosCuadros) {
+              return (
+                <div className="flex flex-col gap-2">
+                  {parejas.map(renderPareja)}
+                </div>
+              );
+            }
+
+            const sinCuadro = parejasSinCuadro(parejas, torneo);
+            const secciones = [
+              ...cuadros.map((c) => ({
+                id: c.id,
+                label: c.label,
+                lista: parejasDeCuadro(parejas, c.id, torneo),
+              })),
+              ...(sinCuadro.length > 0
+                ? [{ id: "sin-cuadro", label: "Sin categoría", lista: sinCuadro }]
+                : []),
+            ];
+
+            return (
+              <div className="flex flex-col gap-4">
+                {secciones.map((s) => (
+                  <div key={s.id}>
                     <p
-                      className="text-xs"
+                      className="text-xs font-semibold mb-2"
                       style={{ color: "var(--text-muted)" }}
                     >
-                      {p.jugador1} — {p.jugador2}
+                      {s.label} · {textoParejas(s.lista.length)}
                     </p>
+                    {s.lista.length === 0 ? (
+                      <p
+                        className="text-xs rounded-xl px-4 py-3"
+                        style={{ color: "var(--text-muted)", backgroundColor: "var(--bg-card-hover)" }}
+                      >
+                        Sin parejas inscriptas todavía
+                      </p>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {s.lista.map(renderPareja)}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            );
+          })()}
         </div>
       )}
 
       {/* Grupos */}
       {tab === "Grupos" && (
         <div className="flex flex-col gap-4">
+          {selectorCuadros}
           {torneo.status === "en_curso" && torneo.habilitarReclamos && (
             <div className="rounded-xl px-4 py-3 mb-0 flex items-start gap-2 border" style={{ backgroundColor: "var(--bg-card-hover)", borderColor: "var(--border-card)" }}>
               <span className="text-sm mt-0.5" style={{ color: "var(--accent)" }}>*</span>
@@ -1050,14 +1172,14 @@ export default function DetalleTorneoPublico() {
             </div>
           )}
 
-          {grupos.length === 0 ? (
+          {gruposDelCuadro.length === 0 ? (
             <div className="themed-card rounded-2xl p-5 border text-center py-12">
               <p style={{ color: "var(--text-muted)" }}>
                 Los grupos aún no fueron generados
               </p>
             </div>
           ) : (
-            grupos.map((grupo, gi) => (
+            gruposDelCuadro.map((grupo, gi) => (
               <div
                 key={grupo.id || gi}
                 className="themed-card rounded-2xl p-5 border"
@@ -1254,7 +1376,7 @@ export default function DetalleTorneoPublico() {
                                         </button>
                                         <button
                                           onClick={() =>
-                                            handleReclamo(p, grupo.nombre)
+                                            handleReclamo(p, grupo.nombre, grupo)
                                           }
                                           disabled={enviandoReclamo}
                                           className="flex-1 py-1.5 rounded-lg text-xs font-semibold text-white bg-red-600 hover:bg-red-700 transition disabled:opacity-50"
@@ -1406,12 +1528,14 @@ export default function DetalleTorneoPublico() {
       {/* Liga */}
       {tab === "Liga" && (
         <div className="flex flex-col gap-4">
-          {grupos.length === 0 ? (
+          {selectorCuadros}
+          {gruposDelCuadro.length === 0 ? (
             <div className="themed-card rounded-2xl p-5 border text-center py-12">
               <p style={{ color: "var(--text-muted)" }}>El fixture aún no fue generado</p>
             </div>
           ) : (() => {
-            const grupo = grupos[0];
+            const grupo =
+              gruposDelCuadro.find((g) => g.nombre === "Liga") || gruposDelCuadro[0];
             const tabla = calcularTabla(grupo);
             const partidos = grupo.partidos || [];
             const fechasMap = {};
@@ -1522,7 +1646,8 @@ export default function DetalleTorneoPublico() {
       {/* Bracket */}
       {tab === "Bracket" && (
         <div className="flex flex-col gap-4">
-          {!bracket || !bracket.rondas ? (
+          {selectorCuadros}
+          {!rondas ? (
             <div className="themed-card rounded-2xl p-5 border text-center py-12">
               <p style={{ color: "var(--text-muted)" }}>
                 El bracket aún no fue generado
@@ -1532,7 +1657,7 @@ export default function DetalleTorneoPublico() {
             <>
             {/* Campeones */}
             {(() => {
-              const finalMatch = bracket.rondas[bracket.rondas.length - 1]?.[0];
+              const finalMatch = rondas[rondas.length - 1]?.[0];
               if (!finalMatch?.resultado || !finalMatch?.pareja1 || !finalMatch?.pareja2) return null;
               const g = getGanador(finalMatch.resultado);
               const campeon = g === 1 ? finalMatch.pareja1 : finalMatch.pareja2;
@@ -1541,7 +1666,9 @@ export default function DetalleTorneoPublico() {
                 <div className="rounded-2xl p-6 shadow-sm text-center border"
                   style={{ background: "linear-gradient(to right, rgba(234,179,8,0.08), rgba(234,179,8,0.15))", borderColor: "rgba(234,179,8,0.3)" }}>
                   <div className="text-5xl mb-3">🏆</div>
-                  <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "#ca8a04" }}>Campeones</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "#ca8a04" }}>
+                    {variosCuadros ? `Campeones — ${labelDeCuadro(cuadroActual, torneo)}` : "Campeones"}
+                  </p>
                   <p className="text-xl font-bold mb-4" style={{ color: "var(--text-primary)" }}>{getNombrePareja(campeon)}</p>
                   <div className="text-3xl mb-2">🥈</div>
                   <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>Subcampeones</p>
@@ -1549,22 +1676,14 @@ export default function DetalleTorneoPublico() {
                 </div>
               );
             })()}
-            {bracket.rondas.map((ronda, ri) => {
-              const totalRondas = bracket.rondas.length;
-              const faltantes = totalRondas - ri;
-              let nombreRonda = `Ronda ${ri + 1}`;
-              if (faltantes === 1) nombreRonda = "Final";
-              else if (faltantes === 2) nombreRonda = "Semifinales";
-              else if (faltantes === 3) nombreRonda = "Cuartos de final";
-              else if (faltantes === 4) nombreRonda = "Octavos de final";
-
+            {rondas.map((ronda, ri) => {
               return (
                 <div key={ri} className="themed-card rounded-2xl p-5 border">
                   <h2
                     className="font-semibold mb-3"
                     style={{ color: "var(--text-primary)" }}
                   >
-                    {nombreRonda}
+                    {nombreRonda(rondas.length, ri)}
                   </h2>
                   <div className="flex flex-col gap-2">
                     {ronda.map((p, pi) => (
