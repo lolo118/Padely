@@ -4,10 +4,14 @@
 //   - Torneos que esa cuenta organiza: mueve whatsapp1/whatsapp2/email1/email2 de cada pareja a
 //     tournaments/{tid}/contactos/{pairId} (solo organizador) y los borra de pairs; reescribe groups y el
 //     bracketJson con la proyección pública de cada pareja (nombres, uids, categoría).
+//   - Torneos que esa cuenta organiza: mueve email1/email2/whatsapp1/whatsapp2 de cada inscripción a
+//     tournaments/{tid}/contactosInscripciones/{inscId} (solo organizador) y los borra de inscripciones.
 //   - Clubes de esa cuenta: mueve cbu/alias/titularCuenta/cuit/razonSocial/usuarios a clubs/{clubId}/privado/datos
-//     (solo dueño) y los borra del documento del club.
-// Correr DESPUÉS de desplegar firestore.rules (necesita las reglas de contactos/ y privado/) y ANTES de publicar
-// el link del sitio. Los torneos y clubes de otras cuentas se listan al final para migrarlos con su dueño.
+//     (solo dueño) y los borra del documento del club; mueve email/telefono de cada reserva a
+//     clubs/{clubId}/contactosReservas/{reservaId} y el telefono de cada turno fijo a clubs/{clubId}/privado/turnosFijos
+//     (solo dueño) y los borra de reservas y turnosFijos, que leen todos los jugadores con sesión.
+// Correr DESPUÉS de desplegar firestore.rules (necesita las reglas de contactos/, contactosInscripciones/,
+// contactosReservas/ y privado/). Los torneos y clubes de otras cuentas se listan al final para migrarlos con su dueño.
 // Nota: reescribir groups/bracket dispara las Cloud Functions de puntos; los marcadores evitan otorgar dos veces,
 // salvo en torneos con resultados cargados ANTES de desplegar las Functions (se avisan en el resumen).
 //
@@ -51,6 +55,7 @@ const PASSWORD = process.env.SEED_PASSWORD || "Padely2026!";
 
 const CAMPOS_CONTACTO = ["whatsapp1", "whatsapp2", "email1", "email2"];
 const CAMPOS_CLUB_PRIVADOS = ["cbu", "alias", "titularCuenta", "cuit", "razonSocial", "usuarios"];
+const CAMPOS_CONTACTO_RESERVA = ["email", "telefono"];
 const CAMPOS_PAREJA_PUBLICA = ["id", "nombrePareja", "jugador1", "jugador2", "jugador1Uid", "jugador2Uid", "categoria", "grupo", "posGrupo"];
 
 const tieneAlguno = (obj, campos) => !!obj && typeof obj === "object" && campos.some((k) => obj[k] !== undefined);
@@ -66,7 +71,7 @@ const partidoPublico = (m) => (m && typeof m === "object" ? { ...m, pareja1: par
 // Una pareja "sucia" es la que tiene cualquier clave fuera de la proyección pública
 const parejaSucia = (p) => !!p && typeof p === "object" && Object.keys(p).some((k) => !CAMPOS_PAREJA_PUBLICA.includes(k));
 
-const resumen = { parejas: 0, grupos: 0, brackets: 0, clubes: 0, torneosConResultados: [], ajenos: { torneos: [], clubes: [] } };
+const resumen = { parejas: 0, grupos: 0, brackets: 0, inscripciones: 0, clubes: 0, reservas: 0, turnosFijos: 0, torneosConResultados: [], ajenos: { torneos: [], clubes: [] } };
 
 async function migrarTorneo(t) {
   const tid = t.id;
@@ -119,9 +124,84 @@ async function migrarTorneo(t) {
     }
   }
   if (conResultados) resumen.torneosConResultados.push(`${t.nombre || "(sin nombre)"} [${tid}]`);
+  // Inscripciones: contactos a contactosInscripciones/{inscId}, y fuera de inscripciones
+  const inscSnap = await getDocs(collection(db, "tournaments", tid, "inscripciones"));
+  for (const i of inscSnap.docs) {
+    const data = i.data();
+    if (!tieneAlguno(data, CAMPOS_CONTACTO)) continue;
+    const contactos = {};
+    const borrar = {};
+    CAMPOS_CONTACTO.forEach((k) => {
+      if (data[k] !== undefined) {
+        if (data[k]) contactos[k] = data[k];
+        borrar[k] = deleteField();
+      }
+    });
+    await setDoc(
+      doc(db, "tournaments", tid, "contactosInscripciones", i.id),
+      { ...contactos, jugador1Uid: data.jugador1Uid || null, migradoEn: serverTimestamp() },
+      { merge: true },
+    );
+    await updateDoc(i.ref, borrar);
+    resumen.inscripciones++;
+  }
+}
+
+// Reservas del club: email/telefono a contactosReservas/{reservaId}, y fuera de reservas
+async function migrarReservasClub(clubId) {
+  const snap = await getDocs(collection(db, "clubs", clubId, "reservas"));
+  for (const r of snap.docs) {
+    const data = r.data();
+    if (!tieneAlguno(data, CAMPOS_CONTACTO_RESERVA)) continue;
+    const contacto = {};
+    const borrar = {};
+    CAMPOS_CONTACTO_RESERVA.forEach((k) => {
+      if (data[k] !== undefined) {
+        contacto[k] = data[k] || "";
+        borrar[k] = deleteField();
+      }
+    });
+    if (data.jugadorUid || contacto.email || contacto.telefono) {
+      await setDoc(
+        doc(db, "clubs", clubId, "contactosReservas", r.id),
+        {
+          jugadorUid: data.jugadorUid || null,
+          nombreJugador: data.nombreJugador || "",
+          canchaId: data.canchaId || "",
+          fecha: data.fecha || "",
+          hora: data.hora || "",
+          email: contacto.email || "",
+          telefono: contacto.telefono || "",
+          migradoEn: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+    await updateDoc(r.ref, borrar);
+    resumen.reservas++;
+  }
+}
+
+// Turnos fijos del club: telefono a privado/turnosFijos ({ [turnoId]: { telefono } }), y fuera de turnosFijos
+async function migrarTurnosFijosClub(clubId) {
+  const snap = await getDocs(collection(db, "clubs", clubId, "turnosFijos"));
+  const telefonos = {};
+  for (const t of snap.docs) {
+    const data = t.data();
+    if (data.telefono === undefined) continue;
+    telefonos[t.id] = { telefono: data.telefono || "" };
+    resumen.turnosFijos++;
+  }
+  if (!Object.keys(telefonos).length) return;
+  await setDoc(doc(db, "clubs", clubId, "privado", "turnosFijos"), { ...telefonos, migradoEn: serverTimestamp() }, { merge: true });
+  for (const id of Object.keys(telefonos)) {
+    await updateDoc(doc(db, "clubs", clubId, "turnosFijos", id), { telefono: deleteField() });
+  }
 }
 
 async function migrarClub(c) {
+  await migrarReservasClub(c.id);
+  await migrarTurnosFijosClub(c.id);
   const data = c.data();
   if (!tieneAlguno(data, CAMPOS_CLUB_PRIVADOS)) return;
   const privados = {};
@@ -184,7 +264,8 @@ resumen.ajenos.torneos = resumen.ajenos.torneos.filter((t) => !migrables.has(t.o
 resumen.ajenos.clubes = resumen.ajenos.clubes.filter((c) => !migrables.has(c.ownerUid));
 
 console.log("\n=== Resumen ===");
-console.log(`Parejas migradas: ${resumen.parejas} · Grupos reescritos: ${resumen.grupos} · Brackets reescritos: ${resumen.brackets} · Clubes migrados: ${resumen.clubes}`);
+console.log(`Parejas migradas: ${resumen.parejas} · Grupos reescritos: ${resumen.grupos} · Brackets reescritos: ${resumen.brackets} · Inscripciones migradas: ${resumen.inscripciones}`);
+console.log(`Clubes migrados: ${resumen.clubes} · Reservas migradas: ${resumen.reservas} · Turnos fijos migrados: ${resumen.turnosFijos}`);
 if (resumen.torneosConResultados.length) {
   console.log("Torneos con resultados cargados (si son anteriores al deploy de las Functions, los puntos pudieron otorgarse de nuevo):");
   resumen.torneosConResultados.forEach((t) => console.log(`  - ${t}`));

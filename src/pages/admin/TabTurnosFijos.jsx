@@ -54,7 +54,7 @@ export default function TabTurnosFijos({ clubId }) {
       try {
         const [canchasData, turnosData] = await Promise.all([
           getCanchas(clubId),
-          getTurnosFijos(clubId),
+          getTurnosFijos(clubId, { contactos: true }),
         ]);
         setCanchas(canchasData);
         setTurnosFijos(turnosData);

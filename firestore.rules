@@ -1,7 +1,9 @@
 rules_version = '2';
 // Padely rules v2 — ownership model (deployed from the repo with `npx firebase deploy --only firestore:rules`)
-// Lectura pública (sin sesión): torneos, parejas, grupos, clubes, canchas, reviews y organizadores.
-// Reservas, turnos fijos, inscripciones, reclamos, usuarios y notificaciones siguen requiriendo sesión.
+// Lectura pública (sin sesión): torneos, parejas, grupos, clubes, canchas y reviews.
+// Reservas, turnos fijos, inscripciones y reclamos requieren sesión. Perfiles (users), organizadores,
+// notificaciones y los datos de contacto (contactosReservas, contactosInscripciones, contactos, privado)
+// los lee solo su dueño: ningún documento legible por terceros lleva email ni teléfono.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -25,14 +27,20 @@ service cloud.firestore {
       let p = get(/databases/$(database)/documents/tournaments/$(tid)/pairs/$(pairId)).data;
       return p.get('jugador1Uid', null) == request.auth.uid || p.get('jugador2Uid', null) == request.auth.uid;
     }
+    // Los documentos que leen terceros no llevan datos de contacto: esos van a las subcolecciones privadas
+    function sinContacto(campos) {
+      return !request.resource.data.keys().hasAny(campos);
+    }
 
     // "Mis reservas": a player reads his reservations across clubs (collection group query)
     match /{path=**}/reservas/{reservaId} {
       allow read: if signedIn();
     }
 
+    // Perfil (email, teléfono, nacimiento...): lo lee solo el propio usuario. Parejas y reservas llevan el
+    // nombre a mostrar; un ranking público se publicaría como proyección desde una Cloud Function.
     match /users/{userId} {
-      allow read: if signedIn();
+      allow read: if isSelf(userId);
       allow create: if isSelf(userId);
       allow delete: if isSelf(userId);
       // Own profile: anything except role and ranking fields
@@ -49,8 +57,10 @@ service cloud.firestore {
       }
     }
 
+    // Entidad organizadora (email, teléfono, equipo de trabajo): la lee solo su dueño. El contacto público
+    // de un torneo lo elige el organizador en el torneo (whatsappOrganizador, instagramOrganizador, administradores).
     match /organizers/{orgId} {
-      allow read: if true;
+      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
       allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
@@ -71,28 +81,44 @@ service cloud.firestore {
         allow create, update, delete: if clubOwner(clubId);
       }
 
+      // Los jugadores leen los turnos fijos para la grilla; el teléfono del cliente va en privado/turnosFijos
       match /turnosFijos/{turnoId} {
         allow read: if signedIn();
-        allow create, update, delete: if clubOwner(clubId);
+        allow create, update: if clubOwner(clubId) && sinContacto(['telefono']);
+        allow delete: if clubOwner(clubId);
       }
 
       match /reservas/{reservaId} {
         allow read: if signedIn();
-        // The club books manually or blocks a slot; a player books for himself with the status the club's config dictates
-        allow create: if clubOwner(clubId)
-          || (signedIn()
-              && request.resource.data.jugadorUid == request.auth.uid
-              && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
-                  || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente')));
+        // The club books manually or blocks a slot; a player books for himself with the status the club's config dictates.
+        // Email y teléfono de quien reserva van en contactosReservas/{reservaId}, nunca acá.
+        allow create: if sinContacto(['email', 'telefono'])
+          && (clubOwner(clubId)
+              || (signedIn()
+                  && request.resource.data.jugadorUid == request.auth.uid
+                  && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
+                      || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente'))));
         // The club manages; a player may cancel his own, or re-book a slot whose previous reservation was cancelled
         allow update: if clubOwner(clubId)
           || (signedIn() && resource.data.get('jugadorUid', null) == request.auth.uid
               && changedOnly(['status']) && request.resource.data.status == 'cancelada')
           || (signedIn() && resource.data.status == 'cancelada'
+              && sinContacto(['email', 'telefono'])
               && request.resource.data.jugadorUid == request.auth.uid
               && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
                   || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente')));
         allow delete: if clubOwner(clubId);
+      }
+
+      // Contacto (email/teléfono) de quien reservó, con el id de la reserva: lo lee solo el club. Lo escribe
+      // el club, o el jugador en la misma transacción que crea su reserva (getAfter ve la reserva tal como queda).
+      match /contactosReservas/{reservaId} {
+        allow read, delete: if clubOwner(clubId);
+        allow create, update: if clubOwner(clubId)
+          || (signedIn()
+              && request.resource.data.jugadorUid == request.auth.uid
+              && getAfter(/databases/$(database)/documents/clubs/$(clubId)/reservas/$(reservaId)).data.jugadorUid
+                 == request.auth.uid);
       }
 
       match /reviews/{reviewId} {
@@ -138,7 +164,9 @@ service cloud.firestore {
 
       match /inscripciones/{inscId} {
         allow read: if signedIn();
-        allow create: if signedIn() && request.resource.data.jugador1Uid == request.auth.uid;
+        // Email y WhatsApp de los jugadores van en contactosInscripciones/{inscId}, nunca acá
+        allow create: if signedIn() && request.resource.data.jugador1Uid == request.auth.uid
+          && sinContacto(['email1', 'email2', 'whatsapp1', 'whatsapp2']);
         // The organizer confirms/rejects; the invited partner accepts (must be logged in)
         allow update: if tournamentOrganizer(tid)
           || (signedIn()
@@ -147,6 +175,17 @@ service cloud.firestore {
               && request.resource.data.jugador2Uid == request.auth.uid
               && request.resource.data.status == 'pendiente_aprobacion');
         allow delete: if tournamentOrganizer(tid);
+      }
+
+      // Contactos de una inscripción (email/WhatsApp de los dos jugadores), con el id de la inscripción: los lee
+      // solo el organizador. Los escribe el jugador 1 en el mismo batch que su inscripción, o el organizador.
+      match /contactosInscripciones/{inscId} {
+        allow read, update, delete: if tournamentOrganizer(tid);
+        allow create: if tournamentOrganizer(tid)
+          || (signedIn()
+              && request.resource.data.jugador1Uid == request.auth.uid
+              && getAfter(/databases/$(database)/documents/tournaments/$(tid)/inscripciones/$(inscId)).data.jugador1Uid
+                 == request.auth.uid);
       }
 
       match /reclamos/{reclamoId} {

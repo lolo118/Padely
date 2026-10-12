@@ -11,12 +11,14 @@ import {
   orderBy,
   serverTimestamp,
   setDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { parejaPublica, partidoPublico } from "../utils/torneo";
 
-// pairs, groups y el bracket del torneo son de lectura pública: los contactos de una pareja se guardan
-// aparte en tournaments/{tid}/contactos/{pairId} (solo organizador) y nunca en esos documentos.
+// pairs, groups y el bracket del torneo son de lectura pública, y las inscripciones las lee cualquier jugador
+// con sesión: los contactos de una pareja se guardan aparte en tournaments/{tid}/contactos/{pairId} y los de
+// una inscripción en tournaments/{tid}/contactosInscripciones/{inscId} (solo organizador), nunca en esos documentos.
 const CAMPOS_CONTACTO = ["whatsapp1", "whatsapp2", "email1", "email2"];
 
 function separarContactos(pareja) {
@@ -150,16 +152,39 @@ export const getBracket = async (torneoId) => {
   if (data.bracketJson) return JSON.parse(data.bracketJson);
   return null;
 };
+// La inscripción y sus contactos se escriben en el mismo batch: las reglas aceptan el contacto solo si la
+// inscripción que queda es del jugador que lo escribe.
 export const crearSolicitudInscripcion = async (torneoId, solicitud) => {
-  const ref = await addDoc(
-    collection(db, "tournaments", torneoId, "inscripciones"),
-    {
-      ...solicitud,
-      status: "esperando_companero",
-      createdAt: serverTimestamp(),
-    },
-  );
+  const { publica, contactos } = separarContactos(solicitud);
+  const ref = doc(collection(db, "tournaments", torneoId, "inscripciones"));
+  const batch = writeBatch(db);
+  batch.set(ref, {
+    ...publica,
+    status: "esperando_companero",
+    createdAt: serverTimestamp(),
+  });
+  batch.set(doc(db, "tournaments", torneoId, "contactosInscripciones", ref.id), {
+    ...contactos,
+    jugador1Uid: publica.jugador1Uid || null,
+    createdAt: serverTimestamp(),
+  });
+  await batch.commit();
   return ref.id;
+};
+
+// Contactos de las inscripciones ({ [inscId]: { whatsapp1, whatsapp2, email1, email2 } }), solo organizador
+export const getContactosInscripciones = async (torneoId) => {
+  const snap = await getDocs(collection(db, "tournaments", torneoId, "contactosInscripciones"));
+  const contactos = {};
+  snap.docs.forEach((d) => {
+    const data = d.data();
+    const c = {};
+    CAMPOS_CONTACTO.forEach((k) => {
+      if (data[k]) c[k] = data[k];
+    });
+    contactos[d.id] = c;
+  });
+  return contactos;
 };
 
 export const getInscripciones = async (torneoId) => {

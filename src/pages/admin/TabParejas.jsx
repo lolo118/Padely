@@ -5,6 +5,7 @@ import {
   eliminarPareja,
   getInscripciones,
   getContactosParejas,
+  getContactosInscripciones,
   actualizarInscripcion,
 } from "../../services/torneoService";
 import { notificarInscripcionConfirmada, notificarInscripcionRechazada } from "../../services/notificationService";
@@ -53,17 +54,23 @@ export default function TabParejas({ torneoId, torneo }) {
     let cancelled = false;
     const cargar = async () => {
       try {
-        const [parejasData, inscData, contactosData] = await Promise.all([
+        const [parejasData, inscData, contactosData, contactosInsc] = await Promise.all([
           getParejas(torneoId),
           getInscripciones(torneoId),
           getContactosParejas(torneoId).catch((err) => {
             console.error("Error al cargar los contactos de las parejas:", err);
             return {};
           }),
+          getContactosInscripciones(torneoId).catch((err) => {
+            console.error("Error al cargar los contactos de las inscripciones:", err);
+            return {};
+          }),
         ]);
         if (!cancelled) {
           setParejas(parejasData);
-          setInscripciones(inscData);
+          // Los contactos de cada inscripción viven aparte (solo organizador): se suman acá para mostrarlos
+          // y para copiarlos a la pareja al confirmar
+          setInscripciones(inscData.map((i) => ({ ...i, ...(contactosInsc[i.id] || {}) })));
           setContactos(contactosData);
         }
       } catch (err) {

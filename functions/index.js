@@ -410,7 +410,8 @@ exports.expirarReservasPendientes = onSchedule(
 );
 
 // Cuenta eliminada en Auth (v1): borra users/{uid} con sus subcolecciones, desvincula al jugador
-// de las parejas de torneos y cancela sus reservas futuras.
+// de las parejas de torneos, cancela sus reservas futuras y borra su contacto de los clubes
+// (clubs/{clubId}/contactosReservas, que solo lee el club).
 exports.onUserDeleted = functionsV1
   .region(REGION)
   .auth.user()
@@ -444,6 +445,12 @@ exports.onUserDeleted = functionsV1
       reservas++;
     });
 
+    const contactosSnap = await db.collectionGroup("contactosReservas").where("jugadorUid", "==", uid).get();
+    contactosSnap.docs.forEach((d) => ops.push((b) => b.delete(d.ref)));
+
     await escribirEnLotes(ops);
-    logger.info(`onUserDeleted ${uid}: ${parejas.size} parejas desvinculadas, ${reservas} reservas canceladas`);
+    logger.info(
+      `onUserDeleted ${uid}: ${parejas.size} parejas desvinculadas, ${reservas} reservas canceladas, ` +
+        `${contactosSnap.size} contactos de reservas borrados`,
+    );
   });

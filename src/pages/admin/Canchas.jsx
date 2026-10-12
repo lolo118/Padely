@@ -169,7 +169,8 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
     const cargar = async () => {
       setLoading(true);
       try {
-        const data = await getReservas(clubId);
+        // Con contactos: el email y el teléfono viven aparte y solo los ve el club
+        const data = await getReservas(clubId, undefined, { contactos: true });
         setReservas(data);
       } catch (err) {
         console.error("Error cargando reservas:", err);
