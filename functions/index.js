@@ -14,15 +14,22 @@ const db = getFirestore();
 // ============================================================================
 // PUNTOS Y RANKING — se otorgan una sola vez por partido/bonus usando marcadores en
 // tournaments/{tid}/puntosOtorgados/{markerId}. Editar un resultado nunca vuelve a otorgar.
+// Un torneo tiene un cuadro por categoría (ver cuadrosDeTorneo en ./puntos): cada cuadro tiene sus grupos
+// (groups con campo `cuadro`) y su bracket (tournaments/{tid}/cuadros/{cid}.bracketJson).
+// Marcadores:
+//   g_{gid}_{i}                      partido i del grupo gid (tipo "partido")
+//   b_{cid}_{ri}_{pi}                partido pi de la ronda ri del bracket del cuadro cid (tipo "partido")
+//   b_{cid}_final_campeon / _sub      bonus de la final del cuadro cid (tipo "campeon" / "subcampeon")
+//   liga_{cid}_campeon / _sub         bonus de la liga del cuadro cid al finalizar (tipo "campeon" / "subcampeon")
+//   fin_{uid}                        torneosJugados al finalizar (tipo "torneoJugado")
 // ============================================================================
 const { onDocumentWritten, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const puntos = require("./puntos");
 
 const userRef = (uid) => db.collection("users").doc(uid);
-const markerRef = (tid, markerId) =>
-  db.collection("tournaments").doc(tid).collection("puntosOtorgados").doc(markerId);
+const markersCol = (tid) => db.collection("tournaments").doc(tid).collection("puntosOtorgados");
+const markerRef = (tid, markerId) => markersCol(tid).doc(markerId);
 const nuevaNotificacionRef = (uid) => userRef(uid).collection("notifications").doc();
-const MARCADORES_BONUS = ["b_final_campeon", "b_final_sub", "liga_campeon", "liga_sub"];
 
 // Uids vinculados a una pareja (jugador1Uid / jugador2Uid), sin vacíos
 function uidsDePareja(pareja) {
@@ -153,8 +160,9 @@ async function otorgarBonus(tid, premios, torneo) {
   });
 }
 
-// Final del cuadro: campeón = ganador, subcampeón = perdedor (markers b_final_campeon / b_final_sub)
-async function otorgarFinal(tid, partido, torneo) {
+// Final del bracket del cuadro cid: campeón = ganador, subcampeón = perdedor
+// (markers b_{cid}_final_campeon / b_{cid}_final_sub)
+async function otorgarFinal(tid, cid, partido, torneo) {
   const p1 = partido && partido.pareja1;
   const p2 = partido && partido.pareja2;
   if (!p1 || !p2 || !partido.resultado) return [];
@@ -163,15 +171,16 @@ async function otorgarFinal(tid, partido, torneo) {
   return otorgarBonus(
     tid,
     [
-      { markerId: "b_final_campeon", tipo: "campeon", pareja: ganoP1 ? p1 : p2, posicion: 1 },
-      { markerId: "b_final_sub", tipo: "subcampeon", pareja: ganoP1 ? p2 : p1, posicion: 2 },
+      { markerId: `b_${cid}_final_campeon`, tipo: "campeon", pareja: ganoP1 ? p1 : p2, posicion: 1 },
+      { markerId: `b_${cid}_final_sub`, tipo: "subcampeon", pareja: ganoP1 ? p2 : p1, posicion: 2 },
     ],
     torneo,
   );
 }
 
 // Torneo finalizado: torneosJugados += 1 para cada jugador vinculado a una pareja (marker fin_{uid}),
-// salvo los uids ya contados por un bonus de campeón/subcampeón. Transacciones de hasta 100 uids.
+// salvo los uids ya contados por un bonus de campeón/subcampeón de cualquier cuadro (marcadores con
+// tipo "campeon" / "subcampeon"). Transacciones de hasta 100 uids.
 async function contarTorneoJugado(tid, uids) {
   const unicos = [...new Set(uids)];
   let contados = 0;
@@ -181,10 +190,10 @@ async function contarTorneoJugado(tid, uids) {
       const finSnaps = await tx.getAll(...grupo.map((uid) => markerRef(tid, `fin_${uid}`)));
       const pendientes = grupo.filter((_, k) => !finSnaps[k].exists);
       if (!pendientes.length) return 0;
-      const bonusSnaps = await tx.getAll(...MARCADORES_BONUS.map((m) => markerRef(tid, m)));
+      const bonusSnap = await tx.get(markersCol(tid).where("tipo", "in", ["campeon", "subcampeon"]));
       const yaContados = new Set();
-      bonusSnaps.forEach((s) => {
-        if (s.exists) Object.keys((s.data() && s.data().detalle) || {}).forEach((u) => yaContados.add(u));
+      bonusSnap.docs.forEach((s) => {
+        Object.keys((s.data() && s.data().detalle) || {}).forEach((u) => yaContados.add(u));
       });
       const userSnaps = await tx.getAll(...pendientes.map((uid) => userRef(uid)));
       let n = 0;
@@ -235,56 +244,67 @@ exports.onGroupWritten = onDocumentWritten("tournaments/{tid}/groups/{gid}", asy
   }
 });
 
-// Trigger B: resultados del cuadro (bracketJson) y cierre del torneo (status → finalizado)
+// Trigger C: resultados del bracket de un cuadro (tournaments/{tid}/cuadros/{cid}.bracketJson).
+// Cada partido con resultado se puntúa una sola vez (marker b_{cid}_{ri}_{pi}); la final del cuadro
+// (última ronda, partido 0) otorga además el bonus de campeón/subcampeón de ese cuadro.
+exports.onCuadroWritten = onDocumentWritten("tournaments/{tid}/cuadros/{cid}", async (event) => {
+  const after = event.data && event.data.after;
+  if (!after || !after.exists) return;
+  const { tid, cid } = event.params;
+  const cuadro = after.data() || {};
+  if (!cuadro.bracketJson) return;
+  const rondas = parseBracket(cuadro.bracketJson);
+  if (!rondas) return;
+
+  const torneoSnap = await db.collection("tournaments").doc(tid).get();
+  const torneo = torneoSnap.exists ? torneoSnap.data() : {};
+  for (let ri = 0; ri < rondas.length; ri++) {
+    const ronda = Array.isArray(rondas[ri]) ? rondas[ri] : [];
+    for (let pi = 0; pi < ronda.length; pi++) {
+      const partido = ronda[pi];
+      if (!partido || !partido.resultado || !partido.pareja1 || !partido.pareja2) continue;
+      const otorgado = await otorgarPartido(tid, `b_${cid}_${ri}_${pi}`, partido, torneo);
+      if (otorgado) logger.info(`Puntos otorgados: cuadro ${cid} ronda ${ri} partido ${pi}`, { tid });
+      const esFinal = ri === rondas.length - 1 && pi === 0;
+      if (esFinal) {
+        const creados = await otorgarFinal(tid, cid, partido, torneo);
+        if (creados.length) logger.info(`Bonus de final otorgado en ${cid} (${creados.join(", ")})`, { tid });
+      }
+    }
+  }
+});
+
+// Trigger B: cierre del torneo (status → finalizado)
 exports.onTournamentUpdated = onDocumentUpdated("tournaments/{tid}", async (event) => {
   if (!event.data) return;
-  const before = event.data.before.data() || {};
   const after = event.data.after.data();
   if (!after) return;
   const { tid } = event.params;
 
-  // B1: partidos del cuadro con resultado (primer resultado solamente; los marcadores lo garantizan)
-  if (after.bracketJson && after.bracketJson !== before.bracketJson) {
-    const rondas = parseBracket(after.bracketJson);
-    if (rondas) {
-      for (let ri = 0; ri < rondas.length; ri++) {
-        const ronda = Array.isArray(rondas[ri]) ? rondas[ri] : [];
-        for (let pi = 0; pi < ronda.length; pi++) {
-          const partido = ronda[pi];
-          if (!partido || !partido.resultado || !partido.pareja1 || !partido.pareja2) continue;
-          const otorgado = await otorgarPartido(tid, `b_${ri}_${pi}`, partido, after);
-          if (otorgado) logger.info(`Puntos otorgados: cuadro ronda ${ri} partido ${pi}`, { tid });
-          const esFinal = ri === rondas.length - 1 && pi === 0;
-          if (esFinal) {
-            const creados = await otorgarFinal(tid, partido, after);
-            if (creados.length) logger.info(`Bonus de final otorgado (${creados.join(", ")})`, { tid });
-          }
-        }
-      }
-    }
-  }
-
   // B2: torneo finalizado. Se evalúa en cada escritura mientras el torneo esté finalizado (no solo en la
   // transición): los marcadores garantizan una sola vez, y así una invocación perdida se recupera sola.
   if (after.status === "finalizado") {
-    // Liga: bonus de campeón y subcampeón según la tabla del (único) grupo
+    // Liga: bonus de campeón y subcampeón por cuadro, según la tabla del único grupo "Liga" de cada uno
     if (after.formato === "liga") {
       if (after.puntosFinalesOtorgados) {
         logger.info("Liga con puntos finales ya otorgados por el cliente, se omite el bonus", { tid });
       } else {
         const gruposSnap = await db.collection("tournaments").doc(tid).collection("groups").get();
-        const grupoLiga = gruposSnap.docs[0] ? gruposSnap.docs[0].data() : null;
-        if (grupoLiga) {
+        const grupos = gruposSnap.docs.map((d) => d.data());
+        for (const cuadro of puntos.cuadrosDeTorneo(after)) {
+          const delCuadro = grupos.filter((g) => puntos.cuadroDeGrupo(g, after) === cuadro.id);
+          const grupoLiga = delCuadro.find((g) => g.nombre === "Liga") || delCuadro[0] || null;
+          if (!grupoLiga) continue;
           const tabla = puntos.calcularTabla(grupoLiga);
           const creados = await otorgarBonus(
             tid,
             [
-              { markerId: "liga_campeon", tipo: "campeon", pareja: tabla[0] || null, posicion: 1 },
-              { markerId: "liga_sub", tipo: "subcampeon", pareja: tabla[1] || null, posicion: 2 },
+              { markerId: `liga_${cuadro.id}_campeon`, tipo: "campeon", pareja: tabla[0] || null, posicion: 1 },
+              { markerId: `liga_${cuadro.id}_sub`, tipo: "subcampeon", pareja: tabla[1] || null, posicion: 2 },
             ],
             after,
           );
-          if (creados.length) logger.info(`Bonus de liga otorgado (${creados.join(", ")})`, { tid });
+          if (creados.length) logger.info(`Bonus de liga otorgado en ${cuadro.id} (${creados.join(", ")})`, { tid });
         }
       }
     }
