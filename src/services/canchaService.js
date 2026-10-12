@@ -281,7 +281,13 @@ export const actualizarTurnoFijo = async (clubId, turnoFijoId, datos) => {
   }
 };
 
+// Borra el turno y su teléfono; si no queda ningún otro teléfono, también el documento privado
 export const eliminarTurnoFijo = async (clubId, turnoFijoId) => {
   await deleteDoc(doc(db, "clubs", clubId, "turnosFijos", turnoFijoId));
-  await setDoc(privadoTurnosRef(clubId), { [turnoFijoId]: deleteField() }, { merge: true });
+  const ref = privadoTurnosRef(clubId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const otros = Object.keys(snap.data()).filter((k) => k !== turnoFijoId && k !== "migradoEn");
+  if (otros.length === 0) await deleteDoc(ref);
+  else await updateDoc(ref, { [turnoFijoId]: deleteField() });
 };
