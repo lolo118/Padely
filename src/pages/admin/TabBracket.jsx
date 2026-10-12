@@ -6,7 +6,13 @@ import {
   getBracket,
 } from "../../services/torneoService";
 import { notificarResultadoCargado } from "../../services/notificationService";
-import { calcularTabla, getGanador, getNombrePareja } from "../../utils/torneo";
+import {
+  calcularTabla,
+  getGanador,
+  getNombrePareja,
+  cuadrosDeTorneo,
+  parejasDeCuadro,
+} from "../../utils/torneo";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
 
@@ -294,9 +300,19 @@ function ManualBracketBuilder({ clasificados, onConfirm }) {
   );
 }
 
-export default function TabBracket({ torneoId, torneo }) {
+// `cuadro` ({ id, label }): el cuadro (categoría) de esta pestaña: sus grupos, su bracket
+// (tournaments/{tid}/cuadros/{cuadroId}) y sus campeones. Sin la prop se usa el primer cuadro del torneo.
+// onBracketChange (opcional): recibe las rondas de este cuadro tal como quedaron guardadas, para que el padre
+// actualice el stepper y la tarjeta de cuadros sin recargar.
+export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }) {
+  const cuadrosTorneo = cuadrosDeTorneo(torneo);
+  const cuadroActual = cuadro || cuadrosTorneo[0];
+  const variosCuadros = cuadrosTorneo.length > 1;
+  const primerCuadroId = cuadrosTorneo[0].id;
   const [grupos, setGrupos] = useState([]);
-  const [parejas, setParejas] = useState([]);
+  const [todasParejas, setTodasParejas] = useState([]);
+  // Eliminación directa: al cuadro entran solo las parejas de esta categoría
+  const parejas = parejasDeCuadro(todasParejas, cuadroActual.id, torneo);
   const [rondas, setRondas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [bracketGenerado, setBracketGenerado] = useState(false);
@@ -315,11 +331,12 @@ export default function TabBracket({ torneoId, torneo }) {
       try {
         const [gruposData, bracketData, parejasData] = await Promise.all([
           getGrupos(torneoId),
-          getBracket(torneoId),
+          getBracket(torneoId, cuadroActual.id),
           torneo.formato === "eliminacion" ? getParejas(torneoId) : Promise.resolve([]),
         ]);
-        setGrupos(gruposData);
-        setParejas(parejasData);
+        // Grupos de este cuadro (los grupos viejos sin campo `cuadro` cuentan para el primer cuadro)
+        setGrupos(gruposData.filter((g) => (g.cuadro || primerCuadroId) === cuadroActual.id));
+        setTodasParejas(parejasData);
         if (bracketData && bracketData.rondas) {
           setRondas(avanzarGanadores(bracketData.rondas));
           setBracketGenerado(true);
@@ -330,7 +347,7 @@ export default function TabBracket({ torneoId, torneo }) {
       setLoading(false);
     };
     cargar();
-  }, [torneoId, torneo.formato]);
+  }, [torneoId, torneo.formato, cuadroActual.id, primerCuadroId]);
 
   // Parejas que entran al cuadro: las clasificadas de los grupos, o todas en eliminación directa
   const clasificados = esEliminacionDirecta ? parejas : seedsDesdeGrupos(grupos, parejasQueAvanzan);
@@ -350,9 +367,10 @@ export default function TabBracket({ torneoId, torneo }) {
 
   const confirmarBracket = async () => {
     try {
-      await guardarBracket(torneoId, { rondas });
+      await guardarBracket(torneoId, cuadroActual.id, { rondas }, cuadroActual.label);
       setBracketGenerado(true);
       toast.success("Bracket confirmado");
+      onBracketChange?.(rondas);
     } catch (err) {
       console.error("Error al guardar bracket:", err);
       toast.error("No pudimos guardar el bracket. Intentá de nuevo.");
@@ -375,7 +393,8 @@ export default function TabBracket({ torneoId, torneo }) {
     };
     setRondas(nuevasRondas);
     try {
-      await guardarBracket(torneoId, { rondas: nuevasRondas });
+      await guardarBracket(torneoId, cuadroActual.id, { rondas: nuevasRondas }, cuadroActual.label);
+      onBracketChange?.(nuevasRondas);
     } catch (err) {
       console.error("Error al actualizar:", err);
     }
@@ -533,8 +552,9 @@ export default function TabBracket({ torneoId, torneo }) {
     setRondas(rondasActualizadas);
 
     try {
-      await guardarBracket(torneoId, { rondas: rondasActualizadas });
+      await guardarBracket(torneoId, cuadroActual.id, { rondas: rondasActualizadas }, cuadroActual.label);
       toast.success("Resultado guardado");
+      onBracketChange?.(rondasActualizadas);
     } catch (e) {
       console.error("Error al guardar resultado:", e);
       toast.error("No pudimos guardar el resultado. Intentá de nuevo.");
@@ -567,7 +587,9 @@ export default function TabBracket({ torneoId, torneo }) {
     return (
       <div className="themed-card rounded-2xl p-5 border text-center py-12">
         <div className="text-4xl mb-3">📋</div>
-        <p className="font-medium" style={{ color: "var(--text-muted)" }}>Primero generá los grupos</p>
+        <p className="font-medium" style={{ color: "var(--text-muted)" }}>
+          Primero generá los grupos{variosCuadros ? ` de ${cuadroActual.label}` : ""}
+        </p>
         <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
           Necesitás tener grupos confirmados con resultados cargados
         </p>
@@ -579,7 +601,9 @@ export default function TabBracket({ torneoId, torneo }) {
     return (
       <div className="themed-card rounded-2xl p-5 border text-center py-12">
         <div className="text-4xl mb-3">👥</div>
-        <p className="font-medium" style={{ color: "var(--text-muted)" }}>Necesitás al menos 2 parejas inscriptas</p>
+        <p className="font-medium" style={{ color: "var(--text-muted)" }}>
+          Necesitás al menos 2 parejas inscriptas{variosCuadros ? ` en ${cuadroActual.label}` : ""}
+        </p>
         <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
           Actualmente hay {parejas.length} pareja{parejas.length !== 1 ? "s" : ""}
         </p>
@@ -642,7 +666,7 @@ export default function TabBracket({ torneoId, torneo }) {
           style={{ background: "linear-gradient(to right, rgba(234,179,8,0.08), rgba(234,179,8,0.15))", borderColor: "rgba(234,179,8,0.3)" }}>
           <div className="text-5xl mb-3">🏆</div>
           <p className="text-xs text-yellow-600 font-semibold uppercase tracking-wider mb-1">
-            Campeones
+            {variosCuadros ? `Campeones — ${cuadroActual.label}` : "Campeones"}
           </p>
           <p className="text-xl font-bold mb-4" style={{ color: "var(--text-primary)" }}>
             {getNombrePareja(campeonData.campeon)}

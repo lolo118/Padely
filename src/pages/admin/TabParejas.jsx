@@ -7,9 +7,19 @@ import {
   getContactosParejas,
   getContactosInscripciones,
   actualizarInscripcion,
+  actualizarPareja,
+  getGrupos,
+  getCuadros,
 } from "../../services/torneoService";
 import { notificarInscripcionConfirmada, notificarInscripcionRechazada } from "../../services/notificationService";
-import { listaCategorias } from "../../utils/torneo";
+import {
+  listaCategorias,
+  cuadrosDeTorneo,
+  cuadroDePareja,
+  cuadroDeGrupo,
+  parejasDeCuadro,
+  parejasSinCuadro,
+} from "../../utils/torneo";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
 
@@ -27,9 +37,14 @@ const inscripcionLabel = {
   rechazada: "Rechazada",
 };
 
-export default function TabParejas({ torneoId, torneo }) {
+// onParejasChange (opcional): recibe la lista completa de parejas cada vez que cambia, para que el padre
+// actualice sus contadores
+export default function TabParejas({ torneoId, torneo, onParejasChange }) {
   const [parejas, setParejas] = useState([]);
   const [inscripciones, setInscripciones] = useState([]);
+  // Grupos y documentos de bracket del torneo: sirven para saber qué cuadros ya se generaron
+  const [grupos, setGrupos] = useState([]);
+  const [cuadrosDocs, setCuadrosDocs] = useState({});
   // Contactos por pareja ({ [pairId]: { whatsapp1, whatsapp2, ... } }): viven aparte, solo los ve el organizador
   const [contactos, setContactos] = useState({});
   const [nombre1, setNombre1] = useState("");
@@ -54,7 +69,7 @@ export default function TabParejas({ torneoId, torneo }) {
     let cancelled = false;
     const cargar = async () => {
       try {
-        const [parejasData, inscData, contactosData, contactosInsc] = await Promise.all([
+        const [parejasData, inscData, contactosData, contactosInsc, gruposData, cuadrosData] = await Promise.all([
           getParejas(torneoId),
           getInscripciones(torneoId),
           getContactosParejas(torneoId).catch((err) => {
@@ -65,6 +80,14 @@ export default function TabParejas({ torneoId, torneo }) {
             console.error("Error al cargar los contactos de las inscripciones:", err);
             return {};
           }),
+          getGrupos(torneoId).catch((err) => {
+            console.error("Error al cargar los grupos:", err);
+            return [];
+          }),
+          getCuadros(torneoId).catch((err) => {
+            console.error("Error al cargar los cuadros:", err);
+            return {};
+          }),
         ]);
         if (!cancelled) {
           setParejas(parejasData);
@@ -72,6 +95,8 @@ export default function TabParejas({ torneoId, torneo }) {
           // y para copiarlos a la pareja al confirmar
           setInscripciones(inscData.map((i) => ({ ...i, ...(contactosInsc[i.id] || {}) })));
           setContactos(contactosData);
+          setGrupos(gruposData);
+          setCuadrosDocs(cuadrosData);
         }
       } catch (err) {
         console.error("Error al cargar parejas:", err);
@@ -103,11 +128,13 @@ export default function TabParejas({ torneoId, torneo }) {
         categoria,
       };
       const nuevaId = await agregarPareja(torneoId, nuevaPareja);
-      setParejas([...parejas, { id: nuevaId, ...nuevaPareja }]);
+      const nuevas = [...parejas, { id: nuevaId, ...nuevaPareja }];
+      setParejas(nuevas);
       setContactos({ ...contactos, [nuevaId]: { whatsapp1: whatsapp1.trim(), whatsapp2: whatsapp2.trim() } });
       setNombre1(""); setApellido1(""); setNombre2(""); setApellido2("");
       setWhatsapp1(""); setWhatsapp2("");
       toast.success("Pareja agregada");
+      onParejasChange?.(nuevas);
     } catch (err) {
       console.error("Error al agregar pareja:", err);
       toast.error("No pudimos agregar la pareja. Intentá de nuevo.");
@@ -120,8 +147,10 @@ export default function TabParejas({ torneoId, torneo }) {
     if (!ok) return;
     try {
       await eliminarPareja(torneoId, parejaId);
-      setParejas(parejas.filter((p) => p.id !== parejaId));
+      const nuevas = parejas.filter((p) => p.id !== parejaId);
+      setParejas(nuevas);
       toast.success("Pareja eliminada");
+      onParejasChange?.(nuevas);
     } catch (err) {
       console.error("Error al eliminar pareja:", err);
       toast.error("No pudimos eliminar la pareja. Intentá de nuevo.");
@@ -149,7 +178,8 @@ export default function TabParejas({ torneoId, torneo }) {
         inscripcionId: insc.id,
       };
       const nuevaId = await agregarPareja(torneoId, nuevaPareja);
-      setParejas([...parejas, { id: nuevaId, ...nuevaPareja }]);
+      const nuevas = [...parejas, { id: nuevaId, ...nuevaPareja }];
+      setParejas(nuevas);
       setContactos({
         ...contactos,
         [nuevaId]: {
@@ -169,6 +199,7 @@ export default function TabParejas({ torneoId, torneo }) {
       if (insc.jugador1Uid) notificarInscripcionConfirmada(insc.jugador1Uid, torneoNombre, torneoId);
       if (insc.jugador2Uid) notificarInscripcionConfirmada(insc.jugador2Uid, torneoNombre, torneoId);
       toast.success("Inscripción confirmada");
+      onParejasChange?.(nuevas);
     } catch (err) {
       console.error("Error al confirmar inscripción:", err);
       toast.error("No pudimos confirmar la inscripción. Intentá de nuevo.");
@@ -204,6 +235,22 @@ export default function TabParejas({ torneoId, torneo }) {
     }
   };
 
+  // Mover una pareja de cuadro cambiando su categoría ("" = sin categoría)
+  const handleCambiarCategoria = async (p, valor) => {
+    const categoria = valor || null;
+    if (categoria === cuadroDePareja(p, torneo)) return;
+    try {
+      await actualizarPareja(torneoId, p.id, { categoria });
+      const nuevas = parejas.map((x) => (x.id === p.id ? { ...x, categoria } : x));
+      setParejas(nuevas);
+      toast.success("Categoría actualizada");
+      onParejasChange?.(nuevas);
+    } catch (err) {
+      console.error("Error al cambiar la categoría de la pareja:", err);
+      toast.error("No pudimos cambiar la categoría. Intentá de nuevo.");
+    }
+  };
+
   if (loading) {
     return (
       <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando parejas...</div>
@@ -222,6 +269,134 @@ export default function TabParejas({ torneoId, torneo }) {
   const procesadas = inscripciones.filter(
     (i) => i.status === "confirmada" || i.status === "rechazada",
   );
+
+  // ===== Cuadros =====
+  // Un cuadro está "generado" cuando ya tiene grupos (o fixture) o un documento de bracket: fuera de la
+  // inscripción no se mueven parejas desde ni hacia un cuadro generado (durante la inscripción, siempre)
+  const cuadros = cuadrosDeTorneo(torneo);
+  const generado = (cuadroId) =>
+    grupos.some((g) => cuadroDeGrupo(g, torneo) === cuadroId) || !!cuadrosDocs[cuadroId];
+  const textoParejas = (n) => `${n} ${n === 1 ? "pareja" : "parejas"}`;
+  // Secciones de la lista cuando hay más de un cuadro: primero las parejas sin categoría válida, después un
+  // bloque por cuadro
+  const sinCuadro = parejasSinCuadro(parejas, torneo);
+  const secciones = [
+    ...(sinCuadro.length > 0 ? [{ id: "sin-cuadro", label: "Sin categoría", sinCuadro: true, parejas: sinCuadro }] : []),
+    ...cuadros.map((c) => ({ id: c.id, label: c.label, sinCuadro: false, parejas: parejasDeCuadro(parejas, c.id, torneo) })),
+  ];
+
+  const renderPareja = (p, index) => {
+    const linkJ1 = `${window.location.origin}/vincular/${torneoId}/${p.id}/1`;
+    const linkJ2 = `${window.location.origin}/vincular/${torneoId}/${p.id}/2`;
+    const msgJ1 = `¡Hola ${p.jugador1}! Estás inscripto en el torneo "${torneo.nombre}". Vinculá tu cuenta de Padely para recibir puntos y notificaciones: ${linkJ1}`;
+    const msgJ2 = `¡Hola ${p.jugador2}! Estás inscripto en el torneo "${torneo.nombre}". Vinculá tu cuenta de Padely para recibir puntos y notificaciones: ${linkJ2}`;
+    const wa1 = contactos[p.id]?.whatsapp1 || p.whatsapp1 || "";
+    const wa2 = contactos[p.id]?.whatsapp2 || p.whatsapp2 || "";
+    // Cambio de categoría: bloqueado fuera de la inscripción si el cuadro actual ya se generó; las parejas sin
+    // cuadro siempre pueden moverse, y fuera de la inscripción nunca hacia un cuadro generado
+    const cuadroActual = cuadroDePareja(p, torneo);
+    const selectBloqueado = torneo.status !== "inscripcion" && cuadroActual !== null && generado(cuadroActual);
+
+    return (
+      <div key={p.id} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold w-6" style={{ color: "var(--text-muted)" }}>{index + 1}</span>
+            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+              {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
+            </p>
+            {labelCategoria(p.categoria) && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: "var(--accent-light)", color: "var(--accent)" }}>
+                {labelCategoria(p.categoria)}
+              </span>
+            )}
+          </div>
+          <button onClick={() => handleEliminarPareja(p.id)}
+            className="text-red-400 hover:text-red-600 text-xs font-semibold transition">Eliminar</button>
+        </div>
+
+        {/* Jugador 1 */}
+        <div className="flex items-center justify-between ml-9 mb-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{p.jugador1}</span>
+            {p.jugador1Uid ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">✓ Vinculado</span>
+            ) : (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>Sin vincular</span>
+            )}
+          </div>
+          {!p.jugador1Uid && (
+            <div className="flex gap-1">
+              <button onClick={() => { navigator.clipboard.writeText(linkJ1); toast.success("Link copiado"); }}
+                className="text-[10px] px-2 py-1 rounded-lg transition" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border-card)" }}>
+                🔗 Link
+              </button>
+              {wa1 && (
+                <a href={`https://wa.me/${wa1}?text=${encodeURIComponent(msgJ1)}`} target="_blank" rel="noopener noreferrer"
+                  className="text-[10px] px-2 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition">
+                  📱 WA
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Jugador 2 */}
+        <div className="flex items-center justify-between ml-9">
+          <div className="flex items-center gap-2">
+            <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{p.jugador2}</span>
+            {p.jugador2Uid ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">✓ Vinculado</span>
+            ) : (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>Sin vincular</span>
+            )}
+          </div>
+          {!p.jugador2Uid && (
+            <div className="flex gap-1">
+              <button onClick={() => { navigator.clipboard.writeText(linkJ2); toast.success("Link copiado"); }}
+                className="text-[10px] px-2 py-1 rounded-lg transition" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border-card)" }}>
+                🔗 Link
+              </button>
+              {wa2 && (
+                <a href={`https://wa.me/${wa2}?text=${encodeURIComponent(msgJ2)}`} target="_blank" rel="noopener noreferrer"
+                  className="text-[10px] px-2 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition">
+                  📱 WA
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Cambiar categoría (mover de cuadro) */}
+        {categorias.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2 ml-9 mt-2">
+            <label htmlFor={`categoria-${p.id}`} className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+              Cambiar categoría
+            </label>
+            <select
+              id={`categoria-${p.id}`}
+              value={cuadroActual ?? ""}
+              onChange={(e) => handleCambiarCategoria(p, e.target.value)}
+              disabled={selectBloqueado}
+              title={selectBloqueado ? "Ya se generó el cuadro" : undefined}
+              className="themed-input rounded-lg px-2 py-1 text-xs disabled:opacity-50"
+            >
+              {cuadroActual === null && <option value="">Sin categoría</option>}
+              {categorias.map((cat) => (
+                <option key={cat.id} value={cat.id} disabled={torneo.status !== "inscripcion" && cat.id !== cuadroActual && generado(cat.id)}>
+                  {cat.label}
+                </option>
+              ))}
+            </select>
+            {selectBloqueado && (
+              <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>Ya se generó el cuadro</span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -468,89 +643,32 @@ export default function TabParejas({ torneoId, torneo }) {
         </h2>
         {parejas.length === 0 ? (
           <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>No hay parejas inscriptas todavía</p>
+        ) : cuadros.length > 1 ? (
+          <div className="flex flex-col gap-4">
+            {secciones.map((s) => (
+              <div key={s.id} className="flex flex-col gap-3">
+                {s.sinCuadro ? (
+                  <div className="rounded-lg px-3 py-2 border"
+                    style={{ backgroundColor: "rgba(245,158,11,0.1)", borderColor: "rgba(245,158,11,0.3)", color: "#f59e0b" }}>
+                    <p className="text-xs font-semibold">
+                      {s.label} · {textoParejas(s.parejas.length)}
+                    </p>
+                    <p className="text-[10px] mt-0.5">
+                      Estas parejas no entran en ningún cuadro hasta que les asignes una categoría.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+                    {s.label} · {textoParejas(s.parejas.length)}
+                  </p>
+                )}
+                {s.parejas.map(renderPareja)}
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {parejas.map((p, index) => {
-              const linkJ1 = `${window.location.origin}/vincular/${torneoId}/${p.id}/1`;
-              const linkJ2 = `${window.location.origin}/vincular/${torneoId}/${p.id}/2`;
-              const msgJ1 = `¡Hola ${p.jugador1}! Estás inscripto en el torneo "${torneo.nombre}". Vinculá tu cuenta de Padely para recibir puntos y notificaciones: ${linkJ1}`;
-              const msgJ2 = `¡Hola ${p.jugador2}! Estás inscripto en el torneo "${torneo.nombre}". Vinculá tu cuenta de Padely para recibir puntos y notificaciones: ${linkJ2}`;
-              const wa1 = contactos[p.id]?.whatsapp1 || p.whatsapp1 || "";
-              const wa2 = contactos[p.id]?.whatsapp2 || p.whatsapp2 || "";
-
-              return (
-                <div key={p.id} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-bold w-6" style={{ color: "var(--text-muted)" }}>{index + 1}</span>
-                      <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                        {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
-                      </p>
-                      {labelCategoria(p.categoria) && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                          style={{ backgroundColor: "var(--accent-light)", color: "var(--accent)" }}>
-                          {labelCategoria(p.categoria)}
-                        </span>
-                      )}
-                    </div>
-                    <button onClick={() => handleEliminarPareja(p.id)}
-                      className="text-red-400 hover:text-red-600 text-xs font-semibold transition">Eliminar</button>
-                  </div>
-
-                  {/* Jugador 1 */}
-                  <div className="flex items-center justify-between ml-9 mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{p.jugador1}</span>
-                      {p.jugador1Uid ? (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">✓ Vinculado</span>
-                      ) : (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>Sin vincular</span>
-                      )}
-                    </div>
-                    {!p.jugador1Uid && (
-                      <div className="flex gap-1">
-                        <button onClick={() => { navigator.clipboard.writeText(linkJ1); toast.success("Link copiado"); }}
-                          className="text-[10px] px-2 py-1 rounded-lg transition" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border-card)" }}>
-                          🔗 Link
-                        </button>
-                        {wa1 && (
-                          <a href={`https://wa.me/${wa1}?text=${encodeURIComponent(msgJ1)}`} target="_blank" rel="noopener noreferrer"
-                            className="text-[10px] px-2 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition">
-                            📱 WA
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Jugador 2 */}
-                  <div className="flex items-center justify-between ml-9">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{p.jugador2}</span>
-                      {p.jugador2Uid ? (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">✓ Vinculado</span>
-                      ) : (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>Sin vincular</span>
-                      )}
-                    </div>
-                    {!p.jugador2Uid && (
-                      <div className="flex gap-1">
-                        <button onClick={() => { navigator.clipboard.writeText(linkJ2); toast.success("Link copiado"); }}
-                          className="text-[10px] px-2 py-1 rounded-lg transition" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border-card)" }}>
-                          🔗 Link
-                        </button>
-                        {wa2 && (
-                          <a href={`https://wa.me/${wa2}?text=${encodeURIComponent(msgJ2)}`} target="_blank" rel="noopener noreferrer"
-                            className="text-[10px] px-2 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition">
-                            📱 WA
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {parejas.map(renderPareja)}
           </div>
         )}
       </div>

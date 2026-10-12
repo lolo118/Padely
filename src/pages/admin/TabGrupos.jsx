@@ -6,7 +6,13 @@ import {
   actualizarGrupo,
 } from "../../services/torneoService";
 import { notificarResultadoCargado } from "../../services/notificationService";
-import { calcularTabla, getGanador } from "../../utils/torneo";
+import {
+  calcularTabla,
+  getGanador,
+  cuadrosDeTorneo,
+  parejasDeCuadro,
+  parejasSinCuadro,
+} from "../../utils/torneo";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
 
@@ -169,8 +175,19 @@ function generarFixtureRoundRobin(parejas) {
   return fechas;
 }
 
-export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
-  const [parejas, setParejas] = useState([]);
+// `cuadro` ({ id, label }): el cuadro (categoría) de esta pestaña. Todo lo que pasa acá (generar, guardar,
+// resultados) es solo de ese cuadro; sin la prop se usa el primer cuadro del torneo.
+// onGruposChange (opcional): recibe los grupos de este cuadro tal como quedaron guardados, para que el padre
+// actualice el stepper y la tarjeta de cuadros sin recargar.
+export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, onGruposChange }) {
+  const cuadrosTorneo = cuadrosDeTorneo(torneo);
+  const cuadroActual = cuadro || cuadrosTorneo[0];
+  const variosCuadros = cuadrosTorneo.length > 1;
+  const primerCuadroId = cuadrosTorneo[0].id;
+  const [todasParejas, setTodasParejas] = useState([]);
+  // Solo las parejas de este cuadro juegan acá; las que no tienen cuadro se avisan arriba
+  const parejas = parejasDeCuadro(todasParejas, cuadroActual.id, torneo);
+  const sinCuadro = parejasSinCuadro(todasParejas, torneo);
   const [grupos, setGrupos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [parejasXGrupo, setParejasXGrupo] = useState(2);
@@ -196,9 +213,11 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
           getParejas(torneoId),
           getGrupos(torneoId),
         ]);
-        setParejas(parejasData);
-        if (gruposData.length > 0) {
-          setGrupos(gruposData.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "")));
+        setTodasParejas(parejasData);
+        // Grupos de este cuadro (los grupos viejos sin campo `cuadro` cuentan para el primer cuadro)
+        const delCuadro = gruposData.filter((g) => (g.cuadro || primerCuadroId) === cuadroActual.id);
+        if (delCuadro.length > 0) {
+          setGrupos(delCuadro.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "")));
           setGruposGenerados(true);
         }
       } catch (err) {
@@ -207,7 +226,7 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
       setLoading(false);
     };
     cargar();
-  }, [torneoId]);
+  }, [torneoId, cuadroActual.id, primerCuadroId]);
 
   const generarGruposAleatorio = () => {
     const shuffled = [...parejas].sort(() => Math.random() - 0.5);
@@ -229,9 +248,11 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
 
   const guardarGruposEnFirebase = async () => {
     try {
-      const ids = await guardarGrupos(torneoId, grupos);
-      setGrupos(grupos.map((g, i) => ({ ...g, id: ids[i] })));
+      const ids = await guardarGrupos(torneoId, grupos, cuadroActual.id);
+      const guardados = grupos.map((g, i) => ({ ...g, id: ids[i], cuadro: cuadroActual.id }));
+      setGrupos(guardados);
       setGruposGenerados(true);
+      onGruposChange?.(guardados);
       toast.success(modoLiga ? "Fixture confirmado" : "Grupos confirmados");
     } catch (err) {
       console.error("Error al guardar grupos:", err);
@@ -253,6 +274,7 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
     if (grupo.id) {
       try {
         await actualizarGrupo(torneoId, grupo.id, { partidos });
+        onGruposChange?.(nuevosGrupos);
       } catch (err) {
         console.error("Error al actualizar partido:", err);
       }
@@ -395,6 +417,7 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
       try {
         await actualizarGrupo(torneoId, grupo.id, { partidos });
         toast.success("Resultado guardado");
+        onGruposChange?.(nuevosGrupos);
       } catch (e) {
         console.error("Error al guardar resultado:", e);
         toast.error("No pudimos guardar el resultado. Intentá de nuevo.");
@@ -450,17 +473,30 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
       <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando grupos...</div>
     );
 
+  // Parejas sin categoría: no entran en ningún cuadro hasta que el organizador les asigne una
+  const avisoSinCuadro = sinCuadro.length > 0 ? (
+    <div
+      className="text-xs rounded-lg px-3 py-2 border"
+      style={{ color: "#b45309", backgroundColor: "rgba(245,158,11,0.08)", borderColor: "rgba(245,158,11,0.3)" }}
+    >
+      ⚠ {sinCuadro.length} pareja{sinCuadro.length !== 1 ? "s" : ""} sin categoría — asignales una en la pestaña Parejas
+    </div>
+  ) : null;
+
   if (parejas.length < 3) {
     return (
-      <div className="themed-card rounded-2xl p-5 border text-center py-12">
-        <div className="text-4xl mb-3">👥</div>
-        <p className="font-medium" style={{ color: "var(--text-muted)" }}>
-          Necesitás al menos 3 parejas inscriptas
-        </p>
-        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-          Actualmente hay {parejas.length} pareja
-          {parejas.length !== 1 ? "s" : ""}
-        </p>
+      <div className="flex flex-col gap-4">
+        {avisoSinCuadro}
+        <div className="themed-card rounded-2xl p-5 border text-center py-12">
+          <div className="text-4xl mb-3">👥</div>
+          <p className="font-medium" style={{ color: "var(--text-muted)" }}>
+            Necesitás al menos 3 parejas inscriptas{variosCuadros ? ` en ${cuadroActual.label}` : ""}
+          </p>
+          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+            Actualmente hay {parejas.length} pareja
+            {parejas.length !== 1 ? "s" : ""}
+          </p>
+        </div>
       </div>
     );
   }
@@ -473,6 +509,8 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {avisoSinCuadro}
+
       {/* Regenerar arriba */}
       {gruposGenerados && (
         <div className="flex justify-end">
@@ -524,7 +562,9 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
 
       {!gruposGenerados && modoLiga && (
         <div className="themed-card rounded-2xl p-5 border">
-          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Generar fixture</h2>
+          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
+            Generar fixture{variosCuadros ? ` — ${cuadroActual.label}` : ""}
+          </h2>
           <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
             Se generará un fixture round-robin donde todas las {parejas.length} parejas juegan entre sí.
             Total de partidos: {parejas.length * (parejas.length - 1) / 2} · Fechas: {parejas.length % 2 === 0 ? parejas.length - 1 : parejas.length}
@@ -544,7 +584,9 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false }) {
 
       {!gruposGenerados && !modoLiga && (
         <div className="themed-card rounded-2xl p-5 border">
-          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Generar grupos</h2>
+          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
+            Generar grupos{variosCuadros ? ` — ${cuadroActual.label}` : ""}
+          </h2>
           <div className="flex flex-col gap-3">
             <div>
               <label className="text-sm block mb-1" style={{ color: "var(--text-muted)" }}>

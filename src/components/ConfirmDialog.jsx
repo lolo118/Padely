@@ -69,7 +69,7 @@ export function ConfirmHost() {
           </h2>
         </div>
         {opciones.mensaje && (
-          <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-sm mb-4 whitespace-pre-line" style={{ color: "var(--text-secondary)" }}>
             {opciones.mensaje}
           </p>
         )}

@@ -89,6 +89,8 @@ export default function TabReclamos({ torneoId, torneo }) {
                 (Number(torneo.plazoReclamosMinutos) || 30) -
                 Math.floor((ahora - new Date(r.creadoEn).getTime()) / 60000)
               );
+              // "Grupo A · 7ma Masculino": grupo y cuadro del partido reclamado, cuando el reclamo los trae
+              const contexto = [r.grupoNombre, r.cuadroLabel].filter(Boolean).join(" · ");
               return (
                 <div key={r.id} className="themed-card rounded-2xl p-5 border">
                   <div className="flex items-start justify-between mb-3">
@@ -102,6 +104,10 @@ export default function TabReclamos({ torneoId, torneo }) {
                     </div>
                     <span className="text-xs font-semibold px-2 py-1 rounded-full bg-amber-100 text-amber-700">Abierto</span>
                   </div>
+
+                  {contexto && (
+                    <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>{contexto}</p>
+                  )}
 
                   <div className="rounded-xl p-3 mb-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
                     <p className="text-xs" style={{ color: "var(--text-muted)" }}>Denunciante</p>
@@ -189,31 +195,37 @@ export default function TabReclamos({ torneoId, torneo }) {
             Reclamos resueltos ({resueltos.length})
           </h3>
           <div className="flex flex-col gap-3">
-            {resueltos.map((r) => (
-              <div key={r.id} className="themed-card rounded-2xl p-5 border opacity-75">
-                <div className="flex items-start justify-between mb-2">
-                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-red-100 text-red-600">
-                    {motivoLabel[r.motivo] || r.motivo}
-                  </span>
-                  <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                    r.decision === "descalificar" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
-                  }`}>
-                    {r.decision === "descalificar" ? "Descalificada" : "Desestimado"}
-                  </span>
-                </div>
-                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                  {getNombrePareja(r.parejaDenunciante)} → {getNombrePareja(r.parejaDenunciada)}
-                </p>
-                {r.motivoDecision && (
-                  <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
-                    Decisión: {r.motivoDecision}
+            {resueltos.map((r) => {
+              const contexto = [r.grupoNombre, r.cuadroLabel].filter(Boolean).join(" · ");
+              return (
+                <div key={r.id} className="themed-card rounded-2xl p-5 border opacity-75">
+                  <div className="flex items-start justify-between mb-2">
+                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-red-100 text-red-600">
+                      {motivoLabel[r.motivo] || r.motivo}
+                    </span>
+                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                      r.decision === "descalificar" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                    }`}>
+                      {r.decision === "descalificar" ? "Descalificada" : "Desestimado"}
+                    </span>
+                  </div>
+                  {contexto && (
+                    <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{contexto}</p>
+                  )}
+                  <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                    {getNombrePareja(r.parejaDenunciante)} → {getNombrePareja(r.parejaDenunciada)}
                   </p>
-                )}
-                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                  {r.adheridos?.length || 0} pareja{(r.adheridos?.length || 0) !== 1 ? "s" : ""} adherida{(r.adheridos?.length || 0) !== 1 ? "s" : ""}
-                </p>
-              </div>
-            ))}
+                  {r.motivoDecision && (
+                    <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+                      Decisión: {r.motivoDecision}
+                    </p>
+                  )}
+                  <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                    {r.adheridos?.length || 0} pareja{(r.adheridos?.length || 0) !== 1 ? "s" : ""} adherida{(r.adheridos?.length || 0) !== 1 ? "s" : ""}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
