@@ -1,0 +1,55 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Padely</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; height:100%; }
+  body { background:var(--surface); color:var(--ink); font-family:var(--font-sans); overflow:hidden; }
+  .cover { position:relative; width:960px; height:288px; overflow:hidden; }
+  /* the composition: a 480-wide box on the right half of the 960 layout, clear of the name */
+  .art { position:absolute; top:0; left:480px; width:480px; height:288px; overflow:hidden; }
+  .art svg { display:block; width:480px; height:288px; }
+  .slab { fill:var(--ink); rx:var(--radius-xl); }
+  .court { fill:var(--court); rx:var(--radius-lg); }
+  .tint { fill:var(--court-soft); rx:var(--radius-md); }
+  .ball { fill:var(--lime); }
+  .rule { stroke:var(--line-strong); stroke-width:2; fill:none; }
+  .words { position:absolute; left:var(--space-6); bottom:var(--space-6); max-width:440px; }
+  .name { margin:0; font-family:var(--font-display); font-size:120px; line-height:.9; font-weight:800; letter-spacing:0; color:var(--ink); }
+  .tag { margin:var(--space-2) 0 0 4px; font-size:14px; line-height:20px; color:var(--ink-3); }
+</style>
+</head>
+<body>
+<div class="cover">
+<div class="art" aria-hidden="true">
+<svg viewBox="480 0 480 288" width="480" height="288">
+<!--
+  blocks      ink 352×248 bled off the top and right (the court at night by day, paper by night — bound to ink so it never sinks into the ground) · court 96×152 beside it · court-soft 96×72 (the tint) · lime disc ⌀80 on the slab's lower corner — ≈38% of 960×288
+  arrangement one tall slab with satellites: the court strip and its tint stacked at the box's left edge, bottoms one space-6 above the edge, space-4 gutters
+  pattern     discs, from "the brand has one pictogram of its own: the ball": twelve space-2 balls at a space-6 pitch in the slab's upper corner, plus three line-strong rules across the slab — the court's lines under the lights
+  scales      sides in space-4/space-6 multiples; gutters space-4; disc pitch space-6, disc rx = half of space-2; big ball ⌀ 2×space-10; corners radius-xl (slab), radius-lg (court), radius-md (tint)
+-->
+<rect class="slab" x="608" y="-24" width="352" height="248" rx="24"/>
+<rect class="tint" x="496" y="24" width="96" height="72" rx="12"/>
+<rect class="court" x="496" y="112" width="96" height="152" rx="16"/>
+<line class="rule" x1="808" y1="-24" x2="808" y2="224"/>
+<line class="rule" x1="736" y1="56" x2="960" y2="56"/>
+<line class="rule" x1="736" y1="136" x2="960" y2="136"/>
+<circle class="ball" cx="648" cy="32" r="4"/><circle class="ball" cx="672" cy="32" r="4"/><circle class="ball" cx="696" cy="32" r="4"/>
+<circle class="ball" cx="648" cy="56" r="4"/><circle class="ball" cx="672" cy="56" r="4"/><circle class="ball" cx="696" cy="56" r="4"/>
+<circle class="ball" cx="648" cy="80" r="4"/><circle class="ball" cx="672" cy="80" r="4"/><circle class="ball" cx="696" cy="80" r="4"/>
+<circle class="ball" cx="648" cy="104" r="4"/><circle class="ball" cx="672" cy="104" r="4"/><circle class="ball" cx="696" cy="104" r="4"/>
+<circle class="ball" cx="640" cy="224" r="40"/>
+</svg>
+</div>
+<div class="words">
+<h1 class="name">Padely</h1>
+<p class="tag">Viví el pádel.</p>
+</div>
+</div>
+</body>
+</html>

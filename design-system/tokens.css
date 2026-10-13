@@ -1,0 +1,117 @@
+/* Padely — tokens.css, compiled from design-system/tokens.json. Do not edit by hand: change tokens.json (the design system) and recompile. */
+/* Themes: light = Día (clubs, organizers), dark = Noche (players, public). The app sets data-theme on <html>; a nested element with data-theme="dark" re-themes its subtree. */
+:root, [data-theme="light"] {
+  --surface: #f6f7f9;
+  --surface-raised: #ffffff;
+  --surface-sunken: #eef1f5;
+  --surface-hover: #f1f4f8;
+  --line: #e3e8ef;
+  --line-strong: #cbd5e1;
+  --ink: #0f172a;
+  --ink-2: #475569;
+  --ink-3: #64748b;
+  --night: #0b1220;
+  --on-night: #f1f5f9;
+  --on-night-muted: #b6c2d3;
+  --lime: #84cc16;
+  --lime-hover: #74b312;
+  --on-lime: #0b1220;
+  --lime-text: #4d7c0f;
+  --lime-soft: #ecfccb;
+  --court: #1d4ed8;
+  --court-soft: #dbe7ff;
+  --on-court: #ffffff;
+  --success: #15803d;
+  --success-soft: #dcfce7;
+  --warning: #b45309;
+  --warning-soft: #fef3c7;
+  --danger: #b91c1c;
+  --danger-soft: #fee2e2;
+  --on-danger: #ffffff;
+  --focus: #2563eb;
+  --overlay: #0b1220aa;
+  --slot-blocked: #cbd5e1;
+  --heat-red: #ef4444;
+  --heat-orange: #f97316;
+  --heat-pink: #d946ef;
+  --heat-purple: #7c3aed;
+  --gold-light: #f6dd8d;
+  --gold: #d9a927;
+  --gold-deep: #8b6514;
+  --black: #060709;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05), 0 12px 32px -20px rgba(15, 23, 42, 0.25);
+  --shadow-overlay: 0 24px 64px -24px rgba(15, 23, 42, 0.45);
+}
+[data-theme="dark"] {
+  --surface: #0b1220;
+  --surface-raised: #111a2e;
+  --surface-sunken: #070d19;
+  --surface-hover: #182338;
+  --line: #243149;
+  --line-strong: #34435e;
+  --ink: #f1f5f9;
+  --ink-2: #b6c2d3;
+  --ink-3: #8494ab;
+  --night: #0b1220;
+  --on-night: #f1f5f9;
+  --on-night-muted: #b6c2d3;
+  --lime: #84cc16;
+  --lime-hover: #9be02a;
+  --on-lime: #0b1220;
+  --lime-text: #bef264;
+  --lime-soft: #1f3306;
+  --court: #8db0ff;
+  --court-soft: #16244a;
+  --on-court: #0b1220;
+  --success: #4ade80;
+  --success-soft: #0f2d1b;
+  --warning: #fbbf24;
+  --warning-soft: #3a2a05;
+  --danger: #f87171;
+  --danger-soft: #3b1212;
+  --on-danger: #0b1220;
+  --focus: #8db0ff;
+  --overlay: #000000b3;
+  --slot-blocked: #34435e;
+  --heat-red: #ef4444;
+  --heat-orange: #f97316;
+  --heat-pink: #d946ef;
+  --heat-purple: #7c3aed;
+  --gold-light: #f6dd8d;
+  --gold: #d9a927;
+  --gold-deep: #8b6514;
+  --black: #060709;
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --shadow-overlay: 0 24px 64px -24px rgba(0, 0, 0, 0.9);
+}
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+  --font-display: "Barlow Condensed", "Figtree", system-ui, sans-serif;
+  --font-sans: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+/* Type styles */
+.display-xl { font-family: var(--font-display); font-size: 44px; line-height: 48px; font-weight: 800; }
+.display-lg { font-family: var(--font-display); font-size: 36px; line-height: 40px; font-weight: 800; }
+.heading-lg { font-family: var(--font-display); font-size: 26px; line-height: 32px; font-weight: 700; }
+.heading-md { font-family: var(--font-display); font-size: 22px; line-height: 28px; font-weight: 700; }
+.numeral-lg { font-family: var(--font-display); font-size: 32px; line-height: 36px; font-weight: 800; }
+.numeral-md { font-family: var(--font-display); font-size: 22px; line-height: 26px; font-weight: 700; }
+.heading-sm { font-family: var(--font-sans); font-size: 17px; line-height: 22px; font-weight: 600; }
+.body-md { font-family: var(--font-sans); font-size: 15px; line-height: 22px; font-weight: 400; }
+.body-sm { font-family: var(--font-sans); font-size: 13px; line-height: 18px; font-weight: 400; }
+.label { font-family: var(--font-sans); font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.button { font-family: var(--font-sans); font-size: 14px; line-height: 20px; font-weight: 600; }
+.caption { font-family: var(--font-sans); font-size: 12px; line-height: 16px; font-weight: 500; }

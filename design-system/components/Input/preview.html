@@ -1,0 +1,35 @@
+<!-- @dsCard group="Forms" height=330 -->
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Input — Padely</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>html,body{margin:0} body{padding:16px;} .row{display:flex;flex-wrap:wrap;gap:16px;align-items:center} .stack{display:grid;gap:16px} </style>
+</head>
+<body>
+
+<div class="stack" style="max-width:420px">
+  <label class="pd-field">
+    <span class="pd-label">Nombre del torneo</span>
+    <input class="pd-input" value="Abierto de Primavera — 7ma Masculino">
+    <span class="pd-help">Así lo van a ver los jugadores en la lista pública.</span>
+  </label>
+  <div class="row" style="align-items:flex-start">
+    <label class="pd-field" style="flex:1">
+      <span class="pd-label">Categoría</span>
+      <span class="pd-select"><select class="pd-input"><option>7ma Masculino</option><option>6ta Masculino</option><option>7ma Femenino</option></select><svg class="pd-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+    </label>
+    <label class="pd-field" style="flex:1">
+      <span class="pd-label">Seña</span>
+      <input class="pd-input" inputmode="numeric" value="$ 5.000" aria-invalid="true">
+      <span class="pd-error">La seña no puede superar el precio del turno.</span>
+    </label>
+  </div>
+  <div class="row" style="align-items:flex-start">
+    <label class="pd-field pd-input-icon" style="flex:1"><svg class="pd-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input class="pd-input" placeholder="Buscar jugador por nombre o DNI"></label>
+    <label class="pd-field" style="flex:1"><input class="pd-input" value="Solo lectura" disabled></label>
+  </div>
+</div>
+</body>
+</html>

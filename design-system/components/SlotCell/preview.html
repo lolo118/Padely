@@ -1,0 +1,24 @@
+<!-- @dsCard group="Booking" height=300 -->
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>SlotCell — Padely</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>html,body{margin:0} body{padding:16px;} .row{display:flex;flex-wrap:wrap;gap:16px;align-items:center} .stack{display:grid;gap:16px} </style>
+</head>
+<body>
+
+<div class="stack" style="max-width:560px">
+<div class="pd-grid" style="grid-template-columns:56px repeat(3,1fr)" role="grid" aria-label="Turnos del miércoles 15">
+  <div></div><div class="pd-grid-head">Cancha 1</div><div class="pd-grid-head">Cancha 2</div><div class="pd-grid-head">Cancha 3</div>
+  <div class="pd-grid-time">17:00</div>
+  <div class="pd-slot pd-slot-past">Pasado</div><div class="pd-slot pd-slot-past">Pasado</div><div class="pd-slot pd-slot-past">Pasado</div>
+  <div class="pd-grid-time">18:30</div>
+  <button class="pd-slot pd-slot-free">Libre<small>$ 15.000</small></button><div class="pd-slot pd-slot-booked">Gómez / Pérez<small>confirmada</small></div><button class="pd-slot pd-slot-free" aria-selected="true">Elegido<small>$ 15.000</small></button>
+  <div class="pd-grid-time">20:00</div>
+  <div class="pd-slot pd-slot-pending">Rodríguez<small>pendiente de seña</small></div><div class="pd-slot pd-slot-fixed"><svg class="pd-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg><small>Turno fijo · Díaz</small></div><div class="pd-slot pd-slot-blocked">Mantenimiento</div>
+</div>
+</div>
+</body>
+</html>
