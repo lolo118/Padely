@@ -55,9 +55,9 @@ const NoEncontrado = lazy(() => import("./pages/NoEncontrado"));
 
 function LoadingFallback() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center" style={{ backgroundColor: "var(--bg-primary)" }}>
-      <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
-      <p style={{ color: "var(--text-muted)" }} className="text-sm">Cargando...</p>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-surface">
+      <div className="w-10 h-10 border-2 border-line-strong border-t-ink rounded-pill animate-spin mb-3" aria-hidden="true" />
+      <p className="body-sm text-ink-3">Cargando…</p>
     </div>
   );
 }
@@ -66,10 +66,7 @@ function ProtectedRoute({ children }) {
   const { user, loading } = useAuthStore();
   if (loading)
     return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ color: "var(--text-muted)" }}
-      >
+      <div className="min-h-screen flex items-center justify-center body-md text-ink-3">
         Cargando...
       </div>
     );
@@ -81,9 +78,9 @@ function ProtectedRoute({ children }) {
 function RoleRoute({ allowedRoles, children }) {
   const { user, loading, rol } = useAuthStore();
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
   if (!user) return <Navigate to="/login" />;
-  if (!rol) return <div className="min-h-screen flex items-center justify-center" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
+  if (!rol) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
   if (!allowedRoles.includes(rol)) {
     if (rol === "club") return <Navigate to="/admin" />;
     if (rol === "organizador") return <Navigate to="/org" />;
@@ -95,7 +92,7 @@ function RoleRoute({ allowedRoles, children }) {
 function RedirigirPorRol() {
   const { user, rol } = useAuthStore();
 
-  if (user && !rol) return <div className="min-h-screen flex items-center justify-center" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
+  if (user && !rol) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
   if (rol === "club") return <Navigate to="/admin" />;
   if (rol === "organizador") return <Navigate to="/org" />;
   return <Inicio />;
@@ -108,7 +105,7 @@ function RedirigirTorneo() {
   const { user, loading, rol } = useAuthStore();
 
   if (loading || (user && !rol)) {
-    return <div className="min-h-screen flex items-center justify-center" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
+    return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
   }
   if (!user) {
     // Después del login volvemos a este mismo link

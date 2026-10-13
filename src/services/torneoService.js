@@ -14,6 +14,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { NIVELES } from "../utils/categorias";
 import {
   parejaPublica,
   partidoPublico,
@@ -372,11 +373,9 @@ export const resolverReclamo = async (
 // Los puntos, bonus y ascensos los otorgan las Cloud Functions (functions/puntos.js) al cargar
 // resultados; el cliente solo valida en qué categoría puede inscribirse un jugador.
 
-const CATEGORIAS_ORDEN = ["8va", "7ma", "6ta", "5ta", "4ta", "3era", "2da", "1era", "Libre"];
-
 export function puedeInscribirse(categoriaJugador, categoriaTorneo) {
-  const idxJugador = CATEGORIAS_ORDEN.indexOf(categoriaJugador);
-  const idxTorneo = CATEGORIAS_ORDEN.indexOf(categoriaTorneo);
+  const idxJugador = NIVELES.indexOf(categoriaJugador);
+  const idxTorneo = NIVELES.indexOf(categoriaTorneo);
   if (idxJugador === -1 || idxTorneo === -1) return true;
   // No puede inscribirse en categoría menor
   return idxTorneo >= idxJugador;

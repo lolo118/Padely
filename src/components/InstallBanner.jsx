@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { Download, Share, X } from "lucide-react";
 import { getInstallPrompt, consumirInstallPrompt, suscribirInstallPrompt } from "../lib/installPrompt";
+import Button from "./ui/Button";
 
 const CLAVE_DESCARTADO = "padely-install-dismissed";
 
@@ -34,25 +36,7 @@ function esStandalone() {
   );
 }
 
-const IconoCompartir = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className="inline w-3.5 h-3.5 align-text-bottom"
-    aria-label="Compartir"
-  >
-    <path d="M12 3v12" />
-    <path d="M8 7l4-4 4 4" />
-    <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" />
-  </svg>
-);
-
-// Banner "Instalá Padely", solo en móvil y mientras no se lo cierre (el cierre queda en localStorage):
+// Banner "Instalá Padely" (pd-install), solo en móvil y mientras no se lo cierre (el cierre queda en localStorage):
 // - Chrome/Edge en Android: aparece cuando el navegador dispara beforeinstallprompt y el botón instala.
 //   El evento se captura en src/lib/installPrompt.js desde el arranque, porque puede llegar antes de que
 //   se monte este componente.
@@ -93,74 +77,45 @@ export default function InstallBanner() {
   };
 
   if (!habilitado || cerrado) return null;
-
-  if (modoIOS) {
-    return (
-      <div className="fixed left-3 right-3 bottom-[76px] z-30 md:hidden">
-        <div
-          className="themed-card rounded-2xl border shadow-lg px-4 py-3 flex items-center gap-3"
-          style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.18)" }}
-        >
-          <img src="/icon-192.png" alt="" className="w-10 h-10 rounded-xl" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-              Instalá Padely
-            </p>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              Tocá <IconoCompartir /> Compartir y elegí «Agregar a inicio»
-            </p>
-          </div>
-          <button
-            onClick={cerrar}
-            aria-label="Cerrar"
-            className="p-1 rounded-lg transition hover:opacity-70"
-            style={{ color: "var(--text-muted)" }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!promptEvent) return null;
+  if (!modoIOS && !promptEvent) return null;
 
   return (
-    <div className="fixed left-3 right-3 bottom-[76px] z-30 md:hidden">
-      <div
-        className="themed-card rounded-2xl border shadow-lg px-4 py-3 flex items-center gap-3"
-        style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.18)" }}
-      >
-        <img src="/icon-192.png" alt="" className="w-10 h-10 rounded-xl" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-            Instalá Padely
-          </p>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Acceso directo en tu pantalla de inicio
-          </p>
+    <div className="fixed left-3 right-3 bottom-[76px] z-30 md:hidden flex justify-center">
+      <div className="pd-install" role="region" aria-label="Instalar Padely">
+        <div className="pd-install-tile" aria-hidden="true">
+          P<span className="pd-ball"></span>
         </div>
-        <button
-          onClick={instalar}
-          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition hover:opacity-90"
-          style={{ backgroundColor: "var(--accent)" }}
-        >
-          Instalar
-        </button>
-        <button
-          onClick={cerrar}
-          aria-label="Cerrar"
-          className="p-1 rounded-lg transition hover:opacity-70"
-          style={{ color: "var(--text-muted)" }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
+        <div className="pd-install-body">
+          <strong>Instalá Padely</strong>
+          {modoIOS ? (
+            <span>
+              Tocá <Share className="pd-icon" size={16} aria-label="Compartir" /> Compartir y elegí «Agregar a inicio».
+            </span>
+          ) : (
+            <span>Acceso directo en tu pantalla de inicio.</span>
+          )}
+        </div>
+        <div className="pd-install-actions">
+          {modoIOS ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              iconOnly
+              aria-label="Ahora no"
+              onClick={cerrar}
+              icon={<X className="pd-icon" size={20} aria-hidden="true" />}
+            />
+          ) : (
+            <>
+              <Button variant="ghost" size="sm" onClick={cerrar}>
+                Ahora no
+              </Button>
+              <Button variant="primary" size="sm" onClick={instalar} icon={<Download className="pd-icon" size={20} aria-hidden="true" />}>
+                Instalar
+              </Button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

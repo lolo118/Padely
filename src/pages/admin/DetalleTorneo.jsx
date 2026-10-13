@@ -10,6 +10,7 @@ import TabBracket from "./TabBracket";
 import TabParejas from "./TabParejas";
 import TabReclamos from "./TabReclamos";
 import { formatFecha } from "../../utils/formatDate";
+import { CATEGORIAS_TORNEO } from "../../utils/categorias";
 import { formatPrecio } from "../../utils/format";
 
 const estadoBadge = {
@@ -65,25 +66,6 @@ const provinciasArgentina = [
   "Santiago del Estero",
   "Tierra del Fuego",
   "Tucumán",
-];
-
-const categoriasNivel = [
-  "8va",
-  "Suma 15",
-  "7ma",
-  "Suma 13",
-  "6ta",
-  "Suma 11",
-  "5ta",
-  "Suma 9",
-  "4ta",
-  "Suma 7",
-  "3era",
-  "Suma 5",
-  "2da",
-  "Suma 3",
-  "1era",
-  "Libre",
 ];
 
 const inputClass =
@@ -1176,7 +1158,7 @@ export default function DetalleTorneo() {
                     {genero.charAt(0).toUpperCase() + genero.slice(1)}
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    {categoriasNivel.map((nivel) => (
+                    {CATEGORIAS_TORNEO.map((nivel) => (
                       <button
                         key={nivel}
                         type="button"

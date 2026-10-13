@@ -6,6 +6,7 @@ import { useAuthStore } from "../../store/authStore";
 import { crearTorneo } from "../../services/torneoService";
 import { getClubByOwner } from "../../services/canchaService";
 import PerfilIncompleto from "../../components/PerfilIncompleto";
+import { CATEGORIAS_TORNEO } from "../../utils/categorias";
 
 const inputClass =
   "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
@@ -46,25 +47,6 @@ const categoriasGenero = [
   { value: "masculino", label: "Masculino" },
   { value: "femenino", label: "Femenino" },
   { value: "mixto", label: "Mixto" },
-];
-
-const categoriasNivel = [
-  "8va",
-  "Suma 15",
-  "7ma",
-  "Suma 13",
-  "6ta",
-  "Suma 11",
-  "5ta",
-  "Suma 9",
-  "4ta",
-  "Suma 7",
-  "3era",
-  "Suma 5",
-  "2da",
-  "Suma 3",
-  "1era",
-  "Libre",
 ];
 
 const formatoDescripcion = {
@@ -352,7 +334,7 @@ export default function CrearTorneo() {
                   {genero.charAt(0).toUpperCase() + genero.slice(1)}
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {categoriasNivel.map((nivel) => (
+                  {CATEGORIAS_TORNEO.map((nivel) => (
                     <button
                       key={nivel}
                       type="button"

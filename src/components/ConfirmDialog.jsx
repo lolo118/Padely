@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useId, useRef } from "react";
 import { create } from "zustand";
+import Button from "./ui/Button";
 
 // Diálogo de confirmación: `await confirmar({ titulo, mensaje })` devuelve true/false
 const useConfirmStore = create((set, get) => ({
@@ -30,67 +31,64 @@ export function confirmar({
   return useConfirmStore.getState().abrir({ titulo, mensaje, confirmText, cancelText, danger });
 }
 
+// pd-backdrop + pd-dialog: hoja inferior en teléfonos, centrado desde 640px. Escape y el fondo cierran como
+// cancelar. El foco entra al diálogo al abrir y vuelve al disparador al cerrar.
 export function ConfirmHost() {
   const abierto = useConfirmStore((s) => s.abierto);
   const opciones = useConfirmStore((s) => s.opciones);
   const cerrar = useConfirmStore((s) => s.cerrar);
+  const dialogo = useRef(null);
+  const disparador = useRef(null);
+  const tituloId = useId();
+  const cuerpoId = useId();
 
   useEffect(() => {
-    if (!abierto) return;
+    if (!abierto) return undefined;
+    disparador.current = document.activeElement;
+    dialogo.current?.focus();
     const onKey = (e) => {
       if (e.key === "Escape") cerrar(false);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      const previo = disparador.current;
+      disparador.current = null;
+      if (previo && typeof previo.focus === "function" && document.contains(previo)) previo.focus();
+    };
   }, [abierto, cerrar]);
 
   if (!abierto || !opciones) return null;
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[90] p-4"
-      onClick={() => cerrar(false)}
+      className="pd-backdrop z-[90]"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) cerrar(false);
+      }}
     >
       <div
+        ref={dialogo}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
-        className="themed-card rounded-2xl max-w-md w-full p-6 border"
-        onClick={(e) => e.stopPropagation()}
+        aria-labelledby={tituloId}
+        aria-describedby={opciones.mensaje ? cuerpoId : undefined}
+        className="pd-dialog outline-none"
       >
-        <div className="flex items-center gap-3 mb-3">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-            style={{ backgroundColor: opciones.danger ? "rgba(239,68,68,0.1)" : "var(--accent-light)" }}
-          >
-            <span className="text-lg">{opciones.danger ? "⚠️" : "❓"}</span>
-          </div>
-          <h2 className="font-bold" style={{ color: "var(--text-primary)" }}>
-            {opciones.titulo}
-          </h2>
-        </div>
+        <h2 className="pd-dialog-title" id={tituloId}>
+          {opciones.titulo}
+        </h2>
         {opciones.mensaje && (
-          <p className="text-sm mb-4 whitespace-pre-line" style={{ color: "var(--text-secondary)" }}>
+          <p className="pd-dialog-body whitespace-pre-line" id={cuerpoId}>
             {opciones.mensaje}
           </p>
         )}
-        <div className="flex gap-2 mt-2">
-          <button
-            type="button"
-            onClick={() => cerrar(false)}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition"
-            style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-secondary)" }}
-          >
-            {opciones.cancelText}
-          </button>
-          <button
-            type="button"
-            autoFocus
-            onClick={() => cerrar(true)}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:opacity-90"
-            style={{ backgroundColor: opciones.danger ? "#ef4444" : "var(--accent)" }}
-          >
+        <div className="pd-dialog-actions">
+          <Button onClick={() => cerrar(false)}>{opciones.cancelText}</Button>
+          <Button variant={opciones.danger ? "danger" : "primary"} onClick={() => cerrar(true)}>
             {opciones.confirmText}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

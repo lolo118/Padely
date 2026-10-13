@@ -1,4 +1,6 @@
 import { useNavigate } from "react-router-dom";
+import { Lock } from "lucide-react";
+import Button from "./ui/Button";
 
 export default function PerfilIncompleto({ tipo, ruta }) {
   const navigate = useNavigate();
@@ -24,17 +26,13 @@ export default function PerfilIncompleto({ tipo, ruta }) {
   const msg = mensajes[tipo] || mensajes.jugador;
 
   return (
-    <div className="themed-card rounded-2xl border p-8 text-center max-w-md mx-auto mt-8">
-      <div className="text-4xl mb-3">🔒</div>
-      <h2 className="font-bold text-lg mb-2" style={{ color: "var(--text-primary)" }}>{msg.titulo}</h2>
-      <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>{msg.desc}</p>
-      <button
-        onClick={() => navigate(ruta)}
-        className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:opacity-90"
-        style={{ backgroundColor: "var(--accent)" }}
-      >
+    <div className="pd-card text-center max-w-md mx-auto mt-8">
+      <Lock className="pd-icon-lg mx-auto mb-3 text-ink-3" size={24} aria-hidden="true" />
+      <h2 className="heading-md mb-2">{msg.titulo}</h2>
+      <p className="body-sm text-ink-2 mb-5">{msg.desc}</p>
+      <Button variant="primary" onClick={() => navigate(ruta)}>
         {msg.boton}
-      </button>
+      </Button>
     </div>
   );
 }

@@ -1,0 +1,21 @@
+// Componentes compartidos del design system (pd-*). Importar desde "../components/ui".
+export { default as AppBar, Wordmark } from "./AppBar";
+export { default as Badge } from "./Badge";
+export { default as BottomNav } from "./BottomNav";
+export { default as Button } from "./Button";
+export { default as Card } from "./Card";
+export { default as CategorySelect, Marca as MarcaCategoria } from "./CategorySelect";
+export { default as ChampionCard } from "./ChampionCard";
+export { default as Field } from "./Field";
+export { default as Input } from "./Input";
+export { default as MatchCard } from "./MatchCard";
+export { default as Pills } from "./Pills";
+export { default as RankMark } from "./RankMark";
+export { default as SearchInput } from "./SearchInput";
+export { default as Select } from "./Select";
+export { default as Sidebar } from "./Sidebar";
+export { default as SlotCell } from "./SlotCell";
+export { default as Standings } from "./Standings";
+export { default as StatTile } from "./StatTile";
+export { default as Tabs } from "./Tabs";
+export { default as Textarea } from "./Textarea";

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { AlertTriangle, Check, Info } from "lucide-react";
 
 // Store de toasts: toast.success / toast.error / toast.info (se cierran solos a los 4 s)
 let proximoId = 1;
@@ -22,10 +23,12 @@ export const toast = {
   info: (mensaje) => useToast.getState().agregar("info", mensaje),
 };
 
-const estilos = {
-  success: { accent: "#22c55e", border: "rgba(34,197,94,0.35)", bg: "rgba(34,197,94,0.08)", icono: "✓" },
-  error: { accent: "#ef4444", border: "rgba(239,68,68,0.35)", bg: "rgba(239,68,68,0.08)", icono: "✕" },
-  info: { accent: "#3b82f6", border: "rgba(59,130,246,0.35)", bg: "rgba(59,130,246,0.08)", icono: "i" },
+// pd-toast, siempre Noche (data-theme="dark"): check lime, triángulo danger o info en court.
+// El sistema no define una variante info: el ícono lleva var(--court) a mano.
+const TIPOS = {
+  success: { Icono: Check, clase: "", role: "status", estilo: undefined },
+  error: { Icono: AlertTriangle, clase: "pd-toast-danger", role: "alert", estilo: undefined },
+  info: { Icono: Info, clase: "", role: "status", estilo: { color: "var(--court)" } },
 };
 
 export function Toaster() {
@@ -35,34 +38,24 @@ export function Toaster() {
 
   return (
     <div
-      className="fixed z-[100] bottom-20 md:bottom-4 left-1/2 -translate-x-1/2 md:left-auto md:right-4 md:translate-x-0 flex flex-col gap-2 w-[calc(100%-2rem)] max-w-sm pointer-events-none"
+      className="fixed z-[100] bottom-20 md:bottom-4 left-1/2 -translate-x-1/2 md:left-auto md:right-4 md:translate-x-0 flex flex-col gap-2 w-[calc(100%-2rem)] max-w-[420px] pointer-events-none"
       aria-live="polite"
     >
       {toasts.map((t) => {
-        const e = estilos[t.tipo] || estilos.info;
+        const { Icono, clase, role, estilo } = TIPOS[t.tipo] || TIPOS.info;
         return (
+          // Sin botón de cerrar: se va solo y un toque lo descarta
           <div
             key={t.id}
-            role="status"
-            className="themed-card pointer-events-auto rounded-xl border shadow-lg px-4 py-3 flex items-start gap-3 text-sm"
-            style={{ color: "var(--text-primary)", borderColor: e.border, borderLeft: `4px solid ${e.accent}` }}
+            role={role}
+            className={["pd-toast", clase, "pointer-events-auto cursor-pointer"].filter(Boolean).join(" ")}
+            data-theme="dark"
+            onClick={() => quitar(t.id)}
           >
-            <span
-              className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-              style={{ backgroundColor: e.bg, color: e.accent }}
-            >
-              {e.icono}
-            </span>
-            <span className="flex-1">{t.mensaje}</span>
-            <button
-              type="button"
-              onClick={() => quitar(t.id)}
-              aria-label="Cerrar"
-              className="text-xs font-semibold shrink-0 hover:opacity-70"
-              style={{ color: "var(--text-muted)" }}
-            >
-              ✕
-            </button>
+            <Icono className="pd-icon" size={20} aria-hidden="true" style={estilo} />
+            <div className="pd-toast-body">
+              <strong>{t.mensaje}</strong>
+            </div>
           </div>
         );
       })}
