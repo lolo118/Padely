@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
+import useThemeStore from "../store/themeStore";
 
 const columnas = [
   {
@@ -42,6 +44,12 @@ const pasos = [
 
 export default function Landing() {
   const { user, rol, loading } = useAuthStore();
+  // La landing abre en Noche; una elección explícita del toggle siempre gana
+  const setDefaultTheme = useThemeStore((s) => s.setDefaultTheme);
+  const explicit = useThemeStore((s) => s.explicit);
+  useEffect(() => {
+    setDefaultTheme("dark");
+  }, [setDefaultTheme, explicit]);
   const whatsapp = (import.meta.env.VITE_WHATSAPP_CONTACTO || "").replace(/\D/g, "");
 
   // Mientras se resuelve la sesión (o el rol) no se muestra la landing: con sesión se va directo

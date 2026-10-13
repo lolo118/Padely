@@ -1,87 +1,131 @@
 @import "tailwindcss";
+/* Design system Padely: tokens (Día / Noche) y componentes pd-*; copiados de design-system/, ver src/styles/ */
+@import "./styles/tokens.css";
+@import "./styles/components.css";
+
+/* Los tokens del design system como utilidades de Tailwind v4: bg-surface, text-ink, border-line, bg-lime,
+   text-lime-text, font-display, rounded-lg (16px)… "inline" para que cada utilidad lea la variable y el cambio
+   de tema (data-theme en <html>) la siga. La paleta por defecto de Tailwind queda, pero no se usa para el chrome. */
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-hover: var(--surface-hover);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-night: var(--night);
+  --color-on-night: var(--on-night);
+  --color-on-night-muted: var(--on-night-muted);
+  --color-lime: var(--lime);
+  --color-lime-hover: var(--lime-hover);
+  --color-on-lime: var(--on-lime);
+  --color-lime-text: var(--lime-text);
+  --color-lime-soft: var(--lime-soft);
+  --color-court: var(--court);
+  --color-court-soft: var(--court-soft);
+  --color-on-court: var(--on-court);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-on-danger: var(--on-danger);
+  --color-focus: var(--focus);
+  --color-overlay: var(--overlay);
+  --color-slot-blocked: var(--slot-blocked);
+  --color-heat-red: var(--heat-red);
+  --color-heat-orange: var(--heat-orange);
+  --color-heat-pink: var(--heat-pink);
+  --color-heat-purple: var(--heat-purple);
+  --color-gold-light: var(--gold-light);
+  --color-gold: var(--gold);
+  --color-gold-deep: var(--gold-deep);
+  --color-black: var(--black);
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-pill: var(--radius-pill);
+}
+
+/* Alias legacy SOLO durante el port (los borra el paso 5): las pantallas todavía no portadas siguen leyendo
+   los nombres viejos, que ahora apuntan a los tokens del design system. */
+:root {
+  --bg-primary: var(--surface);
+  --bg-card: var(--surface-raised);
+  --bg-card-hover: var(--surface-hover);
+  --bg-input: var(--surface-raised);
+  --border-card: var(--line);
+  --border-input: var(--line-strong);
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-2);
+  --text-muted: var(--ink-3);
+  --sidebar-bg: var(--surface-raised);
+  --sidebar-border: var(--line);
+  --sidebar-active-bg: var(--lime-soft);
+  --sidebar-active-text: var(--lime-text);
+  --accent: var(--lime-text);
+  --accent-light: var(--lime-soft);
+}
 
 * {
   -webkit-tap-highlight-color: transparent;
 }
 
-:root, [data-theme="light"] {
-  --bg-primary: #f5f7fa;
-  --bg-card: #ffffff;
-  --bg-card-hover: #f8fafc;
-  --bg-input: #ffffff;
-  --border-card: #e2e8f0;
-  --border-input: #cbd5e1;
-  --text-primary: #1e293b;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
-  --sidebar-bg: #ffffff;
-  --sidebar-border: #e2e8f0;
-  --sidebar-active-bg: #ecfdf5;
-  --sidebar-active-text: #047857;
-  --accent: #059669;
-  --accent-light: #d1fae5;
-}
-
-[data-theme="dark"] {
-  --bg-primary: #0f172a;
-  --bg-card: #1e293b;
-  --bg-card-hover: #253348;
-  --bg-input: #1e293b;
-  --border-card: #334155;
-  --border-input: #475569;
-  --text-primary: #f1f5f9;
-  --text-secondary: #cbd5e1;
-  --text-muted: #64748b;
-  --sidebar-bg: #1e293b;
-  --sidebar-border: #334155;
-  --sidebar-active-bg: #064e3b;
-  --sidebar-active-text: #6ee7b7;
-  --accent: #10b981;
-  --accent-light: #064e3b;
-}
-
 body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--surface);
+  color: var(--ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-
-/* Themed cards */
-.themed-card {
-  background-color: var(--bg-card);
-  border-color: var(--border-card);
-  color: var(--text-primary);
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
-}
-.themed-card:hover {
-  background-color: var(--bg-card-hover);
-}
-
-.themed-input {
-  background-color: var(--bg-input);
-  border-color: var(--border-input);
-  color: var(--text-primary);
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
-}
-
-/* Inputs globales adaptados al tema */
+/* Controles globales con los valores de pd-input (las pantallas portadas usan pd-input directamente) */
 input, select, textarea {
-  border: 1px solid var(--border-input);
-  color: var(--text-primary);
-  background-color: var(--bg-input);
+  border: 1px solid var(--line-strong);
+  background-color: var(--surface-raised);
+  color: var(--ink);
+  font-family: var(--font-sans);
 }
 
 input::placeholder, textarea::placeholder {
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 
 option {
-  background-color: var(--bg-card);
-  color: var(--text-primary);
+  background-color: var(--surface-raised);
+  color: var(--ink);
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px var(--court-soft);
+}
+
+/* Legacy (solo durante el port; los borra el paso 5) */
+.themed-card {
+  background-color: var(--surface-raised);
+  border-color: var(--line);
+  color: var(--ink);
+}
+.themed-card:hover {
+  background-color: var(--surface-hover);
+}
+.themed-input {
+  background-color: var(--surface-raised);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.card-hover:hover {
+  border-color: var(--line-strong);
 }
 
 /* Scrollbar */
@@ -92,23 +136,6 @@ option {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--text-muted);
+  background: var(--line-strong);
   border-radius: 3px;
-}
-
-input:focus, select:focus, textarea:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.2);
-  border-color: var(--accent);
-}
-
-.card-hover {
-  transition: all 0.2s ease;
-}
-.card-hover:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-[data-theme="dark"] .card-hover:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }

@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuthStore } from "../../store/authStore";
+import useThemeStore from "../../store/themeStore";
 import ThemeToggle from "../ThemeToggle";
 import NotificationBell from "../NotificationBell";
 
@@ -116,6 +117,12 @@ export default function OrgLayout() {
   const [menuUsuario, setMenuUsuario] = useState(false);
   const { user, perfil } = useAuthStore();
   const nombre = perfil?.nombre || user?.email?.split("@")[0] || "Organizador";
+  // El panel del organizador abre en Día; una elección explícita del toggle siempre gana
+  const setDefaultTheme = useThemeStore((s) => s.setDefaultTheme);
+  const explicit = useThemeStore((s) => s.explicit);
+  useEffect(() => {
+    setDefaultTheme("light");
+  }, [setDefaultTheme, explicit]);
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col">

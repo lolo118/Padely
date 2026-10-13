@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { registerUser, loginWithGoogle, getUserData } from "../../services/authService";
+import useThemeStore from "../../store/themeStore";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { toast } from "../../components/Toast";
 
@@ -63,6 +64,12 @@ export default function Register() {
   const [error, setError] = useState("");
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const navigate = useNavigate();
+  // El registro abre en Noche; una elección explícita del toggle siempre gana
+  const setDefaultTheme = useThemeStore((s) => s.setDefaultTheme);
+  const explicit = useThemeStore((s) => s.explicit);
+  useEffect(() => {
+    setDefaultTheme("dark");
+  }, [setDefaultTheme, explicit]);
 
   const set = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 

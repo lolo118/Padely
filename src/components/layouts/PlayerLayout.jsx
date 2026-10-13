@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuthStore } from "../../store/authStore";
+import useThemeStore from "../../store/themeStore";
 import ThemeToggle from "../ThemeToggle";
 import NotificationBell from "../NotificationBell";
 import InstallBanner from "../InstallBanner";
@@ -124,6 +125,12 @@ const menuItems = [
 export default function PlayerLayout() {
   const { user, perfil } = useAuthStore();
   const [menuOpen, setMenuOpen] = useState(false);
+  // Los jugadores abren en Noche; una elección explícita del toggle siempre gana
+  const setDefaultTheme = useThemeStore((s) => s.setDefaultTheme);
+  const explicit = useThemeStore((s) => s.explicit);
+  useEffect(() => {
+    setDefaultTheme("dark");
+  }, [setDefaultTheme, explicit]);
   // Nombre y foto salen del perfil cargado en el store (users/{uid})
   const nombre = perfil?.nombre || user?.email?.split("@")[0] || "Jugador";
   const fotoUrl = perfil?.fotoUrl || null;

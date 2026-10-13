@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
+import useThemeStore from "../../store/themeStore";
 import PlayerLayout from "./PlayerLayout";
 import ThemeToggle from "../ThemeToggle";
 
@@ -8,6 +10,12 @@ import ThemeToggle from "../ThemeToggle";
 export default function PublicLayout() {
   const { user, loading } = useAuthStore();
   const location = useLocation();
+  // Las páginas públicas abren en Noche; una elección explícita del toggle siempre gana
+  const setDefaultTheme = useThemeStore((s) => s.setDefaultTheme);
+  const explicit = useThemeStore((s) => s.explicit);
+  useEffect(() => {
+    setDefaultTheme("dark");
+  }, [setDefaultTheme, explicit]);
 
   if (loading) {
     return (

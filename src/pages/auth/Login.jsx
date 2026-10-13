@@ -3,6 +3,7 @@ import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../../lib/firebase";
 import { loginUser, loginWithGoogle } from "../../services/authService";
 import { useAuthStore } from "../../store/authStore";
+import useThemeStore from "../../store/themeStore";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { toast } from "../../components/Toast";
 
@@ -26,6 +27,12 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  // El login abre en Noche; una elección explícita del toggle siempre gana
+  const setDefaultTheme = useThemeStore((s) => s.setDefaultTheme);
+  const explicit = useThemeStore((s) => s.explicit);
+  useEffect(() => {
+    setDefaultTheme("dark");
+  }, [setDefaultTheme, explicit]);
   // ?next=/ruta: volver a la página pública desde la que se pidió iniciar sesión (solo rutas internas)
   const [searchParams] = useSearchParams();
   const next = rutaInternaSegura(searchParams.get("next"));
