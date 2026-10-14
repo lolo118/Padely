@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { formatFecha } from "../utils/formatDate";
+import { formatPrecio } from "../utils/format";
 import { useNavigate } from "react-router-dom";
 import { getTodosLosTorneos } from "../services/torneoService";
+import { Badge, Card, MarcaCategoria, Pills, SearchInput } from "../components/ui";
 
-const estadoBadge = {
-  inscripcion: "bg-blue-100 text-blue-700",
-  en_curso: "bg-green-100 text-green-700",
-  finalizado: "bg-[var(--bg-card-hover)] text-[var(--text-muted)]",
-  cancelado: "bg-red-100 text-red-500",
+// Abierto y en curso llevan el marco heat (Card torneo) y su badge; finalizado y cancelado, tarjeta quieta
+const estadoTone = {
+  inscripcion: "heat",
+  en_curso: "heat",
+  finalizado: "neutral",
+  cancelado: "danger",
 };
 
 const estadoLabel = {
@@ -16,6 +19,15 @@ const estadoLabel = {
   finalizado: "Finalizado",
   cancelado: "Cancelado",
 };
+
+const filtros = [
+  { value: "todos", label: "Todos" },
+  { value: "inscripcion", label: "Inscripción abierta" },
+  { value: "en_curso", label: "En curso" },
+  { value: "finalizado", label: "Finalizados" },
+];
+
+const esActivo = (t) => t.status === "inscripcion" || t.status === "en_curso";
 
 export default function Torneos() {
   const navigate = useNavigate();
@@ -46,114 +58,90 @@ export default function Torneos() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold mb-4" style={{ color: "var(--text-primary)" }}>Torneos</h1>
+      <h1 className="display-lg mb-4">Torneos</h1>
 
-      {/* Buscador */}
+      {/* Buscador y filtros */}
       <div className="flex flex-col gap-3 mb-6">
-        <input
-          type="text"
-          placeholder="Buscar por nombre, sede o ciudad..."
+        <SearchInput
+          placeholder="Buscar por nombre, sede o ciudad…"
+          aria-label="Buscar torneos"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          className="w-full border border-[var(--border-card)] rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
         />
-        <div className="flex gap-2 flex-wrap">
-          {[
-            { key: "todos", label: "Todos" },
-            { key: "inscripcion", label: "Inscripción abierta" },
-            { key: "en_curso", label: "En curso" },
-            { key: "finalizado", label: "Finalizados" },
-          ].map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFiltroEstado(f.key)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold transition ${
-                filtroEstado === f.key
-                  ? "bg-green-600 text-white"
-                  : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        <Pills items={filtros} value={filtroEstado} onChange={setFiltroEstado} ariaLabel="Filtrar por estado" />
       </div>
 
       {loading && (
-        <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
-          Cargando torneos...
+        <div className="flex flex-col gap-4" aria-busy="true">
+          <span className="sr-only">Cargando torneos…</span>
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="pd-skeleton h-36 rounded-lg!" />
+          ))}
         </div>
       )}
 
       {!loading && torneosFiltrados.length === 0 && (
-        <div className="themed-card text-center py-16 rounded-2xl border">
-          <div className="text-5xl mb-4">🏆</div>
-          <p className="font-medium" style={{ color: "var(--text-muted)" }}>No se encontraron torneos</p>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-            Probá con otra búsqueda o filtro
-          </p>
+        <div className="pd-card text-center py-10">
+          <div className="flex justify-center mb-4">
+            <span className="pd-ball" aria-hidden="true" />
+          </div>
+          <h2 className="heading-md">No se encontraron torneos</h2>
+          <p className="body-sm text-ink-2 mt-1">Probá con otra búsqueda o filtro</p>
         </div>
       )}
 
       {!loading && torneosFiltrados.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {torneosFiltrados.map((t) => (
-            <div
-              key={t.id}
-              onClick={() => navigate(`/torneos/${t.id}`)}
-              className="themed-card rounded-2xl p-5 border card-hover cursor-pointer"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1">
-                  <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>{t.nombre}</h2>
-                  <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    {t.sede} — {t.ciudad}, {t.provincia}
-                  </p>
-                  <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    {formatFecha(t.fechaInicio)} → {formatFecha(t.fechaFin)}
-                  </p>
-                  <div className="flex gap-2 mt-2 flex-wrap">
-                    {Array.isArray(t.categoriaGenero) &&
-                      t.categoriaGenero.map((g) => (
-                        <span
-                          key={g}
-                          className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full capitalize"
-                        >
-                          {g}
-                        </span>
-                      ))}
-                    {t.categoriasConfig &&
-                      Object.entries(t.categoriasConfig).map(
-                        ([genero, niveles]) =>
-                          niveles.map((n) => (
-                            <span
-                              key={`${genero}-${n}`}
-                              className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}
-                            >
-                              {n}
-                            </span>
-                          )),
-                      )}
-                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
-                      {t.maxParejas} parejas
-                    </span>
-                    {t.inscripcion > 0 && (
-                      <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
-                        ${t.inscripcion}
-                      </span>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
+          {torneosFiltrados.map((t) => {
+            const activo = esActivo(t);
+            const abrir = () => navigate(`/torneos/${t.id}`);
+            return (
+              <Card
+                key={t.id}
+                variant={activo ? "torneo" : "default"}
+                hover={!activo}
+                className="cursor-pointer"
+                role="link"
+                tabIndex={0}
+                onClick={abrir}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") abrir();
+                }}
+              >
+                <Card.Row>
+                  <Card.Eyebrow>
+                    {formatFecha(t.fechaInicio)} – {formatFecha(t.fechaFin)}
+                  </Card.Eyebrow>
+                  <Badge tone={estadoTone[t.status] || "neutral"}>{estadoLabel[t.status] || t.status}</Badge>
+                </Card.Row>
+                <Card.Title as="h2" className="mt-2!">
+                  {t.nombre}
+                </Card.Title>
+                <Card.Meta>
+                  {t.sede} · {t.ciudad}, {t.provincia}
+                </Card.Meta>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {Array.isArray(t.categoriaGenero) &&
+                    t.categoriaGenero.map((g) => (
+                      <Badge key={g} className="capitalize">
+                        {g}
+                      </Badge>
+                    ))}
+                  {t.categoriasConfig &&
+                    Object.entries(t.categoriasConfig).map(([genero, niveles]) =>
+                      niveles.map((n) => (
+                        <Badge key={`${genero}-${n}`}>
+                          <MarcaCategoria cat={n} size={20} />
+                          {n}
+                        </Badge>
+                      )),
                     )}
-                  </div>
+                  <Badge>{t.maxParejas} parejas</Badge>
+                  {t.inscripcion > 0 && <Badge>{formatPrecio(t.inscripcion)}</Badge>}
                 </div>
-                <span
-                  className={`text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap ${
-                    estadoBadge[t.status] || "bg-[var(--bg-card-hover)] text-[var(--text-muted)]"
-                  }`}
-                >
-                  {estadoLabel[t.status] || t.status}
-                </span>
-              </div>
-            </div>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>

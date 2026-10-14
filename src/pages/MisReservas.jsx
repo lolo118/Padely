@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { CircleDot } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { query, where, getDocs, collectionGroup, getDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -9,22 +9,20 @@ import { formatFecha, getTodayLocal } from "../utils/formatDate";
 import { formatPrecio } from "../utils/format";
 import { toast } from "../components/Toast";
 import { confirmar } from "../components/ConfirmDialog";
+import { Badge, Button, Card } from "../components/ui";
 
-const statusBadge = {
-  confirmada: "bg-green-100 text-green-700",
-  pendiente: "bg-yellow-100 text-yellow-700",
-  cancelada: "bg-red-100 text-red-500",
-};
-
-const statusLabel = {
-  confirmada: "Confirmada",
-  pendiente: "Pendiente",
-  cancelada: "Cancelada",
-};
+// Estado de la reserva → tono del badge y su palabra. Llevan punto: son estados que cambian con el tiempo.
+function estadoReserva(status) {
+  if (status === "confirmada") return { tone: "success", label: "Confirmada" };
+  if (status === "cancelada") return { tone: "danger", label: "Cancelada" };
+  if (status === "rechazada") return { tone: "danger", label: "Rechazada" };
+  if (status === "expirada") return { tone: "neutral", label: "Expirada" };
+  if (String(status || "").startsWith("pendiente_")) return { tone: "warning", label: "Pendiente de seña" };
+  return { tone: "warning", label: "Pendiente" };
+}
 
 export default function MisReservas() {
   const { user } = useAuthStore();
-  const navigate = useNavigate();
   const [reservas, setReservas] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -109,10 +107,23 @@ export default function MisReservas() {
     }
   };
 
+  const encabezado = (
+    <header className="mb-6">
+      <h1 className="display-lg">Mis reservas</h1>
+      <p className="body-sm text-ink-2 mt-1">Tus reservas de canchas</p>
+    </header>
+  );
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      <div className="max-w-2xl mx-auto" aria-busy="true">
+        {encabezado}
+        <p className="sr-only">Cargando reservas…</p>
+        <div className="flex flex-col gap-4">
+          <div className="pd-skeleton h-36 rounded-lg!" />
+          <div className="pd-skeleton h-36 rounded-lg!" />
+          <div className="pd-skeleton h-36 rounded-lg!" />
+        </div>
       </div>
     );
   }
@@ -120,97 +131,67 @@ export default function MisReservas() {
   const proximas = reservas.filter((r) => r.fecha >= hoyStr && r.status !== "cancelada");
   const anteriores = reservas.filter((r) => r.fecha < hoyStr || r.status === "cancelada");
 
+  // Una reserva: fecha en el eyebrow, estado en el badge, club como título, cancha/hora/precio en body-sm.
+  // Cancelar es secondary en la tarjeta; el danger vive en el diálogo de confirmación.
+  function tarjeta(r, pasada) {
+    const estado = estadoReserva(r.status);
+    return (
+      <Card key={r.id}>
+        <Card.Row>
+          <Card.Eyebrow className="pd-tnum">{formatFecha(r.fecha)}</Card.Eyebrow>
+          <Badge dot tone={estado.tone}>
+            {estado.label}
+          </Badge>
+        </Card.Row>
+        <Card.Title className={pasada ? "mt-2! text-ink-2" : "mt-2!"}>{r.clubNombre || "Club"}</Card.Title>
+        <p className="body-sm text-ink-2 mt-1 pd-tnum">
+          {r.canchaName || r.cancha || "Cancha"} · {r.hora}
+        </p>
+        {r.precio != null && <p className="body-sm text-ink-2 pd-tnum">{formatPrecio(r.precio)}</p>}
+        {!pasada && r.status !== "cancelada" && (
+          <Card.Foot>
+            <Button size="sm" onClick={() => cancelarReserva(r)}>
+              Cancelar reserva
+            </Button>
+          </Card.Foot>
+        )}
+      </Card>
+    );
+  }
+
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Mis reservas</h1>
-        <p className="text-sm" style={{ color: "var(--text-muted)" }}>Tus reservas de canchas</p>
-      </div>
-
+      {encabezado}
 
       {reservas.length === 0 ? (
-        <div className="themed-card rounded-2xl p-8 border text-center">
-          <div className="text-4xl mb-3">📋</div>
-          <p className="font-semibold" style={{ color: "var(--text-primary)" }}>No tenés reservas</p>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Cuando reserves una cancha, aparecerá acá</p>
-          <button
-            onClick={() => navigate("/clubes")}
-            className="mt-4 px-5 py-2 rounded-xl text-sm font-semibold text-white transition"
-            style={{ backgroundColor: "var(--accent)" }}
-          >
+        <Card className="text-center">
+          <CircleDot className="pd-icon-lg mx-auto mb-3 text-ink-3" size={24} aria-hidden="true" />
+          <p className="heading-sm">No tenés reservas</p>
+          <p className="body-sm text-ink-2 mt-1">Cuando reserves una cancha, aparece acá.</p>
+          <Button as="link" to="/clubes" variant="primary" className="mt-4">
             Ver canchas disponibles
-          </button>
-        </div>
+          </Button>
+        </Card>
       ) : (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-8">
           {/* Próximas */}
           {proximas.length > 0 && (
-            <div>
-              <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-muted)" }}>
-                Próximas ({proximas.length})
+            <section aria-labelledby="reservas-proximas">
+              <h2 id="reservas-proximas" className="heading-lg mb-3">
+                Próximas <span className="pd-count text-ink-3 font-semibold">{proximas.length}</span>
               </h2>
-              <div className="flex flex-col gap-3">
-                {proximas.map((r) => (
-                  <div key={r.id} className="themed-card rounded-2xl p-4 border">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="font-semibold" style={{ color: "var(--text-primary)" }}>{r.clubNombre || "Club"}</p>
-                        <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-                          {r.canchaName || r.cancha} · {formatFecha(r.fecha)} · {r.hora}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        {r.precio != null && (
-                          <p className="font-bold text-sm" style={{ color: "var(--accent)" }}>{formatPrecio(r.precio)}</p>
-                        )}
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full mt-1 inline-block ${statusBadge[r.status] || statusBadge.pendiente}`}>
-                          {statusLabel[r.status] || "Pendiente"}
-                        </span>
-                      </div>
-                    </div>
-                    {r.status !== "cancelada" && (
-                      <button
-                        onClick={() => cancelarReserva(r)}
-                        className="text-xs font-semibold text-red-400 hover:text-red-600 transition mt-2"
-                      >
-                        Cancelar reserva
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+              <div className="flex flex-col gap-4">{proximas.map((r) => tarjeta(r, false))}</div>
+            </section>
           )}
 
           {/* Anteriores */}
           {anteriores.length > 0 && (
-            <div>
-              <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-muted)" }}>
-                Anteriores ({anteriores.length})
+            <section aria-labelledby="reservas-anteriores">
+              <h2 id="reservas-anteriores" className="heading-lg mb-3">
+                Anteriores <span className="pd-count text-ink-3 font-semibold">{anteriores.length}</span>
               </h2>
-              <div className="flex flex-col gap-3">
-                {anteriores.map((r) => (
-                  <div key={r.id} className="themed-card rounded-2xl p-4 border" style={{ opacity: 0.7 }}>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="font-semibold" style={{ color: "var(--text-primary)" }}>{r.clubNombre || "Club"}</p>
-                        <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-                          {r.canchaName || r.cancha} · {formatFecha(r.fecha)} · {r.hora}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        {r.precio != null && (
-                          <p className="font-bold text-sm" style={{ color: "var(--accent)" }}>{formatPrecio(r.precio)}</p>
-                        )}
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full mt-1 inline-block ${statusBadge[r.status] || statusBadge.pendiente}`}>
-                          {statusLabel[r.status] || "Pendiente"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+              <div className="flex flex-col gap-4">{anteriores.map((r) => tarjeta(r, true))}</div>
+            </section>
           )}
         </div>
       )}

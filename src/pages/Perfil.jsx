@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { AlertTriangle, Calendar, Camera, Check, CircleDot, LogOut } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { getUserData } from "../services/authService";
 import {
@@ -22,14 +23,32 @@ import { uploadProfilePhoto } from "../services/storageService";
 import { toast } from "../components/Toast";
 import { confirmar } from "../components/ConfirmDialog";
 import { formatFecha } from "../utils/formatDate";
+import { Badge, Button, Card, Field, Input, RankMark, Select, StatTile } from "../components/ui";
 
-const inputClass =
-  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
-const labelClass = "text-xs font-semibold mb-1 block";
+// Grilla de datos de solo lectura: etiqueta en caption, valor en body-md ("—" si falta)
+function datos(pares) {
+  return (
+    <dl className="grid grid-cols-2 gap-3">
+      {pares.map(([etiqueta, valor, extra]) => (
+        <div key={etiqueta}>
+          <dt className="caption text-ink-3">{etiqueta}</dt>
+          <dd className={extra ? `body-md ${extra}` : "body-md"}>{valor || "—"}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+// "pendiente_aprobacion" → "Pendiente aprobacion" (solo presentación, sentence case)
+function sentenceCase(s) {
+  const texto = String(s || "").replace(/_/g, " ");
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
 
 export default function Perfil() {
   const { user, setUser, refreshPerfil } = useAuthStore();
   const navigate = useNavigate();
+  const fotoInput = useRef(null);
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState(false);
@@ -225,17 +244,32 @@ export default function Perfil() {
     setSubiendoFoto(false);
   };
 
+  const verHistorial = async () => {
+    setCargandoHistorial(true);
+    setMostrarHistorial(true);
+    try {
+      const data = await getHistorialPartidos(user.uid);
+      setHistorial(data);
+    } catch (err) { console.error("Error cargando historial:", err); }
+    setCargandoHistorial(false);
+  };
+
   if (loading)
     return (
-      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
-        Cargando perfil...
+      <div className="max-w-2xl mx-auto flex flex-col gap-4" aria-busy="true">
+        <p className="sr-only">Cargando perfil…</p>
+        <div className="pd-skeleton h-10 w-40" />
+        <div className="pd-skeleton h-4 w-24 mb-2" />
+        <div className="pd-skeleton h-20 rounded-lg!" />
+        <div className="pd-skeleton h-48 rounded-lg!" />
+        <div className="pd-skeleton h-48 rounded-lg!" />
       </div>
     );
   if (!userData)
     return (
-      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
-        No se encontró tu perfil
-      </div>
+      <Card className="max-w-2xl mx-auto text-center">
+        <p className="body-md">No se encontró tu perfil</p>
+      </Card>
     );
 
   const emailVerificado = auth.currentUser?.emailVerified || false;
@@ -245,609 +279,383 @@ export default function Perfil() {
   const inscConfirmadas = inscripciones.filter(
     (i) => i.status === "confirmada",
   );
+  const rolLabel =
+    rol === "jugador" ? "Jugador" : rol === "club" ? "Administrador de club" : "Organizador de torneos";
+  const perfilIncompleto = userData && (!userData.telefono || !userData.genero || !userData.nacimiento);
+  const victorias = historial.filter((h) => h.gane).length;
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <h1
-        className="text-xl font-bold mb-1"
-        style={{ color: "var(--text-primary)" }}
-      >
-        Mi perfil
-      </h1>
-      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
-        {rol === "jugador"
-          ? "Jugador"
-          : rol === "club"
-            ? "Administrador de club"
-            : "Organizador de torneos"}
-      </p>
+    <div className="max-w-2xl mx-auto flex flex-col gap-4">
+      <header className="flex flex-wrap items-end justify-between gap-3 mb-2">
+        <div>
+          <h1 className="display-lg">Mi perfil</h1>
+          <p className="body-sm text-ink-2">{rolLabel}</p>
+        </div>
+        <Button as="link" to="/mis-reservas" icon={<Calendar className="pd-icon" size={20} aria-hidden="true" />}>
+          Mis reservas
+        </Button>
+      </header>
 
       {/* Verificación de email */}
       {!emailVerificado && (
-        <div className="rounded-2xl p-4 mb-4 border" style={{ backgroundColor: "rgba(234,179,8,0.08)", borderColor: "rgba(234,179,8,0.3)" }}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-semibold text-sm" style={{ color: "#ca8a04" }}>
-                Email no verificado
-              </p>
-              <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                Verificá tu email para mayor seguridad
-              </p>
+        <Card>
+          <div className="flex items-start gap-3 flex-wrap">
+            <AlertTriangle className="pd-icon text-warning mt-0.5" size={20} aria-hidden="true" />
+            <div className="flex-1 min-w-0">
+              <p className="heading-sm">Email no verificado</p>
+              <p className="body-sm text-ink-2 mt-1">Verificá tu email para mayor seguridad</p>
             </div>
             {emailEnviado ? (
-              <span className="text-xs text-green-600 font-semibold">
-                Email enviado ✓
+              <span className="body-sm font-semibold! text-success inline-flex items-center gap-1">
+                <Check className="pd-icon" size={20} aria-hidden="true" />
+                Email enviado
               </span>
             ) : (
-              <button
-                onClick={handleVerificarEmail}
-                disabled={verificandoEmail}
-                className="px-3 py-1 rounded-lg text-xs font-semibold bg-yellow-500 text-white hover:bg-yellow-600 transition disabled:opacity-50"
-              >
-                {verificandoEmail ? "Enviando..." : "Verificar email"}
-              </button>
+              <Button size="sm" onClick={handleVerificarEmail} cargando={verificandoEmail ? "Enviando…" : ""}>
+                Verificar email
+              </Button>
             )}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* ========== PERFIL JUGADOR ========== */}
       {rol === "jugador" && (
         <>
-          {/* Foto de perfil */}
-          <div className="flex flex-col items-center mb-4">
-            <div className="relative group">
-              {fotoUrl ? (
-                <img src={fotoUrl} alt="Foto de perfil" className="w-20 h-20 rounded-full object-cover ring-2" style={{ ringColor: "var(--accent)" }} />
-              ) : (
-                <div className="w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold text-white" style={{ backgroundColor: "var(--accent)" }}>
-                  {(userData?.nombre || user?.email || "J").charAt(0).toUpperCase()}
+          {perfilIncompleto && (
+            <Card>
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="pd-icon text-warning mt-0.5" size={20} aria-hidden="true" />
+                <div className="flex-1 min-w-0">
+                  <p className="heading-sm">Completá tu perfil</p>
+                  <p className="body-sm text-ink-2 mt-1">
+                    Necesitamos tus datos para inscribirte a torneos.
+                    {!userData.telefono && " Falta: teléfono."}
+                    {!userData.genero && " Falta: género."}
+                    {!userData.nacimiento && " Falta: nacimiento."}
+                  </p>
+                  <Button size="sm" className="mt-3" onClick={() => setEditando(true)}>
+                    Completar ahora
+                  </Button>
                 </div>
-              )}
-              <label className="absolute inset-0 flex items-center justify-center rounded-full cursor-pointer bg-black/40 opacity-0 group-hover:opacity-100 transition">
-                <span className="text-white text-xs font-semibold">{subiendoFoto ? "..." : "📷"}</span>
-                <input type="file" accept="image/*" onChange={handleSubirFoto} disabled={subiendoFoto} className="hidden" />
-              </label>
-            </div>
-            <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
-              {subiendoFoto ? "Subiendo foto..." : "Tocá para cambiar foto"}
-            </p>
-          </div>
+              </div>
+            </Card>
+          )}
 
-          {userData &&
-            (!userData.telefono ||
-              !userData.genero ||
-              !userData.nacimiento) && (
-              <div className="rounded-2xl p-4 mb-4 border" style={{ backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.25)" }}>
-                <p className="font-semibold text-sm" style={{ color: "#3b82f6" }}>
-                  Completá tu perfil
-                </p>
-                <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                  Necesitamos tus datos para inscribirte a torneos.
-                  {!userData.telefono && " Falta: teléfono."}
-                  {!userData.genero && " Falta: género."}
-                  {!userData.nacimiento && " Falta: nacimiento."}
-                </p>
-                <button
-                  onClick={() => setEditando(true)}
-                  className="mt-2 px-3 py-1 rounded-lg text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 transition"
-                >
-                  Completar ahora
-                </button>
+          {/* Foto de perfil */}
+          <div className="flex items-center gap-4">
+            {fotoUrl ? (
+              <img src={fotoUrl} alt="Foto de perfil" className="w-20 h-20 rounded-pill object-cover border border-line" />
+            ) : (
+              <div
+                className="w-20 h-20 rounded-pill bg-surface-sunken border border-line grid place-items-center font-display font-extrabold text-[32px] text-ink"
+                aria-hidden="true"
+              >
+                {(userData?.nombre || user?.email || "J").charAt(0).toUpperCase()}
               </div>
             )}
+            <div className="flex flex-col gap-2">
+              <input
+                ref={fotoInput}
+                type="file"
+                accept="image/*"
+                onChange={handleSubirFoto}
+                disabled={subiendoFoto}
+                className="hidden"
+                aria-label="Elegir foto de perfil"
+              />
+              <Button
+                size="sm"
+                icon={<Camera className="pd-icon" size={20} aria-hidden="true" />}
+                cargando={subiendoFoto ? "Subiendo foto…" : ""}
+                onClick={() => fotoInput.current?.click()}
+              >
+                Cambiar foto
+              </Button>
+              <p className="caption text-ink-3">Una imagen de hasta 5 MB</p>
+            </div>
+          </div>
+
+          {/* Estadísticas */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <StatTile value={userData.puntos || 0} label="Puntos" />
+            <StatTile value={userData.torneosJugados || 0} label="Torneos jugados" />
+            <StatTile value={userData.torneosGanados || 0} label="Torneos ganados" />
+          </div>
 
           {/* Datos personales */}
-          <div className="themed-card rounded-2xl p-5 border mb-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2
-                className="font-semibold"
-                style={{ color: "var(--text-primary)" }}
-              >
-                Datos personales
-              </h2>
+          <Card>
+            <Card.Row>
+              <Card.Title as="h2">Datos personales</Card.Title>
               {!editando ? (
-                <button
-                  onClick={() => setEditando(true)}
-                  className="text-xs font-semibold hover:underline"
-                  style={{ color: "var(--accent)" }}
-                >
+                <Button variant="ghost" size="sm" onClick={() => setEditando(true)}>
                   Editar
-                </button>
+                </Button>
               ) : (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setEditando(false)}
-                    className="text-xs font-semibold"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleGuardar}
-                    disabled={guardando}
-                    className="text-xs font-semibold hover:underline disabled:opacity-50"
-                    style={{ color: "var(--accent)" }}
-                  >
-                    {guardando ? "Guardando..." : "Guardar"}
-                  </button>
-                </div>
+                <Button variant="ghost" size="sm" onClick={() => setEditando(false)}>
+                  Cancelar
+                </Button>
               )}
-            </div>
-            {!editando ? (
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {[
+            </Card.Row>
+            <div className="mt-4">
+              {!editando ? (
+                datos([
                   ["Nombre", userData.nombre],
                   ["Email", userData.email],
                   ["Teléfono", userData.telefono],
                   ["Ciudad", userData.ciudad],
                   ["Provincia", userData.provincia],
                   ["Nacimiento", formatFecha(userData.nacimiento)],
-                  ["Género", userData.genero],
-                ].map(([label, val]) => (
-                  <div key={label}>
-                    <span
-                      className="block"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {label}
-                    </span>
-                    <span
-                      className={`font-medium${label === "Género" ? " capitalize" : ""}`}
-                      style={{ color: "var(--text-primary)" }}
-                    >
-                      {val || "—"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <label
-                    className={labelClass}
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Nombre
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.nombre}
-                    onChange={(e) =>
-                      setEditField("nombre", e.target.value)
-                    }
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label
-                    className={labelClass}
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Teléfono
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ej: 385 1234567"
-                    value={editForm.telefono}
-                    onChange={(e) =>
-                      setEditField("telefono", e.target.value)
-                    }
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label
-                    className={labelClass}
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Ciudad
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ej: Santiago del Estero"
-                    value={editForm.ciudad}
-                    onChange={(e) =>
-                      setEditField("ciudad", e.target.value)
-                    }
-                    className={inputClass}
-                  />
-                </div>
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <label
-                      className={labelClass}
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Provincia
-                    </label>
-                    <input
+                  ["Género", userData.genero, "capitalize"],
+                ])
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <Field label="Nombre">
+                    <Input type="text" value={editForm.nombre} onChange={(e) => setEditField("nombre", e.target.value)} />
+                  </Field>
+                  <Field label="Teléfono">
+                    <Input
                       type="text"
-                      value={editForm.provincia}
-                      onChange={(e) =>
-                        setEditField("provincia", e.target.value)
-                      }
-                      className={inputClass}
+                      inputMode="tel"
+                      placeholder="Ej: 385 1234567"
+                      value={editForm.telefono}
+                      onChange={(e) => setEditField("telefono", e.target.value)}
                     />
-                  </div>
-                  <div className="flex-1">
-                    <label
-                      className={labelClass}
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Nacimiento
-                    </label>
-                    <input
-                      type="date"
-                      value={editForm.nacimiento}
-                      onChange={(e) =>
-                        setEditField("nacimiento", e.target.value)
-                      }
-                      className={inputClass}
+                  </Field>
+                  <Field label="Ciudad">
+                    <Input
+                      type="text"
+                      placeholder="Ej: Santiago del Estero"
+                      value={editForm.ciudad}
+                      onChange={(e) => setEditField("ciudad", e.target.value)}
                     />
+                  </Field>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <Field label="Provincia">
+                      <Input type="text" value={editForm.provincia} onChange={(e) => setEditField("provincia", e.target.value)} />
+                    </Field>
+                    <Field label="Nacimiento">
+                      <Input type="date" value={editForm.nacimiento} onChange={(e) => setEditField("nacimiento", e.target.value)} />
+                    </Field>
                   </div>
+                  <Field label="Género">
+                    <Select wrapperClassName="block" value={editForm.genero} onChange={(e) => setEditField("genero", e.target.value)}>
+                      <option value="">Seleccionar</option>
+                      <option value="masculino">Masculino</option>
+                      <option value="femenino">Femenino</option>
+                      <option value="otro">Otro</option>
+                    </Select>
+                  </Field>
                 </div>
-                <div>
-                  <label
-                    className={labelClass}
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Género
-                  </label>
-                  <select
-                    value={editForm.genero}
-                    onChange={(e) =>
-                      setEditField("genero", e.target.value)
-                    }
-                    className={inputClass}
-                  >
-                    <option value="">Seleccionar</option>
-                    <option value="masculino">Masculino</option>
-                    <option value="femenino">Femenino</option>
-                    <option value="otro">Otro</option>
-                  </select>
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          </Card>
 
           {/* Datos de juego */}
-          <div className="themed-card rounded-2xl p-5 border mb-4">
-            <h2
-              className="font-semibold mb-4"
-              style={{ color: "var(--text-primary)" }}
-            >
-              Datos de juego
-            </h2>
+          <Card>
+            <Card.Title as="h2">Datos de juego</Card.Title>
 
             {/* Categoría: solo lectura, la define el sistema de puntos */}
-            <div className="rounded-xl p-3 mb-4 border" style={{ backgroundColor: "var(--bg-card-hover)", borderColor: "var(--border-card)" }}>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>Categoría</span>
-                <span className="text-sm font-bold px-3 py-1 rounded-full" style={{ backgroundColor: "var(--accent-light)", color: "var(--accent)" }}>
-                  {userData.nivel || "Sin asignar"}
-                </span>
-                <button
-                  onClick={() => setMostrarInfoPuntos(!mostrarInfoPuntos)}
-                  className="text-xs font-semibold px-2 py-1 rounded-lg transition"
-                  style={{ backgroundColor: "var(--bg-card)", color: "var(--accent)", border: "1px solid var(--border-card)" }}
-                >
-                  {mostrarInfoPuntos ? "Cerrar" : "¿Cómo funciona?"}
-                </button>
+            <div className="flex items-center gap-3 mt-4 flex-wrap">
+              <RankMark nivel={userData.nivel} size={40} />
+              <div className="flex-1 min-w-0">
+                <p className="pd-eyebrow">Categoría</p>
+                <p className="heading-md">{userData.nivel || "Sin asignar"}</p>
               </div>
-              <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
-                Tu categoría cambia automáticamente con tus resultados
-              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-expanded={mostrarInfoPuntos}
+                onClick={() => setMostrarInfoPuntos(!mostrarInfoPuntos)}
+              >
+                {mostrarInfoPuntos ? "Cerrar" : "¿Cómo funciona?"}
+              </Button>
             </div>
-
-            {!editando ? (
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {[
-                  ["Mano hábil", userData.manoHabil],
-                  ["Posición", userData.posicionPreferida],
-                  ["Puntos", userData.puntos || 0],
-                ].map(([l, v]) => (
-                  <div key={l}>
-                    <span
-                      className="block"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {l}
-                    </span>
-                    <span
-                      className="font-medium capitalize"
-                      style={{
-                        color:
-                          l === "Puntos"
-                            ? "var(--accent)"
-                            : "var(--text-primary)",
-                      }}
-                    >
-                      {v || "—"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <label
-                    className={labelClass}
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Mano hábil
-                  </label>
-                  <select
-                    value={editForm.manoHabil}
-                    onChange={(e) =>
-                      setEditField("manoHabil", e.target.value)
-                    }
-                    className={inputClass}
-                  >
-                    <option value="">Seleccionar</option>
-                    <option value="derecha">Derecha</option>
-                    <option value="izquierda">Izquierda</option>
-                    <option value="ambidiestro">Ambidiestro</option>
-                  </select>
-                </div>
-                <div>
-                  <label
-                    className={labelClass}
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Posición preferida
-                  </label>
-                  <select
-                    value={editForm.posicionPreferida}
-                    onChange={(e) =>
-                      setEditField("posicionPreferida", e.target.value)
-                    }
-                    className={inputClass}
-                  >
-                    <option value="">Seleccionar</option>
-                    <option value="drive">Drive (derecha)</option>
-                    <option value="reves">Revés (izquierda)</option>
-                    <option value="ambas">Ambas</option>
-                  </select>
-                </div>
-              </div>
-            )}
+            <p className="body-sm text-ink-2 mt-2">Tu categoría cambia automáticamente con tus resultados</p>
 
             {mostrarInfoPuntos && (
-              <div className="rounded-xl p-4 mt-3 border" style={{ backgroundColor: "var(--bg-card-hover)", borderColor: "var(--border-card)" }}>
-                <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Sistema de puntos y categorías</h3>
-                <div className="flex flex-col gap-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+              <div className="pd-card mt-3">
+                <h3 className="heading-sm mb-3">Sistema de puntos y categorías</h3>
+                <dl className="flex flex-col gap-2 body-sm text-ink-2">
                   <div>
-                    <p className="font-semibold" style={{ color: "var(--text-primary)" }}>Puntos por partido:</p>
-                    <p>Ganar partido: +10 pts · Ganar set: +3 pts · Perder partido: +2 pts</p>
+                    <dt className="font-semibold text-ink">Puntos por partido</dt>
+                    <dd>Ganar partido: +10 pts · Ganar set: +3 pts · Perder partido: +2 pts</dd>
                   </div>
                   <div>
-                    <p className="font-semibold" style={{ color: "var(--text-primary)" }}>Bonus por torneo:</p>
-                    <p>Campeón: +50 pts · Subcampeón: +25 pts</p>
+                    <dt className="font-semibold text-ink">Bonus por torneo</dt>
+                    <dd>Campeón: +50 pts · Subcampeón: +25 pts</dd>
                   </div>
                   <div>
-                    <p className="font-semibold" style={{ color: "var(--text-primary)" }}>Multiplicador por categoría:</p>
-                    <p>Jugar en categoría superior: x1.5 o x2</p>
+                    <dt className="font-semibold text-ink">Multiplicador por categoría</dt>
+                    <dd>Jugar en categoría superior: x1.5 o x2</dd>
                   </div>
                   <div>
-                    <p className="font-semibold" style={{ color: "var(--text-primary)" }}>Ascenso automático:</p>
-                    <p>A) 150 pts + 2 victorias · B) 300 pts + 1 victoria · C) 500 pts (experiencia)</p>
+                    <dt className="font-semibold text-ink">Ascenso automático</dt>
+                    <dd>A) 150 pts + 2 victorias · B) 300 pts + 1 victoria · C) 500 pts (experiencia)</dd>
                   </div>
                   <div>
-                    <p className="font-semibold" style={{ color: "var(--text-primary)" }}>Categorías:</p>
-                    <p>8va → 7ma → 6ta → 5ta → 4ta → 3era → 2da → 1era → Libre</p>
+                    <dt className="font-semibold text-ink">Categorías</dt>
+                    <dd>8va → 7ma → 6ta → 5ta → 4ta → 3era → 2da → 1era → Libre</dd>
                   </div>
-                </div>
+                </dl>
               </div>
             )}
-          </div>
 
-          {/* Estadísticas */}
-          <div className="themed-card rounded-2xl p-5 border mb-4">
-            <h2
-              className="font-semibold mb-3"
-              style={{ color: "var(--text-primary)" }}
-            >
-              Estadísticas
-            </h2>
-            <div className="grid grid-cols-3 gap-3 text-center">
-              {[
-                ["Torneos jugados", userData.torneosJugados || 0, "#3b82f6"],
-                [
-                  "Torneos ganados",
-                  userData.torneosGanados || 0,
-                  "var(--accent)",
-                ],
-                ["Puntos", userData.puntos || 0, "#8b5cf6"],
-              ].map(([l, v, c]) => (
-                <div
-                  key={l}
-                  className="rounded-xl p-4"
-                  style={{ backgroundColor: "var(--bg-card-hover)" }}
-                >
-                  <p className="text-2xl font-bold" style={{ color: c }}>
-                    {v}
-                  </p>
-                  <p
-                    className="text-xs mt-1"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {l}
-                  </p>
+            <div className="mt-4">
+              {!editando ? (
+                datos([
+                  ["Mano hábil", userData.manoHabil, "capitalize"],
+                  ["Posición", userData.posicionPreferida, "capitalize"],
+                ])
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <Field label="Mano hábil">
+                    <Select wrapperClassName="block" value={editForm.manoHabil} onChange={(e) => setEditField("manoHabil", e.target.value)}>
+                      <option value="">Seleccionar</option>
+                      <option value="derecha">Derecha</option>
+                      <option value="izquierda">Izquierda</option>
+                      <option value="ambidiestro">Ambidiestro</option>
+                    </Select>
+                  </Field>
+                  <Field label="Posición preferida">
+                    <Select
+                      wrapperClassName="block"
+                      value={editForm.posicionPreferida}
+                      onChange={(e) => setEditField("posicionPreferida", e.target.value)}
+                    >
+                      <option value="">Seleccionar</option>
+                      <option value="drive">Drive (derecha)</option>
+                      <option value="reves">Revés (izquierda)</option>
+                      <option value="ambas">Ambas</option>
+                    </Select>
+                  </Field>
                 </div>
-              ))}
+              )}
             </div>
-          </div>
+          </Card>
 
           {/* Inscripciones y torneos */}
           {cargandoInscripciones && (
-            <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
-              Cargando inscripciones...
-            </p>
+            <div className="pd-skeleton h-16 rounded-lg!" aria-busy="true">
+              <span className="sr-only">Cargando inscripciones…</span>
+            </div>
           )}
           {inscPendientes.length > 0 && (
-            <div className="themed-card rounded-2xl p-5 border border-orange-200 mb-4">
-              <h2 className="font-semibold text-orange-700 mb-3">
-                Inscripciones pendientes ({inscPendientes.length})
-              </h2>
-              <div className="flex flex-col gap-2">
+            <Card>
+              <Card.Title as="h2">
+                Inscripciones pendientes <span className="pd-count text-ink-3 font-semibold">{inscPendientes.length}</span>
+              </Card.Title>
+              <ul className="flex flex-col gap-2 mt-3">
                 {inscPendientes.map((i) => (
-                  <div
-                    key={i.id}
-                    className="flex items-center justify-between rounded-xl px-4 py-3"
-                    style={{ backgroundColor: "var(--bg-card-hover)" }}
-                  >
-                    <div>
-                      <p
-                        className="text-sm font-semibold"
-                        style={{ color: "var(--text-primary)" }}
-                      >
-                        {i.torneoNombre}
-                      </p>
-                    </div>
-                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-orange-100 text-orange-600 capitalize">
-                      {(i.status || "").replace(/_/g, " ")}
-                    </span>
-                  </div>
+                  <li key={i.id} className="flex items-center justify-between gap-3 rounded-md px-4 py-3 bg-surface-sunken">
+                    <p className="heading-sm truncate">{i.torneoNombre}</p>
+                    <Badge dot tone="warning">
+                      {sentenceCase(i.status)}
+                    </Badge>
+                  </li>
                 ))}
-              </div>
-            </div>
+              </ul>
+            </Card>
           )}
           {inscConfirmadas.length > 0 && (
-            <div className="themed-card rounded-2xl p-5 border mb-4">
-              <h2
-                className="font-semibold mb-3"
-                style={{ color: "var(--text-primary)" }}
-              >
-                Mis torneos ({inscConfirmadas.length})
-              </h2>
-              <div className="flex flex-col gap-2">
+            <Card>
+              <Card.Title as="h2">
+                Mis torneos <span className="pd-count text-ink-3 font-semibold">{inscConfirmadas.length}</span>
+              </Card.Title>
+              <ul className="flex flex-col gap-2 mt-3">
                 {inscConfirmadas.map((i) => (
-                  <div
-                    key={i.id}
-                    onClick={() => navigate(`/torneos/${i.torneoId}`)}
-                    className="flex items-center justify-between rounded-xl px-4 py-3 cursor-pointer transition"
-                    style={{ backgroundColor: "var(--bg-card-hover)" }}
-                  >
-                    <p
-                      className="text-sm font-semibold"
-                      style={{ color: "var(--text-primary)" }}
+                  <li key={i.id}>
+                    <Link
+                      to={`/torneos/${i.torneoId}`}
+                      className="flex items-center justify-between gap-3 rounded-md px-4 py-3 bg-surface-sunken hover:bg-surface-hover"
                     >
-                      {i.torneoNombre}
-                    </p>
-                    <span
-                      className="text-xs font-semibold px-2 py-1 rounded-full"
-                      style={{
-                        backgroundColor: "var(--accent-light)",
-                        color: "var(--accent)",
-                      }}
-                    >
-                      Confirmada
-                    </span>
-                  </div>
+                      <p className="heading-sm truncate">{i.torneoNombre}</p>
+                      <Badge dot tone="success">
+                        Confirmada
+                      </Badge>
+                    </Link>
+                  </li>
                 ))}
-              </div>
-            </div>
+              </ul>
+            </Card>
           )}
 
           {/* Historial de partidos */}
-          <div className="themed-card rounded-2xl p-5 border mb-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>Historial de partidos</h2>
+          <Card>
+            <Card.Row>
+              <Card.Title as="h2">Historial de partidos</Card.Title>
               {!mostrarHistorial && (
-                <button
-                  onClick={async () => {
-                    setCargandoHistorial(true);
-                    setMostrarHistorial(true);
-                    try {
-                      const data = await getHistorialPartidos(user.uid);
-                      setHistorial(data);
-                    } catch (err) { console.error("Error cargando historial:", err); }
-                    setCargandoHistorial(false);
-                  }}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg transition"
-                  style={{ backgroundColor: "var(--accent)", color: "white" }}
-                >
+                <Button size="sm" onClick={verHistorial}>
                   Ver historial
-                </button>
+                </Button>
               )}
-            </div>
+            </Card.Row>
 
             {mostrarHistorial && cargandoHistorial && (
-              <div className="text-center py-6" style={{ color: "var(--text-muted)" }}>
-                <p className="text-sm">Cargando historial...</p>
+              <div className="flex flex-col gap-2 mt-4" aria-busy="true">
+                <p className="sr-only">Cargando historial…</p>
+                <div className="pd-skeleton h-10" />
+                <div className="pd-skeleton h-10" />
+                <div className="pd-skeleton h-10" />
               </div>
             )}
 
             {mostrarHistorial && !cargandoHistorial && historial.length === 0 && (
               <div className="text-center py-6">
-                <div className="text-3xl mb-2">🎾</div>
-                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  Todavía no tenés partidos registrados
-                </p>
-                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                  Participá en un torneo para ver tu historial acá
-                </p>
+                <CircleDot className="pd-icon-lg mx-auto mb-3 text-ink-3" size={24} aria-hidden="true" />
+                <p className="body-md">Todavía no tenés partidos registrados</p>
+                <p className="body-sm text-ink-2 mt-1">Participá en un torneo para ver tu historial acá</p>
               </div>
             )}
 
             {mostrarHistorial && !cargandoHistorial && historial.length > 0 && (
-              <div className="flex flex-col gap-2 mt-3">
-                <div className="flex gap-3 mb-2">
-                  <div className="flex-1 rounded-xl p-3 text-center" style={{ backgroundColor: "rgba(34,197,94,0.08)" }}>
-                    <p className="text-lg font-bold text-green-600">{historial.filter(h => h.gane).length}</p>
-                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Victorias</p>
-                  </div>
-                  <div className="flex-1 rounded-xl p-3 text-center" style={{ backgroundColor: "rgba(239,68,68,0.08)" }}>
-                    <p className="text-lg font-bold text-red-400">{historial.filter(h => !h.gane).length}</p>
-                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Derrotas</p>
-                  </div>
-                  <div className="flex-1 rounded-xl p-3 text-center" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-                    <p className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>{historial.length}</p>
-                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Partidos</p>
+              <>
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <Badge tone="success">Victorias {victorias}</Badge>
+                  <Badge tone="danger">Derrotas {historial.length - victorias}</Badge>
+                  <Badge>Partidos {historial.length}</Badge>
+                </div>
+                <div className="pd-table-wrap mt-3">
+                  <div className="overflow-x-auto">
+                    <table className="pd-table">
+                      <thead>
+                        <tr>
+                          <th>Torneo</th>
+                          <th>Fase</th>
+                          <th>Rival</th>
+                          <th>Resultado</th>
+                          <th className="num">Sets</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historial.map((m, i) => (
+                          <tr key={i}>
+                            <td>{m.torneoNombre}</td>
+                            <td>{m.fase}</td>
+                            <td>{m.rival}</td>
+                            <td>
+                              <Badge tone={m.gane ? "success" : "danger"}>{m.gane ? "Victoria" : "Derrota"}</Badge>
+                            </td>
+                            <td className="num pd-tnum font-semibold whitespace-nowrap">
+                              {m.resultado.sets.map((s) => `${s.g1}–${s.g2}`).join(" · ")}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-
-                {historial.map((m, i) => (
-                  <div key={i} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>{m.torneoNombre}</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-muted)" }}>
-                        {m.fase}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>vs</p>
-                        <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{m.rival}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold px-2 py-1 rounded-lg ${m.gane ? "bg-green-100 text-green-700" : "bg-red-100 text-red-400"}`}>
-                          {m.gane ? "Victoria" : "Derrota"}
-                        </span>
-                        <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                          {m.resultado.sets.map(s => `${s.g1}-${s.g2}`).join(" / ")}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              </>
             )}
-          </div>
+          </Card>
 
-          {/* Sticky save bar */}
+          {/* Barra de guardado: el único primary de la pantalla, flota sobre la navegación inferior */}
           {editando && perfilModificado && (
-            <div className="fixed bottom-20 left-0 right-0 z-30 px-4">
-              <div className="max-w-2xl mx-auto">
-                <button
-                  onClick={handleGuardar}
-                  disabled={guardando}
-                  className="w-full py-3 rounded-xl text-sm font-semibold text-white shadow-lg transition disabled:opacity-50"
-                  style={{ backgroundColor: "var(--accent)" }}
-                >
-                  {guardando ? "Guardando..." : "Guardar cambios"}
-                </button>
+            <div className="fixed bottom-20 md:bottom-6 left-0 right-0 z-30 px-4">
+              <div className="max-w-2xl mx-auto pd-card p-2! flex" style={{ boxShadow: "var(--shadow-overlay)" }}>
+                <Button variant="primary" block onClick={handleGuardar} cargando={guardando ? "Guardando…" : ""}>
+                  Guardar cambios
+                </Button>
               </div>
             </div>
           )}
@@ -857,234 +665,104 @@ export default function Perfil() {
       {/* ========== PERFIL CLUB ========== */}
       {rol === "club" && (
         <>
-          <div className="themed-card rounded-2xl p-5 border mb-4">
-            <h2
-              className="font-semibold mb-4"
-              style={{ color: "var(--text-primary)" }}
-            >
-              Datos del club
-            </h2>
-            {club ? (
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {[
+          <Card>
+            <Card.Title as="h2">Datos del club</Card.Title>
+            <div className="mt-4">
+              {club ? (
+                datos([
                   ["Nombre", club.nombre],
                   ["Dirección", club.direccion],
                   ["Ciudad", club.ciudad],
                   ["Provincia", club.provincia],
                   ["Teléfono", club.telefono],
                   ["Email", club.email],
-                ].map(([l, v]) => (
-                  <div key={l}>
-                    <span
-                      className="block"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {l}
-                    </span>
-                    <span
-                      className="font-medium"
-                      style={{ color: "var(--text-primary)" }}
-                    >
-                      {v || "—"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p style={{ color: "var(--text-muted)" }} className="text-sm">
-                No se encontraron datos del club
-              </p>
-            )}
-          </div>
+                ])
+              ) : (
+                <p className="body-sm text-ink-2">No se encontraron datos del club</p>
+              )}
+            </div>
+          </Card>
 
           {club && (
-            <div className="themed-card rounded-2xl p-5 border mb-4">
-              <h2
-                className="font-semibold mb-3"
-                style={{ color: "var(--text-primary)" }}
-              >
-                Redes sociales
-              </h2>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {[
+            <Card>
+              <Card.Title as="h2">Redes sociales</Card.Title>
+              <div className="mt-4">
+                {datos([
                   ["Instagram", club.instagram],
                   ["Facebook", club.facebook],
                   ["WhatsApp", club.whatsapp],
                   ["Web", club.website],
-                ].map(([l, v]) => (
-                  <div key={l}>
-                    <span
-                      className="block"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {l}
-                    </span>
-                    <span
-                      className="font-medium"
-                      style={{ color: "var(--text-primary)" }}
-                    >
-                      {v || "—"}
-                    </span>
-                  </div>
-                ))}
+                ])}
               </div>
-            </div>
+            </Card>
           )}
 
-          <button
-            onClick={() => navigate("/admin")}
-            className="w-full py-3 rounded-xl text-sm font-semibold text-white transition hover:opacity-90 mb-4"
-            style={{ backgroundColor: "var(--accent)" }}
-          >
+          <Button as="link" to="/admin" block>
             Ir al panel de administración
-          </button>
+          </Button>
         </>
       )}
 
       {/* ========== PERFIL ORGANIZADOR ========== */}
       {rol === "organizador" && (
         <>
-          <div className="themed-card rounded-2xl p-5 border mb-4">
-            <h2
-              className="font-semibold mb-4"
-              style={{ color: "var(--text-primary)" }}
-            >
-              Datos de la entidad
-            </h2>
-            {entidad ? (
-              <div className="flex flex-col gap-3 text-sm">
-                <div className="grid grid-cols-2 gap-3">
-                  {[
+          <Card>
+            <Card.Title as="h2">Datos de la entidad</Card.Title>
+            <div className="mt-4">
+              {entidad ? (
+                <div className="flex flex-col gap-3">
+                  {datos([
                     ["Nombre", entidad.nombre],
                     ["Teléfono", entidad.telefono],
                     ["Email", entidad.email],
                     ["Ciudad", entidad.ciudad],
                     ["Provincia", entidad.provincia],
-                  ].map(([l, v]) => (
-                    <div key={l}>
-                      <span
-                        className="block"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        {l}
-                      </span>
-                      <span
-                        className="font-medium"
-                        style={{ color: "var(--text-primary)" }}
-                      >
-                        {v || "—"}
-                      </span>
+                  ])}
+                  {entidad.bio && (
+                    <div>
+                      <p className="caption text-ink-3">Descripción</p>
+                      <p className="body-md mt-1">{entidad.bio}</p>
                     </div>
-                  ))}
+                  )}
                 </div>
-                {entidad.bio && (
-                  <div>
-                    <span
-                      className="block"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Descripción
-                    </span>
-                    <p
-                      className="text-sm mt-1"
-                      style={{ color: "var(--text-primary)" }}
-                    >
-                      {entidad.bio}
-                    </p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p style={{ color: "var(--text-muted)" }} className="text-sm">
-                No se encontró la entidad
-              </p>
-            )}
-          </div>
+              ) : (
+                <p className="body-sm text-ink-2">No se encontró la entidad</p>
+              )}
+            </div>
+          </Card>
 
           {/* Estadísticas org */}
-          <div className="themed-card rounded-2xl p-5 border mb-4">
-            <h2
-              className="font-semibold mb-3"
-              style={{ color: "var(--text-primary)" }}
-            >
-              Mis torneos
-            </h2>
-            <div className="grid grid-cols-3 gap-3 text-center mb-3">
-              {[
-                ["Total", torneosOrg.length, "#3b82f6"],
-                [
-                  "Activos",
-                  torneosOrg.filter(
-                    (t) =>
-                      t.status === "inscripcion" || t.status === "en_curso",
-                  ).length,
-                  "var(--accent)",
-                ],
-                [
-                  "Finalizados",
-                  torneosOrg.filter((t) => t.status === "finalizado").length,
-                  "#8b5cf6",
-                ],
-              ].map(([l, v, c]) => (
-                <div
-                  key={l}
-                  className="rounded-xl p-4"
-                  style={{ backgroundColor: "var(--bg-card-hover)" }}
-                >
-                  <p className="text-2xl font-bold" style={{ color: c }}>
-                    {v}
-                  </p>
-                  <p
-                    className="text-xs mt-1"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {l}
-                  </p>
-                </div>
-              ))}
+          <section aria-labelledby="torneos-org">
+            <h2 id="torneos-org" className="heading-lg mb-3">Mis torneos</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <StatTile value={torneosOrg.length} label="Total" />
+              <StatTile
+                value={torneosOrg.filter((t) => t.status === "inscripcion" || t.status === "en_curso").length}
+                label="Activos"
+              />
+              <StatTile value={torneosOrg.filter((t) => t.status === "finalizado").length} label="Finalizados" />
             </div>
-          </div>
+          </section>
 
-          <button
-            onClick={() => navigate("/org")}
-            className="w-full py-3 rounded-xl text-sm font-semibold text-white transition hover:opacity-90 mb-4 bg-blue-600 hover:bg-blue-700"
-          >
+          <Button as="link" to="/org" block>
             Ir al panel de organizador
-          </button>
+          </Button>
         </>
       )}
 
       {/* Acciones de cuenta — todos los roles */}
-      <div className="themed-card rounded-2xl p-5 border mb-8">
-        <h2
-          className="font-semibold mb-3"
-          style={{ color: "var(--text-primary)" }}
-        >
-          Cuenta
-        </h2>
-        <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
-          {userData.email}
-        </p>
-        <div className="flex flex-col gap-2">
-          <button
-            onClick={handleCerrarSesion}
-            className="w-full py-2 rounded-xl text-sm font-semibold transition"
-            style={{
-              backgroundColor: "var(--bg-card-hover)",
-              color: "var(--text-secondary)",
-            }}
-          >
+      <Card className="mb-4">
+        <Card.Title as="h2">Cuenta</Card.Title>
+        <p className="body-sm text-ink-2 mt-1">{userData.email}</p>
+        <div className="pd-btn-group mt-4">
+          <Button variant="ghost" icon={<LogOut className="pd-icon" size={20} aria-hidden="true" />} onClick={handleCerrarSesion}>
             Cerrar sesión
-          </button>
-          <button
-            onClick={handleEliminarCuenta}
-            className="w-full py-2 rounded-xl text-sm font-semibold text-red-500 transition hover:opacity-80"
-            style={{ backgroundColor: "rgba(239,68,68,0.08)" }}
-          >
+          </Button>
+          <Button variant="ghost" className="text-danger!" onClick={handleEliminarCuenta}>
             Eliminar cuenta
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

@@ -100,7 +100,7 @@ export default function PlayerLayout() {
               </NavLink>
             ))}
             <div className="border-t border-line mt-1 pt-1">
-              <button type="button" onClick={cerrarSesion} className="pd-sidebar-item w-full text-danger">
+              <button type="button" onClick={cerrarSesion} className="pd-sidebar-item w-full text-danger!">
                 <LogOut className="pd-icon" size={20} aria-hidden="true" />
                 Cerrar sesión
               </button>

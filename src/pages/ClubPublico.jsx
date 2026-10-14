@@ -1,5 +1,21 @@
-import { useEffect, useState } from "react";
-import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
+import { Fragment, useEffect, useState } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import {
+  AlertTriangle,
+  AtSign,
+  Camera,
+  Check,
+  ChevronLeft,
+  Clock,
+  ExternalLink,
+  Globe,
+  Lock,
+  Mail,
+  MapPin,
+  MessageCircle,
+  Phone,
+  Star,
+} from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { formatFecha, getTodayLocal, addDaysLocal, horaActualStr } from "../utils/formatDate";
 import { formatPrecio } from "../utils/format";
@@ -21,55 +37,97 @@ import { getUserData } from "../services/authService";
 import { notificarNuevaReserva } from "../services/notificationService";
 import { toast } from "../components/Toast";
 import { confirmar } from "../components/ConfirmDialog";
+import { Badge, Button, Card, Field, Input, Pills, SlotCell, Tabs, Textarea } from "../components/ui";
 
 const horasDelDia = Array.from(
   { length: 24 },
   (_, i) => `${i.toString().padStart(2, "0")}:00`,
 );
 
-function StarRating({ value, onChange, size = "w-6 h-6" }) {
+// Fechas cortas del design system ("mié 15 oct") a partir de "YYYY-MM-DD", en hora local
+const DIAS_CORTOS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+function partesFecha(fechaStr) {
+  const [y, m, d] = String(fechaStr).split("-").map(Number);
+  return { m, d, dia: new Date(y, m - 1, d).getDay() };
+}
+
+function fechaCorta(fechaStr) {
+  if (!fechaStr) return "";
+  const { m, d, dia } = partesFecha(fechaStr);
+  return `${DIAS_CORTOS[dia]} ${d} ${MESES_CORTOS[m - 1]}`;
+}
+
+// Etiqueta de cada pastilla del selector de día: "Hoy", "Mañana" y después "mié 15"
+function etiquetaDia(fechaStr, indice) {
+  if (indice === 0) return "Hoy";
+  if (indice === 1) return "Mañana";
+  const { d, dia } = partesFecha(fechaStr);
+  return `${DIAS_CORTOS[dia]} ${d}`;
+}
+
+// Puntuación de reviews. El sistema no define estrellas: Lucide Star, llena en ink y vacía en ink-3
+function StarRating({ value, onChange }) {
   return (
-    <div className="flex gap-1">
+    <div className="flex gap-1" role="radiogroup" aria-label="Puntuación">
       {[1, 2, 3, 4, 5].map((star) => (
         <button
           key={star}
           type="button"
+          role="radio"
+          aria-checked={star === value}
+          aria-label={`${star} ${star === 1 ? "estrella" : "estrellas"}`}
           onClick={() => onChange?.(star)}
-          className="transition hover:scale-110"
+          className="grid h-11 w-11 place-items-center rounded-sm cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill={star <= value ? "#f59e0b" : "none"}
-            stroke={star <= value ? "#f59e0b" : "currentColor"}
-            strokeWidth="1.5"
-            className={`${size} ${!onChange ? "" : "cursor-pointer"}`}
-            style={{ color: "var(--text-muted)" }}
-          >
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-          </svg>
+          <Star
+            className={`pd-icon-lg ${star <= value ? "text-ink fill-current" : "text-ink-3"}`}
+            size={24}
+            aria-hidden="true"
+          />
         </button>
       ))}
     </div>
   );
 }
 
-function StarDisplay({ value, size = "w-4 h-4" }) {
+function StarDisplay({ value, size = 16 }) {
+  const llenas = Math.round(value || 0);
   return (
-    <div className="flex gap-0.5">
+    <div className="flex gap-0.5" role="img" aria-label={`${Number(value || 0).toFixed(1)} de 5`}>
       {[1, 2, 3, 4, 5].map((star) => (
-        <svg
+        <Star
           key={star}
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill={star <= Math.round(value) ? "#f59e0b" : "none"}
-          stroke={star <= Math.round(value) ? "#f59e0b" : "currentColor"}
-          strokeWidth="1.5"
-          className={size}
-          style={{ color: "var(--text-muted)" }}
-        >
-          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-        </svg>
+          size={size}
+          className={star <= llenas ? "text-ink fill-current" : "text-ink-3"}
+          aria-hidden="true"
+        />
+      ))}
+    </div>
+  );
+}
+
+// Las canchas del club como tarjetas: nombre, superficie y el precio base
+function ListaCanchas({ canchas }) {
+  if (canchas.length === 0) {
+    return <p className="body-sm text-ink-2">Este club todavía no cargó sus canchas.</p>;
+  }
+  return (
+    <div className="grid gap-4 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
+      {canchas.map((c) => (
+        <Card key={c.id}>
+          <Card.Row>
+            <div className="min-w-0">
+              <Card.Title>{c.nombre}</Card.Title>
+              <Card.Meta>{[c.superficie, c.techada ? "Techada" : "Aire libre"].filter(Boolean).join(" · ")}</Card.Meta>
+            </div>
+            <div className="shrink-0 text-right">
+              <span className="caption text-ink-3 block">Desde</span>
+              <span className="numeral-md pd-tnum text-ink">{formatPrecio(c.precioBase || 0)}</span>
+            </div>
+          </Card.Row>
+        </Card>
       ))}
     </div>
   );
@@ -174,6 +232,13 @@ export default function ClubPublico() {
     );
   };
 
+  // La reserva viva de una celda (misma condición que estaOcupado), para elegir la palabra del estado
+  const reservaEn = (canchaId, hora) =>
+    reservas.find(
+      (r) =>
+        r.canchaId === canchaId && r.hora === hora && r.status !== "cancelada",
+    );
+
   const esTurnoFijo = (canchaId, hora) => {
     const partes = fechaSeleccionada.split("-");
     const hoy = new Date(
@@ -197,6 +262,15 @@ export default function ClubPublico() {
         (t.horas || [t.hora]).includes(hora) &&
         t.status === "activo",
     );
+  };
+
+  // Estado de una celda de la grilla: solo "libre" se puede reservar (misma condición que antes)
+  const estadoDeCelda = (cancha, hora) => {
+    const reserva = reservaEn(cancha.id, hora);
+    if (reserva) return reserva.status === "pendiente" ? "pendiente" : "reservada";
+    if (esTurnoFijo(cancha.id, hora)) return "fijo";
+    if (!(cancha.horariosDisponibles || []).includes(hora)) return "bloqueada";
+    return "libre";
   };
 
   const abrirModal = async (cancha, hora, precio) => {
@@ -329,307 +403,206 @@ export default function ClubPublico() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
-        <p style={{ color: "var(--text-muted)" }} className="text-sm">
-          Cargando club...
-        </p>
+      <div aria-busy="true">
+        <span className="sr-only">Cargando club…</span>
+        <div className="pd-skeleton h-10 w-2/3 mb-2" />
+        <div className="pd-skeleton h-[18px] w-1/2 mb-6" />
+        <div className="flex gap-2 mb-4">
+          <div className="pd-skeleton h-9 w-20 rounded-pill!" />
+          <div className="pd-skeleton h-9 w-20 rounded-pill!" />
+          <div className="pd-skeleton h-9 w-20 rounded-pill!" />
+        </div>
+        <div className="pd-skeleton h-72 rounded-lg!" />
       </div>
     );
   }
 
   if (!club) {
     return (
-      <div className="themed-card text-center py-16 rounded-2xl border">
-        <p style={{ color: "var(--text-muted)" }}>Club no encontrado</p>
-      </div>
+      <Card className="text-center py-10">
+        <div className="flex justify-center mb-3">
+          <span className="pd-ball" aria-hidden="true" />
+        </div>
+        <p className="body-md text-ink-2">Club no encontrado</p>
+      </Card>
     );
   }
 
   const tabs = [
-    { key: "canchas", label: "Canchas" },
-    { key: "info", label: "Info" },
-    { key: "reviews", label: `Reviews (${reviews.length})` },
+    { value: "canchas", label: "Canchas" },
+    { value: "info", label: "Info" },
+    { value: "reviews", label: "Reviews", count: reviews.length },
   ];
+
+  // Un día por pastilla, desde hoy hasta el máximo de anticipación del club
+  const dias = [];
+  for (let f = fechaMin, i = 0; f <= fechaMax; f = addDaysLocal(f, 1), i += 1) {
+    dias.push({ value: f, label: etiquetaDia(f, i) });
+  }
+
+  // Filas de la grilla: hoy, una hora que ya empezó no se puede reservar; y solo horas con alguna cancha libre
+  const horasVisibles = horasDelDia.filter((hora) => {
+    if (esHoy && hora <= horaAhora) return false;
+    return canchas.some((c) => {
+      const disp = (c.horariosDisponibles || []).includes(hora);
+      return disp && !estaOcupado(c.id, hora) && !esTurnoFijo(c.id, hora);
+    });
+  });
+
+  const reservaConfirmada = reservaExitosa?.status === "confirmada";
 
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center gap-3 mb-2">
-        <button
+      <div className="flex items-start gap-1 mb-4">
+        <Button
+          variant="ghost"
+          iconOnly
+          aria-label="Volver a clubes"
+          icon={<ChevronLeft className="pd-icon" size={20} aria-hidden="true" />}
           onClick={() => navigate("/clubes")}
-          className="p-1 rounded-lg transition"
-          style={{ color: "var(--text-muted)" }}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className="w-5 h-5"
-          >
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
-        <div className="flex-1">
-          <h1
-            className="text-xl font-bold"
-            style={{ color: "var(--text-primary)" }}
-          >
-            {club.nombre}
-          </h1>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            {club.direccion && `${club.direccion} · `}
-            {club.ciudad}
-          </p>
+          className="-ml-3 shrink-0"
+        />
+        <div className="min-w-0 flex-1">
+          <h1 className="display-lg text-ink break-words">{club.nombre}</h1>
+          {(club.direccion || club.ciudad) && (
+            <p className="body-sm text-ink-2 flex items-center gap-1.5 mt-1">
+              <MapPin className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+              <span>
+                {club.direccion && `${club.direccion} · `}
+                {club.ciudad}
+              </span>
+            </p>
+          )}
+
+          {/* Rating */}
+          {reviews.length > 0 && (
+            <div className="flex items-center gap-2 mt-2">
+              <StarDisplay value={promedioEstrellas} size={16} />
+              <span className="numeral-md pd-tnum text-ink">{promedioEstrellas.toFixed(1)}</span>
+              <span className="body-sm text-ink-3">
+                {reviews.length} review{reviews.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Rating */}
-      {reviews.length > 0 && (
-        <div className="flex items-center gap-2 mb-4 ml-8">
-          <StarDisplay value={promedioEstrellas} />
-          <span
-            className="text-sm font-bold"
-            style={{ color: "var(--text-primary)" }}
-          >
-            {promedioEstrellas.toFixed(1)}
-          </span>
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-            ({reviews.length} review{reviews.length !== 1 ? "s" : ""})
-          </span>
-        </div>
-      )}
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-4 overflow-x-auto">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold transition whitespace-nowrap ${
-              tab === t.key ? "text-white" : ""
-            }`}
-            style={{
-              backgroundColor:
-                tab === t.key ? "var(--accent)" : "var(--bg-card)",
-              color: tab === t.key ? "white" : "var(--text-secondary)",
-              border: tab === t.key ? "none" : "1px solid var(--border-card)",
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs items={tabs} value={tab} onChange={setTab} ariaLabel="Secciones del club" className="mb-4" />
 
       {/* Tab: Canchas sin sesión: la grilla y las reservas no son públicas */}
       {tab === "canchas" && !user && (
-        <div className="flex flex-col gap-4">
-          <div className="themed-card rounded-2xl border p-5 text-center">
-            <div className="text-3xl mb-2">🔒</div>
-            <p className="font-semibold" style={{ color: "var(--text-primary)" }}>
-              Iniciá sesión para ver disponibilidad y reservar
-            </p>
-            <p className="text-sm mt-1 mb-4" style={{ color: "var(--text-muted)" }}>
+        <div className="flex flex-col gap-6">
+          <Card className="text-center">
+            <Lock className="pd-icon-lg mx-auto mb-3 text-ink-3" size={24} aria-hidden="true" />
+            <h2 className="heading-md">Iniciá sesión para ver disponibilidad y reservar</h2>
+            <p className="body-sm text-ink-2 mt-1 mb-5">
               La grilla de horarios y las reservas están disponibles con tu cuenta de Padely.
             </p>
-            <div className="flex gap-2 justify-center flex-wrap">
-              <Link
-                to={`/login?next=${encodeURIComponent(`/club/${id}`)}`}
-                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:opacity-90"
-                style={{ backgroundColor: "var(--accent)" }}
-              >
+            <div className="pd-btn-group justify-center">
+              <Button as="link" to={`/login?next=${encodeURIComponent(`/club/${id}`)}`} variant="primary">
                 Iniciar sesión
-              </Link>
-              <Link
-                to="/register"
-                className="px-5 py-2.5 rounded-xl text-sm font-semibold border transition hover:opacity-80"
-                style={{ color: "var(--accent)", borderColor: "var(--accent)" }}
-              >
+              </Button>
+              <Button as="link" to="/register">
                 Crear cuenta
-              </Link>
+              </Button>
             </div>
-          </div>
-          <div className="themed-card rounded-2xl border p-5">
-            <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-              Canchas ({canchas.length})
+          </Card>
+          <section>
+            <h2 className="heading-lg mb-4">
+              Canchas <span className="body-md font-medium! text-ink-3">{canchas.length}</span>
             </h2>
-            <div className="flex flex-col gap-2">
-              {canchas.map((c) => (
-                <div
-                  key={c.id}
-                  className="flex items-center justify-between rounded-xl px-4 py-3"
-                  style={{ backgroundColor: "var(--bg-card-hover)" }}
-                >
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{c.nombre}</p>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {c.superficie} · {c.techada ? "Techada" : "Aire libre"}
-                    </p>
-                  </div>
-                  <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>
-                    Desde {formatPrecio(c.precioBase || 0)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+            <ListaCanchas canchas={canchas} />
+          </section>
         </div>
       )}
 
       {/* Tab: Canchas */}
       {tab === "canchas" && user && (
         <>
-          <div className="themed-card rounded-xl border px-3 py-2 flex items-center gap-2 mb-4 w-fit">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              className="w-4 h-4"
-              style={{ color: "var(--accent)" }}
-            >
-              <rect x="3" y="4" width="18" height="18" rx="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-              <line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            <input
-              type="date"
-              value={fechaSeleccionada}
-              min={fechaMin}
-              max={fechaMax}
-              onChange={(e) => cambiarFecha(e.target.value)}
-              className="text-sm bg-transparent focus:outline-none"
-              style={{ color: "var(--text-primary)" }}
-            />
-          </div>
+          <Pills
+            items={dias}
+            value={fechaSeleccionada}
+            onChange={cambiarFecha}
+            ariaLabel="Día"
+            className="flex-nowrap! overflow-x-auto pb-1 mb-4 -mx-4 px-4 sm:mx-0 sm:px-0"
+          />
 
-          <div className="themed-card rounded-2xl border overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr style={{ borderBottom: "1px solid var(--border-card)" }}>
-                    <th
-                      className="sticky left-0 z-10 text-left py-3 px-4 font-semibold text-xs"
-                      style={{
-                        backgroundColor: "var(--bg-card)",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      Hora
-                    </th>
-                    {canchas.map((cancha) => (
-                      <th
-                        key={cancha.id}
-                        className="text-center py-3 px-3 min-w-[110px]"
-                        style={{ backgroundColor: "var(--bg-card)" }}
-                      >
-                        <div
-                          className="font-semibold text-xs"
-                          style={{ color: "var(--text-primary)" }}
-                        >
-                          {cancha.nombre}
-                        </div>
-                        <div
-                          className="text-[10px] font-normal mt-0.5"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          {cancha.superficie} ·{" "}
-                          {cancha.techada ? "Techada" : "Aire libre"}
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {horasDelDia.map((hora) => {
-                    // Hoy: una hora que ya empezó no se puede reservar
-                    if (esHoy && hora <= horaAhora) return null;
-                    const algunaLibre = canchas.some((c) => {
-                      const disp = (c.horariosDisponibles || []).includes(hora);
-                      return (
-                        disp &&
-                        !estaOcupado(c.id, hora) &&
-                        !esTurnoFijo(c.id, hora)
-                      );
-                    });
-                    if (!algunaLibre) return null;
-                    return (
-                      <tr
-                        key={hora}
-                        style={{ borderBottom: "1px solid var(--border-card)" }}
-                      >
-                        <td
-                          className="sticky left-0 z-10 py-3 px-4 font-medium text-xs"
-                          style={{
-                            backgroundColor: "var(--bg-card)",
-                            color: "var(--text-muted)",
-                            borderRight: "1px solid var(--border-card)",
-                          }}
-                        >
-                          {hora}
-                        </td>
-                        {canchas.map((cancha) => {
-                          const disponible = (
-                            cancha.horariosDisponibles || []
-                          ).includes(hora);
-                          if (
-                            !disponible ||
-                            estaOcupado(cancha.id, hora) ||
-                            esTurnoFijo(cancha.id, hora)
-                          ) {
-                            return (
-                              <td
-                                key={cancha.id}
-                                className="text-center py-2 px-2"
-                              >
-                                <span
-                                  className="text-xs"
-                                  style={{
-                                    color: "var(--text-muted)",
-                                    opacity: 0.3,
-                                  }}
-                                >
-                                  —
-                                </span>
-                              </td>
-                            );
-                          }
-                          const precio =
-                            (cancha.horarios || {})[hora] ??
-                            cancha.precioBase ??
-                            0;
+          <Card className="p-0! overflow-hidden">
+            {canchas.length === 0 ? (
+              <div className="p-5 text-center">
+                <div className="flex justify-center mb-3">
+                  <span className="pd-ball" aria-hidden="true" />
+                </div>
+                <p className="body-md text-ink-2">Este club todavía no cargó sus canchas.</p>
+              </div>
+            ) : horasVisibles.length === 0 ? (
+              <div className="p-5 text-center">
+                <div className="flex justify-center mb-3">
+                  <span className="pd-ball" aria-hidden="true" />
+                </div>
+                <p className="body-md text-ink-2">No quedan turnos libres para este día. Probá con otro día.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <div
+                  className="pd-grid"
+                  style={{
+                    gridTemplateColumns: `56px repeat(${canchas.length}, minmax(112px, 1fr))`,
+                    minWidth: `${80 + canchas.length * 120}px`,
+                  }}
+                  role="group"
+                  aria-label={`Turnos del ${fechaCorta(fechaSeleccionada)}`}
+                >
+                  {/* La columna de horas queda fija cuando la grilla se desplaza a lo ancho */}
+                  <div className="sticky left-0 z-[1] bg-surface-sunken -ml-3 pl-3 -mr-2 pr-2" aria-hidden="true" />
+                  {canchas.map((cancha) => (
+                    <div key={cancha.id} className="pd-grid-head">
+                      {cancha.nombre}
+                      <span className="block normal-case tracking-normal body-sm font-medium! text-ink-3">
+                        {[cancha.superficie, cancha.techada ? "Techada" : "Aire libre"].filter(Boolean).join(" · ")}
+                      </span>
+                    </div>
+                  ))}
+                  {horasVisibles.map((hora) => (
+                    <Fragment key={hora}>
+                      <div className="pd-grid-time sticky left-0 z-[1] bg-surface-sunken self-stretch! flex items-center -ml-3 pl-3 -mr-2 pr-2">
+                        {hora}
+                      </div>
+                      {canchas.map((cancha) => {
+                        const estado = estadoDeCelda(cancha, hora);
+                        if (estado !== "libre") {
                           return (
-                            <td
+                            <SlotCell
                               key={cancha.id}
-                              className="text-center py-2 px-2"
-                            >
-                              <button
-                                onClick={() => abrirModal(cancha, hora, precio)}
-                                className="w-full rounded-xl py-2.5 px-2 text-xs font-semibold transition-all duration-200 hover:scale-105"
-                                style={{
-                                  backgroundColor: "var(--accent-light)",
-                                  color: "var(--accent)",
-                                }}
-                              >
-                                Libre
-                                <span className="block font-bold mt-0.5">
-                                  {formatPrecio(precio)}
-                                </span>
-                              </button>
-                            </td>
+                              estado={estado}
+                              linea1={estado === "bloqueada" ? "No disponible" : undefined}
+                            />
                           );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                        }
+                        const precio =
+                          (cancha.horarios || {})[hora] ??
+                          cancha.precioBase ??
+                          0;
+                        const elegido =
+                          mostrarModal && modalData?.cancha?.id === cancha.id && modalData?.hora === hora;
+                        return (
+                          <SlotCell
+                            key={cancha.id}
+                            estado={elegido ? "elegido" : "libre"}
+                            linea2={formatPrecio(precio)}
+                            onClick={() => abrirModal(cancha, hora, precio)}
+                            aria-label={`${cancha.nombre}, ${hora}, ${formatPrecio(precio)}, ${elegido ? "elegido" : "libre"}`}
+                          />
+                        );
+                      })}
+                    </Fragment>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
         </>
       )}
 
@@ -637,139 +610,53 @@ export default function ClubPublico() {
       {tab === "info" && (
         <div className="flex flex-col gap-4">
           {/* Datos generales */}
-          <div className="themed-card rounded-2xl border p-5">
-            <h2
-              className="font-semibold mb-3"
-              style={{ color: "var(--text-primary)" }}
-            >
-              Información
-            </h2>
-            <div className="flex flex-col gap-3">
-              {club.bio && (
-                <p
-                  className="text-sm"
-                  style={{ color: "var(--text-secondary)" }}
-                >
-                  {club.bio}
-                </p>
-              )}
-              <div className="flex flex-col gap-2">
+          <Card>
+            <Card.Title as="h2">Información</Card.Title>
+            <div className="flex flex-col gap-3 mt-3">
+              {club.bio && <p className="body-md text-ink-2">{club.bio}</p>}
+              <ul className="flex flex-col gap-2">
                 {club.direccion && (
-                  <div className="flex items-center gap-2">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      className="w-4 h-4 shrink-0"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-                      <circle cx="12" cy="10" r="3" />
-                    </svg>
-                    <span
-                      className="text-sm"
-                      style={{ color: "var(--text-secondary)" }}
-                    >
+                  <li className="flex items-center gap-2 body-sm text-ink-2">
+                    <MapPin className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+                    <span>
                       {club.direccion}, {club.ciudad}, {club.provincia}
                     </span>
-                  </div>
+                  </li>
                 )}
                 {club.telefono && (
-                  <div className="flex items-center gap-2">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      className="w-4 h-4 shrink-0"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" />
-                    </svg>
-                    <span
-                      className="text-sm"
-                      style={{ color: "var(--text-secondary)" }}
-                    >
-                      {club.telefono}
-                    </span>
-                  </div>
+                  <li className="flex items-center gap-2 body-sm text-ink-2">
+                    <Phone className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+                    <span>{club.telefono}</span>
+                  </li>
                 )}
                 {club.email && (
-                  <div className="flex items-center gap-2">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      className="w-4 h-4 shrink-0"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                      <polyline points="22,6 12,13 2,6" />
-                    </svg>
-                    <span
-                      className="text-sm"
-                      style={{ color: "var(--text-secondary)" }}
-                    >
-                      {club.email}
-                    </span>
-                  </div>
+                  <li className="flex items-center gap-2 body-sm text-ink-2">
+                    <Mail className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+                    <span>{club.email}</span>
+                  </li>
                 )}
-              </div>
+              </ul>
             </div>
-          </div>
+          </Card>
 
           {/* Horarios */}
           {(club.horarioApertura || club.horarioCierre) && (
-            <div className="themed-card rounded-2xl border p-5">
-              <h2
-                className="font-semibold mb-3"
-                style={{ color: "var(--text-primary)" }}
-              >
-                Horario de atención
-              </h2>
-              <div className="flex items-center gap-2">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  className="w-4 h-4"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                <span
-                  className="text-sm"
-                  style={{ color: "var(--text-secondary)" }}
-                >
-                  {club.horarioApertura || "08:00"} a{" "}
-                  {club.horarioCierre || "23:00"}
+            <Card>
+              <Card.Title as="h2">Horario de atención</Card.Title>
+              <p className="flex items-center gap-2 body-sm text-ink-2 mt-3">
+                <Clock className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+                <span>
+                  {club.horarioApertura || "08:00"} – {club.horarioCierre || "23:00"}
                 </span>
-              </div>
+              </p>
               {club.diasAbiertos && (
-                <div className="flex gap-1.5 mt-2 flex-wrap">
+                <div className="flex flex-wrap gap-1.5 mt-3">
                   {club.diasAbiertos.map((d) => (
-                    <span
-                      key={d}
-                      className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                      style={{
-                        backgroundColor: "var(--accent-light)",
-                        color: "var(--accent)",
-                      }}
-                    >
-                      {d.slice(0, 3)}
-                    </span>
+                    <Badge key={d}>{d.slice(0, 3)}</Badge>
                   ))}
                 </div>
               )}
-            </div>
+            </Card>
           )}
 
           {/* Redes sociales */}
@@ -777,132 +664,90 @@ export default function ClubPublico() {
             club.facebook ||
             club.whatsapp ||
             club.website) && (
-            <div className="themed-card rounded-2xl border p-5">
-              <h2
-                className="font-semibold mb-3"
-                style={{ color: "var(--text-primary)" }}
-              >
-                Redes y contacto
-              </h2>
-              <div className="flex flex-col gap-2">
+            <Card>
+              <Card.Title as="h2">Redes y contacto</Card.Title>
+              <ul className="flex flex-col gap-2 mt-3">
                 {club.instagram && (
-                  <a
-                    href={`https://instagram.com/${club.instagram.replace("@", "")}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 text-sm transition hover:opacity-80"
-                    style={{ color: "#e4405f" }}
-                  >
-                    <span className="font-semibold">Instagram</span>
-                    <span style={{ color: "var(--text-secondary)" }}>
-                      @{club.instagram.replace("@", "")}
-                    </span>
-                  </a>
+                  <li>
+                    <a
+                      href={`https://instagram.com/${club.instagram.replace("@", "")}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 body-sm text-court hover:underline"
+                    >
+                      <AtSign className="pd-icon" size={20} aria-hidden="true" />
+                      <span className="font-semibold">Instagram</span>
+                      <span className="text-ink-2">@{club.instagram.replace("@", "")}</span>
+                    </a>
+                  </li>
                 )}
                 {club.facebook && (
-                  <a
-                    href={
-                      club.facebook.startsWith("http")
-                        ? club.facebook
-                        : `https://facebook.com/${club.facebook}`
-                    }
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 text-sm transition hover:opacity-80"
-                    style={{ color: "#1877f2" }}
-                  >
-                    <span className="font-semibold">Facebook</span>
-                    <span style={{ color: "var(--text-secondary)" }}>
-                      {club.facebook}
-                    </span>
-                  </a>
+                  <li>
+                    <a
+                      href={
+                        club.facebook.startsWith("http")
+                          ? club.facebook
+                          : `https://facebook.com/${club.facebook}`
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 body-sm text-court hover:underline"
+                    >
+                      <ExternalLink className="pd-icon" size={20} aria-hidden="true" />
+                      <span className="font-semibold">Facebook</span>
+                      <span className="text-ink-2">{club.facebook}</span>
+                    </a>
+                  </li>
                 )}
                 {club.whatsapp && (
-                  <a
-                    href={`https://wa.me/${club.whatsapp.replace(/[^0-9]/g, "")}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 text-sm transition hover:opacity-80"
-                    style={{ color: "#25d366" }}
-                  >
-                    <span className="font-semibold">WhatsApp</span>
-                    <span style={{ color: "var(--text-secondary)" }}>
-                      {club.whatsapp}
-                    </span>
-                  </a>
+                  <li>
+                    <a
+                      href={`https://wa.me/${club.whatsapp.replace(/[^0-9]/g, "")}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 body-sm text-court hover:underline"
+                    >
+                      <MessageCircle className="pd-icon" size={20} aria-hidden="true" />
+                      <span className="font-semibold">WhatsApp</span>
+                      <span className="text-ink-2">{club.whatsapp}</span>
+                    </a>
+                  </li>
                 )}
                 {club.website && (
-                  <a
-                    href={
-                      club.website.startsWith("http")
-                        ? club.website
-                        : `https://${club.website}`
-                    }
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 text-sm transition hover:opacity-80"
-                    style={{ color: "var(--accent)" }}
-                  >
-                    <span className="font-semibold">Web</span>
-                    <span style={{ color: "var(--text-secondary)" }}>
-                      {club.website}
-                    </span>
-                  </a>
+                  <li>
+                    <a
+                      href={
+                        club.website.startsWith("http")
+                          ? club.website
+                          : `https://${club.website}`
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 body-sm text-court hover:underline"
+                    >
+                      <Globe className="pd-icon" size={20} aria-hidden="true" />
+                      <span className="font-semibold">Web</span>
+                      <span className="text-ink-2">{club.website}</span>
+                    </a>
+                  </li>
                 )}
-              </div>
-            </div>
+              </ul>
+            </Card>
           )}
 
           {/* Canchas del club */}
-          <div className="themed-card rounded-2xl border p-5">
-            <h2
-              className="font-semibold mb-3"
-              style={{ color: "var(--text-primary)" }}
-            >
-              Canchas ({canchas.length})
+          <section>
+            <h2 className="heading-lg mb-4">
+              Canchas <span className="body-md font-medium! text-ink-3">{canchas.length}</span>
             </h2>
-            <div className="flex flex-col gap-2">
-              {canchas.map((c) => (
-                <div
-                  key={c.id}
-                  className="flex items-center justify-between rounded-xl px-4 py-3"
-                  style={{ backgroundColor: "var(--bg-card-hover)" }}
-                >
-                  <div>
-                    <p
-                      className="text-sm font-semibold"
-                      style={{ color: "var(--text-primary)" }}
-                    >
-                      {c.nombre}
-                    </p>
-                    <p
-                      className="text-xs"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {c.superficie} · {c.techada ? "Techada" : "Aire libre"}
-                    </p>
-                  </div>
-                  <span
-                    className="text-xs font-semibold"
-                    style={{ color: "var(--accent)" }}
-                  >
-                    Desde {formatPrecio(c.precioBase || 0)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+            <ListaCanchas canchas={canchas} />
+          </section>
 
           {/* Galería placeholder */}
-          <div className="themed-card rounded-2xl border p-5 text-center">
-            <div className="text-3xl mb-2">📸</div>
-            <p
-              className="text-sm font-medium"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Galería de fotos próximamente
-            </p>
-          </div>
+          <Card className="text-center">
+            <Camera className="pd-icon-lg mx-auto mb-2 text-ink-3" size={24} aria-hidden="true" />
+            <p className="body-sm text-ink-2">Galería de fotos próximamente</p>
+          </Card>
         </div>
       )}
 
@@ -910,97 +755,59 @@ export default function ClubPublico() {
       {tab === "reviews" && (
         <div className="flex flex-col gap-4">
           {/* Resumen */}
-          <div className="themed-card rounded-2xl border p-5 text-center">
+          <Card className="text-center">
             {reviews.length > 0 ? (
               <>
-                <p
-                  className="text-4xl font-bold mb-1"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  {promedioEstrellas.toFixed(1)}
-                </p>
-                <StarDisplay value={promedioEstrellas} size="w-5 h-5" />
-                <p
-                  className="text-xs mt-1"
-                  style={{ color: "var(--text-muted)" }}
-                >
+                <p className="numeral-lg pd-tnum text-ink">{promedioEstrellas.toFixed(1)}</p>
+                <div className="flex justify-center mt-1">
+                  <StarDisplay value={promedioEstrellas} size={20} />
+                </div>
+                <p className="body-sm text-ink-3 mt-1">
                   {reviews.length} review{reviews.length !== 1 ? "s" : ""}
                 </p>
               </>
             ) : (
               <>
-                <div className="text-3xl mb-2">⭐</div>
-                <p
-                  className="text-sm font-medium"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Este club aún no tiene reviews
-                </p>
+                <div className="flex justify-center mb-3">
+                  <span className="pd-ball" aria-hidden="true" />
+                </div>
+                <p className="body-md text-ink-2">Este club aún no tiene reviews</p>
               </>
             )}
-          </div>
+          </Card>
 
           {/* Botón dejar review */}
           {puedeReview && !mostrarFormReview && (
-            <button
-              onClick={() => setMostrarFormReview(true)}
-              className="w-full py-3 rounded-xl text-sm font-semibold text-white transition"
-              style={{ backgroundColor: "var(--accent)" }}
-            >
+            <Button variant="primary" block onClick={() => setMostrarFormReview(true)}>
               Dejar una review
-            </button>
+            </Button>
           )}
 
           {yaHizoReview && (
-            <p
-              className="text-xs text-center"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Ya dejaste tu review en este club
-            </p>
+            <p className="body-sm text-ink-3 text-center">Ya dejaste tu review en este club</p>
           )}
 
           {!puedeReview && !yaHizoReview && user && (
-            <p
-              className="text-xs text-center"
-              style={{ color: "var(--text-muted)" }}
-            >
+            <p className="body-sm text-ink-3 text-center">
               Necesitás haber reservado en este club para dejar una review
             </p>
           )}
 
           {/* Formulario de review */}
           {mostrarFormReview && (
-            <div className="themed-card rounded-2xl border p-5">
-              <h3
-                className="font-semibold mb-3"
-                style={{ color: "var(--text-primary)" }}
-              >
-                Tu review
-              </h3>
-              <div className="flex flex-col gap-3">
-                <div>
-                  <label
-                    className="text-xs font-semibold mb-2 block"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Puntuación
-                  </label>
+            <Card>
+              <Card.Title>Tu review</Card.Title>
+              <div className="flex flex-col gap-4 mt-3">
+                <Field label="Puntuación" as="div">
                   <StarRating
                     value={reviewForm.estrellas}
                     onChange={(v) =>
                       setReviewForm({ ...reviewForm, estrellas: v })
                     }
                   />
-                </div>
-                <div>
-                  <label
-                    className="text-xs font-semibold mb-1 block"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Comentario (opcional)
-                  </label>
-                  <textarea
+                </Field>
+                <Field label="Comentario (opcional)">
+                  <Textarea
                     value={reviewForm.comentario}
                     onChange={(e) =>
                       setReviewForm({
@@ -1008,79 +815,50 @@ export default function ClubPublico() {
                         comentario: e.target.value,
                       })
                     }
-                    placeholder="Contá tu experiencia..."
+                    placeholder="Contá tu experiencia…"
                     rows={3}
-                    className="themed-input w-full rounded-xl px-4 py-2.5 text-sm border resize-none"
                   />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setMostrarFormReview(false)}
-                    className="flex-1 py-2 rounded-xl text-sm font-semibold transition"
-                    style={{
-                      backgroundColor: "var(--bg-card-hover)",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
+                </Field>
+                <div className="pd-btn-group justify-end">
+                  <Button variant="ghost" onClick={() => setMostrarFormReview(false)}>
                     Cancelar
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="primary"
                     onClick={handleReview}
-                    disabled={guardandoReview}
-                    className="flex-1 py-2 rounded-xl text-sm font-semibold text-white transition disabled:opacity-50"
-                    style={{ backgroundColor: "var(--accent)" }}
+                    cargando={guardandoReview ? "Enviando…" : ""}
                   >
-                    {guardandoReview ? "Enviando..." : "Enviar review"}
-                  </button>
+                    Enviar review
+                  </Button>
                 </div>
               </div>
-            </div>
+            </Card>
           )}
 
           {/* Lista de reviews */}
           {reviews.length > 0 && (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-4">
               {reviews
                 .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""))
                 .map((r) => (
-                  <div
-                    key={r.id}
-                    className="themed-card rounded-2xl border p-4"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                          style={{ backgroundColor: "var(--accent)" }}
+                  <Card key={r.id}>
+                    <Card.Row>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="w-8 h-8 rounded-pill bg-surface-sunken text-ink font-display font-bold text-[15px] grid place-items-center shrink-0"
+                          aria-hidden="true"
                         >
                           {(r.nombre || "A").charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <p
-                            className="text-sm font-semibold"
-                            style={{ color: "var(--text-primary)" }}
-                          >
-                            {r.nombre}
-                          </p>
-                          <p
-                            className="text-[10px]"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            {formatFecha(r.fecha)}
-                          </p>
+                        </span>
+                        <div className="min-w-0">
+                          <p className="heading-sm text-ink truncate">{r.nombre}</p>
+                          <p className="body-sm text-ink-3">{formatFecha(r.fecha)}</p>
                         </div>
                       </div>
-                      <StarDisplay value={r.estrellas} size="w-3.5 h-3.5" />
-                    </div>
-                    {r.comentario && (
-                      <p
-                        className="text-sm"
-                        style={{ color: "var(--text-secondary)" }}
-                      >
-                        {r.comentario}
-                      </p>
-                    )}
-                  </div>
+                      <StarDisplay value={r.estrellas} size={16} />
+                    </Card.Row>
+                    {r.comentario && <p className="body-md text-ink-2 mt-3">{r.comentario}</p>}
+                  </Card>
                 ))}
             </div>
           )}
@@ -1089,68 +867,30 @@ export default function ClubPublico() {
 
       {/* Modal de reserva */}
       {mostrarModal && modalData && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="themed-card rounded-2xl max-w-md w-full p-6 border">
-            <div className="flex items-center gap-3 mb-4">
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: "var(--accent-light)" }}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  className="w-5 h-5"
-                  style={{ color: "var(--accent)" }}
-                >
-                  <rect x="3" y="4" width="18" height="18" rx="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-              </div>
-              <div>
-                <h2
-                  className="font-bold"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  Reservar cancha
-                </h2>
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  {club.nombre} · {modalData.cancha.nombre} · {modalData.hora}
-                </p>
-              </div>
+        <div className="pd-backdrop z-50">
+          <div
+            className="pd-dialog max-h-[calc(100dvh-32px)] overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reserva-titulo"
+            aria-describedby="reserva-cuerpo"
+          >
+            <h2 className="pd-dialog-title" id="reserva-titulo">
+              ¿Confirmar la reserva?
+            </h2>
+            <p className="pd-dialog-body" id="reserva-cuerpo">
+              {club.nombre} · {modalData.cancha.nombre} · {fechaCorta(fechaSeleccionada)} a las {modalData.hora}
+            </p>
+            <div className="flex items-end justify-between gap-3 mt-4 rounded-md bg-surface-sunken px-4 py-3">
+              <span className="body-sm text-ink-2">Precio</span>
+              <span className="numeral-lg pd-tnum text-ink">{formatPrecio(modalData.precio)}</span>
             </div>
-            <div
-              className="rounded-xl p-3 mb-4 flex items-center justify-between"
-              style={{ backgroundColor: "var(--accent-light)" }}
-            >
-              <span
-                className="text-sm font-medium"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                Precio
-              </span>
-              <span
-                className="text-lg font-bold"
-                style={{ color: "var(--accent)" }}
-              >
-                {formatPrecio(modalData.precio)}
-              </span>
-            </div>
-            <form onSubmit={handleReservar} className="flex flex-col gap-3">
-              <div>
-                <label
-                  className="text-xs font-semibold mb-1 block"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Nombre completo *
-                </label>
-                <input
+            <form onSubmit={handleReservar} className="flex flex-col gap-4 mt-4">
+              <Field label="Nombre completo *">
+                <Input
                   type="text"
                   required
+                  autoComplete="name"
                   value={formReserva.nombreJugador}
                   onChange={(e) =>
                     setFormReserva({
@@ -1158,61 +898,35 @@ export default function ClubPublico() {
                       nombreJugador: e.target.value,
                     })
                   }
-                  className="themed-input w-full rounded-xl px-4 py-2.5 text-sm border"
                 />
-              </div>
-              <div>
-                <label
-                  className="text-xs font-semibold mb-1 block"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Email
-                </label>
-                <input
+              </Field>
+              <Field label="Email">
+                <Input
                   type="email"
+                  autoComplete="email"
+                  inputMode="email"
                   value={formReserva.email}
                   onChange={(e) =>
                     setFormReserva({ ...formReserva, email: e.target.value })
                   }
-                  className="themed-input w-full rounded-xl px-4 py-2.5 text-sm border"
                 />
-              </div>
-              <div>
-                <label
-                  className="text-xs font-semibold mb-1 block"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Teléfono
-                </label>
-                <input
+              </Field>
+              <Field label="Teléfono">
+                <Input
                   type="tel"
+                  autoComplete="tel"
+                  inputMode="tel"
                   value={formReserva.telefono}
                   onChange={(e) =>
                     setFormReserva({ ...formReserva, telefono: e.target.value })
                   }
-                  className="themed-input w-full rounded-xl px-4 py-2.5 text-sm border"
                 />
-              </div>
-              <div className="flex gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={() => setMostrarModal(false)}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition"
-                  style={{
-                    backgroundColor: "var(--bg-card-hover)",
-                    color: "var(--text-secondary)",
-                  }}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={guardando}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition disabled:opacity-50"
-                  style={{ backgroundColor: "var(--accent)" }}
-                >
-                  {guardando ? "Reservando..." : "Confirmar reserva"}
-                </button>
+              </Field>
+              <div className="pd-dialog-actions">
+                <Button onClick={() => setMostrarModal(false)}>Volver</Button>
+                <Button type="submit" variant="primary" cargando={guardando ? "Reservando…" : ""}>
+                  Confirmar reserva
+                </Button>
               </div>
             </form>
           </div>
@@ -1221,69 +935,58 @@ export default function ClubPublico() {
 
       {/* Confirmación de reserva */}
       {reservaExitosa && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="themed-card rounded-2xl max-w-sm w-full p-6 border text-center">
-            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: reservaExitosa.status === "confirmada" ? "rgba(34,197,94,0.1)" : "rgba(234,179,8,0.1)" }}>
-              {reservaExitosa.status === "confirmada" ? (
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="12" />
-                  <line x1="12" y1="16" x2="12.01" y2="16" />
-                </svg>
-              )}
-            </div>
-
-            <h2 className="text-lg font-bold mb-1" style={{ color: "var(--text-primary)" }}>
-              {reservaExitosa.status === "confirmada" ? "¡Reserva confirmada!" : "Reserva pendiente"}
+        <div className="pd-backdrop z-50">
+          <div
+            className="pd-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="exito-titulo"
+            aria-describedby="exito-cuerpo"
+          >
+            {reservaConfirmada ? (
+              <Check className="pd-icon-lg text-success mb-3" size={24} aria-hidden="true" />
+            ) : (
+              <AlertTriangle className="pd-icon-lg text-warning mb-3" size={24} aria-hidden="true" />
+            )}
+            <h2 className="pd-dialog-title" id="exito-titulo">
+              {reservaConfirmada ? "Reserva confirmada" : "Reserva pendiente"}
             </h2>
-            <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
-              {reservaExitosa.status === "confirmada"
-                ? "Tu cancha está reservada. ¡Nos vemos en la cancha!"
+            <p className="pd-dialog-body" id="exito-cuerpo">
+              {reservaConfirmada
+                ? "Tu cancha está reservada. Nos vemos en la cancha."
                 : "Tu reserva fue enviada y está pendiente de aprobación por el club."}
             </p>
 
-            <div className="rounded-xl p-4 mb-4 flex flex-col gap-1.5" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-              <div className="flex justify-between">
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>Club</span>
-                <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{reservaExitosa.clubNombre}</span>
+            <dl className="flex flex-col gap-2 mt-4 rounded-md bg-surface-sunken px-4 py-3">
+              <div className="flex justify-between gap-3">
+                <dt className="body-sm text-ink-3">Club</dt>
+                <dd className="body-sm font-semibold! text-ink text-right">{reservaExitosa.clubNombre}</dd>
               </div>
-              <div className="flex justify-between">
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>Cancha</span>
-                <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{reservaExitosa.cancha}</span>
+              <div className="flex justify-between gap-3">
+                <dt className="body-sm text-ink-3">Cancha</dt>
+                <dd className="body-sm font-semibold! text-ink text-right">{reservaExitosa.cancha}</dd>
               </div>
-              <div className="flex justify-between">
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>Fecha</span>
-                <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{reservaExitosa.fecha}</span>
+              <div className="flex justify-between gap-3">
+                <dt className="body-sm text-ink-3">Fecha</dt>
+                <dd className="body-sm font-semibold! text-ink text-right">{fechaCorta(reservaExitosa.fecha)}</dd>
               </div>
-              <div className="flex justify-between">
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>Hora</span>
-                <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{reservaExitosa.hora}</span>
+              <div className="flex justify-between gap-3">
+                <dt className="body-sm text-ink-3">Hora</dt>
+                <dd className="body-sm font-semibold! text-ink text-right pd-tnum">{reservaExitosa.hora}</dd>
               </div>
-              <div className="flex justify-between">
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>Precio</span>
-                <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>{formatPrecio(reservaExitosa.precio)}</span>
+              <div className="flex items-end justify-between gap-3">
+                <dt className="body-sm text-ink-3">Precio</dt>
+                <dd className="numeral-lg pd-tnum text-ink">{formatPrecio(reservaExitosa.precio)}</dd>
               </div>
-            </div>
+            </dl>
 
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => setReservaExitosa(null)}
-                className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition"
-                style={{ backgroundColor: "var(--accent)" }}
-              >
-                Entendido
-              </button>
-              <button
-                onClick={() => { setReservaExitosa(null); navigate("/mis-reservas"); }}
-                className="w-full py-2.5 rounded-xl text-sm font-semibold transition"
-                style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-secondary)" }}
-              >
+            <div className="pd-dialog-actions">
+              <Button onClick={() => { setReservaExitosa(null); navigate("/mis-reservas"); }}>
                 Ver mis reservas
-              </button>
+              </Button>
+              <Button variant="primary" onClick={() => setReservaExitosa(null)}>
+                Entendido
+              </Button>
             </div>
           </div>
         </div>

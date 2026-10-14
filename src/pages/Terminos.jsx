@@ -12,7 +12,7 @@ export default function Terminos() {
         </p>
         <p>
           Al crear una cuenta o usar la aplicación aceptás estos Términos y condiciones y nuestra{" "}
-          <Link to="/privacidad" className="font-semibold hover:underline" style={{ color: "var(--accent)" }}>
+          <Link to="/privacidad" className="font-semibold text-court hover:underline">
             Política de privacidad
           </Link>
           . Si no estás de acuerdo, no uses el servicio.

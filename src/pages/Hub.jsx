@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { CircleDot, MapPin, Star } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import {
   getClubesConCanchas,
@@ -10,10 +11,20 @@ import { doc, updateDoc, getDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { getTodayLocal, addDaysLocal, horaActualStr } from "../utils/formatDate";
 import { formatPrecio } from "../utils/format";
+import { Badge, Button, Card, Field, Input, Pills, SearchInput, Select } from "../components/ui";
+
+// Horas del filtro de rango: de 07:00 a 23:00
+const HORAS = Array.from({ length: 17 }, (_, i) => i + 7);
+const hh = (h) => `${h.toString().padStart(2, "0")}:00`;
+
+const PILLS_COBERTURA = [
+  { value: "", label: "Todas" },
+  { value: "techada", label: "Techada" },
+  { value: "airelibre", label: "Aire libre" },
+];
 
 export default function Hub() {
   const { user } = useAuthStore();
-  const navigate = useNavigate();
   const [clubes, setClubes] = useState([]);
   const [fechaSeleccionada, setFechaSeleccionada] = useState(getTodayLocal());
   const [reservasPorClub, setReservasPorClub] = useState({});
@@ -225,274 +236,257 @@ export default function Hub() {
   // Obtener superficies únicas
   const todasSuperficies = [...new Set(clubes.flatMap((c) => (c.canchas || []).map((ca) => ca.superficie)).filter(Boolean))];
 
+  const enRango = Boolean(horaDesde && horaHasta);
+  const hayFiltros = Boolean(filtroSuperficie || filtroTechada || horaDesde || horaHasta);
+
+  // Pie de la tarjeta: cuántos horarios quedan (en el rango elegido, si hay)
+  function disponibilidad(club) {
+    if (!user) {
+      return <span className="body-sm font-semibold! text-lime-text">Ingresá para ver horarios</span>;
+    }
+    const n = enRango ? club.libresEnRango : club.libres;
+    if (n <= 0) {
+      return (
+        <span className="body-sm text-ink-3">
+          {enRango ? "Sin disponibilidad en ese horario" : "Sin disponibilidad"}
+        </span>
+      );
+    }
+    const plural = n !== 1 ? "s" : "";
+    return (
+      <span className="body-sm text-ink-2 inline-flex items-baseline gap-1">
+        <span className="numeral-md text-lime-text pd-tnum">{n}</span>
+        {enRango ? `disponible${plural} entre ${horaDesde} – ${horaHasta}` : `horario${plural} disponible${plural}`}
+      </span>
+    );
+  }
+
+  const encabezado = (
+    <header className="mb-5">
+      <h1 className="display-lg">Canchas disponibles</h1>
+      <p className="body-sm text-ink-2 mt-1">Encontrá y reservá tu cancha</p>
+    </header>
+  );
+
   if (cargando) {
     return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
-        <p style={{ color: "var(--text-muted)" }} className="text-sm">Cargando canchas...</p>
+      <div aria-busy="true">
+        {encabezado}
+        <p className="sr-only">Cargando canchas…</p>
+        <div className="pd-skeleton h-11 mb-4" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="pd-skeleton h-56 rounded-lg!" />
+          <div className="pd-skeleton h-56 rounded-lg!" />
+          <div className="pd-skeleton h-56 rounded-lg!" />
+          <div className="pd-skeleton h-56 rounded-lg!" />
+        </div>
       </div>
     );
   }
 
   return (
     <div>
-      <div className="mb-5">
-        <h1 className="text-xl font-bold mb-1" style={{ color: "var(--text-primary)" }}>
-          Canchas disponibles
-        </h1>
-        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          Encontrá y reservá tu cancha
-        </p>
-      </div>
+      {encabezado}
 
       {/* Filtros principales */}
-      <div className="flex flex-col gap-3 mb-4">
+      <div className="flex flex-col gap-3 mb-5">
         {/* Fecha y rango horario: solo con sesión (sin ella no hay disponibilidad) */}
         {user && (
-        <div className="flex gap-2 flex-wrap">
-          <div className="themed-card rounded-xl border px-3 py-2 flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4" style={{ color: "var(--accent)" }}>
-              <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            <input type="date" value={fechaSeleccionada} min={fechaMin} max={fechaMax} onChange={(e) => cambiarFecha(e.target.value)}
-              className="text-sm bg-transparent focus:outline-none" style={{ color: "var(--text-primary)" }} />
-          </div>
-          <div className="themed-card rounded-xl border px-3 py-2 flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4" style={{ color: "var(--accent)" }}>
-              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-            </svg>
-            <select value={horaDesde}
-              onChange={(e) => {
-                setHoraDesde(e.target.value);
-                // Si "Hasta" queda vacío o antes/igual que "Desde", lo corremos 3 horas (antes se hacía en un useEffect)
-                if (e.target.value && (!horaHasta || horaHasta <= e.target.value)) {
-                  const h = parseInt(e.target.value.split(":")[0]) + 3;
-                  setHoraHasta(h <= 23 ? `${h.toString().padStart(2, "0")}:00` : "23:00");
-                }
-              }}
-              className="text-xs bg-transparent focus:outline-none"
-              style={{ color: horaDesde ? "var(--text-primary)" : "var(--text-muted)" }}>
-              <option value="">Desde</option>
-              {Array.from({ length: 17 }, (_, i) => i + 7).map((h) => (
-                <option key={h} value={`${h.toString().padStart(2, "0")}:00`}>{h.toString().padStart(2, "0")}:00</option>
-              ))}
-            </select>
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>—</span>
-            <select value={horaHasta} onChange={(e) => setHoraHasta(e.target.value)}
-              className="text-xs bg-transparent focus:outline-none"
-              style={{ color: horaHasta ? "var(--text-primary)" : "var(--text-muted)" }}>
-              <option value="">Hasta</option>
-              {Array.from({ length: 17 }, (_, i) => i + 7)
-                .filter((h) => !horaDesde || h > parseInt(horaDesde.split(":")[0]))
-                .map((h) => (
-                  <option key={h} value={`${h.toString().padStart(2, "0")}:00`}>{h.toString().padStart(2, "0")}:00</option>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Field label="Fecha" className="col-span-2">
+              <Input type="date" value={fechaSeleccionada} min={fechaMin} max={fechaMax} onChange={(e) => cambiarFecha(e.target.value)} />
+            </Field>
+            <Field label="Desde">
+              <Select
+                wrapperClassName="block"
+                value={horaDesde}
+                onChange={(e) => {
+                  setHoraDesde(e.target.value);
+                  // Si "Hasta" queda vacío o antes/igual que "Desde", lo corremos 3 horas (antes se hacía en un useEffect)
+                  if (e.target.value && (!horaHasta || horaHasta <= e.target.value)) {
+                    const h = parseInt(e.target.value.split(":")[0]) + 3;
+                    setHoraHasta(h <= 23 ? `${h.toString().padStart(2, "0")}:00` : "23:00");
+                  }
+                }}
+              >
+                <option value="">Cualquier hora</option>
+                {HORAS.map((h) => (
+                  <option key={h} value={hh(h)}>{hh(h)}</option>
                 ))}
-            </select>
+              </Select>
+            </Field>
+            <Field label="Hasta">
+              <Select wrapperClassName="block" value={horaHasta} onChange={(e) => setHoraHasta(e.target.value)}>
+                <option value="">Cualquier hora</option>
+                {HORAS
+                  .filter((h) => !horaDesde || h > parseInt(horaDesde.split(":")[0]))
+                  .map((h) => (
+                    <option key={h} value={hh(h)}>{hh(h)}</option>
+                  ))}
+              </Select>
+            </Field>
           </div>
-        </div>
         )}
 
-        <div className="flex gap-2 flex-wrap">
-          <div className="themed-card rounded-xl border px-3 py-2 flex items-center gap-2 flex-1 min-w-[150px]">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4" style={{ color: "var(--text-muted)" }}>
-              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input type="text" placeholder="Buscar club..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
-              className="text-sm bg-transparent focus:outline-none w-full" style={{ color: "var(--text-primary)" }} />
-          </div>
+        <SearchInput
+          wrapperClassName="block"
+          placeholder="Buscar club..."
+          aria-label="Buscar club"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+        />
+
+        <div className="grid sm:grid-cols-2 gap-3">
           {todasSuperficies.length > 0 && (
-            <select value={filtroSuperficie} onChange={(e) => setFiltroSuperficie(e.target.value)}
-              className="themed-card rounded-xl border px-3 py-2 text-xs bg-transparent" style={{ color: "var(--text-secondary)" }}>
-              <option value="">Superficie</option>
-              {todasSuperficies.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <div>
+              <p className="pd-eyebrow mb-2!">Superficie</p>
+              <Pills
+                ariaLabel="Superficie"
+                value={filtroSuperficie}
+                onChange={setFiltroSuperficie}
+                items={[{ value: "", label: "Todas" }, ...todasSuperficies.map((s) => ({ value: s, label: s }))]}
+              />
+            </div>
           )}
-          <select value={filtroTechada} onChange={(e) => setFiltroTechada(e.target.value)}
-            className="themed-card rounded-xl border px-3 py-2 text-xs bg-transparent" style={{ color: "var(--text-secondary)" }}>
-            <option value="">Cobertura</option>
-            <option value="techada">Techada</option>
-            <option value="airelibre">Aire libre</option>
-          </select>
+          <div>
+            <p className="pd-eyebrow mb-2!">Cobertura</p>
+            <Pills ariaLabel="Cobertura" value={filtroTechada} onChange={setFiltroTechada} items={PILLS_COBERTURA} />
+          </div>
         </div>
 
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {ciudadJugador && !verTodasCiudades && (
-              <span className="text-xs px-3 py-1 rounded-full flex items-center gap-1.5"
-                style={{ backgroundColor: "rgba(16,185,129,0.1)", color: "var(--accent)" }}>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" />
-                </svg>
+              <span className="body-sm text-ink-2 inline-flex items-center gap-1">
+                <MapPin className="pd-icon" size={20} aria-hidden="true" />
                 {ciudadJugador}
               </span>
             )}
             {ciudadJugador && (
-              <button onClick={() => setVerTodasCiudades(!verTodasCiudades)}
-                className="text-xs font-semibold transition" style={{ color: "var(--accent)" }}>
+              <Button variant="ghost" size="sm" onClick={() => setVerTodasCiudades(!verTodasCiudades)}>
                 {verTodasCiudades ? "Solo mi ciudad" : "Ver todas las ciudades"}
-              </button>
+              </Button>
             )}
           </div>
-          {(filtroSuperficie || filtroTechada || horaDesde || horaHasta) && (
-            <button onClick={() => { setFiltroSuperficie(""); setFiltroTechada(""); setHoraDesde(""); setHoraHasta(""); }}
-              className="text-xs font-semibold px-3 py-1 rounded-xl transition" style={{ color: "var(--accent)" }}>
+          {hayFiltros && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setFiltroSuperficie(""); setFiltroTechada(""); setHoraDesde(""); setHoraHasta(""); }}
+            >
               Limpiar filtros
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
       {/* Sin resultados */}
       {clubesConInfo.length === 0 && (
-        <div className="themed-card text-center py-16 rounded-2xl border">
-          <div className="text-5xl mb-4">🏟️</div>
-          <p className="font-medium" style={{ color: "var(--text-secondary)" }}>
+        <Card className="text-center">
+          <CircleDot className="pd-icon-lg mx-auto mb-3 text-ink-3" size={24} aria-hidden="true" />
+          <p className="heading-sm">
             {ciudadJugador && !verTodasCiudades ? `No hay canchas disponibles en ${ciudadJugador}` : "No hay canchas disponibles"}
           </p>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+          <p className="body-sm text-ink-2 mt-1">
             {horaDesde && horaHasta
               ? `No hay disponibilidad entre ${horaDesde} y ${horaHasta}. Probá con otro horario.`
-              : "Probá cambiando la fecha o los filtros"}
+              : "Probá cambiando la fecha o los filtros."}
           </p>
           {ciudadJugador && !verTodasCiudades && (
-            <button onClick={() => setVerTodasCiudades(true)}
-              className="mt-3 text-sm font-semibold px-4 py-2 rounded-xl transition"
-              style={{ backgroundColor: "var(--accent)", color: "white" }}>
+            <Button className="mt-4" onClick={() => setVerTodasCiudades(true)}>
               Ver canchas en todas las ciudades
-            </button>
+            </Button>
           )}
-        </div>
+        </Card>
       )}
 
-      {/* Tarjetas de clubes */}
+      {/* Tarjetas de clubes: toda la tarjeta es el link al club; el favorito queda afuera, encima */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {clubesConInfo.map((club) => (
-          <div
-            key={club.id}
-            className="themed-card rounded-2xl border overflow-hidden card-hover cursor-pointer"
-            onClick={() => navigate(`/club/${club.id}`, { state: { fecha: fechaSeleccionada, horaDesde, horaHasta } })}
-          >
-            {/* Header del club */}
-            <div className="px-4 pt-4 pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h2 className="font-bold" style={{ color: "var(--text-primary)" }}>{club.nombre}</h2>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    {club.ciudad}{club.direccion && ` · ${club.direccion}`}
-                  </p>
+        {clubesConInfo.map((club) => {
+          const nCanchas = club.canchasInfo.length;
+          return (
+            <div key={club.id} className="relative">
+              <Card
+                variant="hover"
+                as={Link}
+                to={`/club/${club.id}`}
+                state={{ fecha: fechaSeleccionada, horaDesde, horaHasta }}
+                className="block h-full"
+              >
+                <Card.Title className={user ? "pr-10" : undefined}>{club.nombre}</Card.Title>
+                {(club.ciudad || club.direccion) && (
+                  <Card.Meta className="flex items-center gap-1">
+                    <MapPin className="pd-icon" size={20} aria-hidden="true" />
+                    <span className="truncate">
+                      {club.ciudad}{club.direccion && ` · ${club.direccion}`}
+                    </span>
+                  </Card.Meta>
+                )}
+
+                <div className="flex gap-2 mt-3 flex-wrap">
+                  <Badge>{nCanchas} {nCanchas !== 1 ? "canchas" : "cancha"}</Badge>
+                  {club.superficies.map((s) => (
+                    <Badge key={s}>{s}</Badge>
+                  ))}
+                  {club.tieneTechada && <Badge>Techada</Badge>}
                 </div>
-                {user && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); toggleFavorito(club.id); }}
-                  className="p-1.5 rounded-lg transition hover:scale-110"
-                >
-                  {club.esFavorito ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth="1.5" className="w-5 h-5">
-                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                    </svg>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5" style={{ color: "var(--text-muted)" }}>
-                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                    </svg>
+
+                {/* Canchas resumen */}
+                <ul className="flex flex-col gap-2 mt-3">
+                  {club.canchasInfo.map((cancha) => {
+                    const n = enRango ? cancha.canchaLibresEnRango : cancha.canchaLibres;
+                    return (
+                      <li key={cancha.id} className="flex items-center justify-between gap-3 rounded-sm bg-surface-sunken px-3 py-2 body-sm">
+                        <span className="min-w-0 truncate">
+                          <span className="font-semibold text-ink">{cancha.nombre}</span>
+                          <span className="text-ink-3"> · {cancha.superficie} · {cancha.techada ? "Techada" : "Aire libre"}</span>
+                        </span>
+                        {user && (
+                          n > 0 ? (
+                            <span className="font-semibold text-lime-text pd-tnum whitespace-nowrap">
+                              {n} {n !== 1 ? "libres" : "libre"}
+                            </span>
+                          ) : (
+                            <span className="text-ink-3 whitespace-nowrap">{enRango ? "—" : "Completa"}</span>
+                          )
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                {/* Footer */}
+                <Card.Foot className="justify-between flex-wrap border-t border-line pt-3">
+                  {disponibilidad(club)}
+                  {club.precioMin > 0 && (
+                    <span className="body-sm text-ink-2 inline-flex items-baseline gap-1">
+                      Desde <span className="numeral-md text-ink pd-tnum">{formatPrecio(club.precioMin)}</span>
+                    </span>
                   )}
-                </button>
-                )}
-              </div>
-
-              {/* Badges */}
-              <div className="flex gap-1.5 mt-2 flex-wrap">
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                  style={{ backgroundColor: "var(--accent-light)", color: "var(--accent)" }}>
-                  {club.canchasInfo.length} cancha{club.canchasInfo.length !== 1 ? "s" : ""}
-                </span>
-                {club.superficies.map((s) => (
-                  <span key={s} className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-                    style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "#3b82f6" }}>
-                    {s}
-                  </span>
-                ))}
-                {club.tieneTechada && (
-                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-                    style={{ backgroundColor: "rgba(139,92,246,0.1)", color: "#8b5cf6" }}>
-                    Techada
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Canchas resumen */}
-            <div className="px-4 pb-3">
-              <div className="flex flex-col gap-1.5">
-                {club.canchasInfo.map((cancha) => (
-                  <div key={cancha.id} className="flex items-center justify-between rounded-lg px-3 py-2"
-                    style={{ backgroundColor: "var(--bg-card-hover)" }}>
-                    <div>
-                      <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{cancha.nombre}</span>
-                      <span className="text-[10px] ml-1.5" style={{ color: "var(--text-muted)" }}>
-                        {cancha.superficie} · {cancha.techada ? "Techada" : "Aire libre"}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      {!user ? null : (horaDesde && horaHasta) ? (
-                        cancha.canchaLibresEnRango > 0 ? (
-                          <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>
-                            {cancha.canchaLibresEnRango} libre{cancha.canchaLibresEnRango !== 1 ? "s" : ""}
-                          </span>
-                        ) : (
-                          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>—</span>
-                        )
-                      ) : (
-                        cancha.canchaLibres > 0 ? (
-                          <span className="text-xs font-bold" style={{ color: "var(--accent)" }}>
-                            {cancha.canchaLibres} libre{cancha.canchaLibres !== 1 ? "s" : ""}
-                          </span>
-                        ) : (
-                          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Completa</span>
-                        )
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--border-card)" }}>
-              <div>
-                {!user ? (
-                  <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>Ingresá para ver horarios</span>
-                ) : (horaDesde && horaHasta) ? (
-                  club.libresEnRango > 0 ? (
-                    <>
-                      <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>{club.libresEnRango}</span>
-                      <span className="text-xs ml-1" style={{ color: "var(--text-muted)" }}>
-                        disponible{club.libresEnRango !== 1 ? "s" : ""} entre {horaDesde}–{horaHasta}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Sin disponibilidad en ese horario</span>
-                  )
-                ) : (
-                  club.libres > 0 ? (
-                    <>
-                      <span className="text-sm font-bold" style={{ color: "var(--accent)" }}>{club.libres}</span>
-                      <span className="text-xs ml-1" style={{ color: "var(--text-muted)" }}>
-                        horario{club.libres !== 1 ? "s" : ""} disponible{club.libres !== 1 ? "s" : ""}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Sin disponibilidad</span>
-                  )
-                )}
-              </div>
-              {club.precioMin > 0 && (
-                <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                  Desde <span style={{ color: "var(--accent)" }}>{formatPrecio(club.precioMin)}</span>
-                </span>
+                </Card.Foot>
+              </Card>
+              {user && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  iconOnly
+                  className="absolute top-3 right-3"
+                  aria-label={club.esFavorito ? `Quitar ${club.nombre} de favoritos` : `Agregar ${club.nombre} a favoritos`}
+                  aria-pressed={club.esFavorito}
+                  onClick={() => toggleFavorito(club.id)}
+                  icon={
+                    <Star
+                      className={club.esFavorito ? "pd-icon text-ink" : "pd-icon text-ink-3"}
+                      size={20}
+                      fill={club.esFavorito ? "currentColor" : "none"}
+                      aria-hidden="true"
+                    />
+                  }
+                />
               )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

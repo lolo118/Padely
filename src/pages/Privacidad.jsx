@@ -97,7 +97,7 @@ export default function Privacidad() {
         <p>
           Si cambiamos esta política lo avisamos en la app y actualizamos la fecha de "Última actualización".
           Para consultas sobre privacidad escribinos a <Dato>[EMAIL DE CONTACTO]</Dato>. También podés leer los{" "}
-          <Link to="/terminos" className="font-semibold hover:underline" style={{ color: "var(--accent)" }}>
+          <Link to="/terminos" className="font-semibold text-court hover:underline">
             Términos y condiciones
           </Link>
           .

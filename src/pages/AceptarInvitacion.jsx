@@ -8,6 +8,17 @@ import {
   getInscripciones,
   actualizarInscripcion,
 } from "../services/torneoService";
+import { Badge, Button, MarcaCategoria } from "../components/ui";
+
+// Una línea de la ficha del torneo: la etiqueta como eyebrow y el dato debajo
+function Linea({ etiqueta, className = "", children }) {
+  return (
+    <div className={className}>
+      <span className="pd-eyebrow block">{etiqueta}</span>
+      <span className="block body-sm font-medium! text-ink mt-0.5">{children}</span>
+    </div>
+  );
+}
 
 export default function AceptarInvitacion() {
   const { torneoId, inscripcionId } = useParams();
@@ -70,116 +81,93 @@ export default function AceptarInvitacion() {
 
   if (loading || authLoading || !user) {
     return (
-      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
-        Cargando invitación...
+      <div className="min-h-screen bg-surface px-4 py-8">
+        <div className="pd-card max-w-md mx-auto flex flex-col gap-3" aria-busy="true">
+          <span className="sr-only">Cargando invitación…</span>
+          <div className="pd-skeleton h-4 w-1/3" />
+          <div className="pd-skeleton h-7 w-2/3" />
+          <div className="pd-skeleton h-40" />
+          <div className="pd-skeleton h-11" />
+        </div>
       </div>
     );
   }
 
   if (!torneo || !inscripcion) {
     return (
-      <div className="max-w-md mx-auto text-center py-12">
-        <div className="text-5xl mb-4">❌</div>
-        <p className="font-medium" style={{ color: "var(--text-muted)" }}>Invitación no encontrada</p>
-        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-          El link puede estar vencido o ser incorrecto
-        </p>
-        <button
-          onClick={() => navigate("/torneos")}
-          className="mt-4 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition"
-        >
-          Ver torneos
-        </button>
+      <div className="min-h-screen bg-surface px-4 py-8">
+        <div className="pd-card max-w-md mx-auto text-center">
+          <div className="flex justify-center mb-4">
+            <span className="pd-ball" aria-hidden="true" />
+          </div>
+          <h1 className="heading-md">Invitación no encontrada</h1>
+          <p className="body-sm text-ink-2 mt-1">El link puede estar vencido o ser incorrecto</p>
+          <Button variant="primary" className="mt-4" onClick={() => navigate("/torneos")}>
+            Ver torneos
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-md mx-auto">
-      <div className="themed-card border rounded-2xl p-6 mb-4">
-        <div className="text-center mb-4">
-          <div className="text-4xl mb-2">🏸</div>
-          <h1 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
-            Invitación a torneo
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>{torneo.nombre}</p>
+    <div className="min-h-screen bg-surface px-4 py-8">
+      <div className="pd-card max-w-md mx-auto">
+        <div className="mb-4">
+          <p className="pd-eyebrow mb-1!">Invitación a torneo</p>
+          <h1 className="heading-md">{torneo.nombre}</h1>
         </div>
 
-        {/* ✅ Bloque reemplazado según consigna */}
-        <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div>
-              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Sede</span>
-              <span className="font-medium" style={{ color: "var(--text-primary)" }}>{torneo.sede}</span>
-            </div>
-            <div>
-              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Ubicación</span>
-              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                {torneo.ciudad}, {torneo.provincia}
-              </span>
-            </div>
+        {/* Ficha del torneo */}
+        <div className="rounded-md bg-surface-sunken p-4 mb-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Linea etiqueta="Sede">{torneo.sede}</Linea>
+            <Linea etiqueta="Ubicación">
+              {torneo.ciudad}, {torneo.provincia}
+            </Linea>
             {torneo.direccionSede && (
-              <div className="col-span-2">
-                <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Dirección</span>
-                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                  {torneo.direccionSede}
-                </span>
-              </div>
+              <Linea etiqueta="Dirección" className="col-span-2">
+                {torneo.direccionSede}
+              </Linea>
             )}
-            <div>
-              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Fechas</span>
-              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                {formatFecha(torneo.fechaInicio)} → {formatFecha(torneo.fechaFin)}
-              </span>
-            </div>
-            <div>
-              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Inscripción</span>
-              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                {torneo.inscripcion > 0 ? formatPrecio(torneo.inscripcion) : "Gratuita"}
-              </span>
-            </div>
-            <div>
-              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Formato</span>
-              <span className="font-medium capitalize" style={{ color: "var(--text-primary)" }}>
-                {torneo.formato}
-              </span>
-            </div>
-            <div>
-              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Máx. parejas</span>
-              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                {torneo.maxParejas}
-              </span>
-            </div>
+            <Linea etiqueta="Fechas">
+              {formatFecha(torneo.fechaInicio)} – {formatFecha(torneo.fechaFin)}
+            </Linea>
+            <Linea etiqueta="Inscripción">
+              {torneo.inscripcion > 0 ? formatPrecio(torneo.inscripcion) : "Gratuita"}
+            </Linea>
+            <Linea etiqueta="Formato" className="capitalize">
+              {torneo.formato}
+            </Linea>
+            <Linea etiqueta="Máx. parejas">{torneo.maxParejas}</Linea>
             {Array.isArray(torneo.categoriaGenero) && (
-              <div>
-                <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Género</span>
-                <span className="font-medium capitalize" style={{ color: "var(--text-primary)" }}>
-                  {torneo.categoriaGenero.join(", ")}
-                </span>
-              </div>
+              <Linea etiqueta="Género" className="capitalize">
+                {torneo.categoriaGenero.join(", ")}
+              </Linea>
             )}
             {torneo.categoriasConfig && (
               <div className="col-span-2">
-                <span className="block text-xs" style={{ color: "var(--text-muted)" }}>Categorías</span>
-                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                  {Object.entries(torneo.categoriasConfig)
-                    .map(
-                      ([g, niveles]) =>
-                        `${g.charAt(0).toUpperCase() + g.slice(1)}: ${niveles.join(", ")}`,
-                    )
-                    .join(" | ")}
-                </span>
+                <span className="pd-eyebrow block">Categorías</span>
+                <div className="flex flex-col gap-1 mt-1">
+                  {Object.entries(torneo.categoriasConfig).map(([g, niveles]) => (
+                    <div key={g} className="flex flex-wrap items-center gap-2">
+                      <span className="body-sm font-medium! text-ink capitalize">{g}</span>
+                      {niveles.map((n) => (
+                        <Badge key={n}>
+                          <MarcaCategoria cat={n} size={20} />
+                          {n}
+                        </Badge>
+                      ))}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
           {torneo.reglamento && (
-            <div className="mt-3 pt-3 border-t" style={{ borderColor: "var(--border-card)" }}>
-              <span className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>
-                Reglamento
-              </span>
-              <p className="text-xs whitespace-pre-line" style={{ color: "var(--text-primary)" }}>
-                {torneo.reglamento}
-              </p>
+            <div className="mt-3 pt-3 border-t border-line">
+              <span className="pd-eyebrow block mb-1!">Reglamento</span>
+              <p className="body-sm text-ink whitespace-pre-line">{torneo.reglamento}</p>
             </div>
           )}
         </div>
@@ -187,84 +175,69 @@ export default function AceptarInvitacion() {
         {/* Estado: esperando confirmación */}
         {!estado && inscripcion.status === "esperando_companero" && (
           <div className="flex flex-col gap-2">
-            <button
+            <Button
+              variant="primary"
+              block
               onClick={aceptarInvitacion}
               disabled={procesando || !user}
-              className="w-full bg-green-600 text-white font-semibold py-3 rounded-xl hover:bg-green-700 transition disabled:opacity-50"
+              cargando={procesando ? "Aceptando…" : ""}
             >
-              {procesando ? "Aceptando..." : "Aceptar invitación"}
-            </button>
-            <button
-              onClick={() => navigate("/torneos")}
-              className="w-full font-semibold py-2 rounded-xl bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
-            >
+              Aceptar invitación
+            </Button>
+            <Button block onClick={() => navigate("/torneos")}>
               Rechazar
-            </button>
+            </Button>
           </div>
         )}
 
         {/* Estado: pendiente de aprobación */}
         {estado === "pendiente_aprobacion" && (
-          <div className="rounded-xl p-4 text-center border" style={{ backgroundColor: "rgba(249,115,22,0.08)", borderColor: "rgba(249,115,22,0.25)" }}>
-            <div className="text-3xl mb-2">⏳</div>
-            <p className="font-semibold" style={{ color: "#f97316" }}>Invitación aceptada</p>
-            <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
+          <div className="rounded-md border border-line p-4 text-center">
+            <Badge tone="warning" dot>
+              Invitación aceptada
+            </Badge>
+            <p className="body-sm text-ink-2 mt-2">
               Tu inscripción quedó pendiente de aprobación del organizador. Te
               notificaremos cuando sea confirmada.
             </p>
-            <button
-              onClick={() => navigate(`/torneos/${torneoId}`)}
-              className="mt-3 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition"
-            >
+            <Button variant="primary" className="mt-3" onClick={() => navigate(`/torneos/${torneoId}`)}>
               Ver torneo
-            </button>
+            </Button>
           </div>
         )}
 
         {/* Estado: confirmada */}
         {estado === "confirmada" && (
-          <div className="rounded-xl p-4 text-center border" style={{ backgroundColor: "rgba(34,197,94,0.08)", borderColor: "rgba(34,197,94,0.25)" }}>
-            <div className="text-3xl mb-2">✅</div>
-            <p className="font-semibold" style={{ color: "#22c55e" }}>
+          <div className="rounded-md border border-line p-4 text-center">
+            <Badge tone="success" dot>
               Inscripción confirmada
-            </p>
-            <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-              Ya están inscriptos en el torneo. ¡Éxitos!
-            </p>
-            <button
-              onClick={() => navigate(`/torneos/${torneoId}`)}
-              className="mt-3 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition"
-            >
+            </Badge>
+            <p className="body-sm text-ink-2 mt-2">Ya están inscriptos en el torneo. ¡Éxitos!</p>
+            <Button variant="primary" className="mt-3" onClick={() => navigate(`/torneos/${torneoId}`)}>
               Ver torneo
-            </button>
+            </Button>
           </div>
         )}
 
         {/* Estado: rechazada */}
         {estado === "rechazada" && (
-          <div className="rounded-xl p-4 text-center border" style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)" }}>
-            <div className="text-3xl mb-2">❌</div>
-            <p className="font-semibold" style={{ color: "#ef4444" }}>Inscripción rechazada</p>
+          <div className="rounded-md border border-line p-4 text-center">
+            <Badge tone="danger" dot>
+              Inscripción rechazada
+            </Badge>
             {inscripcion.motivoRechazo && (
-              <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-                Motivo: {inscripcion.motivoRechazo}
-              </p>
+              <p className="body-sm text-ink-2 mt-2">Motivo: {inscripcion.motivoRechazo}</p>
             )}
-            <button
-              onClick={() => navigate("/torneos")}
-              className="mt-3 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition"
-            >
+            <Button variant="primary" className="mt-3" onClick={() => navigate("/torneos")}>
               Ver otros torneos
-            </button>
+            </Button>
           </div>
         )}
 
         {estado === "error" && (
-          <div className="rounded-xl p-4 text-center border" style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)" }}>
-            <p className="text-sm" style={{ color: "#ef4444" }}>
-              Hubo un error. Intentá de nuevo.
-            </p>
-          </div>
+          <p className="body-sm text-danger text-center" role="alert">
+            Hubo un error. Intentá de nuevo.
+          </p>
         )}
       </div>
     </div>

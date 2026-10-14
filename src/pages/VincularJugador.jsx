@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { Check, Link2, Lock, X } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { vincularJugadorAPareja, getParejaById, getTorneoById } from "../services/torneoService";
+import { Button } from "../components/ui";
 
-function Pantalla({ children }) {
+function Pantalla({ children, ...rest }) {
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--bg-primary)" }}>
-      <div className="themed-card rounded-2xl p-8 border text-center max-w-md mx-4 w-full">{children}</div>
+    <div className="min-h-screen flex items-center justify-center px-4 bg-surface">
+      <div className="pd-card text-center max-w-md w-full" {...rest}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -79,47 +83,41 @@ export default function VincularJugador() {
 
   if (vista === "verificando" || vista === "vinculando") {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--bg-primary)" }}>
-        <div className="text-center">
-          <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p style={{ color: "var(--text-muted)" }} className="text-sm">
-            {vista === "vinculando" ? "Vinculando tu cuenta..." : "Verificando el link..."}
-          </p>
+      <Pantalla aria-busy="true">
+        <div className="flex flex-col gap-3">
+          <div className="pd-skeleton h-7 w-2/3 mx-auto" />
+          <div className="pd-skeleton h-4 w-full" />
+          <div className="pd-skeleton h-4 w-5/6 mx-auto" />
         </div>
-      </div>
+        <p className="body-sm text-ink-3 mt-4">
+          {vista === "vinculando" ? "Vinculando tu cuenta…" : "Verificando el link…"}
+        </p>
+      </Pantalla>
     );
   }
 
   if (vista === "confirmar") {
     return (
       <Pantalla>
-        <div className="text-5xl mb-4">🔗</div>
-        <h1 className="text-xl font-bold mb-3" style={{ color: "var(--text-primary)" }}>Vincular tu cuenta</h1>
-        <p className="text-sm mb-2" style={{ color: "var(--text-secondary)" }}>
+        <Link2 className="pd-icon-lg block mx-auto mb-4 text-ink-3" size={24} aria-hidden="true" />
+        <h1 className="heading-md mb-3">Vincular tu cuenta</h1>
+        <p className="body-md text-ink-2 mb-2">
           Vas a vincular tu cuenta como{" "}
-          <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{nombreJugador || `Jugador ${pos}`}</span>
+          <strong className="font-semibold text-ink">{nombreJugador || `Jugador ${pos}`}</strong>
           {" "}en{" "}
-          <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{torneo?.nombre}</span>.
+          <strong className="font-semibold text-ink">{torneo?.nombre}</strong>.
         </p>
         {pareja?.nombrePareja && (
-          <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>Pareja: {pareja.nombrePareja}</p>
+          <p className="body-sm text-ink-3 mb-4">Pareja: {pareja.nombrePareja}</p>
         )}
-        <p className="text-sm font-semibold mb-5" style={{ color: "var(--text-primary)" }}>¿Sos vos?</p>
+        <p className="heading-sm mb-5">¿Sos vos?</p>
         <div className="flex gap-2">
-          <button
-            onClick={() => navigate("/inicio")}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition"
-            style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-secondary)" }}
-          >
+          <Button className="flex-1" onClick={() => navigate("/inicio")}>
             No soy yo
-          </button>
-          <button
-            onClick={confirmarVinculacion}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:opacity-90"
-            style={{ backgroundColor: "var(--accent)" }}
-          >
+          </Button>
+          <Button variant="primary" className="flex-1" onClick={confirmarVinculacion}>
             Confirmar
-          </button>
+          </Button>
         </div>
       </Pantalla>
     );
@@ -128,20 +126,18 @@ export default function VincularJugador() {
   if (vista === "vinculado" || vista === "ya_vinculado") {
     return (
       <Pantalla>
-        <div className="text-5xl mb-4">✅</div>
-        <h1 className="text-xl font-bold mb-2" style={{ color: "var(--text-primary)" }}>
+        <Check className="pd-icon-lg block mx-auto mb-4 text-success" size={24} aria-hidden="true" />
+        <h1 className="heading-md mb-2">
           {vista === "vinculado" ? "¡Cuenta vinculada!" : "Tu cuenta ya estaba vinculada"}
         </h1>
-        {torneo && <p className="text-sm mb-1" style={{ color: "var(--text-secondary)" }}>Torneo: {torneo.nombre}</p>}
-        {pareja && <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>Pareja: {pareja.nombrePareja}</p>}
-        <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
+        {torneo && <p className="body-sm text-ink-2 mb-1">Torneo: {torneo.nombre}</p>}
+        {pareja && <p className="body-sm text-ink-3 mb-4">Pareja: {pareja.nombrePareja}</p>}
+        <p className="body-sm text-ink-3 mb-6">
           Ahora podés recibir puntos, participar de reclamos y recibir notificaciones del torneo.
         </p>
-        <button onClick={() => navigate(`/torneos/${torneoId}`)}
-          className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition"
-          style={{ backgroundColor: "var(--accent)" }}>
+        <Button variant="primary" onClick={() => navigate(`/torneos/${torneoId}`)}>
           Ver torneo
-        </button>
+        </Button>
       </Pantalla>
     );
   }
@@ -149,33 +145,29 @@ export default function VincularJugador() {
   if (vista === "ocupado") {
     return (
       <Pantalla>
-        <div className="text-5xl mb-4">🔒</div>
-        <h1 className="text-xl font-bold mb-2" style={{ color: "var(--text-primary)" }}>Este lugar ya está vinculado</h1>
-        <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
+        <Lock className="pd-icon-lg block mx-auto mb-4 text-ink-3" size={24} aria-hidden="true" />
+        <h1 className="heading-md mb-2">Este lugar ya está vinculado</h1>
+        <p className="body-sm text-ink-3 mb-6">
           Otra cuenta ya se vinculó como {nombreJugador || `Jugador ${pos}`} en {torneo?.nombre}. Si creés que es un error,
           pedile al organizador que revise la pareja.
         </p>
-        <button onClick={() => navigate(`/torneos/${torneoId}`)}
-          className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition"
-          style={{ backgroundColor: "var(--accent)" }}>
+        <Button variant="primary" onClick={() => navigate(`/torneos/${torneoId}`)}>
           Ver torneo
-        </button>
+        </Button>
       </Pantalla>
     );
   }
 
   return (
     <Pantalla>
-      <div className="text-5xl mb-4">❌</div>
-      <h1 className="text-xl font-bold mb-2" style={{ color: "var(--text-primary)" }}>Error de vinculación</h1>
-      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
+      <X className="pd-icon-lg block mx-auto mb-4 text-danger" size={24} aria-hidden="true" />
+      <h1 className="heading-md mb-2">Error de vinculación</h1>
+      <p className="body-sm text-ink-3 mb-6">
         No se pudo vincular tu cuenta. El link puede estar vencido o ser incorrecto.
       </p>
-      <button onClick={() => navigate("/inicio")}
-        className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition"
-        style={{ backgroundColor: "var(--accent)" }}>
+      <Button variant="primary" onClick={() => navigate("/inicio")}>
         Ir al inicio
-      </button>
+      </Button>
     </Pantalla>
   );
 }

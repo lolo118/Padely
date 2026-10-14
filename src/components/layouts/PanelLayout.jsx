@@ -57,7 +57,7 @@ export default function PanelLayout({ rol, inicio, items }) {
           onClick={() => setAbierto(true)}
           icon={<Menu className="pd-icon" size={20} aria-hidden="true" />}
         />
-        <Wordmark to={inicio} className="text-ink text-[22px]" />
+        <Wordmark to={inicio} className="text-ink! text-[22px]!" />
         <Badge>{rol}</Badge>
         <div className="ml-auto flex items-center gap-1">
           <NotificationBell />
