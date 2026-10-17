@@ -1,20 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, query, where, getDocs } from "firebase/firestore";
+import { ArrowLeft, Info, Plus, X } from "lucide-react";
 import { db, logEvento } from "../../lib/firebase";
 import { useAuthStore } from "../../store/authStore";
 import { crearTorneo } from "../../services/torneoService";
 import { getClubByOwner } from "../../services/canchaService";
 import PerfilIncompleto from "../../components/PerfilIncompleto";
 import { CATEGORIAS_TORNEO } from "../../utils/categorias";
-
-const inputClass =
-  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
-const selectClass =
-  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
-const labelClass = "text-xs font-semibold mb-1 block";
-const tipClass = "text-xs rounded-lg px-3 py-2 mt-2 border";
-const tipStyle = { color: "#3b82f6", backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.15)" };
+import { Button, Card, Field, Input, MarcaCategoria, Pills, Select, Textarea } from "../../components/ui";
 
 const provinciasArgentina = [
   "Buenos Aires",
@@ -55,6 +49,14 @@ const formatoDescripcion = {
   liga: "Todos contra todos (round robin) con tabla general de posiciones. Ideal para torneos largos con fechas semanales.",
   eliminacion: "Eliminación directa (single elimination) desde la primera ronda. El que pierde, queda afuera.",
 };
+
+// Los cuatro formatos como tarjetas elegibles (mismos valores y textos que tenía el select)
+const formatos = [
+  { value: "mini", label: "Mini torneo (grupos + eliminación)" },
+  { value: "normal", label: "Torneo estándar (grupos + eliminación)" },
+  { value: "liga", label: "Liga (todos contra todos)" },
+  { value: "eliminacion", label: "Eliminación directa" },
+];
 
 export default function CrearTorneo() {
   const { user } = useAuthStore();
@@ -259,221 +261,190 @@ export default function CrearTorneo() {
     return <PerfilIncompleto tipo={tipoUsuario} ruta={tipoUsuario === "organizador" ? "/org/entidad" : "/admin/configuracion"} />;
   }
 
+  // Chips de categoría de un género: pastillas multi (aria-pressed) con la marca de cada categoría
+  const chipsNivel = (genero) => (
+    <div className="pd-pills" role="group" aria-label={`Categorías ${genero}`}>
+      {CATEGORIAS_TORNEO.map((nivel) => (
+        <button
+          key={nivel}
+          type="button"
+          className="pd-pill"
+          aria-pressed={(form.categoriasConfig[genero] || []).includes(nivel)}
+          onClick={() => toggleNivel(genero, nivel)}
+        >
+          <MarcaCategoria cat={nivel} size={20} />
+          {nivel}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="max-w-2xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <button
+        <Button
+          variant="ghost"
+          iconOnly
+          aria-label="Volver"
+          icon={<ArrowLeft className="pd-icon" size={20} aria-hidden="true" />}
           onClick={() => navigate(-1)}
-          className="text-xl hover:opacity-70"
-          style={{ color: "var(--text-muted)" }}
-        >
-          ←
-        </button>
-        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Crear torneo</h1>
+        />
+        <h1 className="heading-lg">Crear torneo</h1>
       </div>
 
       {error && (
-        <div className="bg-red-100 text-red-600 text-sm p-3 rounded-lg mb-4">
+        <div role="alert" className="rounded-md border border-danger bg-danger-soft text-danger body-sm px-4 py-3 mb-4">
           {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         {/* Información general */}
-        <div className="themed-card rounded-2xl p-6 border">
-          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
+        <Card as="section">
+          <Card.Title as="h2" className="mb-4!">
             Información general
-          </h2>
-          <div className="flex flex-col gap-3">
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Nombre del torneo</label>
-              <input
+          </Card.Title>
+          <div className="flex flex-col gap-4">
+            <Field label="Nombre del torneo">
+              <Input
                 type="text"
                 placeholder="Ej: Torneo Apertura 2025"
                 value={form.nombre}
                 onChange={set("nombre")}
-                className={inputClass}
                 required
               />
-            </div>
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Descripción (opcional)</label>
-              <textarea
+            </Field>
+            <Field label="Descripción (opcional)">
+              <Textarea
                 placeholder="Información adicional del torneo..."
                 value={form.descripcion}
                 onChange={set("descripcion")}
                 rows={3}
-                className="themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Categoría Género (hasta 3)</label>
-              <div className="flex gap-2">
-                {categoriasGenero.map((cat) => (
-                  <button
-                    key={cat.value}
-                    type="button"
-                    onClick={() => toggleGenero(cat.value)}
-                    className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${
-                      form.categoriaGenero.includes(cat.value)
-                        ? "bg-green-600 text-white"
-                        : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
-                    }`}
-                  >
-                    {cat.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <Field label="Categoría género (hasta 3)" as="div">
+              <Pills
+                items={categoriasGenero}
+                value={form.categoriaGenero}
+                onChange={toggleGenero}
+                multi
+                ariaLabel="Categoría género"
+              />
+            </Field>
 
             {form.categoriaGenero.map((genero) => (
-              <div key={genero}>
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>
-                  Categoría Nivel —{" "}
-                  {genero.charAt(0).toUpperCase() + genero.slice(1)}
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {CATEGORIAS_TORNEO.map((nivel) => (
-                    <button
-                      key={nivel}
-                      type="button"
-                      onClick={() => toggleNivel(genero, nivel)}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
-                        (form.categoriasConfig[genero] || []).includes(nivel)
-                          ? "bg-green-600 text-white"
-                          : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
-                      }`}
-                    >
-                      {nivel}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <Field key={genero} label={`Categoría nivel — ${genero.charAt(0).toUpperCase() + genero.slice(1)}`} as="div">
+                {chipsNivel(genero)}
+              </Field>
             ))}
           </div>
-        </div>
+        </Card>
 
         {/* Formato */}
-        <div className="themed-card rounded-2xl p-6 border">
-          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Formato</h2>
-          <div className="flex flex-col gap-3">
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Tipo de torneo</label>
-              <select
-                value={form.formato}
-                onChange={set("formato")}
-                className={selectClass}
-              >
-                <option value="mini">Mini torneo (grupos + eliminación)</option>
-                <option value="normal">Torneo estándar (grupos + eliminación)</option>
-                <option value="liga">Liga (todos contra todos)</option>
-                <option value="eliminacion">Eliminación directa</option>
-              </select>
-              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                {formatoDescripcion[form.formato]}
-              </p>
-            </div>
+        <Card as="section">
+          <Card.Title as="h2" className="mb-4!">
+            Formato
+          </Card.Title>
+          <div className="flex flex-col gap-4">
+            <Field label="Tipo de torneo" as="div">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2" role="group" aria-label="Tipo de torneo">
+                {formatos.map((f) => {
+                  const elegido = form.formato === f.value;
+                  return (
+                    <Card
+                      key={f.value}
+                      as="button"
+                      type="button"
+                      aria-pressed={elegido}
+                      onClick={() => {
+                        if (elegido) return;
+                        set("formato")({ target: { type: "button", value: f.value } });
+                      }}
+                      className={`text-left w-full cursor-pointer ${elegido ? "border-line-strong! bg-surface-hover!" : ""}`}
+                    >
+                      <span className="heading-sm block">{f.label}</span>
+                      <span className="body-sm text-ink-2 block mt-1">{formatoDescripcion[f.value]}</span>
+                    </Card>
+                  );
+                })}
+              </div>
+            </Field>
 
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Sets por partido</label>
-                <select
-                  value={form.sets}
-                  onChange={set("sets")}
-                  className={selectClass}
-                >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="Sets por partido">
+                <Select value={form.sets} onChange={set("sets")}>
                   <option value={1}>1 set</option>
                   <option value={2}>2 sets</option>
                   <option value={3}>3 sets</option>
-                </select>
-              </div>
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Games por set</label>
-                <select
-                  value={form.gamesPorSet}
-                  onChange={set("gamesPorSet")}
-                  className={selectClass}
-                >
+                </Select>
+              </Field>
+              <Field
+                label="Games por set"
+                help={Number(form.gamesPorSet) === 4 ? "Ideal para mini torneos rápidos" : "Formato estándar de padel"}
+              >
+                <Select value={form.gamesPorSet} onChange={set("gamesPorSet")}>
                   <option value={4}>4 games</option>
                   <option value={6}>6 games</option>
-                </select>
-                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                  {Number(form.gamesPorSet) === 4 ? "Ideal para mini torneos rápidos" : "Formato estándar de padel"}
-                </p>
-              </div>
+                </Select>
+              </Field>
             </div>
 
             {(form.formato === "mini" || form.formato === "normal") && (
-              <div>
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>
-                  Parejas que avanzan de cada grupo
-                </label>
-                <select
-                  value={form.parejasQueAvanzan}
-                  onChange={set("parejasQueAvanzan")}
-                  className={selectClass}
-                >
+              <Field label="Parejas que avanzan de cada grupo">
+                <Select value={form.parejasQueAvanzan} onChange={set("parejasQueAvanzan")}>
                   <option value={1}>1 pareja (solo el primero)</option>
                   <option value={2}>2 parejas (primero y segundo)</option>
                   <option value={3}>3 parejas</option>
-                </select>
-              </div>
+                </Select>
+              </Field>
             )}
 
-            <div className="flex items-center gap-3">
+            <label className="flex items-center gap-3 body-md">
               <input
                 type="checkbox"
                 id="superTiebreak"
                 checked={form.superTiebreak}
                 onChange={set("superTiebreak")}
-                className="w-4 h-4 accent-green-600"
+                className="h-5 w-5 accent-ink"
               />
-              <label htmlFor="superTiebreak" className="text-sm" style={{ color: "var(--text-muted)" }}>
-                Super tiebreak al 10 en caso de empate
-              </label>
-            </div>
-            <div className="flex items-center gap-3">
+              Super tiebreak al 10 en caso de empate
+            </label>
+            <label className="flex items-center gap-3 body-md">
               <input
                 type="checkbox"
                 id="inscripcionAbierta"
                 checked={form.inscripcionAbierta}
                 onChange={set("inscripcionAbierta")}
-                className="w-4 h-4 accent-green-600"
+                className="h-5 w-5 accent-ink"
               />
-              <label
-                htmlFor="inscripcionAbierta"
-                className="text-sm"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Inscripción abierta al público
-              </label>
-            </div>
+              Inscripción abierta al público
+            </label>
             <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="habilitarReclamos"
-                checked={form.habilitarReclamos}
-                onChange={set("habilitarReclamos")}
-                className="w-4 h-4 accent-green-600"
-              />
-              <label htmlFor="habilitarReclamos" className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              <label className="flex items-center gap-3 body-md">
+                <input
+                  type="checkbox"
+                  id="habilitarReclamos"
+                  checked={form.habilitarReclamos}
+                  onChange={set("habilitarReclamos")}
+                  className="h-5 w-5 accent-ink"
+                />
                 Habilitar sistema de reclamos de categoría
               </label>
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
+                iconOnly
+                aria-label="¿Qué es el sistema de reclamos?"
+                aria-expanded={mostrarInfoReclamos}
+                icon={<Info className="pd-icon" size={20} aria-hidden="true" />}
                 onClick={() => setMostrarInfoReclamos(!mostrarInfoReclamos)}
-                className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold transition"
-                style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--accent)" }}
-                title="¿Qué es el sistema de reclamos?"
-              >
-                ⓘ
-              </button>
+              />
             </div>
             {mostrarInfoReclamos && (
-              <div className="rounded-xl p-4 mt-2 border" style={{ backgroundColor: "var(--bg-card-hover)", borderColor: "var(--border-card)" }}>
-                <h4 className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Sistema de reclamos de categoría</h4>
-                <div className="flex flex-col gap-1.5 text-xs" style={{ color: "var(--text-secondary)" }}>
+              <div className="rounded-md bg-surface-sunken p-4">
+                <h3 className="heading-sm mb-2">Sistema de reclamos de categoría</h3>
+                <div className="flex flex-col gap-1.5 body-sm text-ink-2">
                   <p>Permite a los jugadores denunciar a una pareja rival si consideran que no pertenece a la categoría del torneo.</p>
                   <p><strong>¿Cómo funciona?</strong></p>
                   <p>1. Un jugador vinculado abre un reclamo contra la pareja rival desde su vista del partido.</p>
@@ -481,314 +452,282 @@ export default function CrearTorneo() {
                   <p>3. La pareja denunciada puede dejar un descargo (defensa).</p>
                   <p>4. El organizador revisa el reclamo y decide: desestimar (sin efecto) o descalificar a la pareja.</p>
                   <p><strong>Motivos disponibles:</strong> categoría incorrecta, conducta antideportiva.</p>
-                  <p className="mt-1" style={{ color: "var(--text-muted)" }}>Los jugadores deben estar vinculados a sus parejas para poder abrir reclamos.</p>
+                  <p className="mt-1 text-ink-3">Los jugadores deben estar vinculados a sus parejas para poder abrir reclamos.</p>
                 </div>
               </div>
             )}
             {form.habilitarReclamos && (
-              <div>
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Plazo para adherirse al reclamo</label>
-                <select
-                  value={form.plazoReclamosMinutos}
-                  onChange={set("plazoReclamosMinutos")}
-                  className={`${selectClass} themed-input`}
-                >
+              <Field label="Plazo para adherirse al reclamo">
+                <Select value={form.plazoReclamosMinutos} onChange={set("plazoReclamosMinutos")}>
                   <option value={15}>15 minutos</option>
                   <option value={30}>30 minutos</option>
                   <option value={45}>45 minutos</option>
                   <option value={60}>60 minutos</option>
-                </select>
-              </div>
+                </Select>
+              </Field>
             )}
 
-            <p className={tipClass} style={tipStyle}>
-              💡 <strong>Mini torneo:</strong> sugiere 1 set de 4 games, rápido y dinámico. <strong>Estándar:</strong> sugiere 3 sets de 6 games, el clásico. <strong>Liga:</strong> todos juegan contra todos, ideal para temporadas largas. <strong>Eliminación directa:</strong> sin fase de grupos, máxima intensidad. Podés personalizar sets y games en cualquier formato.
+            <p className="flex items-start gap-2 rounded-md bg-surface-sunken px-3 py-2 body-sm text-ink-2">
+              <Info className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+              <span>
+                <strong>Mini torneo:</strong> sugiere 1 set de 4 games, rápido y dinámico. <strong>Estándar:</strong> sugiere 3 sets de 6 games, el clásico. <strong>Liga:</strong> todos juegan contra todos, ideal para temporadas largas. <strong>Eliminación directa:</strong> sin fase de grupos, máxima intensidad. Podés personalizar sets y games en cualquier formato.
+              </span>
             </p>
           </div>
-        </div>
+        </Card>
 
         {/* Participantes */}
-        <div className="themed-card rounded-2xl p-6 border">
-          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Participantes</h2>
-          <div className="flex flex-col gap-3">
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Máximo de parejas</label>
-                <input
+        <Card as="section">
+          <Card.Title as="h2" className="mb-4!">
+            Participantes
+          </Card.Title>
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="Máximo de parejas">
+                <Input
                   type="number"
+                  inputMode="numeric"
                   min="4"
                   max="256"
                   placeholder="Ej: 32"
                   value={form.maxParejas}
                   onChange={set("maxParejas")}
-                  className={inputClass}
                 />
-              </div>
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Costo de inscripción ($)</label>
-                <input
+              </Field>
+              <Field label="Costo de inscripción ($)">
+                <Input
                   type="number"
+                  inputMode="numeric"
                   min="0"
                   placeholder="0"
                   value={form.inscripcion}
                   onChange={set("inscripcion")}
-                  className={inputClass}
                 />
-              </div>
+              </Field>
             </div>
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>
-                ¿Qué incluye la inscripción? (opcional)
-              </label>
-              <textarea
+            <Field label="¿Qué incluye la inscripción? (opcional)">
+              <Textarea
                 placeholder={
                   "Ej:\n- 1 tubo de pelotas\n- Remera del torneo\n- Hidratación durante los partidos\n- Acceso a vestuarios"
                 }
                 value={form.inscripcionIncluye}
                 onChange={set("inscripcionIncluye")}
                 rows={3}
-                className="themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
               />
-            </div>
+            </Field>
           </div>
-        </div>
+        </Card>
 
         {/* Premios */}
-        <div className="themed-card rounded-2xl p-6 border">
-          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Premios</h2>
-          <div>
-            <label className={labelClass} style={{ color: "var(--text-muted)" }}>Premios del torneo (opcional)</label>
-            <textarea
+        <Card as="section">
+          <Card.Title as="h2" className="mb-4!">
+            Premios
+          </Card.Title>
+          <Field label="Premios del torneo (opcional)">
+            <Textarea
               placeholder={
-                "Ej:\n🥇 1er puesto: $50.000 + 2 paletas Bullpadel\n🥈 2do puesto: $25.000 + voucher tienda\n🥉 3er puesto: Kit de pelotas\n\nTambién podés incluir premios especiales como mejor jugador, fair play, etc."
+                "Ej:\n1er puesto: $ 50.000 + 2 paletas Bullpadel\n2do puesto: $ 25.000 + voucher tienda\n3er puesto: Kit de pelotas\n\nTambién podés incluir premios especiales como mejor jugador, fair play, etc."
               }
               value={form.premios}
               onChange={set("premios")}
               rows={5}
-              className="themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
             />
-          </div>
-        </div>
+          </Field>
+        </Card>
 
         {/* Sede y fechas */}
-        <div className="themed-card rounded-2xl p-6 border">
-          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Sede y fechas</h2>
-          <div className="flex flex-col gap-3">
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Nombre de la sede</label>
-              <input
+        <Card as="section">
+          <Card.Title as="h2" className="mb-4!">
+            Sede y fechas
+          </Card.Title>
+          <div className="flex flex-col gap-4">
+            <Field label="Nombre de la sede">
+              <Input
                 type="text"
                 placeholder="Ej: Club Náutico Santiago"
                 value={form.sede}
                 onChange={set("sede")}
-                className={inputClass}
                 required
               />
-            </div>
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Dirección física</label>
-              <input
+            </Field>
+            <Field label="Dirección física">
+              <Input
                 type="text"
                 placeholder="Ej: Av. Belgrano 1234"
                 value={form.direccionSede}
                 onChange={set("direccionSede")}
-                className={inputClass}
               />
-            </div>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Instagram de la sede</label>
-                <input
+            </Field>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="Instagram de la sede">
+                <Input
                   type="text"
                   placeholder="@clubnautico"
                   value={form.instagramSede}
                   onChange={set("instagramSede")}
-                  className={inputClass}
                 />
-              </div>
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Facebook de la sede</label>
-                <input
+              </Field>
+              <Field label="Facebook de la sede">
+                <Input
                   type="text"
                   placeholder="facebook.com/clubnautico"
                   value={form.facebookSede}
                   onChange={set("facebookSede")}
-                  className={inputClass}
                 />
-              </div>
+              </Field>
             </div>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Ciudad</label>
-                <input
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="Ciudad">
+                <Input
                   type="text"
                   placeholder="Ciudad"
                   value={form.ciudad}
                   onChange={set("ciudad")}
-                  className={inputClass}
                   required
                 />
-              </div>
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Provincia</label>
-                <select
-                  value={form.provincia}
-                  onChange={set("provincia")}
-                  className={selectClass}
-                  required
-                >
+              </Field>
+              <Field label="Provincia">
+                <Select value={form.provincia} onChange={set("provincia")} required>
                   <option value="">Seleccionar provincia</option>
                   {provinciasArgentina.map((p) => (
                     <option key={p} value={p}>
                       {p}
                     </option>
                   ))}
-                </select>
-              </div>
+                </Select>
+              </Field>
             </div>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Fecha de inicio</label>
-                <input
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="Fecha de inicio">
+                <Input
                   type="date"
                   value={form.fechaInicio}
                   onChange={set("fechaInicio")}
                   min={todayStr}
-                  className={inputClass}
                   required
                 />
-              </div>
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Fecha de fin</label>
-                <input
+              </Field>
+              <Field label="Fecha de fin">
+                <Input
                   type="date"
                   value={form.fechaFin}
                   onChange={set("fechaFin")}
                   min={form.fechaInicio || todayStr}
-                  className={inputClass}
                   required
                 />
-              </div>
+              </Field>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Reglamento */}
-        <div className="themed-card rounded-2xl p-6 border">
-          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Reglamento</h2>
-          <div>
-            <label className={labelClass} style={{ color: "var(--text-muted)" }}>
-              Reglas especiales del torneo (opcional)
-            </label>
-            <textarea
+        <Card as="section">
+          <Card.Title as="h2" className="mb-4!">
+            Reglamento
+          </Card.Title>
+          <Field label="Reglas especiales del torneo (opcional)">
+            <Textarea
               placeholder={
                 "Ej:\n- 15 minutos de tolerancia\n- Pareja que no sea de la categoría será eliminada sin devolución de inscripción\n- Se juega con pelotas nuevas provistas por la organización"
               }
               value={form.reglamento}
               onChange={set("reglamento")}
               rows={5}
-              className="themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full resize-none"
             />
-          </div>
-        </div>
+          </Field>
+        </Card>
 
         {/* Redes y administradores */}
-        <div className="themed-card rounded-2xl p-6 border">
-          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Redes y contacto</h2>
-          <div className="flex flex-col gap-3">
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Instagram del organizador</label>
-              <input
+        <Card as="section">
+          <Card.Title as="h2" className="mb-4!">
+            Redes y contacto
+          </Card.Title>
+          <div className="flex flex-col gap-4">
+            <Field label="Instagram del organizador">
+              <Input
                 type="text"
                 placeholder="@toppadeltorneos"
                 value={form.instagramOrganizador}
                 onChange={set("instagramOrganizador")}
-                className={inputClass}
               />
-            </div>
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Facebook del organizador</label>
-              <input
+            </Field>
+            <Field label="Facebook del organizador">
+              <Input
                 type="text"
                 placeholder="facebook.com/toppadeltorneos"
                 value={form.facebookOrganizador}
                 onChange={set("facebookOrganizador")}
-                className={inputClass}
               />
-            </div>
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>WhatsApp general</label>
-              <input
+            </Field>
+            <Field label="WhatsApp general">
+              <Input
                 type="text"
+                inputMode="tel"
                 placeholder="Ej: +54 385 1234567"
                 value={form.whatsappOrganizador}
                 onChange={(e) => setForm({ ...form, whatsappOrganizador: e.target.value.replace(/\D/g, "") })}
-                className={inputClass}
               />
-            </div>
+            </Field>
 
-            <div className="mt-2 pt-3 border-t" style={{ borderColor: "var(--border-card)" }}>
-              <div className="flex items-center justify-between mb-2">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>
-                  Personas administradoras del torneo
-                </label>
-                <button
-                  type="button"
+            <div className="mt-2 pt-4 border-t border-line">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <span className="pd-label">Personas administradoras del torneo</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Plus className="pd-icon" size={20} aria-hidden="true" />}
                   onClick={agregarAdmin}
-                  className="text-xs font-semibold text-green-600 hover:underline"
                 >
-                  + Agregar persona
-                </button>
+                  Agregar persona
+                </Button>
               </div>
               <div className="flex flex-col gap-2">
                 {form.administradores.map((admin, i) => (
                   <div key={i} className="flex gap-2 items-center">
-                    <input
+                    <Input
                       type="text"
                       placeholder="Nombre"
+                      aria-label={`Nombre de la persona ${i + 1}`}
                       value={admin.nombre}
                       onChange={(e) =>
                         actualizarAdmin(i, "nombre", e.target.value)
                       }
-                      className="themed-input flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="flex-1"
                     />
-                    <input
+                    <Input
                       type="tel"
+                      inputMode="tel"
                       placeholder="Ej: 5493851234567"
+                      aria-label={`WhatsApp de la persona ${i + 1}`}
                       value={admin.whatsapp}
                       onChange={(e) =>
                         actualizarAdmin(i, "whatsapp", e.target.value.replace(/\D/g, ""))
                       }
-                      className="themed-input flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="flex-1"
                     />
                     {form.administradores.length > 1 && (
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
+                        iconOnly
+                        aria-label="Quitar persona"
+                        icon={<X className="pd-icon" size={20} aria-hidden="true" />}
                         onClick={() => eliminarAdmin(i)}
-                        className="text-red-400 hover:text-red-600 text-sm font-semibold"
-                      >
-                        ✕
-                      </button>
+                      />
                     )}
                   </div>
                 ))}
               </div>
-              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+              <p className="pd-help mt-2">
                 Personas responsables que los jugadores pueden contactar durante
                 el torneo
               </p>
             </div>
           </div>
-        </div>
+        </Card>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="text-white py-3 rounded-xl font-semibold hover:opacity-90 transition disabled:opacity-50"
-          style={{ backgroundColor: "var(--accent)" }}
-        >
-          {loading ? "Creando torneo..." : "Crear torneo"}
-        </button>
+        <Button type="submit" variant="primary" block cargando={loading ? "Creando torneo…" : ""}>
+          Crear torneo
+        </Button>
       </form>
     </div>
   );

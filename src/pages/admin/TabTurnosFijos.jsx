@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Plus, Repeat, Trash2 } from "lucide-react";
 import {
   getCanchas,
   getTurnosFijos,
@@ -6,8 +7,10 @@ import {
   actualizarTurnoFijo,
   eliminarTurnoFijo,
 } from "../../services/canchaService";
+import { formatPrecio } from "../../utils/format";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
+import { Badge, Button, Card, Field, Input, Pills, Select, Textarea } from "../../components/ui";
 
 const diasSemana = [
   "Lunes",
@@ -187,8 +190,10 @@ export default function TabTurnosFijos({ clubId }) {
 
   if (loading) {
     return (
-      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
-        Cargando turnos fijos...
+      <div className="flex flex-col gap-4" aria-busy="true" aria-label="Cargando turnos fijos">
+        <div className="pd-skeleton h-7 w-40" />
+        <div className="pd-skeleton h-36 w-full rounded-lg" />
+        <div className="pd-skeleton h-36 w-full rounded-lg" />
       </div>
     );
   }
@@ -196,42 +201,67 @@ export default function TabTurnosFijos({ clubId }) {
   const activos = turnosFijos.filter((t) => t.status === "activo");
   const suspendidos = turnosFijos.filter((t) => t.status === "suspendido");
 
+  // Las horas de un turno, como lista y como cantidad ("18:00, 19:00" · "2 hs")
+  const horasDe = (turno) => turno.horas || [turno.hora];
+
+  // La cabecera que comparten las tarjetas activas y suspendidas. Función, no componente.
+  function cabeceraTurno(turno, estadoBadge) {
+    const horas = horasDe(turno);
+    return (
+      <>
+        <Card.Row className="items-start!">
+          <Card.Eyebrow className="truncate">{turno.canchaName}</Card.Eyebrow>
+          <div className="flex flex-wrap justify-end gap-1">
+            <Badge tone="night">Turno fijo</Badge>
+            {estadoBadge}
+          </div>
+        </Card.Row>
+        <Card.Title className="mt-2! pd-tnum flex items-center gap-2">
+          <Repeat className="pd-icon" size={20} aria-hidden="true" />
+          <span className="truncate">
+            {turno.dia} · {horas.join(", ")}
+          </span>
+        </Card.Title>
+        <p className="heading-sm m-0 mt-1 truncate">{turno.nombreJugador}</p>
+        <Card.Meta className="pd-tnum">
+          {horas.length} hs
+          {turno.telefono ? ` · Tel: ${turno.telefono}` : ""}
+        </Card.Meta>
+      </>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>Turnos fijos</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="heading-md m-0">Turnos fijos</h2>
         {!mostrarForm && (
-          <button
+          <Button
+            variant="primary"
+            icon={<Plus className="pd-icon" size={20} aria-hidden="true" />}
             onClick={() => {
               setForm(formInicial);
               setEditandoId(null);
               setMostrarForm(true);
             }}
-            className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-700 transition"
           >
-            + Nuevo turno fijo
-          </button>
+            Nuevo turno fijo
+          </Button>
         )}
       </div>
 
       {/* Formulario */}
       {mostrarForm && (
-        <div className="themed-card border rounded-2xl p-5" style={{ borderColor: "rgba(34,197,94,0.35)" }}>
-          <h3 className="font-semibold mb-3" style={{ color: "#22c55e" }}>
-            {editandoId ? "Editar turno fijo" : "Nuevo turno fijo"}
-          </h3>
-          <form onSubmit={handleGuardar} className="flex flex-col gap-3">
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>
-                  Cancha
-                </label>
-                <select
+        <Card>
+          <Card.Title>{editandoId ? "Editar turno fijo" : "Nuevo turno fijo"}</Card.Title>
+          <form onSubmit={handleGuardar} className="flex flex-col gap-4 mt-3">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Cancha">
+                <Select
                   value={form.canchaId}
                   onChange={(e) =>
                     setForm({ ...form, canchaId: e.target.value, horas: [] })
                   }
-                  className="themed-input rounded-lg px-4 py-2 text-sm w-full"
                   required
                 >
                   <option value="">Seleccionar cancha</option>
@@ -240,129 +270,108 @@ export default function TabTurnosFijos({ clubId }) {
                       {c.nombre}
                     </option>
                   ))}
-                </select>
-              </div>
-              <div className="flex-1">
-                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>
-                  Día de la semana
-                </label>
-                <select
-                  value={form.dia}
-                  onChange={(e) => setForm({ ...form, dia: e.target.value })}
-                  className="themed-input rounded-lg px-4 py-2 text-sm w-full"
-                >
+                </Select>
+              </Field>
+              <Field label="Día de la semana">
+                <Select value={form.dia} onChange={(e) => setForm({ ...form, dia: e.target.value })}>
                   {diasSemana.map((d) => (
                     <option key={d} value={d}>
                       {d}
                     </option>
                   ))}
-                </select>
-              </div>
+                </Select>
+              </Field>
             </div>
 
             {/* Selección múltiple de horas */}
-            <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>
-                Horarios ({form.horas.length}hs seleccionadas)
-              </label>
+            <Field
+              as="div"
+              label={
+                <>
+                  Horarios{" "}
+                  <span className="font-normal text-ink-3 pd-tnum">{form.horas.length} hs seleccionadas</span>
+                </>
+              }
+              help={
+                horariosCancha.length === 0
+                  ? "Seleccioná una cancha primero"
+                  : form.horas.length > 0
+                    ? `Bloque: ${form.horas[0]} a ${form.horas[form.horas.length - 1].replace(":00", "")}:59 · ${form.horas.length} hs`
+                    : undefined
+              }
+            >
               {horariosCancha.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
-                  {horariosCancha.map((hora) => (
-                    <button
-                      key={hora}
-                      type="button"
-                      onClick={() => toggleHora(hora)}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
-                        form.horas.includes(hora)
-                          ? "bg-green-600 text-white"
-                          : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
-                      }`}
-                    >
-                      {hora}
-                    </button>
-                  ))}
-                </div>
+                <Pills
+                  multi
+                  items={horariosCancha.map((hora) => ({ value: hora, label: hora }))}
+                  value={form.horas}
+                  onChange={toggleHora}
+                  ariaLabel="Horas del turno fijo"
+                />
               ) : (
-                <p className="text-xs py-2" style={{ color: "var(--text-muted)" }}>
-                  Seleccioná una cancha primero
-                </p>
+                <div />
               )}
-              {form.horas.length > 0 && (
-                <p className="text-xs text-green-600 mt-1">
-                  Bloque: {form.horas[0]} a{" "}
-                  {form.horas[form.horas.length - 1].replace(":00", "")}:59 (
-                  {form.horas.length}hs)
-                </p>
-              )}
-            </div>
+            </Field>
 
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>
-                  Nombre del jugador/grupo
-                </label>
-                <input
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Nombre del jugador/grupo">
+                <Input
                   type="text"
                   placeholder="Ej: Grupo de Juan Pérez"
                   value={form.nombreJugador}
                   onChange={(e) =>
                     setForm({ ...form, nombreJugador: e.target.value })
                   }
-                  className="themed-input rounded-lg px-4 py-2 text-sm w-full"
                   required
                 />
-              </div>
-              <div className="flex-1">
-                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>
-                  Teléfono
-                </label>
-                <input
+              </Field>
+              <Field label="Teléfono">
+                <Input
                   type="text"
+                  inputMode="tel"
                   placeholder="Ej: 385 1234567"
                   value={form.telefono}
                   onChange={(e) =>
                     setForm({ ...form, telefono: e.target.value })
                   }
-                  className="themed-input rounded-lg px-4 py-2 text-sm w-full"
                 />
-              </div>
+              </Field>
             </div>
 
-            <div className="flex-1">
-              <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>
-                Precio total del pack ($)
-              </label>
-              <input
+            <Field label="Precio total del pack ($)" className="md:max-w-xs">
+              <Input
                 type="number"
                 min="0"
+                inputMode="numeric"
                 value={form.precioTotal}
                 onChange={(e) =>
                   setForm({ ...form, precioTotal: e.target.value })
                 }
-                className="themed-input rounded-lg px-4 py-2 text-sm w-full"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>
-                Descripción del pack/combo (opcional)
-              </label>
-              <textarea
-                placeholder="Ej: 2hs + 4 bebidas al 10% off + 15% off en comida..."
-                value={form.packDescripcion}
-                onChange={(e) =>
-                  setForm({ ...form, packDescripcion: e.target.value })
-                }
-                rows={3}
-                className="themed-input rounded-lg px-4 py-2 text-sm w-full resize-none"
-              />
-              <div className="mt-2">
-                <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Sugerencias:</p>
-                <div className="flex flex-wrap gap-1">
+            <div className="flex flex-col gap-2">
+              <Field label="Descripción del pack/combo (opcional)">
+                <Textarea
+                  placeholder="Ej: 2hs + 4 bebidas al 10% off + 15% off en comida..."
+                  value={form.packDescripcion}
+                  onChange={(e) =>
+                    setForm({ ...form, packDescripcion: e.target.value })
+                  }
+                  rows={3}
+                  className="resize-none!"
+                />
+              </Field>
+              <div>
+                <p className="pd-help m-0 mb-1">Sugerencias</p>
+                <div className="pd-btn-group">
                   {packSugerencias.map((sug, i) => (
-                    <button
+                    <Button
                       key={i}
                       type="button"
+                      size="sm"
+                      icon={<Plus className="pd-icon" size={20} aria-hidden="true" />}
+                      className="whitespace-normal! h-auto! min-h-9 py-1! text-left"
                       onClick={() =>
                         setForm({
                           ...form,
@@ -371,215 +380,161 @@ export default function TabTurnosFijos({ clubId }) {
                             : sug,
                         })
                       }
-                      className="px-2 py-1 rounded-lg text-xs transition hover:opacity-80"
-                      style={{ backgroundColor: "rgba(59,130,246,0.1)", color: "#3b82f6" }}
                     >
-                      + {sug}
-                    </button>
+                      {sug}
+                    </Button>
                   ))}
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={cancelarForm}
-                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
-              >
+            <div className="pd-btn-group">
+              <Button type="button" onClick={cancelarForm}>
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
+                variant="primary"
                 disabled={
                   guardando ||
                   !form.canchaId ||
                   !form.nombreJugador.trim() ||
                   form.horas.length === 0
                 }
-                className="flex-1 bg-green-600 text-white font-semibold py-2 rounded-xl hover:bg-green-700 transition disabled:opacity-50"
+                cargando={guardando ? "Guardando…" : ""}
               >
-                {guardando
-                  ? "Guardando..."
-                  : editandoId
-                    ? "Guardar cambios"
-                    : "Crear turno fijo"}
-              </button>
+                {editandoId ? "Guardar cambios" : "Crear turno fijo"}
+              </Button>
             </div>
           </form>
-        </div>
+        </Card>
       )}
 
       {/* Turnos activos */}
       {activos.length === 0 && suspendidos.length === 0 && !mostrarForm && (
-        <div className="text-center py-12 themed-card border rounded-2xl">
-          <div className="text-4xl mb-3">📌</div>
-          <p className="font-medium" style={{ color: "var(--text-muted)" }}>No hay turnos fijos</p>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+        <Card className="text-center py-12">
+          <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
+          <p className="heading-sm m-0">No hay turnos fijos</p>
+          <p className="body-sm text-ink-2 mt-1 m-0">
             Los turnos fijos bloquean automáticamente el horario en la grilla
           </p>
-        </div>
+        </Card>
       )}
 
       {activos.length > 0 && (
-        <div>
-          <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
-            Activos ({activos.length})
+        <section>
+          <p className="pd-eyebrow mb-2!">
+            Activos <span className="font-medium pd-tnum">{activos.length}</span>
           </p>
-          <div className="flex flex-col gap-3">
+          <div className="grid gap-4 md:grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
             {activos.map((turno) => (
-              <div
-                key={turno.id}
-                className="themed-card border rounded-2xl p-5"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <h3 className="font-semibold" style={{ color: "var(--text-primary)" }}>
-                        {turno.canchaName} — {turno.dia}
-                      </h3>
-                      <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-semibold">
-                        Activo
-                      </span>
-                    </div>
-                    <p className="text-sm text-green-600 font-medium">
-                      {(turno.horas || [turno.hora]).join(", ")} (
-                      {(turno.horas || [turno.hora]).length}hs)
-                    </p>
-                    <p className="text-sm mt-1" style={{ color: "var(--text-primary)" }}>
-                      {turno.nombreJugador}
-                    </p>
-                    {turno.telefono && (
-                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        Tel: {turno.telefono}
-                      </p>
-                    )}
-                    {turno.packDescripcion && (
-                      <div className="mt-2 rounded-lg p-3 border" style={{ backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.2)" }}>
-                        <p className="text-xs font-semibold mb-1" style={{ color: "#3b82f6" }}>
-                          Pack/Combo:
-                        </p>
-                        <p className="text-xs text-blue-700 whitespace-pre-line">
-                          {turno.packDescripcion}
-                        </p>
-                      </div>
-                    )}
-                    {turno.precioTotal > 0 && (
-                      <p className="text-sm font-semibold text-green-600 mt-2">
-                        ${turno.precioTotal}/semana
-                      </p>
-                    )}
+              <Card key={turno.id} className={dandoBajaId === turno.id ? "md:col-span-full" : undefined}>
+                {cabeceraTurno(
+                  turno,
+                  <Badge tone="success" dot>
+                    Activo
+                  </Badge>,
+                )}
+                {turno.packDescripcion && (
+                  <div className="mt-3 rounded-md bg-surface-sunken p-3">
+                    <p className="pd-eyebrow mb-1!">Pack/Combo</p>
+                    <p className="body-sm text-ink-2 m-0 whitespace-pre-line">{turno.packDescripcion}</p>
                   </div>
-                  <div className="flex flex-col gap-1 ml-3">
-                    <button
-                      onClick={() => iniciarEdicion(turno)}
-                      className="text-xs font-semibold text-green-600 hover:underline"
-                    >
+                )}
+                <Card.Foot className="flex-wrap">
+                  {turno.precioTotal > 0 && (
+                    <span className="numeral-md pd-tnum">
+                      {formatPrecio(turno.precioTotal)}
+                      <span className="body-sm text-ink-3 font-sans! font-normal!">/semana</span>
+                    </span>
+                  )}
+                  <div className="pd-btn-group ml-auto">
+                    <Button size="sm" onClick={() => iniciarEdicion(turno)}>
                       Editar
-                    </button>
-                    <button
-                      onClick={() => setDandoBajaId(turno.id)}
-                      className="text-xs font-semibold text-orange-500 hover:underline"
-                    >
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setDandoBajaId(turno.id)} aria-expanded={dandoBajaId === turno.id}>
                       Suspender
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      iconOnly
+                      aria-label={`Eliminar turno fijo de ${turno.nombreJugador}`}
+                      icon={<Trash2 className="pd-icon" size={20} aria-hidden="true" />}
                       onClick={() => handleEliminar(turno.id)}
-                      className="text-xs font-semibold text-red-400 hover:text-red-600"
-                    >
-                      Eliminar
-                    </button>
+                    />
                   </div>
-                </div>
+                </Card.Foot>
 
                 {dandoBajaId === turno.id && (
-                  <div className="mt-3 pt-3 border-t flex flex-col gap-2" style={{ borderColor: "var(--border-card)" }}>
-                    <input
-                      type="text"
-                      placeholder="Motivo de suspensión (ej: Torneo del 25 al 28 de marzo)"
-                      value={motivoBaja}
-                      onChange={(e) => setMotivoBaja(e.target.value)}
-                      className="w-full border border-orange-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    />
-                    <div className="flex gap-2">
-                      <button
+                  <div className="mt-4 pt-4 border-t border-line flex flex-col gap-3">
+                    <Field label="Motivo de suspensión">
+                      <Input
+                        type="text"
+                        placeholder="Ej: Torneo del 25 al 28 de marzo"
+                        value={motivoBaja}
+                        onChange={(e) => setMotivoBaja(e.target.value)}
+                      />
+                    </Field>
+                    <div className="pd-btn-group">
+                      <Button
+                        size="sm"
                         onClick={() => {
                           setDandoBajaId(null);
                           setMotivoBaja("");
                         }}
-                        className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
                       >
                         Cancelar
-                      </button>
-                      <button
-                        onClick={() => handleDarDeBaja(turno.id)}
-                        className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-orange-500 text-white hover:bg-orange-600 transition"
-                      >
+                      </Button>
+                      <Button size="sm" variant="danger" onClick={() => handleDarDeBaja(turno.id)}>
                         Confirmar suspensión
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 )}
-              </div>
+              </Card>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Turnos suspendidos */}
       {suspendidos.length > 0 && (
-        <div>
-          <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
-            Suspendidos ({suspendidos.length})
+        <section>
+          <p className="pd-eyebrow mb-2!">
+            Suspendidos <span className="font-medium pd-tnum">{suspendidos.length}</span>
           </p>
-          <div className="flex flex-col gap-3">
+          <div className="grid gap-4 md:grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
             {suspendidos.map((turno) => (
-              <div
-                key={turno.id}
-                className="themed-card border rounded-2xl p-5 border-orange-200 opacity-75"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <h3 className="font-semibold" style={{ color: "var(--text-primary)" }}>
-                        {turno.canchaName} — {turno.dia}
-                      </h3>
-                      <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-semibold">
-                        Suspendido
-                      </span>
-                    </div>
-                    <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                      {(turno.horas || [turno.hora]).join(", ")} (
-                      {(turno.horas || [turno.hora]).length}hs)
-                    </p>
-                    <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-                      {turno.nombreJugador}
-                    </p>
-                    {turno.motivoBaja && (
-                      <p className="text-xs text-orange-500 mt-1">
-                        Motivo: {turno.motivoBaja}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-1 ml-3">
-                    <button
-                      onClick={() => handleReactivar(turno.id)}
-                      className="text-xs font-semibold text-green-600 hover:underline"
-                    >
+              <Card key={turno.id} className="opacity-75">
+                {cabeceraTurno(
+                  turno,
+                  <Badge tone="warning" dot>
+                    Suspendido
+                  </Badge>,
+                )}
+                {turno.motivoBaja && (
+                  <p className="body-sm text-ink-2 m-0 mt-2">Motivo: {turno.motivoBaja}</p>
+                )}
+                <Card.Foot>
+                  <div className="pd-btn-group ml-auto">
+                    <Button size="sm" onClick={() => handleReactivar(turno.id)}>
                       Reactivar
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      iconOnly
+                      aria-label={`Eliminar turno fijo de ${turno.nombreJugador}`}
+                      icon={<Trash2 className="pd-icon" size={20} aria-hidden="true" />}
                       onClick={() => handleEliminar(turno.id)}
-                      className="text-xs font-semibold text-red-400 hover:text-red-600"
-                    >
-                      Eliminar
-                    </button>
+                    />
                   </div>
-                </div>
-              </div>
+                </Card.Foot>
+              </Card>
             ))}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

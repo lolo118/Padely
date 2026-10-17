@@ -1,5 +1,17 @@
 import { useEffect, useState } from "react";
 import {
+  ArrowDown,
+  ArrowRight,
+  ArrowUp,
+  Check,
+  Info,
+  Lock,
+  MessageCircle,
+  Pencil,
+  Plus,
+  RotateCcw,
+} from "lucide-react";
+import {
   getGrupos,
   getParejas,
   guardarBracket,
@@ -15,6 +27,7 @@ import {
 } from "../../utils/torneo";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
+import { Button, Card, ChampionCard, Field, Input, MatchCard, Pills } from "../../components/ui";
 
 function getNombreRonda(totalRondas, rondaIdx) {
   const faltantes = totalRondas - rondaIdx;
@@ -24,6 +37,42 @@ function getNombreRonda(totalRondas, rondaIdx) {
   if (faltantes === 4) return "Octavos de final";
   if (faltantes === 5) return "16avos de final";
   return `Ronda ${rondaIdx + 1}`;
+}
+
+// Nombre corto de la ronda para el eyebrow del MatchCard ("Cuartos 2 · 6ta Masculino")
+function nombreCortoRonda(totalRondas, rondaIdx) {
+  const faltantes = totalRondas - rondaIdx;
+  if (faltantes === 1) return "Final";
+  if (faltantes === 2) return "Semifinal";
+  if (faltantes === 3) return "Cuartos";
+  if (faltantes === 4) return "Octavos";
+  if (faltantes === 5) return "16avos";
+  return `Ronda ${rondaIdx + 1}`;
+}
+
+// "2026-10-18" -> "18 oct 2026" (la fecha corta del design system; formatDate.js todavía no tiene una)
+function fechaCorta(fechaStr) {
+  if (!fechaStr || typeof fechaStr !== "string") return "";
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  if (!y || !m || !d) return fechaStr;
+  return new Date(y, m - 1, d)
+    .toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" })
+    .replace(/\./g, "");
+}
+
+// "1" -> "Cancha 1"; un nombre ("Central") se muestra tal cual
+function etiquetaCancha(cancha) {
+  const texto = String(cancha ?? "").trim();
+  if (!texto) return undefined;
+  return /^\d+$/.test(texto) ? `Cancha ${texto}` : texto;
+}
+
+// Tie breaks de un resultado para el pie del MatchCard: "TB 7–5 · 10–8"
+function textoTiebreak(sets) {
+  const tbs = (sets || [])
+    .filter((s) => s.tb1 !== undefined && s.tb2 !== undefined)
+    .map((s) => `${s.tb1}–${s.tb2}`);
+  return tbs.length ? `TB ${tbs.join(" · ")}` : "";
 }
 
 // Menor potencia de 2 >= n (n parejas -> tamaño del cuadro)
@@ -168,134 +217,103 @@ function ManualBracketBuilder({ clasificados, onConfirm }) {
   );
   const sinAsignar = clasificados.filter((c) => !asignadasIds.has(c.id));
 
+  // Pone (o saca, con null) una pareja en el lugar `campo` de la llave `li`
+  const asignar = (li, campo, pareja) => {
+    setLlaves(llaves.map((x, i) => (i === li ? { ...x, [campo]: pareja } : x)));
+  };
+
   return (
-    <div className="flex flex-col gap-3 mt-2">
+    <div className="flex flex-col gap-5 mt-4">
       {sinAsignar.length > 0 && (
-        <div>
-          <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
-            Parejas clasificadas sin asignar ({sinAsignar.length})
-          </p>
-          <div className="flex flex-col gap-1">
-            {sinAsignar.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center justify-between rounded-xl px-4 py-2 border"
-                style={{ backgroundColor: "rgba(234,179,8,0.08)", borderColor: "rgba(234,179,8,0.3)" }}
-              >
-                <div>
-                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                    {getNombrePareja(p)}
+        <section className="flex flex-col gap-2">
+          <h3 className="heading-sm m-0">
+            Parejas clasificadas sin asignar{" "}
+            <span className="pd-count text-ink-3 font-medium pd-tnum">{sinAsignar.length}</span>
+          </h3>
+          {sinAsignar.map((p) => (
+            <div
+              key={p.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-surface-sunken px-4 py-3"
+            >
+              <div className="min-w-0">
+                <span className="body-md font-medium!">{getNombrePareja(p)}</span>
+                {p.grupo && (
+                  <span className="body-sm text-ink-3 ml-2">
+                    {p.grupo} · {p.posGrupo}°
                   </span>
-                  {p.grupo && (
-                    <span className="text-xs ml-2" style={{ color: "var(--text-muted)" }}>
-                      ({p.grupo} — {p.posGrupo}°)
-                    </span>
-                  )}
-                </div>
-                <div className="flex gap-1 flex-wrap">
-                  {llaves.map((l, li) => (
-                    <span key={li} className="flex gap-0.5">
-                      {!l.pareja1 && (
-                        <button
-                          onClick={() => {
-                            const n = llaves.map((x, i) =>
-                              i === li ? { ...x, pareja1: p } : x,
-                            );
-                            setLlaves(n);
-                          }}
-                          className="px-2 py-1 rounded-lg text-xs font-semibold bg-green-100 text-green-700 hover:bg-green-200 transition"
-                        >
-                          L{li + 1}↑
-                        </button>
-                      )}
-                      {!l.pareja2 && (
-                        <button
-                          onClick={() => {
-                            const n = llaves.map((x, i) =>
-                              i === li ? { ...x, pareja2: p } : x,
-                            );
-                            setLlaves(n);
-                          }}
-                          className="px-2 py-1 rounded-lg text-xs font-semibold bg-green-100 text-green-700 hover:bg-green-200 transition"
-                        >
-                          L{li + 1}↓
-                        </button>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      <div>
-        <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>Llaves</p>
-        <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
-          Si una llave queda con una sola pareja, esa pareja pasa directo (bye).
-        </p>
-        <div className="flex flex-col gap-2">
-          {llaves.map((l, li) => (
-            <div key={li} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-              <p className="text-xs font-semibold mb-1" style={{ color: "var(--text-muted)" }}>
-                Llave {li + 1}
-              </p>
-              <div className="flex items-center justify-between">
-                <span
-                  className={`text-sm ${l.pareja1 ? "font-medium" : ""}`}
-                  style={l.pareja1 ? { color: "var(--text-primary)" } : { color: "var(--text-muted)", opacity: 0.4 }}
-                >
-                  {l.pareja1 ? getNombrePareja(l.pareja1) : "— vacío —"}
-                </span>
-                {l.pareja1 && (
-                  <button
-                    onClick={() => {
-                      const n = llaves.map((x, i) =>
-                        i === li ? { ...x, pareja1: null } : x,
-                      );
-                      setLlaves(n);
-                    }}
-                    className="text-xs text-red-400 hover:text-red-600"
-                  >
-                    Quitar
-                  </button>
                 )}
               </div>
-              <p className="text-xs my-0.5" style={{ color: "var(--text-muted)" }}>vs</p>
-              <div className="flex items-center justify-between">
-                <span
-                  className={`text-sm ${l.pareja2 ? "font-medium" : ""}`}
-                  style={l.pareja2 ? { color: "var(--text-primary)" } : { color: "var(--text-muted)", opacity: 0.4 }}
-                >
-                  {l.pareja2 ? getNombrePareja(l.pareja2) : "— vacío —"}
-                </span>
-                {l.pareja2 && (
-                  <button
-                    onClick={() => {
-                      const n = llaves.map((x, i) =>
-                        i === li ? { ...x, pareja2: null } : x,
-                      );
-                      setLlaves(n);
-                    }}
-                    className="text-xs text-red-400 hover:text-red-600"
-                  >
-                    Quitar
-                  </button>
-                )}
+              <div className="pd-btn-group">
+                {llaves.map((l, li) => (
+                  <span key={li} className="flex gap-1">
+                    {!l.pareja1 && (
+                      <Button
+                        size="sm"
+                        icon={<ArrowUp className="pd-icon" size={20} aria-hidden="true" />}
+                        aria-label={`Llave ${li + 1}, lugar de arriba`}
+                        onClick={() => asignar(li, "pareja1", p)}
+                      >
+                        L{li + 1}
+                      </Button>
+                    )}
+                    {!l.pareja2 && (
+                      <Button
+                        size="sm"
+                        icon={<ArrowDown className="pd-icon" size={20} aria-hidden="true" />}
+                        aria-label={`Llave ${li + 1}, lugar de abajo`}
+                        onClick={() => asignar(li, "pareja2", p)}
+                      >
+                        L{li + 1}
+                      </Button>
+                    )}
+                  </span>
+                ))}
               </div>
             </div>
           ))}
+        </section>
+      )}
+      <section className="flex flex-col gap-2">
+        <h3 className="heading-sm m-0">Llaves</h3>
+        <p className="body-sm text-ink-2 m-0">
+          Si una llave queda con una sola pareja, esa pareja pasa directo (bye).
+        </p>
+        <div className="grid gap-4 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] mt-2">
+          {llaves.map((l, li) => (
+            <Card key={li} className="p-4!">
+              <Card.Eyebrow>Llave {li + 1}</Card.Eyebrow>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className={l.pareja1 ? "body-md font-medium" : "body-md text-ink-3 italic"}>
+                  {l.pareja1 ? getNombrePareja(l.pareja1) : "Vacío"}
+                </span>
+                {l.pareja1 && (
+                  <Button size="sm" variant="ghost" onClick={() => asignar(li, "pareja1", null)}>
+                    Quitar
+                  </Button>
+                )}
+              </div>
+              <p className="caption text-ink-3 my-1">vs</p>
+              <div className="flex items-center justify-between gap-2">
+                <span className={l.pareja2 ? "body-md font-medium" : "body-md text-ink-3 italic"}>
+                  {l.pareja2 ? getNombrePareja(l.pareja2) : "Vacío"}
+                </span>
+                {l.pareja2 && (
+                  <Button size="sm" variant="ghost" onClick={() => asignar(li, "pareja2", null)}>
+                    Quitar
+                  </Button>
+                )}
+              </div>
+            </Card>
+          ))}
         </div>
+      </section>
+      <div>
+        <Button variant="primary" onClick={() => onConfirm(llaves)} disabled={sinAsignar.length > 0}>
+          {sinAsignar.length === 0
+            ? "Generar bracket manual"
+            : `Faltan ${sinAsignar.length} pareja${sinAsignar.length !== 1 ? "s" : ""} por asignar`}
+        </Button>
       </div>
-      <button
-        onClick={() => onConfirm(llaves)}
-        disabled={sinAsignar.length > 0}
-        className="bg-green-600 text-white font-semibold py-2 rounded-xl hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {sinAsignar.length === 0
-          ? "Generar bracket manual"
-          : `Faltan ${sinAsignar.length} pareja${sinAsignar.length !== 1 ? "s" : ""} por asignar`}
-      </button>
     </div>
   );
 }
@@ -580,34 +598,41 @@ export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }
 
   if (loading)
     return (
-      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando bracket...</div>
+      <div className="flex flex-col gap-4" role="status" aria-busy="true" aria-label="Cargando bracket">
+        <div className="pd-skeleton h-7 w-40" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="pd-skeleton h-32 rounded-md!" />
+          ))}
+        </div>
+      </div>
     );
 
   if (!esEliminacionDirecta && grupos.length === 0) {
     return (
-      <div className="themed-card rounded-2xl p-5 border text-center py-12">
-        <div className="text-4xl mb-3">📋</div>
-        <p className="font-medium" style={{ color: "var(--text-muted)" }}>
-          Primero generá los grupos{variosCuadros ? ` de ${cuadroActual.label}` : ""}
+      <Card className="text-center py-12">
+        <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
+        <p className="heading-sm m-0">
+          Primero generá los grupos{variosCuadros ? ` de ${cuadroActual.label}` : ""}.
         </p>
-        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-          Necesitás tener grupos confirmados con resultados cargados
+        <p className="body-sm text-ink-2 mt-1 mb-0">
+          Necesitás tener grupos confirmados con resultados cargados.
         </p>
-      </div>
+      </Card>
     );
   }
 
   if (esEliminacionDirecta && parejas.length < 2 && rondas.length === 0) {
     return (
-      <div className="themed-card rounded-2xl p-5 border text-center py-12">
-        <div className="text-4xl mb-3">👥</div>
-        <p className="font-medium" style={{ color: "var(--text-muted)" }}>
-          Necesitás al menos 2 parejas inscriptas{variosCuadros ? ` en ${cuadroActual.label}` : ""}
+      <Card className="text-center py-12">
+        <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
+        <p className="heading-sm m-0">
+          Necesitás al menos 2 parejas inscriptas{variosCuadros ? ` en ${cuadroActual.label}` : ""}.
         </p>
-        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-          Actualmente hay {parejas.length} pareja{parejas.length !== 1 ? "s" : ""}
+        <p className="body-sm text-ink-2 mt-1 mb-0">
+          Actualmente hay {parejas.length} pareja{parejas.length !== 1 ? "s" : ""}.
         </p>
-      </div>
+      </Card>
     );
   }
 
@@ -615,104 +640,95 @@ export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }
   const partido = editandoResultado
     ? rondas[editandoResultado.rondaIdx][editandoResultado.partidoIdx]
     : null;
+  const tieneResultados = rondas.some((r) => (r || []).some((p) => p && p.resultado));
+  const puedeCargarResultados = torneo.status === "en_curso" || torneo.status === "finalizado";
+  const cuadroLabel = variosCuadros ? cuadroActual.label : undefined;
+  const apellido1 = partido?.pareja1?.jugador1?.split(" ").pop() || "P1";
+  const apellido2 = partido?.pareja2?.jugador1?.split(" ").pop() || "P2";
+
+  const cerrarResultado = () => {
+    setEditandoResultado(null);
+    setSetsInput([]);
+    setTiebreakInput([]);
+    setErrorModal("");
+  };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       {/* Regenerar arriba */}
       {bracketGenerado && (
         <div className="flex justify-end">
-          {(() => {
-            const tieneResultados = rondas.some((r) => (r || []).some((p) => p && p.resultado));
-            return tieneResultados ? (
-              <span className="px-3 py-1 rounded-lg text-xs font-semibold" style={{ color: "var(--text-muted)", backgroundColor: "var(--bg-card-hover)" }}>
-                No podés regenerar el bracket después de cargar resultados
-              </span>
-            ) : (
-              <button
-                onClick={async () => {
-                  const ok = await confirmar({
-                    titulo: "Regenerar bracket",
-                    mensaje: "Se descarta el cuadro actual y se arma uno nuevo.",
-                    confirmText: "Regenerar",
-                    danger: true,
-                  });
-                  if (ok) {
-                    setBracketGenerado(false);
-                    setRondas([]);
-                  }
-                }}
-                className="px-3 py-1 rounded-lg text-xs font-semibold text-red-500 transition"
-                style={{ backgroundColor: "rgba(239,68,68,0.08)" }}
-              >
-                Regenerar bracket desde cero
-              </button>
-            );
-          })()}
+          {tieneResultados ? (
+            <p className="body-sm text-ink-3 m-0">No podés regenerar el bracket después de cargar resultados</p>
+          ) : (
+            <Button
+              icon={<RotateCcw className="pd-icon" size={20} aria-hidden="true" />}
+              onClick={async () => {
+                const ok = await confirmar({
+                  titulo: "Regenerar bracket",
+                  mensaje: "Se descarta el cuadro actual y se arma uno nuevo.",
+                  confirmText: "Regenerar",
+                  danger: true,
+                });
+                if (ok) {
+                  setBracketGenerado(false);
+                  setRondas([]);
+                }
+              }}
+            >
+              Regenerar bracket desde cero
+            </Button>
+          )}
         </div>
       )}
 
       {/* Tip */}
       {bracketGenerado && !campeonData && (
-        <div className="text-xs rounded-lg px-3 py-2 border"
-          style={{ color: "#3b82f6", backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.15)" }}>
-          💡 Asigná horario y cancha a cada partido. Cargá los resultados y los
-          ganadores avanzarán automáticamente a la siguiente ronda.
-        </div>
+        <p className="flex items-start gap-2 body-sm text-ink-2 m-0">
+          <Info className="pd-icon text-court" size={20} aria-hidden="true" />
+          <span>
+            Asigná horario y cancha a cada partido. Cargá los resultados y los ganadores avanzarán
+            automáticamente a la siguiente ronda.
+          </span>
+        </p>
       )}
 
       {/* Campeones */}
       {bracketGenerado && campeonData && (
-        <div className="rounded-2xl p-6 shadow-sm text-center border"
-          style={{ background: "linear-gradient(to right, rgba(234,179,8,0.08), rgba(234,179,8,0.15))", borderColor: "rgba(234,179,8,0.3)" }}>
-          <div className="text-5xl mb-3">🏆</div>
-          <p className="text-xs text-yellow-600 font-semibold uppercase tracking-wider mb-1">
-            {variosCuadros ? `Campeones — ${cuadroActual.label}` : "Campeones"}
-          </p>
-          <p className="text-xl font-bold mb-4" style={{ color: "var(--text-primary)" }}>
-            {getNombrePareja(campeonData.campeon)}
-          </p>
-          <div className="text-3xl mb-2">🥈</div>
-          <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)" }}>
-            Subcampeones
-          </p>
-          <p className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
-            {getNombrePareja(campeonData.subcampeon)}
-          </p>
-        </div>
+        <ChampionCard
+          cuadroLabel={cuadroLabel}
+          campeones={getNombrePareja(campeonData.campeon)}
+          subcampeones={getNombrePareja(campeonData.subcampeon)}
+          torneo={torneo.nombre}
+          club={torneo.sede}
+          fecha={fechaCorta(torneo.fechaFin || torneo.fechaInicio)}
+        />
       )}
 
       {/* Generar bracket */}
       {!bracketGenerado && rondas.length === 0 && (
-        <div className="themed-card rounded-2xl p-5 border">
-          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-            Generar bracket eliminatorio
-          </h2>
-          <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+        <Card>
+          <Card.Title as="h2">Generar bracket eliminatorio</Card.Title>
+          <p className="body-sm text-ink-2 mt-1 mb-4">
             {esEliminacionDirecta
               ? `Entran las ${parejas.length} parejas inscriptas; si no son potencia de 2, algunas pasan directo (bye)`
               : `Avanzan ${parejasQueAvanzan} pareja${parejasQueAvanzan !== 1 ? "s" : ""} de cada grupo`}
           </p>
-          <div className="flex gap-2 mb-3">
-            <button
-              onClick={() => setModoGeneracion("automatico")}
-              className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "automatico" ? "bg-green-600 text-white" : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"}`}
-            >
-              {esEliminacionDirecta ? "Automático (sorteo)" : "Automático (cruzado)"}
-            </button>
-            <button
-              onClick={() => setModoGeneracion("manual")}
-              className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "manual" ? "bg-green-600 text-white" : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"}`}
-            >
-              Manual
-            </button>
-          </div>
+          <Pills
+            ariaLabel="Modo de generación"
+            value={modoGeneracion}
+            onChange={setModoGeneracion}
+            items={[
+              { value: "automatico", label: esEliminacionDirecta ? "Automático (sorteo)" : "Automático (cruzado)" },
+              { value: "manual", label: "Manual" },
+            ]}
+          />
           {modoGeneracion === "automatico" && (
-            <button
-              onClick={generarBracketAutomatico}
-              className="w-full bg-green-600 text-white font-semibold py-2 rounded-xl hover:bg-green-700 transition"
-            >
-              {esEliminacionDirecta ? "Sortear cruces" : "Generar cruces automáticos"}
-            </button>
+            <Card.Foot>
+              <Button variant="primary" onClick={generarBracketAutomatico}>
+                {esEliminacionDirecta ? "Sortear cruces" : "Generar cruces automáticos"}
+              </Button>
+            </Card.Foot>
           )}
           {modoGeneracion === "manual" && (
             <ManualBracketBuilder
@@ -721,242 +737,216 @@ export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }
               onConfirm={(llaves) => setRondas(avanzarGanadores(generarRondas(llaves)))}
             />
           )}
-        </div>
+        </Card>
       )}
 
       {/* Rondas */}
       {rondas.length > 0 && (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-6">
           {!bracketGenerado && (
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setRondas([])}
-                className="px-3 py-1 rounded-lg text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
-              >
-                Descartar
-              </button>
-              <button
-                onClick={confirmarBracket}
-                className="px-3 py-1 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition"
-              >
+            <div className="pd-btn-group justify-end">
+              <Button onClick={() => setRondas([])}>Descartar</Button>
+              <Button variant="primary" onClick={confirmarBracket}>
                 Confirmar bracket
-              </button>
+              </Button>
             </div>
           )}
 
-          {rondas.map((ronda, ri) => (
-            <div
-              key={ri}
-              className="themed-card rounded-2xl p-5 border"
-            >
-              <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-                {getNombreRonda(rondas.length, ri)}
-              </h2>
-              <div className="flex flex-col gap-2">
-                {ronda.map((p, pi) => {
-                  const ganador = getGanador(p.resultado);
-                  return (
-                    <div key={pi} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <p
-                            className={`text-sm font-medium ${!p.pareja1 ? "" : ganador === 1 ? "text-green-700 font-bold" : ganador === 2 ? "text-red-400" : ""}`}
-                            style={!p.pareja1 ? { color: "var(--text-muted)", opacity: 0.4 } : (!ganador ? { color: "var(--text-primary)" } : undefined)}
-                          >
-                            {ganador === 1 && "🏆 "}
-                            {getNombrePareja(p.pareja1)}
-                          </p>
-                          <p className="text-xs" style={{ color: "var(--text-muted)" }}>vs</p>
-                          <p
-                            className={`text-sm font-medium ${!p.pareja2 ? "" : ganador === 2 ? "text-green-700 font-bold" : ganador === 1 ? "text-red-400" : ""}`}
-                            style={!p.pareja2 ? { color: "var(--text-muted)", opacity: 0.4 } : (!ganador ? { color: "var(--text-primary)" } : undefined)}
-                          >
-                            {ganador === 2 && "🏆 "}
-                            {getNombrePareja(p.pareja2)}
-                          </p>
-                        </div>
-                        <div>
-                          {p.resultado ? (
-                            <div className="flex flex-col items-end gap-1">
-                              <div className="flex flex-wrap gap-1 justify-end">
-                                {p.resultado.sets.map((s, si) => (
-                                  <span
-                                    key={si}
-                                    className="text-sm font-bold rounded-lg px-2 py-0.5 themed-card border border-[var(--border-card)]"
-                                    style={{ color: "var(--text-primary)" }}
-                                  >
-                                    {s.g1}-{s.g2}
-                                    {s.tb1 !== undefined &&
-                                      s.tb2 !== undefined && (
-                                        <span className="text-xs font-normal text-orange-500 ml-1">
-                                          TB {s.tb1}-{s.tb2}
-                                        </span>
-                                      )}
-                                  </span>
-                                ))}
-                              </div>
-                              {bracketGenerado && (
-                                <button
-                                  onClick={() => abrirEditarResultado(ri, pi)}
-                                  className="text-xs text-green-600 hover:underline"
-                                >
-                                  Editar
-                                </button>
-                              )}
-                            </div>
-                          ) : p.pareja1 && p.pareja2 && bracketGenerado ? (
-                            torneo.status === "en_curso" || torneo.status === "finalizado" ? (
-                              <button
-                                onClick={() => abrirEditarResultado(ri, pi)}
-                                className="px-3 py-1 rounded-lg text-xs font-semibold text-white hover:opacity-90 transition"
-                                style={{ backgroundColor: "var(--accent)" }}
+          {rondas.map((ronda, ri) => {
+            const esFinal = ri === rondas.length - 1;
+            const esSemi = ri === rondas.length - 2;
+            const corto = nombreCortoRonda(rondas.length, ri);
+            return (
+              <section key={ri} className="flex flex-col gap-4">
+                <h2 className="heading-md m-0">{getNombreRonda(rondas.length, ri)}</h2>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {ronda.map((p, pi) => {
+                    const g = getGanador(p.resultado);
+                    const ganador = g === 1 ? 0 : g === 2 ? 1 : null;
+                    const ambas = !!(p.pareja1 && p.pareja2);
+                    const bye = esBye(rondas, ri, pi);
+                    const sets = p.resultado?.sets || [];
+                    // Vestido de la tarjeta: sin rivales definidos es "pending"; con rivales, la ronda manda
+                    const variant = !ambas ? "pending" : esFinal ? "final" : esSemi ? "semi" : "default";
+                    // Tocar la tarjeta abre la carga del resultado (editar siempre; cargar solo con el torneo iniciado)
+                    const abrir =
+                      bracketGenerado && ambas && (p.resultado || puedeCargarResultados)
+                        ? () => abrirEditarResultado(ri, pi)
+                        : undefined;
+                    let foot;
+                    let footIcon;
+                    if (p.resultado) {
+                      const tb = textoTiebreak(sets);
+                      foot = tb ? `Resultado cargado · ${tb}` : "Resultado cargado";
+                      footIcon = Check;
+                    } else if (bye) {
+                      foot = "Pasa directo (bye)";
+                      footIcon = ArrowRight;
+                    } else if (ambas && bracketGenerado) {
+                      foot = puedeCargarResultados ? "Tocá para cargar el resultado" : "Iniciá el torneo primero";
+                      footIcon = puedeCargarResultados ? Pencil : Lock;
+                    }
+                    return (
+                      <div key={pi} className="flex w-full max-w-[360px] flex-col gap-2">
+                        <MatchCard
+                          ronda={ronda.length > 1 ? `${corto} ${pi + 1}` : corto}
+                          cuadro={cuadroLabel}
+                          cancha={etiquetaCancha(p.cancha)}
+                          hora={p.hora || undefined}
+                          parejas={[
+                            { nombre: p.pareja1 ? getNombrePareja(p.pareja1) : "", sets: sets.map((s) => s.g1) },
+                            { nombre: p.pareja2 ? getNombrePareja(p.pareja2) : "", sets: sets.map((s) => s.g2) },
+                          ]}
+                          ganador={ganador}
+                          variant={variant}
+                          foot={foot}
+                          footIcon={footIcon}
+                          onClick={abrir}
+                          role={abrir ? "button" : undefined}
+                          tabIndex={abrir ? 0 : undefined}
+                          onKeyDown={
+                            abrir
+                              ? (e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    abrir();
+                                  }
+                                }
+                              : undefined
+                          }
+                        />
+                        {/* Horario y cancha */}
+                        {bracketGenerado && ambas && (
+                          <div className="flex flex-wrap items-end gap-2">
+                            <Field label="Hora" className="flex-1 min-w-[120px]">
+                              <Input
+                                type="time"
+                                value={p.hora || ""}
+                                onChange={(e) =>
+                                  actualizarPartidoBracket(
+                                    ri,
+                                    pi,
+                                    "hora",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                            </Field>
+                            <Field label="Cancha" className="flex-1 min-w-[120px]">
+                              <Input
+                                type="text"
+                                value={p.cancha || ""}
+                                placeholder="Cancha (ej: 1)"
+                                onChange={(e) =>
+                                  actualizarPartidoBracket(
+                                    ri,
+                                    pi,
+                                    "cancha",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                            </Field>
+                            {p.hora && p.cancha && (
+                              <a
+                                href={`https://wa.me/?text=${encodeURIComponent(
+                                  `🎾 ¡Partido listo!\n\nTorneo: ${torneo.nombre}\n⏰ Hora: ${p.hora}\n📍 Cancha: ${p.cancha}\n\n${p.pareja1?.nombrePareja || "Pareja 1"}\nvs\n${p.pareja2?.nombrePareja || "Pareja 2"}\n\n¡Nos vemos en la cancha!`
+                                )}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="pd-btn pd-btn-icon"
+                                aria-label="Enviar por WhatsApp"
+                                title="Enviar por WhatsApp"
                               >
-                                Cargar resultado
-                              </button>
-                            ) : (
-                              <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
-                                Iniciá el torneo primero
-                              </span>
-                            )
-                          ) : esBye(rondas, ri, pi) ? (
-                            <span className="text-xs font-semibold px-2 py-1 rounded-full"
-                              style={{ backgroundColor: "var(--accent-light)", color: "var(--accent)" }}>
-                              Pasa directo (bye)
-                            </span>
-                          ) : (
-                            <span className="text-xs" style={{ color: "var(--text-muted)", opacity: 0.4 }}>—</span>
-                          )}
-                        </div>
+                                <MessageCircle className="pd-icon" size={20} aria-hidden="true" />
+                              </a>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      {/* Horario y cancha */}
-                      {bracketGenerado && p.pareja1 && p.pareja2 && (
-                        <div className="flex gap-2 mt-2">
-                          <input
-                            type="time"
-                            value={p.hora || ""}
-                            onChange={(e) =>
-                              actualizarPartidoBracket(
-                                ri,
-                                pi,
-                                "hora",
-                                e.target.value,
-                              )
-                            }
-                            className="border border-[var(--border-card)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
-                          />
-                          <input
-                            type="text"
-                            value={p.cancha || ""}
-                            placeholder="Cancha (ej: 1)"
-                            onChange={(e) =>
-                              actualizarPartidoBracket(
-                                ri,
-                                pi,
-                                "cancha",
-                                e.target.value,
-                              )
-                            }
-                            className="border border-[var(--border-card)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500 w-28"
-                          />
-                          {p.hora && p.cancha && (
-                            <a
-                              href={`https://wa.me/?text=${encodeURIComponent(
-                                `🎾 ¡Partido listo!\n\nTorneo: ${torneo.nombre}\n⏰ Hora: ${p.hora}\n📍 Cancha: ${p.cancha}\n\n${p.pareja1?.nombrePareja || "Pareja 1"}\nvs\n${p.pareja2?.nombrePareja || "Pareja 2"}\n\n¡Nos vemos en la cancha!`
-                              )}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center justify-center w-8 h-8 rounded-lg transition hover:opacity-80"
-                              style={{ backgroundColor: "#25d366" }}
-                              title="Enviar por WhatsApp"
-                            >
-                              <span className="text-white text-xs font-bold">W</span>
-                            </a>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
 
-      {/* Modal cargar resultado */}
+      {/* Diálogo cargar resultado */}
       {editandoResultado && partido && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="themed-card rounded-2xl p-6 w-full max-w-sm mx-4">
-            <h3 className="font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
+        <div className="pd-backdrop z-50">
+          <div className="pd-dialog" role="dialog" aria-modal="true" aria-labelledby="bracket-resultado-titulo">
+            <h2 className="pd-dialog-title" id="bracket-resultado-titulo">
               Cargar resultado
-            </h3>
+            </h2>
             {partido.resultado && (
-              <p className="text-xs mb-2 rounded-lg px-3 py-2" style={{ color: "var(--text-muted)", backgroundColor: "var(--bg-card-hover)" }}>
-                Editar un resultado no vuelve a otorgar puntos.
-              </p>
+              <p className="body-sm text-ink-3 m-0 mb-2">Editar un resultado no vuelve a otorgar puntos.</p>
             )}
-            <div className="mb-4 text-sm">
-              <p className="font-medium" style={{ color: "var(--text-primary)" }}>
-                {getNombrePareja(partido.pareja1)}
-              </p>
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>vs</p>
-              <p className="font-medium" style={{ color: "var(--text-primary)" }}>
-                {getNombrePareja(partido.pareja2)}
-              </p>
+            <div className="pd-dialog-body mb-4!">
+              <p className="heading-sm text-ink m-0">{getNombrePareja(partido.pareja1)}</p>
+              <p className="caption text-ink-3 m-0">vs</p>
+              <p className="heading-sm text-ink m-0">{getNombrePareja(partido.pareja2)}</p>
             </div>
 
             {errorModal && (
-              <div className="rounded-lg px-3 py-2 mb-3 text-xs text-red-600 border"
-                style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.2)" }}>
+              <p className="pd-error mb-3" role="alert">
                 {errorModal}
-              </div>
+              </p>
             )}
 
             <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <span className="w-12"></span>
-                <span className="w-16 text-xs text-center text-green-600 font-semibold truncate">
-                  {partido.pareja1?.jugador1?.split(" ").pop() || "P1"}
-                </span>
-                <span></span>
-                <span className="w-16 text-xs text-center text-green-600 font-semibold truncate">
-                  {partido.pareja2?.jugador1?.split(" ").pop() || "P2"}
-                </span>
+              <div className="grid grid-cols-[48px_64px_16px_64px] items-center gap-x-3">
+                <span />
+                <span className="label text-ink-3 text-center truncate">{apellido1}</span>
+                <span />
+                <span className="label text-ink-3 text-center truncate">{apellido2}</span>
               </div>
               {setsInput.slice(0, setsVisibles()).map((set, si) => (
-                <div key={si}>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm w-12" style={{ color: "var(--text-muted)" }}>
-                      Set {si + 1}
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={set.g1}
-                      onChange={(e) => {
-                        const n = [...setsInput];
-                        n[si] = { ...n[si], g1: Number(e.target.value) };
-                        setSetsInput(n);
-                      }}
-                      className="w-16 border border-[var(--border-card)] rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                    <span style={{ color: "var(--text-muted)" }}>-</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={set.g2}
-                      onChange={(e) => {
-                        const n = [...setsInput];
-                        n[si] = { ...n[si], g2: Number(e.target.value) };
-                        setSetsInput(n);
-                      }}
-                      className="w-16 border border-[var(--border-card)] rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-                  <div className="ml-12 mt-1">
-                    <button
-                      type="button"
+                <div key={si} className="grid grid-cols-[48px_64px_16px_64px] items-center gap-x-3 gap-y-1">
+                  <span className="body-sm text-ink-2">Set {si + 1}</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    value={set.g1}
+                    onChange={(e) => {
+                      const n = [...setsInput];
+                      n[si] = { ...n[si], g1: Number(e.target.value) };
+                      setSetsInput(n);
+                    }}
+                    className="text-center pd-tnum"
+                    aria-label={`Set ${si + 1}, games de ${apellido1}`}
+                  />
+                  <span className="text-ink-3 text-center" aria-hidden="true">
+                    –
+                  </span>
+                  <Input
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    value={set.g2}
+                    onChange={(e) => {
+                      const n = [...setsInput];
+                      n[si] = { ...n[si], g2: Number(e.target.value) };
+                      setSetsInput(n);
+                    }}
+                    className="text-center pd-tnum"
+                    aria-label={`Set ${si + 1}, games de ${apellido2}`}
+                  />
+                  <div className="col-span-4">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-pressed={!!tiebreakInput[si]?.activo}
+                      icon={
+                        tiebreakInput[si]?.activo ? (
+                          <Check className="pd-icon" size={20} aria-hidden="true" />
+                        ) : (
+                          <Plus className="pd-icon" size={20} aria-hidden="true" />
+                        )
+                      }
                       onClick={() => {
                         const n = [...tiebreakInput];
                         n[si] = {
@@ -967,65 +957,49 @@ export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }
                         };
                         setTiebreakInput(n);
                       }}
-                      className={`text-xs font-semibold transition ${tiebreakInput[si]?.activo ? "text-orange-600" : ""}`}
-                      style={!tiebreakInput[si]?.activo ? { color: "var(--text-muted)" } : undefined}
                     >
-                      {tiebreakInput[si]?.activo
-                        ? "✓ Tie break"
-                        : "+ Tie break"}
-                    </button>
-                    {tiebreakInput[si]?.activo && (
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-xs text-orange-500 w-12">TB</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={tiebreakInput[si].tb1}
-                          onChange={(e) => {
-                            const n = [...tiebreakInput];
-                            n[si] = { ...n[si], tb1: Number(e.target.value) };
-                            setTiebreakInput(n);
-                          }}
-                          className="w-16 border border-orange-200 rounded-lg px-3 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-orange-400"
-                        />
-                        <span style={{ color: "var(--text-muted)" }}>-</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={tiebreakInput[si].tb2}
-                          onChange={(e) => {
-                            const n = [...tiebreakInput];
-                            n[si] = { ...n[si], tb2: Number(e.target.value) };
-                            setTiebreakInput(n);
-                          }}
-                          className="w-16 border border-orange-200 rounded-lg px-3 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-orange-400"
-                        />
-                      </div>
-                    )}
+                      Tie break
+                    </Button>
                   </div>
+                  {tiebreakInput[si]?.activo && (
+                    <>
+                      <span className="body-sm text-warning">TB</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        value={tiebreakInput[si].tb1}
+                        onChange={(e) => {
+                          const n = [...tiebreakInput];
+                          n[si] = { ...n[si], tb1: Number(e.target.value) };
+                          setTiebreakInput(n);
+                        }}
+                        className="text-center pd-tnum"
+                        aria-label={`Tie break del set ${si + 1}, puntos de ${apellido1}`}
+                      />
+                      <span className="text-ink-3 text-center" aria-hidden="true">
+                        –
+                      </span>
+                      <Input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        value={tiebreakInput[si].tb2}
+                        onChange={(e) => {
+                          const n = [...tiebreakInput];
+                          n[si] = { ...n[si], tb2: Number(e.target.value) };
+                          setTiebreakInput(n);
+                        }}
+                        className="text-center pd-tnum"
+                        aria-label={`Tie break del set ${si + 1}, puntos de ${apellido2}`}
+                      />
+                    </>
+                  )}
                 </div>
               ))}
             </div>
-            <div className="flex flex-col gap-2 mt-4">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setEditandoResultado(null);
-                    setSetsInput([]);
-                    setTiebreakInput([]);
-                    setErrorModal("");
-                  }}
-                  className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => guardarResultado(false)}
-                  className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition"
-                >
-                  Guardar
-                </button>
-              </div>
+            <div className="pd-dialog-actions">
+              <Button onClick={cerrarResultado}>Cancelar</Button>
               {(() => {
                 if (!editandoResultado) return null;
                 const { rondaIdx, partidoIdx } = editandoResultado;
@@ -1041,7 +1015,7 @@ export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }
                 const haySiguiente = siguienteIdx !== -1 || siguienteRonda;
                 if (!haySiguiente) return null;
                 return (
-                  <button
+                  <Button
                     onClick={async () => {
                       const err = validarResultado();
                       if (err) { setErrorModal(err); return; }
@@ -1052,13 +1026,14 @@ export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }
                         abrirEditarResultado(siguienteRonda.rondaIdx, siguienteRonda.partidoIdx);
                       }
                     }}
-                    className="px-4 py-2 rounded-xl text-sm font-semibold transition border-2"
-                    style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
                   >
-                    Guardar y cargar siguiente →
-                  </button>
+                    Guardar y cargar siguiente
+                  </Button>
                 );
               })()}
+              <Button variant="primary" onClick={() => guardarResultado(false)}>
+                Guardar
+              </Button>
             </div>
           </div>
         </div>

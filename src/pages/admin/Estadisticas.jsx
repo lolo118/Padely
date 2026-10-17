@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { LayoutGrid, Share } from "lucide-react";
 import { getTodayLocal } from "../../utils/formatDate";
 import { formatPrecio } from "../../utils/format";
 import { useAuthStore } from "../../store/authStore";
@@ -21,16 +22,33 @@ import {
   Cell,
   Legend,
 } from "recharts";
+import { Card, Pills, StatTile } from "../../components/ui";
 
+// Paleta categórica de la torta (una cancha por color), solo tokens: court y lime primero, después los estados
 const COLORES = [
-  "#22c55e",
-  "#3b82f6",
-  "#f59e0b",
-  "#ef4444",
-  "#8b5cf6",
-  "#ec4899",
-  "#14b8a6",
-  "#f97316",
+  "var(--court)",
+  "var(--lime)",
+  "var(--warning)",
+  "var(--success)",
+  "var(--danger)",
+  "var(--ink-3)",
+  "var(--night)",
+  "var(--line-strong)",
+];
+
+// Estilos de Recharts con tokens (las cadenas var(--…) en props de Recharts están permitidas)
+const TICK = { fontSize: 12, fill: "var(--ink-3)", fontFamily: "var(--font-sans)" };
+const TOOLTIP = {
+  contentStyle: { background: "var(--surface-raised)", border: "1px solid var(--line)", borderRadius: 12, color: "var(--ink)" },
+  itemStyle: { color: "var(--ink)" },
+  labelStyle: { color: "var(--ink-2)", fontWeight: 600 },
+};
+const LEGEND = { fontSize: 12, fontFamily: "var(--font-sans)" };
+
+const PERIODOS = [
+  { value: "dia", label: "Hoy" },
+  { value: "semana", label: "Semana" },
+  { value: "mes", label: "Mes" },
 ];
 
 export default function Estadisticas() {
@@ -68,18 +86,27 @@ export default function Estadisticas() {
 
   if (loading) {
     return (
-      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
-        Cargando estadísticas...
+      <div aria-busy="true">
+        <span className="sr-only">Cargando estadísticas...</span>
+        <div className="flex items-center justify-between mb-6">
+          <div className="pd-skeleton h-8 w-48" />
+          <div className="pd-skeleton h-9 w-56 rounded-pill" />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="pd-skeleton h-[92px] rounded-lg" />
+          ))}
+        </div>
+        <div className="pd-skeleton h-72 rounded-lg" />
       </div>
     );
   }
 
   if (!club) {
     return (
-      <div className="text-center py-16 themed-card rounded-2xl border">
-        <div className="text-5xl mb-4">📊</div>
-        <p className="font-medium" style={{ color: "var(--text-muted)" }}>No tenés un club registrado</p>
-      </div>
+      <Card className="text-center">
+        <p className="body-md text-ink-2 m-0">No tenés un club registrado</p>
+      </Card>
     );
   }
 
@@ -182,238 +209,162 @@ export default function Estadisticas() {
         ? "Última semana"
         : "Último mes";
 
+  // Lista de horarios (más / menos populares) dentro de su tarjeta
+  const listaHorarios = (horarios, claseCantidad) =>
+    horarios.length === 0 ? (
+      <p className="body-sm text-ink-2 mt-3 mb-0">Sin datos</p>
+    ) : (
+      <ol className="m-0 mt-2 p-0 list-none divide-y divide-line">
+        {horarios.map((h, i) => (
+          <li key={h.hora} className="flex items-center justify-between gap-3 py-2">
+            <span className="flex items-center gap-3">
+              <span className="label text-ink-3 w-5 pd-tnum">{i + 1}</span>
+              <span className="body-md font-semibold! pd-tnum">{h.hora}</span>
+            </span>
+            <span className={`body-sm font-semibold! pd-tnum ${claseCantidad}`}>{h.cantidad} reservas</span>
+          </li>
+        ))}
+      </ol>
+    );
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Estadísticas</h1>
-        <div className="flex gap-2">
-          {[
-            { key: "dia", label: "Hoy" },
-            { key: "semana", label: "Semana" },
-            { key: "mes", label: "Mes" },
-          ].map((p) => (
-            <button
-              key={p.key}
-              onClick={() => setPeriodo(p.key)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold transition ${
-                periodo === p.key
-                  ? "bg-green-600 text-white"
-                  : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+      <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
+        <h1 className="heading-lg m-0">Estadísticas</h1>
+        <Pills items={PERIODOS} value={periodo} onChange={setPeriodo} ariaLabel="Período" />
       </div>
 
       {todasReservas.length === 0 ? (
-        <div className="themed-card rounded-2xl p-8 border text-center">
-          <div className="text-5xl mb-4">📊</div>
-          <h2 className="text-lg font-bold mb-2" style={{ color: "var(--text-primary)" }}>
-            Tus estadísticas aparecerán acá
-          </h2>
-          <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
+        <Card className="max-w-xl">
+          <Card.Title>Tus estadísticas aparecerán acá</Card.Title>
+          <p className="body-md text-ink-2 mt-2 mb-4">
             Empezá a recibir reservas para ver métricas de tu club: ingresos, horarios populares, ocupación por cancha y más.
           </p>
-          <div className="flex flex-col gap-2 max-w-sm mx-auto">
-            <div className="flex items-center gap-3 rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-              <span className="text-lg">💡</span>
-              <span className="text-xs text-left" style={{ color: "var(--text-secondary)" }}>
-                Compartí tu club con jugadores para empezar a recibir reservas
-              </span>
-            </div>
-            <div className="flex items-center gap-3 rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-              <span className="text-lg">📱</span>
-              <span className="text-xs text-left" style={{ color: "var(--text-secondary)" }}>
-                Los jugadores pueden encontrar tu club en la sección "Canchas" de la app
-              </span>
-            </div>
-          </div>
-        </div>
+          <ul className="m-0 p-0 list-none grid gap-2">
+            <li className="flex items-start gap-3 rounded-md bg-surface-sunken px-4 py-3 body-sm text-ink-2">
+              <Share className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+              <span>Compartí tu club con jugadores para empezar a recibir reservas</span>
+            </li>
+            <li className="flex items-start gap-3 rounded-md bg-surface-sunken px-4 py-3 body-sm text-ink-2">
+              <LayoutGrid className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+              <span>Los jugadores pueden encontrar tu club en la sección "Canchas" de la app</span>
+            </li>
+          </ul>
+        </Card>
       ) : (
-      <>
-      {/* Tarjetas resumen */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="themed-card rounded-2xl p-5 border text-center">
-          <p className="text-3xl font-bold text-green-600">
-            {formatPrecio(ingresosTotales)}
-          </p>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-            Ingresos ({periodoLabel})
-          </p>
-        </div>
-        <div className="themed-card rounded-2xl p-5 border text-center">
-          <p className="text-3xl font-bold text-blue-600">
-            {reservasConfirmadas.length}
-          </p>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-            Reservas ({periodoLabel})
-          </p>
-        </div>
-        <div className="themed-card rounded-2xl p-5 border text-center">
-          <p className="text-3xl font-bold text-purple-600">
-            {jugadoresUnicos.size}
-          </p>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Jugadores únicos</p>
-        </div>
-        <div className="themed-card rounded-2xl p-5 border text-center">
-          <p className="text-3xl font-bold text-orange-500">
-            {turnosFijos.filter((t) => t.status === "activo").length}
-          </p>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Turnos fijos activos</p>
-        </div>
-      </div>
+        <>
+          {/* Tarjetas resumen */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <StatTile value={formatPrecio(ingresosTotales)} label={`Ingresos · ${periodoLabel}`} />
+            <StatTile value={reservasConfirmadas.length} label={`Reservas · ${periodoLabel}`} />
+            <StatTile value={jugadoresUnicos.size} label="Jugadores únicos" />
+            <StatTile value={turnosFijos.filter((t) => t.status === "activo").length} label="Turnos fijos activos" />
+          </div>
 
-      {/* Gráfico de ingresos por cancha */}
-      {dataIngresos.length > 0 && (
-        <div className="themed-card rounded-2xl p-5 border mb-4">
-          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
-            Ingresos y reservas por cancha
-          </h2>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={dataIngresos}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="Ingresos" fill="#22c55e" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="Reservas" fill="#3b82f6" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+          {/* Gráfico de ingresos por cancha */}
+          {dataIngresos.length > 0 && (
+            <Card className="mb-4">
+              <Card.Title className="mb-4!">Ingresos y reservas por cancha</Card.Title>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={dataIngresos}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--line-strong)" />
+                  <XAxis dataKey="name" stroke="var(--line-strong)" tick={TICK} tickLine={false} />
+                  <YAxis stroke="var(--line-strong)" tick={TICK} tickLine={false} />
+                  <Tooltip {...TOOLTIP} cursor={{ fill: "var(--surface-hover)" }} />
+                  <Bar dataKey="Ingresos" fill="var(--court)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="Reservas" fill="var(--lime)" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+          )}
 
-      {/* Gráfico de ocupación */}
-      {dataTorta.length > 0 && dataTorta.some((d) => d.value > 0) && (
-        <div className="themed-card rounded-2xl p-5 border mb-4">
-          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
-            Tasa de ocupación por cancha
-          </h2>
-          <div className="flex items-center gap-4">
-            <ResponsiveContainer width="50%" height={200}>
-              <PieChart>
-                <Pie
-                  data={dataTorta}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  dataKey="value"
-                  label={({ value }) => `${value}%`}
-                >
-                  {dataTorta.map((_, i) => (
-                    <Cell key={i} fill={COLORES[i % COLORES.length]} />
+          {/* Gráfico de ocupación */}
+          {dataTorta.length > 0 && dataTorta.some((d) => d.value > 0) && (
+            <Card className="mb-4">
+              <Card.Title className="mb-4!">Tasa de ocupación por cancha</Card.Title>
+              <div className="grid gap-4 md:grid-cols-2 md:items-center">
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={dataTorta}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      dataKey="value"
+                      stroke="var(--surface-raised)"
+                      label={({ value }) => `${value}%`}
+                    >
+                      {dataTorta.map((_, i) => (
+                        <Cell key={i} fill={COLORES[i % COLORES.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => `${value}%`} {...TOOLTIP} />
+                    <Legend wrapperStyle={LEGEND} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <ul className="m-0 p-0 list-none divide-y divide-line">
+                  {ocupacionPorCancha.map((c, i) => (
+                    <li key={i} className="flex items-center justify-between gap-3 py-2">
+                      <span className="flex items-center gap-2 body-md">
+                        <span
+                          className="w-3 h-3 rounded-pill flex-none"
+                          style={{ backgroundColor: COLORES[i % COLORES.length] }}
+                          aria-hidden="true"
+                        />
+                        {c.nombre}
+                      </span>
+                      <span className="pd-tnum">
+                        <span className="body-md font-semibold!">{c.tasa}%</span>{" "}
+                        <span className="body-sm text-ink-3">
+                          {c.slotsOcupados} / {c.slotsTotal}
+                        </span>
+                      </span>
+                    </li>
                   ))}
-                </Pie>
-                <Tooltip formatter={(value) => `${value}%`} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex-1 flex flex-col gap-2">
-              {ocupacionPorCancha.map((c, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: COLORES[i % COLORES.length] }}
-                    />
-                    <span className="text-sm" style={{ color: "var(--text-primary)" }}>{c.nombre}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                      {c.tasa}%
-                    </span>
-                    <span className="text-xs ml-1" style={{ color: "var(--text-muted)" }}>
-                      ({c.slotsOcupados}/{c.slotsTotal})
-                    </span>
-                  </div>
-                </div>
-              ))}
+                </ul>
+              </div>
+            </Card>
+          )}
+
+          {/* Horarios más y menos reservados */}
+          <div className="grid gap-4 md:grid-cols-2 mb-4">
+            <Card>
+              <Card.Title>Horarios más populares</Card.Title>
+              {listaHorarios(top5Horarios, "text-success")}
+            </Card>
+            <Card>
+              <Card.Title>Horarios menos populares</Card.Title>
+              {listaHorarios(bottom5Horarios, "text-ink-3")}
+            </Card>
+          </div>
+
+          {/* Detalle por cancha */}
+          <div className="pd-table-wrap mb-4">
+            <div className="pd-table-head">
+              <h3>Detalle por cancha</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="pd-table">
+                <thead>
+                  <tr>
+                    <th>Cancha</th>
+                    <th className="num">Reservas</th>
+                    <th className="num">Ingresos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reservasPorCancha.map((c, i) => (
+                    <tr key={i}>
+                      <td className="font-semibold">{c.nombre}</td>
+                      <td className="num">{c.reservas}</td>
+                      <td className="num font-semibold">{formatPrecio(c.ingresos)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Horarios más y menos reservados */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div className="themed-card rounded-2xl p-5 border">
-          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-            Horarios más populares
-          </h2>
-          {top5Horarios.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>Sin datos</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {top5Horarios.map((h, i) => (
-                <div key={h.hora} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold w-5" style={{ color: "var(--text-muted)" }}>
-                      {i + 1}
-                    </span>
-                    <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                      {h.hora}
-                    </span>
-                  </div>
-                  <span className="text-sm font-semibold text-green-600">
-                    {h.cantidad} reservas
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="themed-card rounded-2xl p-5 border">
-          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-            Horarios menos populares
-          </h2>
-          {bottom5Horarios.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>Sin datos</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {bottom5Horarios.map((h, i) => (
-                <div key={h.hora} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold w-5" style={{ color: "var(--text-muted)" }}>
-                      {i + 1}
-                    </span>
-                    <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                      {h.hora}
-                    </span>
-                  </div>
-                  <span className="text-sm font-semibold text-red-400">
-                    {h.cantidad} reservas
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Detalle por cancha */}
-      <div className="themed-card rounded-2xl p-5 border mb-4">
-        <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Detalle por cancha</h2>
-        <div className="flex flex-col gap-3">
-          {reservasPorCancha.map((c, i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between rounded-xl px-4 py-3"
-              style={{ backgroundColor: "var(--bg-card-hover)" }}
-            >
-              <div>
-                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                  {c.nombre}
-                </p>
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>{c.reservas} reservas</p>
-              </div>
-              <p className="text-sm font-bold text-green-600">
-                {formatPrecio(c.ingresos)}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-      </>
+        </>
       )}
     </div>
   );

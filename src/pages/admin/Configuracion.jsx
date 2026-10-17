@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AlertTriangle, Check, ImagePlus, Info, Plus, Upload } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import {
   getClubByOwner,
@@ -9,12 +10,7 @@ import {
 import { uploadClubLogo } from "../../services/storageService";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
-
-const inputClass =
-  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full";
-const labelClass = "text-xs font-semibold mb-1 block";
-const tipClass = "text-xs rounded-lg px-3 py-2 mt-2 border";
-const tipStyle = { color: "#3b82f6", backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.2)" };
+import { Badge, Button, Card, Field, Input, Pills, Select, Tabs } from "../../components/ui";
 
 const diasSemana = [
   "Lunes",
@@ -35,6 +31,16 @@ const rolesDisponibles = [
   },
   { value: "cajero", label: "Cajero", desc: "Solo ver reservas y cobrar" },
 ];
+
+// Consejo contextual (el sistema no define un callout: surface-sunken + ícono Info + body-sm)
+function Consejo({ children }) {
+  return (
+    <p className="flex items-start gap-2 rounded-md bg-surface-sunken px-4 py-3 body-sm text-ink-2 m-0">
+      <Info className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+      <span>{children}</span>
+    </p>
+  );
+}
 
 export default function Configuracion() {
   const { user } = useAuthStore();
@@ -192,364 +198,311 @@ export default function Configuracion() {
   };
 
   if (loading) {
-    return <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
-  }
-
-  if (!club) {
     return (
-      <div className="text-center py-16 themed-card rounded-2xl border">
-        <div className="text-5xl mb-4">⚙️</div>
-        <p className="font-medium" style={{ color: "var(--text-muted)" }}>
-          No tenés un club registrado
-        </p>
+      <div aria-busy="true">
+        <span className="sr-only">Cargando...</span>
+        <div className="flex items-center justify-between mb-4">
+          <div className="pd-skeleton h-8 w-48" />
+          <div className="pd-skeleton h-11 w-40 rounded-md" />
+        </div>
+        <div className="pd-skeleton h-11 w-full max-w-2xl mb-6" />
+        <div className="pd-skeleton h-80 rounded-lg" />
       </div>
     );
   }
 
+  if (!club) {
+    return (
+      <Card className="text-center">
+        <p className="body-md text-ink-2 m-0">No tenés un club registrado</p>
+      </Card>
+    );
+  }
+
   const tabs = [
-    { key: "datos", label: "Datos del club" },
-    { key: "horarios", label: "Horarios" },
-    { key: "redes", label: "Redes sociales" },
-    { key: "facturacion", label: "Facturación" },
-    { key: "usuarios", label: "Usuarios" },
+    { value: "datos", label: "Datos del club" },
+    { value: "horarios", label: "Horarios" },
+    { value: "redes", label: "Redes sociales" },
+    { value: "facturacion", label: "Facturación" },
+    { value: "usuarios", label: "Usuarios" },
   ];
+
+  const textoLogo = logoUrl
+    ? subiendoLogo
+      ? "Subiendo..."
+      : "Cambiar logo"
+    : subiendoLogo
+      ? "Subiendo logo..."
+      : "Subir logo del club";
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Configuración</h1>
-        <button
-          onClick={handleGuardar}
-          disabled={guardando}
-          className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-emerald-700 transition disabled:opacity-50"
-        >
-          {guardando ? "Guardando..." : "Guardar cambios"}
-        </button>
+      <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+        <h1 className="heading-lg m-0">Configuración</h1>
+        <Button variant="primary" onClick={handleGuardar} cargando={guardando ? "Guardando…" : ""}>
+          Guardar cambios
+        </Button>
       </div>
 
       {mensaje && (
-        <div
-          className="rounded-lg px-4 py-2 text-sm mb-4 border"
-          style={
-            mensaje.includes("Error")
-              ? { color: "#ef4444", backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)" }
-              : { color: "#10b981", backgroundColor: "rgba(16,185,129,0.08)", borderColor: "rgba(16,185,129,0.25)" }
-          }
+        <p
+          role="status"
+          className={`flex items-center gap-2 body-sm font-semibold! mb-4 m-0 ${mensaje.includes("Error") ? "text-danger" : "text-success"}`}
         >
+          {mensaje.includes("Error") ? (
+            <AlertTriangle className="pd-icon" size={20} aria-hidden="true" />
+          ) : (
+            <Check className="pd-icon" size={20} aria-hidden="true" />
+          )}
           {mensaje}
-        </div>
+        </p>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 overflow-x-auto pb-1">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold transition whitespace-nowrap ${
-              tab === t.key
-                ? "bg-emerald-600 text-white"
-                : "themed-card border"
-            }`}
-            style={tab !== t.key ? { color: "var(--text-muted)" } : {}}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs items={tabs} value={tab} onChange={setTab} ariaLabel="Secciones de la configuración" className="mb-6" />
 
       {/* Datos del club */}
       {tab === "datos" && (
-        <div className="themed-card rounded-2xl p-6 border">
-          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Datos del club</h2>
-          <div className="flex flex-col gap-4">
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Nombre del club</label>
-              <input
+        <Card>
+          <Card.Title className="mb-4!">Datos del club</Card.Title>
+          <div className="grid gap-4">
+            <Field label="Nombre del club">
+              <Input
                 type="text"
                 value={form.nombre}
                 onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-                className={inputClass}
               />
-            </div>
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Dirección</label>
-              <input
+            </Field>
+            <Field label="Dirección">
+              <Input
                 type="text"
                 placeholder="Ej: Av. Belgrano 1234"
                 value={form.direccion}
                 onChange={(e) =>
                   setForm({ ...form, direccion: e.target.value })
                 }
-                className={inputClass}
               />
-            </div>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Ciudad</label>
-                <input
+            </Field>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Ciudad">
+                <Input
                   type="text"
                   value={form.ciudad}
                   onChange={(e) => setForm({ ...form, ciudad: e.target.value })}
-                  className={inputClass}
                 />
-              </div>
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Provincia</label>
-                <input
+              </Field>
+              <Field label="Provincia">
+                <Input
                   type="text"
                   value={form.provincia}
                   onChange={(e) =>
                     setForm({ ...form, provincia: e.target.value })
                   }
-                  className={inputClass}
                 />
-              </div>
+              </Field>
             </div>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Teléfono</label>
-                <input
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Teléfono">
+                <Input
                   type="text"
+                  inputMode="tel"
                   placeholder="Ej: 385 1234567"
                   value={form.telefono}
                   onChange={(e) =>
                     setForm({ ...form, telefono: e.target.value })
                   }
-                  className={inputClass}
                 />
-              </div>
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Email</label>
-                <input
+              </Field>
+              <Field label="Email">
+                <Input
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className={inputClass}
                 />
-              </div>
+              </Field>
             </div>
 
             {/* Logo del club */}
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Logo del club</label>
-              <div className="flex flex-col items-center justify-center py-6 rounded-xl border-2 border-dashed" style={{ borderColor: "var(--border-card)" }}>
+            <Field as="div" label="Logo del club">
+              <div className="flex items-center gap-4 flex-wrap rounded-lg border border-dashed border-line-strong p-4">
                 {logoUrl ? (
-                  <div className="relative group">
-                    <img src={logoUrl} alt="Logo del club" className="h-24 max-w-[200px] object-contain rounded-lg" />
-                    <label className="absolute inset-0 flex items-center justify-center rounded-lg cursor-pointer bg-black/40 opacity-0 group-hover:opacity-100 transition">
-                      <span className="text-white text-xs font-semibold">{subiendoLogo ? "Subiendo..." : "Cambiar logo"}</span>
-                      <input type="file" accept="image/*" onChange={handleSubirLogo} disabled={subiendoLogo} className="hidden" />
-                    </label>
-                  </div>
+                  <img src={logoUrl} alt="Logo del club" className="h-24 max-w-[200px] object-contain rounded-sm" />
                 ) : (
-                  <label className="flex flex-col items-center cursor-pointer">
-                    <div className="text-4xl mb-2">🏟️</div>
-                    <span className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
-                      {subiendoLogo ? "Subiendo logo..." : "Subir logo del club"}
-                    </span>
-                    <span className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>PNG, JPG o SVG (máx. 5MB)</span>
-                    <input type="file" accept="image/*" onChange={handleSubirLogo} disabled={subiendoLogo} className="hidden" />
-                  </label>
+                  <span className="grid place-items-center w-24 h-24 rounded-sm bg-surface-sunken">
+                    <ImagePlus className="pd-icon-lg text-ink-3" size={24} aria-hidden="true" />
+                  </span>
                 )}
+                <div className="grid gap-1">
+                  <label className="pd-btn cursor-pointer! has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus" aria-disabled={subiendoLogo || undefined}>
+                    <Upload className="pd-icon" size={20} aria-hidden="true" />
+                    {textoLogo}
+                    <input type="file" accept="image/*" onChange={handleSubirLogo} disabled={subiendoLogo} className="sr-only" />
+                  </label>
+                  <span className="pd-help">PNG, JPG o SVG (máx. 5MB)</span>
+                </div>
               </div>
-            </div>
+            </Field>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Horarios */}
       {tab === "horarios" && (
-        <div className="themed-card rounded-2xl p-6 border">
-          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
-            Horario de atención
-          </h2>
-          <div className="flex flex-col gap-4">
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Hora de apertura</label>
-                <input
+        <Card>
+          <Card.Title className="mb-4!">Horario de atención</Card.Title>
+          <div className="grid gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Hora de apertura">
+                <Input
                   type="time"
+                  inputMode="numeric"
                   value={form.horarioApertura}
                   onChange={(e) =>
                     setForm({ ...form, horarioApertura: e.target.value })
                   }
-                  className={inputClass}
                 />
-              </div>
-              <div className="flex-1">
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Hora de cierre</label>
-                <input
+              </Field>
+              <Field label="Hora de cierre">
+                <Input
                   type="time"
+                  inputMode="numeric"
                   value={form.horarioCierre}
                   onChange={(e) =>
                     setForm({ ...form, horarioCierre: e.target.value })
                   }
-                  className={inputClass}
                 />
-              </div>
+              </Field>
             </div>
 
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Días abiertos</label>
-              <div className="flex flex-wrap gap-2">
-                {diasSemana.map((dia) => (
-                  <button
-                    key={dia}
-                    type="button"
-                    onClick={() => toggleDia(dia)}
-                    className={`px-3 py-2 rounded-xl text-sm font-semibold transition ${
-                      form.diasAbiertos.includes(dia)
-                        ? "bg-emerald-600 text-white"
-                        : "bg-[var(--bg-card-hover)] text-[var(--text-muted)] hover:opacity-80"
-                    }`}
-                  >
-                    {dia.slice(0, 3)}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <Field as="div" label="Días abiertos">
+              <Pills
+                multi
+                items={diasSemana.map((dia) => ({ value: dia, label: dia.slice(0, 3) }))}
+                value={form.diasAbiertos}
+                onChange={toggleDia}
+                ariaLabel="Días abiertos"
+              />
+            </Field>
 
-            <p className={tipClass} style={tipStyle}>
-              💡 Estos horarios se muestran a los jugadores en el hub de
+            <Consejo>
+              Estos horarios se muestran a los jugadores en el hub de
               canchas. Los horarios específicos de cada cancha se configuran en
               la sección Canchas.
-            </p>
+            </Consejo>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Redes sociales */}
       {tab === "redes" && (
-        <div className="themed-card rounded-2xl p-6 border">
-          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Redes sociales</h2>
-          <div className="flex flex-col gap-4">
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Instagram</label>
-              <input
+        <Card>
+          <Card.Title className="mb-4!">Redes sociales</Card.Title>
+          <div className="grid gap-4">
+            <Field label="Instagram">
+              <Input
                 type="text"
                 placeholder="@tuclub"
                 value={form.instagram}
                 onChange={(e) =>
                   setForm({ ...form, instagram: e.target.value })
                 }
-                className={inputClass}
               />
-            </div>
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Facebook</label>
-              <input
+            </Field>
+            <Field label="Facebook">
+              <Input
                 type="text"
                 placeholder="facebook.com/tuclub"
                 value={form.facebook}
                 onChange={(e) => setForm({ ...form, facebook: e.target.value })}
-                className={inputClass}
               />
-            </div>
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>WhatsApp</label>
-              <input
+            </Field>
+            <Field label="WhatsApp">
+              <Input
                 type="text"
+                inputMode="tel"
                 placeholder="Ej: +54 385 1234567"
                 value={form.whatsapp}
                 onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
-                className={inputClass}
               />
-            </div>
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Sitio web</label>
-              <input
+            </Field>
+            <Field label="Sitio web">
+              <Input
                 type="text"
                 placeholder="www.tuclub.com"
                 value={form.website}
                 onChange={(e) => setForm({ ...form, website: e.target.value })}
-                className={inputClass}
               />
-            </div>
+            </Field>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Facturación */}
       {tab === "facturacion" && (
-        <div className="themed-card rounded-2xl p-6 border">
-          <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
-            Datos de facturación
-          </h2>
-          <div className="flex flex-col gap-4">
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Razón social</label>
-              <input
+        <Card>
+          <Card.Title className="mb-4!">Datos de facturación</Card.Title>
+          <div className="grid gap-4">
+            <Field label="Razón social">
+              <Input
                 type="text"
                 value={form.razonSocial}
                 onChange={(e) =>
                   setForm({ ...form, razonSocial: e.target.value })
                 }
-                className={inputClass}
               />
-            </div>
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>CUIT</label>
-              <input
+            </Field>
+            <Field label="CUIT">
+              <Input
                 type="text"
                 placeholder="Ej: 30-12345678-9"
                 value={form.cuit}
                 onChange={(e) => setForm({ ...form, cuit: e.target.value })}
-                className={inputClass}
               />
-            </div>
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>CBU</label>
-              <input
+            </Field>
+            <Field label="CBU">
+              <Input
                 type="text"
+                inputMode="numeric"
                 placeholder="22 dígitos"
                 value={form.cbu}
                 onChange={(e) => setForm({ ...form, cbu: e.target.value })}
-                className={inputClass}
               />
-            </div>
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Alias CBU</label>
-              <input
+            </Field>
+            <Field label="Alias CBU">
+              <Input
                 type="text"
                 placeholder="Ej: CLUB.PADEL.SANTIAGO"
                 value={form.alias}
                 onChange={(e) => setForm({ ...form, alias: e.target.value })}
-                className={inputClass}
               />
-            </div>
-            <div>
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Titular de la cuenta</label>
-              <input
+            </Field>
+            <Field label="Titular de la cuenta">
+              <Input
                 type="text"
                 value={form.titularCuenta}
                 onChange={(e) =>
                   setForm({ ...form, titularCuenta: e.target.value })
                 }
-                className={inputClass}
               />
-            </div>
+            </Field>
 
-            <p className={tipClass} style={tipStyle}>
-              💡 Estos datos se usan para generar comprobantes y recibir pagos
+            <Consejo>
+              Estos datos se usan para generar comprobantes y recibir pagos
               de inscripciones y reservas. Mantenelos actualizados.
-            </p>
+            </Consejo>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Usuarios */}
       {tab === "usuarios" && (
         <div className="flex flex-col gap-4">
-          <div className="themed-card rounded-2xl p-6 border">
-            <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
-              Agregar usuario
-            </h2>
-            <div className="flex flex-col gap-3">
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Nombre</label>
-                  <input
+          <Card>
+            <Card.Title className="mb-4!">Agregar usuario</Card.Title>
+            <div className="grid gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Nombre">
+                  <Input
                     type="text"
                     placeholder="Nombre completo"
                     value={nuevoUsuario.nombre}
@@ -559,12 +512,10 @@ export default function Configuracion() {
                         nombre: e.target.value,
                       })
                     }
-                    className={inputClass}
                   />
-                </div>
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Email</label>
-                  <input
+                </Field>
+                <Field label="Email">
+                  <Input
                     type="email"
                     placeholder="email@ejemplo.com"
                     value={nuevoUsuario.email}
@@ -574,15 +525,14 @@ export default function Configuracion() {
                         email: e.target.value,
                       })
                     }
-                    className={inputClass}
                   />
-                </div>
+                </Field>
               </div>
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Teléfono</label>
-                  <input
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Teléfono">
+                  <Input
                     type="text"
+                    inputMode="tel"
                     placeholder="385 1234567"
                     value={nuevoUsuario.telefono}
                     onChange={(e) =>
@@ -591,122 +541,128 @@ export default function Configuracion() {
                         telefono: e.target.value,
                       })
                     }
-                    className={inputClass}
                   />
-                </div>
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Rol</label>
-                  <select
+                </Field>
+                <Field label="Rol">
+                  <Select
                     value={nuevoUsuario.rol}
                     onChange={(e) =>
                       setNuevoUsuario({ ...nuevoUsuario, rol: e.target.value })
                     }
-                    className={inputClass}
                   >
                     {rolesDisponibles.map((r) => (
                       <option key={r.value} value={r.value}>
                         {r.label}
                       </option>
                     ))}
-                  </select>
-                </div>
+                  </Select>
+                </Field>
               </div>
-              <button
-                onClick={agregarUsuario}
-                disabled={
-                  !nuevoUsuario.email.trim() || !nuevoUsuario.nombre.trim()
-                }
-                className="bg-emerald-600 text-white font-semibold py-2 rounded-xl hover:bg-emerald-700 transition disabled:opacity-50"
-              >
-                Agregar usuario
-              </button>
+              <div>
+                <Button
+                  icon={<Plus className="pd-icon" size={20} aria-hidden="true" />}
+                  onClick={agregarUsuario}
+                  disabled={
+                    !nuevoUsuario.email.trim() || !nuevoUsuario.nombre.trim()
+                  }
+                >
+                  Agregar usuario
+                </Button>
+              </div>
             </div>
-          </div>
+          </Card>
 
           {/* Lista de usuarios */}
-          <div className="themed-card rounded-2xl p-6 border">
-            <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
-              Usuarios del club ({usuarios.length})
-            </h2>
-
-            {/* Dueño */}
-            <div className="flex items-center justify-between rounded-xl px-4 py-3 mb-3" style={{ backgroundColor: "var(--accent-light)" }}>
-              <div>
-                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                  {user?.email}
-                </p>
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>Dueño del club</p>
-              </div>
-              <span className="text-xs font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
-                Dueño
-              </span>
+          <div className="pd-table-wrap">
+            <div className="pd-table-head">
+              <h3>
+                Usuarios del club <span className="pd-count text-ink-3 font-medium">{usuarios.length}</span>
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="pd-table">
+                <thead>
+                  <tr>
+                    <th>Usuario</th>
+                    <th>Rol</th>
+                    <th className="num">
+                      <span className="sr-only">Acciones</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Dueño */}
+                  <tr>
+                    <td>
+                      <p className="font-semibold m-0">{user?.email}</p>
+                      <p className="body-sm text-ink-3 m-0">Dueño del club</p>
+                    </td>
+                    <td>
+                      <Badge tone="court">Dueño</Badge>
+                    </td>
+                    <td className="num" />
+                  </tr>
+                  {usuarios.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="text-ink-2!">
+                        No hay otros usuarios agregados
+                      </td>
+                    </tr>
+                  ) : (
+                    usuarios.map((u) => (
+                      <tr key={u.id}>
+                        <td>
+                          <p className="font-semibold m-0">{u.nombre}</p>
+                          <p className="body-sm text-ink-3 m-0">
+                            {u.email} {u.telefono && `· ${u.telefono}`}
+                          </p>
+                        </td>
+                        <td>
+                          <Select
+                            aria-label={`Rol de ${u.nombre}`}
+                            value={u.rol}
+                            onChange={(e) =>
+                              cambiarRolUsuario(u.id, e.target.value)
+                            }
+                            className="h-9! text-[13px]!"
+                            wrapperClassName="block min-w-[180px]"
+                          >
+                            {rolesDisponibles.map((r) => (
+                              <option key={r.value} value={r.value}>
+                                {r.label}
+                              </option>
+                            ))}
+                          </Select>
+                        </td>
+                        <td className="num">
+                          <Button size="sm" variant="ghost" onClick={() => eliminarUsuario(u.id)}>
+                            Eliminar
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
 
-            {usuarios.length === 0 ? (
-              <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
-                No hay otros usuarios agregados
-              </p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {usuarios.map((u) => (
-                  <div
-                    key={u.id}
-                    className="flex items-center justify-between rounded-xl px-4 py-3"
-                    style={{ backgroundColor: "var(--bg-card-hover)" }}
-                  >
-                    <div>
-                      <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                        {u.nombre}
-                      </p>
-                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        {u.email} {u.telefono && `· ${u.telefono}`}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={u.rol}
-                        onChange={(e) =>
-                          cambiarRolUsuario(u.id, e.target.value)
-                        }
-                        className="themed-input rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      >
-                        {rolesDisponibles.map((r) => (
-                          <option key={r.value} value={r.value}>
-                            {r.label}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => eliminarUsuario(u.id)}
-                        className="text-xs font-semibold text-red-400 hover:text-red-600"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-4 pt-3 border-t" style={{ borderColor: "var(--border-card)" }}>
-              <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>Roles disponibles:</p>
-              <div className="flex flex-col gap-1">
+            <div className="border-t border-line px-4 py-3">
+              <p className="pd-eyebrow mb-2!">Roles disponibles</p>
+              <dl className="m-0 grid gap-1">
                 {rolesDisponibles.map((r) => (
-                  <div key={r.value} className="flex items-center gap-2">
-                    <span className="text-xs font-semibold w-28" style={{ color: "var(--text-primary)" }}>
-                      {r.label}
-                    </span>
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>{r.desc}</span>
+                  <div key={r.value} className="flex items-baseline gap-2 body-sm">
+                    <dt className="font-semibold w-36 flex-none">{r.label}</dt>
+                    <dd className="m-0 text-ink-2">{r.desc}</dd>
                   </div>
                 ))}
-              </div>
+              </dl>
             </div>
           </div>
 
-          <p className={tipClass} style={tipStyle}>
-            💡 Recordá hacer clic en "Guardar cambios" arriba para que los
+          <Consejo>
+            Recordá hacer clic en "Guardar cambios" arriba para que los
             usuarios y roles se guarden correctamente.
-          </p>
+          </Consejo>
         </div>
       )}
     </div>

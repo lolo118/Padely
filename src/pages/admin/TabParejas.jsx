@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import { Check, Info, Link, MessageCircle, Trash2, X } from "lucide-react";
 import {
   agregarPareja,
   getParejas,
@@ -22,12 +23,13 @@ import {
 } from "../../utils/torneo";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
+import { Badge, Button, Card, Field, Input, MarcaCategoria, Pills, Select } from "../../components/ui";
 
-const inscripcionBadge = {
-  esperando_companero: "bg-[var(--bg-card-hover)] text-[var(--text-muted)]",
-  pendiente_aprobacion: "bg-orange-100 text-orange-700",
-  confirmada: "bg-green-100 text-green-700",
-  rechazada: "bg-red-100 text-red-500",
+const inscripcionTone = {
+  esperando_companero: "neutral",
+  pendiente_aprobacion: "warning",
+  confirmada: "success",
+  rechazada: "danger",
 };
 
 const inscripcionLabel = {
@@ -36,6 +38,10 @@ const inscripcionLabel = {
   confirmada: "Confirmada",
   rechazada: "Rechazada",
 };
+
+// Nombre para mostrar: "Pérez / Gómez" (nombrePareja se guarda como "Pérez-Gómez")
+const nombreDePareja = (p) =>
+  p?.nombrePareja ? p.nombrePareja.replace("-", " / ") : `${p?.jugador1} / ${p?.jugador2}`;
 
 // onParejasChange (opcional): recibe la lista completa de parejas cada vez que cambia, para que el padre
 // actualice sus contadores
@@ -57,13 +63,14 @@ export default function TabParejas({ torneoId, torneo, onParejasChange }) {
   const [whatsapp2, setWhatsapp2] = useState("");
   const [motivoRechazo, setMotivoRechazo] = useState("");
   const [rechazandoId, setRechazandoId] = useState(null);
+  // Filtro de la lista por cuadro (solo con más de un cuadro): "todas", "sin-cuadro" o el id del cuadro
+  const [filtroCuadro, setFiltroCuadro] = useState("todas");
   // Categorías del torneo (género|nivel); con una sola se asigna automáticamente
   const categorias = listaCategorias(torneo);
   const [categoriaManual, setCategoriaManual] = useState(() => {
     const lista = listaCategorias(torneo);
     return lista.length === 1 ? lista[0].id : "";
   });
-  const labelCategoria = (id) => categorias.find((cat) => cat.id === id)?.label || null;
 
   useEffect(() => {
     let cancelled = false;
@@ -253,13 +260,17 @@ export default function TabParejas({ torneoId, torneo, onParejasChange }) {
 
   if (loading) {
     return (
-      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando parejas...</div>
+      <div className="flex flex-col gap-4" aria-busy="true" aria-label="Cargando parejas">
+        <div className="pd-skeleton h-24" />
+        <div className="pd-skeleton h-40" />
+        <div className="pd-skeleton h-64" />
+      </div>
     );
   }
 
   const cuposDisponibles = torneo.maxParejas - parejas.length;
 
-  // ✅ Clasificación por estado
+  // Clasificación por estado
   const esperandoCompanero = inscripciones.filter(
     (i) => i.status === "esperando_companero",
   );
@@ -276,14 +287,25 @@ export default function TabParejas({ torneoId, torneo, onParejasChange }) {
   const cuadros = cuadrosDeTorneo(torneo);
   const generado = (cuadroId) =>
     grupos.some((g) => cuadroDeGrupo(g, torneo) === cuadroId) || !!cuadrosDocs[cuadroId];
-  const textoParejas = (n) => `${n} ${n === 1 ? "pareja" : "parejas"}`;
   // Secciones de la lista cuando hay más de un cuadro: primero las parejas sin categoría válida, después un
-  // bloque por cuadro
+  // bloque por cuadro; en la tabla son las pastillas del filtro
   const sinCuadro = parejasSinCuadro(parejas, torneo);
   const secciones = [
     ...(sinCuadro.length > 0 ? [{ id: "sin-cuadro", label: "Sin categoría", sinCuadro: true, parejas: sinCuadro }] : []),
     ...cuadros.map((c) => ({ id: c.id, label: c.label, sinCuadro: false, parejas: parejasDeCuadro(parejas, c.id, torneo) })),
   ];
+  const itemsFiltro = [
+    { value: "todas", label: "Todas", count: parejas.length },
+    ...secciones.map((s) => ({ value: s.id, label: s.label, count: s.parejas.length })),
+  ];
+  const seccionActiva = secciones.find((s) => s.id === filtroCuadro);
+  const filtroActivo = seccionActiva ? filtroCuadro : "todas";
+  const parejasVisibles = cuadros.length > 1 && seccionActiva ? seccionActiva.parejas : parejas;
+
+  const cancelarRechazo = () => {
+    setRechazandoId(null);
+    setMotivoRechazo("");
+  };
 
   const renderPareja = (p, index) => {
     const linkJ1 = `${window.location.origin}/vincular/${torneoId}/${p.id}/1`;
@@ -296,382 +318,434 @@ export default function TabParejas({ torneoId, torneo, onParejasChange }) {
     // cuadro siempre pueden moverse, y fuera de la inscripción nunca hacia un cuadro generado
     const cuadroActual = cuadroDePareja(p, torneo);
     const selectBloqueado = torneo.status !== "inscripcion" && cuadroActual !== null && generado(cuadroActual);
+    const cuadroPareja = cuadros.find((c) => c.id === cuadroActual);
+    const jugadores = [
+      { nombre: p.jugador1, uid: p.jugador1Uid, link: linkJ1, mensaje: msgJ1, wa: wa1 },
+      { nombre: p.jugador2, uid: p.jugador2Uid, link: linkJ2, mensaje: msgJ2, wa: wa2 },
+    ];
 
     return (
-      <div key={p.id} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-bold w-6" style={{ color: "var(--text-muted)" }}>{index + 1}</span>
-            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-              {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
-            </p>
-            {labelCategoria(p.categoria) && (
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: "var(--accent-light)", color: "var(--accent)" }}>
-                {labelCategoria(p.categoria)}
-              </span>
-            )}
-          </div>
-          <button onClick={() => handleEliminarPareja(p.id)}
-            className="text-red-400 hover:text-red-600 text-xs font-semibold transition">Eliminar</button>
-        </div>
-
-        {/* Jugador 1 */}
-        <div className="flex items-center justify-between ml-9 mb-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{p.jugador1}</span>
-            {p.jugador1Uid ? (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">✓ Vinculado</span>
+      <tr key={p.id}>
+        <td className="pos align-top">{index + 1}</td>
+        <td className="align-top">
+          <p className="flex flex-wrap items-center gap-2 font-semibold">
+            {nombreDePareja(p)}
+            {cuadroActual === null && <Badge>Sin cuadro</Badge>}
+          </p>
+          <ul className="mt-1 flex flex-col gap-1">
+            {jugadores.map((j, i) => (
+              <li key={i} className="flex flex-wrap items-center gap-2 body-sm pd-ink-2">
+                <span>{j.nombre}</span>
+                {j.uid ? <Badge tone="success">Vinculado</Badge> : <Badge tone="warning">Sin vincular</Badge>}
+                {!j.uid && (
+                  <span className="pd-btn-group">
+                    <Button
+                      size="sm"
+                      iconOnly
+                      aria-label={`Copiar link de vinculación de ${j.nombre}`}
+                      title="Copiar link de vinculación"
+                      icon={<Link className="pd-icon" size={20} aria-hidden="true" />}
+                      onClick={() => { navigator.clipboard.writeText(j.link); toast.success("Link copiado"); }}
+                    />
+                    {j.wa && (
+                      <a
+                        href={`https://wa.me/${j.wa}?text=${encodeURIComponent(j.mensaje)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="pd-btn pd-btn-sm pd-btn-icon"
+                        aria-label={`Enviar link por WhatsApp a ${j.nombre}`}
+                        title="Enviar por WhatsApp"
+                      >
+                        <MessageCircle className="pd-icon" size={20} aria-hidden="true" />
+                      </a>
+                    )}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </td>
+        {categorias.length > 0 && (
+          <td className="align-top">
+            {categorias.length > 1 ? (
+              // Cambiar categoría (mover de cuadro)
+              <Field as="div" help={selectBloqueado ? "Ya se generó el cuadro" : undefined} className="min-w-48">
+                <div className="flex items-center gap-2">
+                  {cuadroPareja?.nivel && <MarcaCategoria cat={cuadroPareja.nivel} />}
+                  <Select
+                    id={`categoria-${p.id}`}
+                    aria-label="Cambiar categoría"
+                    value={cuadroActual ?? ""}
+                    onChange={(e) => handleCambiarCategoria(p, e.target.value)}
+                    disabled={selectBloqueado}
+                    title={selectBloqueado ? "Ya se generó el cuadro" : undefined}
+                    wrapperClassName="flex-1"
+                  >
+                    {cuadroActual === null && <option value="">Sin categoría</option>}
+                    {categorias.map((cat) => (
+                      <option key={cat.id} value={cat.id} disabled={torneo.status !== "inscripcion" && cat.id !== cuadroActual && generado(cat.id)}>
+                        {cat.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </Field>
             ) : (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>Sin vincular</span>
+              cuadroPareja && (
+                <span className="inline-flex items-center gap-2">
+                  {cuadroPareja.nivel && <MarcaCategoria cat={cuadroPareja.nivel} />}
+                  {cuadroPareja.label}
+                </span>
+              )
             )}
-          </div>
-          {!p.jugador1Uid && (
-            <div className="flex gap-1">
-              <button onClick={() => { navigator.clipboard.writeText(linkJ1); toast.success("Link copiado"); }}
-                className="text-[10px] px-2 py-1 rounded-lg transition" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border-card)" }}>
-                🔗 Link
-              </button>
-              {wa1 && (
-                <a href={`https://wa.me/${wa1}?text=${encodeURIComponent(msgJ1)}`} target="_blank" rel="noopener noreferrer"
-                  className="text-[10px] px-2 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition">
-                  📱 WA
-                </a>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Jugador 2 */}
-        <div className="flex items-center justify-between ml-9">
-          <div className="flex items-center gap-2">
-            <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{p.jugador2}</span>
-            {p.jugador2Uid ? (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">✓ Vinculado</span>
-            ) : (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>Sin vincular</span>
-            )}
-          </div>
-          {!p.jugador2Uid && (
-            <div className="flex gap-1">
-              <button onClick={() => { navigator.clipboard.writeText(linkJ2); toast.success("Link copiado"); }}
-                className="text-[10px] px-2 py-1 rounded-lg transition" style={{ backgroundColor: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border-card)" }}>
-                🔗 Link
-              </button>
-              {wa2 && (
-                <a href={`https://wa.me/${wa2}?text=${encodeURIComponent(msgJ2)}`} target="_blank" rel="noopener noreferrer"
-                  className="text-[10px] px-2 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700 transition">
-                  📱 WA
-                </a>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Cambiar categoría (mover de cuadro) */}
-        {categorias.length > 1 && (
-          <div className="flex flex-wrap items-center gap-2 ml-9 mt-2">
-            <label htmlFor={`categoria-${p.id}`} className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-              Cambiar categoría
-            </label>
-            <select
-              id={`categoria-${p.id}`}
-              value={cuadroActual ?? ""}
-              onChange={(e) => handleCambiarCategoria(p, e.target.value)}
-              disabled={selectBloqueado}
-              title={selectBloqueado ? "Ya se generó el cuadro" : undefined}
-              className="themed-input rounded-lg px-2 py-1 text-xs disabled:opacity-50"
-            >
-              {cuadroActual === null && <option value="">Sin categoría</option>}
-              {categorias.map((cat) => (
-                <option key={cat.id} value={cat.id} disabled={torneo.status !== "inscripcion" && cat.id !== cuadroActual && generado(cat.id)}>
-                  {cat.label}
-                </option>
-              ))}
-            </select>
-            {selectBloqueado && (
-              <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>Ya se generó el cuadro</span>
-            )}
-          </div>
+          </td>
         )}
-      </div>
+        <td className="num align-top">
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<Trash2 className="pd-icon" size={20} aria-hidden="true" />}
+            onClick={() => handleEliminarPareja(p.id)}
+          >
+            Eliminar
+          </Button>
+        </td>
+      </tr>
     );
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 md:gap-6">
       {/* Contador */}
-      <div className="themed-card border rounded-2xl p-5">
-        <div className="flex items-center justify-between">
+      <Card as="section">
+        <Card.Row>
           <div>
-            <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>Parejas inscriptas</h2>
-            <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+            <Card.Title as="h2">Parejas inscriptas</Card.Title>
+            <Card.Meta>
               {parejas.length} de {torneo.maxParejas} parejas
-            </p>
+            </Card.Meta>
           </div>
-          <div
-            className={`text-2xl font-bold ${
-              cuposDisponibles > 0 ? "text-green-600" : "text-red-500"
-            }`}
-          >
-            {cuposDisponibles > 0 ? `${cuposDisponibles} cupos` : "Completo"}
-          </div>
-        </div>
-      </div>
+          <p className={`flex items-baseline gap-1 ${cuposDisponibles > 0 ? "text-success" : "text-danger"}`}>
+            {cuposDisponibles > 0 ? (
+              <>
+                <span className="numeral-lg pd-tnum">{cuposDisponibles}</span>
+                <span className="body-sm">cupos</span>
+              </>
+            ) : (
+              <span className="heading-md">Completo</span>
+            )}
+          </p>
+        </Card.Row>
+      </Card>
 
       {/* Pendientes de aprobación - PRIORIDAD */}
       {pendientesAprobacion.length > 0 && (
-        <div className="themed-card border rounded-2xl p-5 border-orange-200">
-          <h2 className="font-semibold text-orange-700 mb-3">
-            Pendientes de aprobación ({pendientesAprobacion.length})
-          </h2>
-          <div className="flex flex-col gap-3">
-            {pendientesAprobacion.map((insc) => (
-              <div
-                key={insc.id}
-                className="rounded-xl px-4 py-3 border"
-                style={{ backgroundColor: "rgba(249,115,22,0.08)", borderColor: "rgba(249,115,22,0.2)" }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                      {insc.apellido1}-{insc.apellido2}
-                    </p>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {insc.nombre1} {insc.apellido1} — {insc.nombre2}{" "}
-                      {insc.apellido2}
-                    </p>
-                    {insc.email1 && (
-                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>{insc.email1}</p>
-                    )}
-                    {insc.whatsapp1 && (
-                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        WA: {insc.whatsapp1}
-                      </p>
-                    )}
-                  </div>
-                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-700">
-                    Pareja completa ✓
-                  </span>
-                </div>
-                {rechazandoId === insc.id ? (
-                  <div className="flex flex-col gap-2">
-                    <input
-                      type="text"
-                      placeholder="Motivo del rechazo..."
-                      value={motivoRechazo}
-                      onChange={(e) => setMotivoRechazo(e.target.value)}
-                      className="themed-input w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
-                      style={{ borderColor: "rgba(239,68,68,0.35)" }}
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          setRechazandoId(null);
-                          setMotivoRechazo("");
-                        }}
-                        className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={() => rechazarInscripcion(insc.id)}
-                        disabled={!motivoRechazo.trim()}
-                        className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition disabled:opacity-50"
-                      >
-                        Confirmar rechazo
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => confirmarInscripcion(insc)}
-                      className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition"
-                    >
-                      Confirmar inscripción
-                    </button>
-                    <button
-                      onClick={() => setRechazandoId(insc.id)}
-                      className="flex-1 px-3 py-1 rounded-lg text-sm font-semibold bg-red-100 text-red-600 hover:bg-red-200 transition"
-                    >
-                      Rechazar
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+        <section className="pd-table-wrap">
+          <div className="pd-table-head">
+            <h3>
+              Pendientes de aprobación <span className="pd-count font-medium pd-ink-3">{pendientesAprobacion.length}</span>
+            </h3>
+            <Badge tone="warning" dot>Pendiente</Badge>
           </div>
-        </div>
+          <div className="overflow-x-auto">
+            <table className="pd-table">
+              <thead>
+                <tr>
+                  <th>Pareja</th>
+                  <th className="hidden md:table-cell">Contacto</th>
+                  <th>Estado</th>
+                  <th className="num">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendientesAprobacion.map((insc) => (
+                  <Fragment key={insc.id}>
+                    <tr>
+                      <td className="align-top">
+                        <p className="font-semibold">
+                          {insc.apellido1} / {insc.apellido2}
+                        </p>
+                        <p className="body-sm pd-ink-2">
+                          {insc.nombre1} {insc.apellido1} — {insc.nombre2}{" "}
+                          {insc.apellido2}
+                        </p>
+                      </td>
+                      <td className="hidden md:table-cell align-top body-sm pd-ink-2">
+                        {insc.email1 && <p>{insc.email1}</p>}
+                        {insc.whatsapp1 && <p>WA: {insc.whatsapp1}</p>}
+                      </td>
+                      <td className="align-top">
+                        <Badge tone="success">Pareja completa</Badge>
+                      </td>
+                      <td className="num align-top">
+                        {rechazandoId !== insc.id && (
+                          <span className="pd-btn-group justify-end">
+                            <Button
+                              size="sm"
+                              icon={<Check className="pd-icon" size={20} aria-hidden="true" />}
+                              onClick={() => confirmarInscripcion(insc)}
+                            >
+                              Confirmar inscripción
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              icon={<X className="pd-icon" size={20} aria-hidden="true" />}
+                              onClick={() => setRechazandoId(insc.id)}
+                            >
+                              Rechazar
+                            </Button>
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                    {rechazandoId === insc.id && (
+                      <tr>
+                        <td colSpan={4}>
+                          <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                            <Field label="Motivo del rechazo" className="flex-1">
+                              <Input
+                                type="text"
+                                placeholder="Ej.: la categoría no corresponde"
+                                value={motivoRechazo}
+                                onChange={(e) => setMotivoRechazo(e.target.value)}
+                              />
+                            </Field>
+                            <span className="pd-btn-group">
+                              <Button size="sm" onClick={cancelarRechazo}>
+                                Cancelar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                onClick={() => rechazarInscripcion(insc.id)}
+                                disabled={!motivoRechazo.trim()}
+                              >
+                                Confirmar rechazo
+                              </Button>
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
       {/* Esperando compañero */}
       {esperandoCompanero.length > 0 && (
-        <div className="themed-card border rounded-2xl p-5">
-          <h2 className="font-semibold mb-3" style={{ color: "var(--text-muted)" }}>
-            Esperando confirmación del compañero ({esperandoCompanero.length})
-          </h2>
-          <div className="flex flex-col gap-2">
-            {esperandoCompanero.map((insc) => (
-              <div
-                key={insc.id}
-                className="flex items-center justify-between rounded-xl px-4 py-3"
-                style={{ backgroundColor: "var(--bg-card-hover)" }}
-              >
-                <div>
-                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                    {insc.apellido1}-{insc.apellido2}
-                  </p>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {insc.nombre1} {insc.apellido1} — esperando a {insc.nombre2}{" "}
-                    {insc.apellido2}
-                  </p>
-                </div>
-                <span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
-                  Esperando
-                </span>
-              </div>
-            ))}
+        <section className="pd-table-wrap">
+          <div className="pd-table-head">
+            <h3>
+              Esperando confirmación del compañero{" "}
+              <span className="pd-count font-medium pd-ink-3">{esperandoCompanero.length}</span>
+            </h3>
           </div>
-        </div>
+          <div className="overflow-x-auto">
+            <table className="pd-table">
+              <thead>
+                <tr>
+                  <th>Pareja</th>
+                  <th className="num">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {esperandoCompanero.map((insc) => (
+                  <tr key={insc.id}>
+                    <td>
+                      <p className="font-medium">
+                        {insc.apellido1} / {insc.apellido2}
+                      </p>
+                      <p className="body-sm pd-ink-2">
+                        {insc.nombre1} {insc.apellido1} — esperando a {insc.nombre2}{" "}
+                        {insc.apellido2}
+                      </p>
+                    </td>
+                    <td className="num">
+                      <Badge dot>Esperando</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
       {/* Historial de solicitudes procesadas */}
       {procesadas.length > 0 && (
-        <div className="themed-card border rounded-2xl p-5">
-          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-            Historial de solicitudes
-          </h2>
-          <div className="flex flex-col gap-2">
-            {procesadas.map((insc) => (
-              <div
-                key={insc.id}
-                className="flex items-center justify-between rounded-xl px-4 py-2"
-                style={{ backgroundColor: "var(--bg-card-hover)" }}
-              >
-                <div>
-                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                    {insc.apellido1}-{insc.apellido2}
-                  </p>
-                  {insc.status === "rechazada" && insc.motivoRechazo && (
-                    <p className="text-xs text-red-400">
-                      Motivo: {insc.motivoRechazo}
-                    </p>
-                  )}
-                </div>
-                <span
-                  className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                    inscripcionBadge[insc.status]
-                  }`}
-                >
-                  {inscripcionLabel[insc.status]}
-                </span>
-              </div>
-            ))}
+        <section className="pd-table-wrap">
+          <div className="pd-table-head">
+            <h3>
+              Historial de solicitudes <span className="pd-count font-medium pd-ink-3">{procesadas.length}</span>
+            </h3>
           </div>
-        </div>
+          <div className="overflow-x-auto">
+            <table className="pd-table">
+              <thead>
+                <tr>
+                  <th>Pareja</th>
+                  <th className="num">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {procesadas.map((insc) => (
+                  <tr key={insc.id}>
+                    <td>
+                      <p className="font-medium">
+                        {insc.apellido1} / {insc.apellido2}
+                      </p>
+                      {insc.status === "rechazada" && insc.motivoRechazo && (
+                        <p className="body-sm pd-ink-2">Motivo: {insc.motivoRechazo}</p>
+                      )}
+                    </td>
+                    <td className="num">
+                      <Badge tone={inscripcionTone[insc.status]} dot>
+                        {inscripcionLabel[insc.status]}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
       {/* Agregar pareja manual */}
       {cuposDisponibles > 0 && (
-        <div className="themed-card border rounded-2xl p-5">
-          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-            Agregar pareja manualmente
-          </h2>
-          <form onSubmit={handleAgregarPareja} className="flex flex-col gap-3">
-            <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Jugador 1</p>
-            <div className="flex gap-2">
-              <input type="text" placeholder="Nombre" value={nombre1} onChange={(e) => setNombre1(e.target.value)}
-                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm" />
-              <input type="text" placeholder="Apellido" value={apellido1} onChange={(e) => setApellido1(e.target.value)}
-                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm" required />
+        <Card as="section">
+          <Card.Title as="h2">Agregar pareja manualmente</Card.Title>
+          <form onSubmit={handleAgregarPareja} className="mt-4 flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
+              <p className="pd-eyebrow">Jugador 1</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field label="Nombre">
+                  <Input type="text" value={nombre1} onChange={(e) => setNombre1(e.target.value)} />
+                </Field>
+                <Field label="Apellido">
+                  <Input type="text" value={apellido1} onChange={(e) => setApellido1(e.target.value)} required />
+                </Field>
+              </div>
+              <Field label="WhatsApp" help="Con código de país y sin espacios, ej.: 5493851234567">
+                <Input
+                  type="tel"
+                  inputMode="numeric"
+                  value={whatsapp1}
+                  onChange={(e) => setWhatsapp1(e.target.value.replace(/\D/g, ""))}
+                />
+              </Field>
             </div>
-            <input type="tel" placeholder="WhatsApp Jugador 1 (ej: 5493851234567)" value={whatsapp1} onChange={(e) => setWhatsapp1(e.target.value.replace(/\D/g, ""))}
-              className="themed-input rounded-xl px-4 py-2 text-sm" />
 
-            <p className="text-xs font-semibold mt-1" style={{ color: "var(--text-muted)" }}>Jugador 2</p>
-            <div className="flex gap-2">
-              <input type="text" placeholder="Nombre" value={nombre2} onChange={(e) => setNombre2(e.target.value)}
-                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm" />
-              <input type="text" placeholder="Apellido" value={apellido2} onChange={(e) => setApellido2(e.target.value)}
-                className="themed-input flex-1 rounded-xl px-4 py-2 text-sm" required />
+            <div className="flex flex-col gap-3">
+              <p className="pd-eyebrow">Jugador 2</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field label="Nombre">
+                  <Input type="text" value={nombre2} onChange={(e) => setNombre2(e.target.value)} />
+                </Field>
+                <Field label="Apellido">
+                  <Input type="text" value={apellido2} onChange={(e) => setApellido2(e.target.value)} required />
+                </Field>
+              </div>
+              <Field label="WhatsApp" help="Con código de país y sin espacios, ej.: 5493851234567">
+                <Input
+                  type="tel"
+                  inputMode="numeric"
+                  value={whatsapp2}
+                  onChange={(e) => setWhatsapp2(e.target.value.replace(/\D/g, ""))}
+                />
+              </Field>
             </div>
-            <input type="tel" placeholder="WhatsApp Jugador 2 (ej: 5493851234567)" value={whatsapp2} onChange={(e) => setWhatsapp2(e.target.value.replace(/\D/g, ""))}
-              className="themed-input rounded-xl px-4 py-2 text-sm" />
 
             {categorias.length > 1 && (
-              <div>
-                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>Categoría *</label>
-                <select value={categoriaManual} onChange={(e) => setCategoriaManual(e.target.value)} required
-                  className="themed-input rounded-xl px-4 py-2 text-sm w-full">
+              <Field label="Categoría">
+                <Select value={categoriaManual} onChange={(e) => setCategoriaManual(e.target.value)} required>
                   <option value="">Elegí una categoría</option>
                   {categorias.map((cat) => (
                     <option key={cat.id} value={cat.id}>{cat.label}</option>
                   ))}
-                </select>
-              </div>
+                </Select>
+              </Field>
             )}
             {categorias.length === 1 && (
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Categoría: <span className="font-semibold">{categorias[0].label}</span>
+              <p className="flex items-center gap-2 body-sm pd-ink-2">
+                Categoría:
+                <MarcaCategoria cat={categorias[0].nivel} />
+                <span className="font-semibold">{categorias[0].label}</span>
               </p>
             )}
 
             {apellido1.trim() && apellido2.trim() && (
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Nombre de pareja: <span className="font-semibold">{apellido1.trim()}-{apellido2.trim()}</span>
+              <p className="body-sm pd-ink-2">
+                Nombre de pareja: <span className="font-semibold">{apellido1.trim()} / {apellido2.trim()}</span>
               </p>
             )}
 
-            <div className="text-xs rounded-lg px-3 py-2 border" style={{ color: "#3b82f6", backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.2)" }}>
-              💡 Agregá el WhatsApp de cada jugador para enviarles un link de vinculación. Así podrán usar la app, recibir puntos y participar de reclamos.
-            </div>
+            <p className="flex gap-2 body-sm pd-ink-2">
+              <Info className="pd-icon" size={20} aria-hidden="true" />
+              <span>
+                Agregá el WhatsApp de cada jugador para enviarles un link de vinculación. Así podrán usar la app,
+                recibir puntos y participar de reclamos.
+              </span>
+            </p>
 
-            <button type="submit" disabled={guardando || !apellido1.trim() || !apellido2.trim() || (categorias.length > 1 && !categoriaManual)}
-              className="text-white font-semibold py-2 rounded-xl transition disabled:opacity-50"
-              style={{ backgroundColor: "var(--accent)" }}>
-              {guardando ? "Agregando..." : "Agregar pareja"}
-            </button>
+            <div>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={!apellido1.trim() || !apellido2.trim() || (categorias.length > 1 && !categoriaManual)}
+                cargando={guardando ? "Agregando…" : ""}
+              >
+                Agregar pareja
+              </Button>
+            </div>
           </form>
-        </div>
+        </Card>
       )}
 
       {/* Lista de parejas confirmadas */}
-      <div className="themed-card border rounded-2xl p-5">
-        <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-          Lista de parejas confirmadas
-        </h2>
-        {parejas.length === 0 ? (
-          <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>No hay parejas inscriptas todavía</p>
-        ) : cuadros.length > 1 ? (
-          <div className="flex flex-col gap-4">
-            {secciones.map((s) => (
-              <div key={s.id} className="flex flex-col gap-3">
-                {s.sinCuadro ? (
-                  <div className="rounded-lg px-3 py-2 border"
-                    style={{ backgroundColor: "rgba(245,158,11,0.1)", borderColor: "rgba(245,158,11,0.3)", color: "#f59e0b" }}>
-                    <p className="text-xs font-semibold">
-                      {s.label} · {textoParejas(s.parejas.length)}
-                    </p>
-                    <p className="text-[10px] mt-0.5">
-                      Estas parejas no entran en ningún cuadro hasta que les asignes una categoría.
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
-                    {s.label} · {textoParejas(s.parejas.length)}
-                  </p>
-                )}
-                {s.parejas.map(renderPareja)}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {parejas.map(renderPareja)}
+      <section className="pd-table-wrap">
+        <div className="pd-table-head">
+          <h3>
+            Lista de parejas confirmadas <span className="pd-count font-medium pd-ink-3">{parejas.length}</span>
+          </h3>
+        </div>
+        {parejas.length > 0 && cuadros.length > 1 && (
+          <div className="flex flex-col gap-2 px-4 pb-3">
+            <Pills items={itemsFiltro} value={filtroActivo} onChange={setFiltroCuadro} ariaLabel="Filtrar parejas por cuadro" />
+            {sinCuadro.length > 0 && (
+              <p className="body-sm text-warning">
+                Sin categoría {sinCuadro.length}: estas parejas no entran en ningún cuadro hasta que les asignes una
+                categoría.
+              </p>
+            )}
           </div>
         )}
-      </div>
+        {parejas.length === 0 ? (
+          <div className="px-4 py-10 text-center">
+            <span className="pd-ball block! mx-auto mb-3" aria-hidden="true" />
+            <p className="body-md pd-ink-2">Todavía no hay parejas inscriptas. Agregá la primera.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="pd-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Pareja</th>
+                  {categorias.length > 0 && <th>Categoría</th>}
+                  <th className="num">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>{parejasVisibles.map(renderPareja)}</tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

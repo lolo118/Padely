@@ -8,13 +8,11 @@ import {
   doc,
   updateDoc,
 } from "firebase/firestore";
+import { Check, Upload } from "lucide-react";
 import { db } from "../../lib/firebase";
 import { uploadOrgLogo } from "../../services/storageService";
 import { toast } from "../../components/Toast";
-
-const inputClass =
-  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full";
-const labelClass = "text-xs font-semibold mb-1 block";
+import { Button, Card, Field, Input, Textarea } from "../../components/ui";
 
 export default function OrgEntidad() {
   const { user } = useAuthStore();
@@ -97,127 +95,118 @@ export default function OrgEntidad() {
   };
 
   if (loading)
-    return <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
-
-  if (!entidad)
     return (
-      <div className="text-center py-16 themed-card rounded-2xl border">
-        <p style={{ color: "var(--text-muted)" }}>No se encontró tu entidad organizadora</p>
+      <div className="flex flex-col gap-6" aria-busy="true" aria-label="Cargando">
+        <div className="pd-skeleton h-8 w-40" />
+        <div className="pd-skeleton h-[520px] rounded-lg!" />
       </div>
     );
 
+  if (!entidad)
+    return (
+      <Card className="text-center py-12">
+        <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
+        <p className="heading-sm m-0">No se encontró tu entidad organizadora</p>
+      </Card>
+    );
+
+  const textoLogo = subiendoLogo ? "Subiendo logo…" : logoUrl ? "Cambiar logo" : "Subir logo de la entidad";
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Mi entidad</h1>
-        <button
-          onClick={handleGuardar}
-          disabled={guardando}
-          className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50"
-        >
-          {guardando ? "Guardando..." : "Guardar"}
-        </button>
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="heading-lg m-0">Mi entidad</h1>
+        <Button variant="primary" onClick={handleGuardar} cargando={guardando ? "Guardando…" : ""}>
+          Guardar
+        </Button>
       </div>
 
       {mensaje && (
-        <div className="text-sm p-3 rounded-lg mb-4 border" style={{ color: "#10b981", backgroundColor: "rgba(16,185,129,0.08)", borderColor: "rgba(16,185,129,0.25)" }}>
+        <p className="flex items-center gap-2 body-sm text-success m-0" role="status">
+          <Check className="pd-icon" size={20} aria-hidden="true" />
           {mensaje}
-        </div>
+        </p>
       )}
 
-      <div className="themed-card rounded-2xl p-6 border">
+      <Card>
         <div className="flex flex-col gap-4">
-          <div>
-            <label className={labelClass} style={{ color: "var(--text-muted)" }}>Nombre de la entidad</label>
-            <input
+          <Field label="Nombre de la entidad">
+            <Input
               type="text"
               value={form.nombre}
               onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-              className={inputClass}
             />
-          </div>
-          <div>
-            <label className={labelClass} style={{ color: "var(--text-muted)" }}>Descripción / Bio</label>
-            <textarea
+          </Field>
+          <Field label="Descripción / Bio">
+            <Textarea
               value={form.bio}
               onChange={(e) => setForm({ ...form, bio: e.target.value })}
               rows={3}
-              className={`${inputClass} resize-none`}
             />
-          </div>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Teléfono</label>
-              <input
+          </Field>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Teléfono">
+              <Input
                 type="text"
+                inputMode="tel"
                 value={form.telefono}
                 onChange={(e) => setForm({ ...form, telefono: e.target.value })}
-                className={inputClass}
               />
-            </div>
-            <div className="flex-1">
-              <label className={labelClass} style={{ color: "var(--text-muted)" }}>Email</label>
-              <input
+            </Field>
+            <Field label="Email">
+              <Input
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className={inputClass}
               />
-            </div>
+            </Field>
           </div>
-          <div>
-            <label className={labelClass} style={{ color: "var(--text-muted)" }}>Instagram</label>
-            <input
+          <Field label="Instagram">
+            <Input
               type="text"
               placeholder="@entidad"
               value={form.instagram}
               onChange={(e) => setForm({ ...form, instagram: e.target.value })}
-              className={inputClass}
             />
-          </div>
-          <div>
-            <label className={labelClass} style={{ color: "var(--text-muted)" }}>Facebook</label>
-            <input
+          </Field>
+          <Field label="Facebook">
+            <Input
               type="text"
               value={form.facebook}
               onChange={(e) => setForm({ ...form, facebook: e.target.value })}
-              className={inputClass}
             />
-          </div>
-          <div>
-            <label className={labelClass} style={{ color: "var(--text-muted)" }}>Sitio web</label>
-            <input
+          </Field>
+          <Field label="Sitio web">
+            <Input
               type="text"
               value={form.website}
               onChange={(e) => setForm({ ...form, website: e.target.value })}
-              className={inputClass}
             />
-          </div>
-          <div>
-            <label className={labelClass}>Logo de la entidad</label>
-            <div className="flex flex-col items-center justify-center py-6 rounded-xl border-2 border-dashed" style={{ borderColor: "var(--border-input)" }}>
-              {logoUrl ? (
-                <div className="relative group">
-                  <img src={logoUrl} alt="Logo de la entidad" className="h-24 max-w-[200px] object-contain rounded-lg" />
-                  <label className="absolute inset-0 flex items-center justify-center rounded-lg cursor-pointer bg-black/40 opacity-0 group-hover:opacity-100 transition">
-                    <span className="text-white text-xs font-semibold">{subiendoLogo ? "Subiendo..." : "Cambiar logo"}</span>
-                    <input type="file" accept="image/*" onChange={handleSubirLogo} disabled={subiendoLogo} className="hidden" />
-                  </label>
-                </div>
-              ) : (
-                <label className="flex flex-col items-center cursor-pointer">
-                  <div className="text-4xl mb-2">🏆</div>
-                  <span className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
-                    {subiendoLogo ? "Subiendo logo..." : "Subir logo de la entidad"}
-                  </span>
-                  <span className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>PNG, JPG o SVG (máx. 5MB)</span>
-                  <input type="file" accept="image/*" onChange={handleSubirLogo} disabled={subiendoLogo} className="hidden" />
-                </label>
+          </Field>
+          <Field as="div" label="Logo de la entidad" help="PNG, JPG o SVG (máx. 5MB)">
+            <div className="flex flex-wrap items-center gap-4">
+              {logoUrl && (
+                <img
+                  src={logoUrl}
+                  alt="Logo de la entidad"
+                  className="h-24 max-w-[200px] object-contain rounded-sm border border-line bg-surface-sunken p-2"
+                />
               )}
+              <label className="pd-btn" aria-disabled={subiendoLogo || undefined}>
+                <Upload className="pd-icon" size={20} aria-hidden="true" />
+                {textoLogo}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleSubirLogo}
+                  disabled={subiendoLogo}
+                  className="sr-only"
+                />
+              </label>
             </div>
-          </div>
+          </Field>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

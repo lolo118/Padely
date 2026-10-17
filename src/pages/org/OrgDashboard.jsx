@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { collection, query, where, getDocs } from "firebase/firestore";
+import { Plus, TriangleAlert } from "lucide-react";
 import { db } from "../../lib/firebase";
 import { useAuthStore } from "../../store/authStore";
 import { getTorneosByOrganizer } from "../../services/torneoService";
 import { formatFecha } from "../../utils/formatDate";
+import { Badge, Button, Card, StatTile } from "../../components/ui";
+
+const enlaceCard =
+  "block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 
 export default function OrgDashboard() {
   const { user } = useAuthStore();
-  const navigate = useNavigate();
   const [torneos, setTorneos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [entidad, setEntidad] = useState(null);
@@ -37,7 +41,17 @@ export default function OrgDashboard() {
   }, [user]);
 
   if (loading)
-    return <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
+    return (
+      <div className="flex flex-col gap-6" aria-busy="true" aria-label="Cargando">
+        <div className="pd-skeleton h-8 w-40" />
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="pd-skeleton h-24 rounded-lg!" />
+          ))}
+        </div>
+        <div className="pd-skeleton h-40 rounded-lg!" />
+      </div>
+    );
 
   const activos = torneos.filter(
     (t) => t.status === "inscripcion" || t.status === "en_curso",
@@ -45,103 +59,66 @@ export default function OrgDashboard() {
   const finalizados = torneos.filter((t) => t.status === "finalizado");
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Dashboard</h1>
-        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-          Resumen de tu actividad como organizador
-        </p>
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="heading-lg m-0">Dashboard</h1>
+          <p className="body-sm text-ink-2 mt-1 mb-0">Resumen de tu actividad como organizador</p>
+        </div>
+        <Button
+          as="link"
+          to="/org/torneos/nuevo"
+          variant="primary"
+          icon={<Plus className="pd-icon" size={20} aria-hidden="true" />}
+        >
+          Crear nuevo torneo
+        </Button>
       </div>
 
       {/* Recordatorio completar perfil de entidad */}
       {(!entidad || !entidad.telefono || !entidad.bio) && (
-        <div
-          onClick={() => navigate("/org/entidad")}
-          className="rounded-2xl p-4 mb-4 cursor-pointer hover:shadow-md transition border"
-          style={{ backgroundColor: "var(--accent-light)", borderColor: "var(--accent)" }}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(245, 158, 11, 0.15)" }}>
-              <span className="text-lg">⚠️</span>
-            </div>
-            <div>
-              <p className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>Completá tu perfil de entidad</p>
-              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+        <Card as={Link} to="/org/entidad" variant="hover" className={enlaceCard}>
+          <div className="flex items-start gap-3">
+            <TriangleAlert className="pd-icon text-warning mt-0.5" size={20} aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="heading-sm m-0">Completá tu perfil de entidad</p>
+              <p className="body-sm text-ink-2 mt-1 mb-0">
                 Configurá los datos de tu entidad y equipo para que los jugadores te conozcan
               </p>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <div
-          className="themed-card rounded-2xl p-5 border text-center card-hover cursor-pointer"
-          onClick={() => navigate("/org/torneos")}
-        >
-          <p className="text-3xl font-bold text-blue-600">{torneos.length}</p>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Torneos totales</p>
-        </div>
-        <div
-          className="themed-card rounded-2xl p-5 border text-center card-hover cursor-pointer"
-          onClick={() => navigate("/org/torneos")}
-        >
-          <p className="text-3xl font-bold text-emerald-600">
-            {activos.length}
-          </p>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Activos</p>
-        </div>
-        <div className="themed-card rounded-2xl p-5 border text-center">
-          <p className="text-3xl font-bold" style={{ color: "var(--text-muted)" }}>
-            {finalizados.length}
-          </p>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Finalizados</p>
-        </div>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        <Link to="/org/torneos" className="block rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
+          <StatTile value={torneos.length} label="Torneos totales" className="h-full" />
+        </Link>
+        <Link to="/org/torneos" className="block rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
+          <StatTile value={activos.length} label="Activos" className="h-full" />
+        </Link>
+        <StatTile value={finalizados.length} label="Finalizados" className="h-full" />
       </div>
 
       {activos.length > 0 && (
-        <div className="themed-card rounded-2xl p-5 border mb-4">
-          <h2 className="font-semibold text-sm mb-3" style={{ color: "var(--text-primary)" }}>
-            Torneos activos
-          </h2>
-          <div className="flex flex-col gap-2">
+        <section className="flex flex-col gap-4">
+          <h2 className="heading-md m-0">Torneos activos</h2>
+          <div className="grid gap-4 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
             {activos.map((t) => (
-              <div
-                key={t.id}
-                onClick={() => navigate(`/org/torneos/${t.id}`)}
-                className="flex items-center justify-between rounded-xl px-4 py-3 cursor-pointer transition"
-                style={{ backgroundColor: "var(--bg-card-hover)" }}
-              >
-                <div>
-                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                    {t.nombre}
-                  </p>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {t.sede} — {formatFecha(t.fechaInicio)}
-                  </p>
-                </div>
-                <span
-                  className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                    t.status === "inscripcion"
-                      ? "bg-blue-100 text-blue-700"
-                      : "bg-emerald-100 text-emerald-700"
-                  }`}
-                >
-                  {t.status === "inscripcion" ? "Inscripción" : "En curso"}
-                </span>
-              </div>
+              <Card key={t.id} as={Link} to={`/org/torneos/${t.id}`} variant="hover" className={enlaceCard}>
+                <Card.Row>
+                  <Card.Eyebrow>{formatFecha(t.fechaInicio)}</Card.Eyebrow>
+                  <Badge tone={t.status === "inscripcion" ? "court" : "lime"}>
+                    {t.status === "inscripcion" ? "Inscripción" : "En curso"}
+                  </Badge>
+                </Card.Row>
+                <Card.Title className="mt-2!">{t.nombre}</Card.Title>
+                <Card.Meta>{t.sede}</Card.Meta>
+              </Card>
             ))}
           </div>
-        </div>
+        </section>
       )}
-
-      <button
-        onClick={() => navigate("/org/torneos/nuevo")}
-        className="w-full text-white rounded-2xl p-4 text-sm font-semibold hover:opacity-90 transition"
-        style={{ backgroundColor: "var(--accent)" }}
-      >
-        + Crear nuevo torneo
-      </button>
     </div>
   );
 }

@@ -2,6 +2,14 @@ import { useEffect, useState } from "react";
 import { useAuthStore } from "../../store/authStore";
 import { getTorneosByOrganizer } from "../../services/torneoService";
 import { formatFecha } from "../../utils/formatDate";
+import { Badge, StatTile } from "../../components/ui";
+
+// Estado del torneo → tono y palabra del badge (sin punto: la fase cambia, pero el sistema lo reserva a reservas)
+const ESTADO = {
+  inscripcion: { tone: "court", label: "Inscripción" },
+  en_curso: { tone: "lime", label: "En curso" },
+  finalizado: { tone: "neutral", label: "Finalizado" },
+};
 
 export default function OrgEstadisticas() {
   const { user } = useAuthStore();
@@ -15,7 +23,20 @@ export default function OrgEstadisticas() {
       .finally(() => setLoading(false));
   }, [user]);
 
-  if (loading) return <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
+  if (loading) {
+    return (
+      <div aria-busy="true">
+        <span className="sr-only">Cargando...</span>
+        <div className="pd-skeleton h-8 w-48 mb-6" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="pd-skeleton h-[92px] rounded-lg" />
+          ))}
+        </div>
+        <div className="pd-skeleton h-56 rounded-lg" />
+      </div>
+    );
+  }
 
   const finalizados = torneos.filter((t) => t.status === "finalizado");
   const activos = torneos.filter((t) => t.status === "inscripcion" || t.status === "en_curso");
@@ -23,51 +44,46 @@ export default function OrgEstadisticas() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold mb-6" style={{ color: "var(--text-primary)" }}>Estadísticas</h1>
+      <h1 className="heading-lg m-0 mb-6">Estadísticas</h1>
 
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="themed-card rounded-2xl p-5 border text-center">
-          <p className="text-3xl font-bold text-blue-600">{torneos.length}</p>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Torneos totales</p>
-        </div>
-        <div className="themed-card rounded-2xl p-5 border text-center">
-          <p className="text-3xl font-bold text-emerald-600">{activos.length}</p>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Activos ahora</p>
-        </div>
-        <div className="themed-card rounded-2xl p-5 border text-center">
-          <p className="text-3xl font-bold" style={{ color: "var(--text-muted)" }}>{finalizados.length}</p>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Finalizados</p>
-        </div>
-        <div className="themed-card rounded-2xl p-5 border text-center">
-          <p className="text-3xl font-bold text-purple-600">{totalParejas}</p>
-          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Capacidad total parejas</p>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <StatTile value={torneos.length} label="Torneos totales" />
+        <StatTile value={activos.length} label="Activos ahora" />
+        <StatTile value={finalizados.length} label="Finalizados" />
+        <StatTile value={totalParejas} label="Capacidad total parejas" />
       </div>
 
       {torneos.length > 0 && (
-        <div className="themed-card rounded-2xl p-5 border">
-          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Historial de torneos</h2>
-          <div className="flex flex-col gap-2">
-            {torneos.map((t) => (
-              <div
-                key={t.id}
-                className="flex items-center justify-between rounded-xl px-4 py-3"
-                style={{ backgroundColor: "var(--bg-card-hover)" }}
-              >
-                <div>
-                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{t.nombre}</p>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{t.sede} — {formatFecha(t.fechaInicio)}</p>
-                </div>
-                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                  t.status === "finalizado" ? "bg-slate-100 text-slate-500" :
-                  t.status === "inscripcion" ? "bg-blue-100 text-blue-700" :
-                  t.status === "en_curso" ? "bg-emerald-100 text-emerald-700" :
-                  "bg-red-100 text-red-500"
-                }`}>
-                  {t.status === "inscripcion" ? "Inscripción" : t.status === "en_curso" ? "En curso" : t.status === "finalizado" ? "Finalizado" : "Cancelado"}
-                </span>
-              </div>
-            ))}
+        <div className="pd-table-wrap">
+          <div className="pd-table-head">
+            <h3>Historial de torneos</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="pd-table">
+              <thead>
+                <tr>
+                  <th>Torneo</th>
+                  <th>Sede</th>
+                  <th>Inicio</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {torneos.map((t) => {
+                  const estado = ESTADO[t.status] || { tone: "danger", label: "Cancelado" };
+                  return (
+                    <tr key={t.id}>
+                      <td className="font-semibold">{t.nombre}</td>
+                      <td className="text-ink-2!">{t.sede}</td>
+                      <td className="text-ink-2!">{formatFecha(t.fechaInicio)}</td>
+                      <td>
+                        <Badge tone={estado.tone}>{estado.label}</Badge>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

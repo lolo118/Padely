@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { Info } from "lucide-react";
 import { getReclamos, resolverReclamo } from "../../services/torneoService";
 import { getNombrePareja } from "../../utils/torneo";
 import { toast } from "../../components/Toast";
+import { Badge, Button, Card, Field, Textarea } from "../../components/ui";
 
 const motivoLabel = {
   categoria_incorrecta: "Categoría incorrecta",
@@ -41,29 +43,35 @@ export default function TabReclamos({ torneoId, torneo }) {
     setResolviendo(null);
   };
 
-  if (loading) return <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando reclamos...</div>;
+  if (loading)
+    return (
+      <div className="flex flex-col gap-4" role="status" aria-busy="true" aria-label="Cargando reclamos">
+        <div className="pd-skeleton h-40" />
+        <div className="pd-skeleton h-40" />
+      </div>
+    );
 
   if (!torneo.habilitarReclamos) {
     return (
-      <div className="themed-card rounded-2xl p-5 border text-center py-12">
-        <div className="text-4xl mb-3">🛡️</div>
-        <p className="font-medium" style={{ color: "var(--text-secondary)" }}>Sistema de reclamos deshabilitado</p>
-        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-          Podés habilitarlo editando la configuración del torneo
-        </p>
-      </div>
+      <Card className="text-center py-12">
+        <div className="mb-3">
+          <span className="pd-ball" aria-hidden="true" />
+        </div>
+        <p className="heading-sm">Sistema de reclamos deshabilitado</p>
+        <p className="body-sm text-ink-2 mt-1">Podés habilitarlo editando la configuración del torneo</p>
+      </Card>
     );
   }
 
   if (reclamos.length === 0) {
     return (
-      <div className="themed-card rounded-2xl p-5 border text-center py-12">
-        <div className="text-4xl mb-3">✅</div>
-        <p className="font-medium" style={{ color: "var(--text-secondary)" }}>No hay reclamos</p>
-        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-          Ninguna pareja ha iniciado un reclamo
-        </p>
-      </div>
+      <Card className="text-center py-12">
+        <div className="mb-3">
+          <span className="pd-ball" aria-hidden="true" />
+        </div>
+        <p className="heading-sm">No hay reclamos</p>
+        <p className="body-sm text-ink-2 mt-1">Ninguna pareja ha iniciado un reclamo</p>
+      </Card>
     );
   }
 
@@ -73,17 +81,21 @@ export default function TabReclamos({ torneoId, torneo }) {
   return (
     <div className="flex flex-col gap-4">
       {/* Tip */}
-      <div className="text-xs rounded-lg px-3 py-2 border" style={{ color: "#3b82f6", backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.2)" }}>
-        💡 Revisá cada reclamo, leé el descargo de la pareja denunciada y las parejas adheridas antes de tomar una decisión. Tu decisión es final.
-      </div>
+      <p className="flex items-start gap-2 rounded-md bg-surface-sunken px-3 py-2 body-sm text-ink-2">
+        <Info className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+        <span>
+          Revisá cada reclamo, leé el descargo de la pareja denunciada y las parejas adheridas antes de tomar una
+          decisión. Tu decisión es final.
+        </span>
+      </p>
 
       {/* Reclamos abiertos */}
       {abiertos.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
-            Reclamos abiertos ({abiertos.length})
+        <section>
+          <h3 className="heading-sm mb-2">
+            Reclamos abiertos <span className="pd-count text-ink-3 font-medium">{abiertos.length}</span>
           </h3>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             {abiertos.map((r) => {
               const minutosRestantes = Math.max(0,
                 (Number(torneo.plazoReclamosMinutos) || 30) -
@@ -91,49 +103,44 @@ export default function TabReclamos({ torneoId, torneo }) {
               );
               // "Grupo A · 7ma Masculino": grupo y cuadro del partido reclamado, cuando el reclamo los trae
               const contexto = [r.grupoNombre, r.cuadroLabel].filter(Boolean).join(" · ");
+              const plazo = minutosRestantes > 0 ? `${minutosRestantes} min restantes` : "Plazo vencido";
               return (
-                <div key={r.id} className="themed-card rounded-2xl p-5 border">
-                  <div className="flex items-start justify-between mb-3">
+                <Card key={r.id}>
+                  <Card.Row className="items-start!">
+                    <Card.Eyebrow>{[contexto, plazo].filter(Boolean).join(" · ")}</Card.Eyebrow>
+                    <Badge tone="warning" dot>
+                      Abierto
+                    </Badge>
+                  </Card.Row>
+                  <Card.Title className="mt-2!">{motivoLabel[r.motivo] || r.motivo}</Card.Title>
+
+                  <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 rounded-md bg-surface-sunken p-3 mt-3">
                     <div>
-                      <span className="text-xs font-semibold px-2 py-1 rounded-full bg-red-100 text-red-600">
-                        {motivoLabel[r.motivo] || r.motivo}
-                      </span>
-                      <span className="text-xs ml-2" style={{ color: "var(--text-muted)" }}>
-                        {minutosRestantes > 0 ? `${minutosRestantes}min restantes` : "Plazo vencido"}
-                      </span>
+                      <dt className="body-sm text-ink-3">Denunciante</dt>
+                      <dd className="body-md font-semibold!">{getNombrePareja(r.parejaDenunciante)}</dd>
                     </div>
-                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-amber-100 text-amber-700">Abierto</span>
-                  </div>
-
-                  {contexto && (
-                    <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>{contexto}</p>
-                  )}
-
-                  <div className="rounded-xl p-3 mb-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>Denunciante</p>
-                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{getNombrePareja(r.parejaDenunciante)}</p>
-                    <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>Denunciada</p>
-                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{getNombrePareja(r.parejaDenunciada)}</p>
-                  </div>
+                    <div>
+                      <dt className="body-sm text-ink-3">Denunciada</dt>
+                      <dd className="body-md font-semibold!">{getNombrePareja(r.parejaDenunciada)}</dd>
+                    </div>
+                  </dl>
 
                   {r.comentario && (
-                    <div className="mb-3">
-                      <p className="text-xs font-semibold mb-1" style={{ color: "var(--text-muted)" }}>Comentario del denunciante</p>
-                      <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{r.comentario}</p>
+                    <div className="mt-3">
+                      <p className="pd-eyebrow mb-1!">Comentario del denunciante</p>
+                      <p className="body-sm text-ink-2">{r.comentario}</p>
                     </div>
                   )}
 
                   {/* Adheridos */}
                   {(r.adheridos || []).length > 0 && (
-                    <div className="mb-3">
-                      <p className="text-xs font-semibold mb-1" style={{ color: "var(--text-muted)" }}>
-                        Parejas adheridas ({r.adheridos.length})
+                    <div className="mt-3">
+                      <p className="pd-eyebrow mb-1!">
+                        Parejas adheridas <span className="pd-count font-medium">{r.adheridos.length}</span>
                       </p>
                       <div className="flex flex-wrap gap-1">
                         {r.adheridos.map((a, i) => (
-                          <span key={i} className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
-                            {getNombrePareja(a)}
-                          </span>
+                          <Badge key={i}>{getNombrePareja(a)}</Badge>
                         ))}
                       </div>
                     </div>
@@ -141,93 +148,82 @@ export default function TabReclamos({ torneoId, torneo }) {
 
                   {/* Descargo */}
                   {r.descargo ? (
-                    <div className="mb-3 rounded-xl p-3" style={{ backgroundColor: "rgba(59,130,246,0.08)" }}>
-                      <p className="text-xs font-semibold mb-1" style={{ color: "#3b82f6" }}>Descargo de la pareja denunciada</p>
-                      <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{r.descargo}</p>
+                    <div className="mt-3 rounded-md border border-line p-3">
+                      <p className="pd-eyebrow mb-1!">Descargo de la pareja denunciada</p>
+                      <p className="body-sm text-ink-2">{r.descargo}</p>
                     </div>
                   ) : (
-                    <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
-                      La pareja denunciada aún no dejó descargo
-                    </p>
+                    <p className="body-sm text-ink-3 mt-3">La pareja denunciada aún no dejó descargo</p>
                   )}
 
                   {/* Decisión */}
-                  <div className="border-t pt-3 mt-2" style={{ borderColor: "var(--border-card)" }}>
-                    <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>
-                      Motivo de la decisión
-                    </label>
-                    <textarea
-                      value={motivoDecision}
-                      onChange={(e) => setMotivoDecision(e.target.value)}
-                      placeholder="Explicá brevemente tu decisión..."
-                      rows={2}
-                      className="themed-input w-full rounded-xl px-4 py-2 text-sm border resize-none mb-2"
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleResolver(r.id, "desestimar")}
-                        disabled={resolviendo === r.id}
-                        className="flex-1 py-2 rounded-xl text-sm font-semibold transition disabled:opacity-50"
-                        style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-secondary)" }}
-                      >
+                  <div className="border-t border-line pt-4 mt-4 flex flex-col gap-3">
+                    <Field label="Motivo de la decisión">
+                      <Textarea
+                        value={motivoDecision}
+                        onChange={(e) => setMotivoDecision(e.target.value)}
+                        placeholder="Explicá brevemente tu decisión..."
+                        rows={2}
+                      />
+                    </Field>
+                    <div className="pd-btn-group">
+                      <Button size="sm" onClick={() => handleResolver(r.id, "desestimar")} disabled={resolviendo === r.id}>
                         Desestimar
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
                         onClick={() => handleResolver(r.id, "descalificar")}
                         disabled={resolviendo === r.id}
-                        className="flex-1 py-2 rounded-xl text-sm font-semibold text-white transition disabled:opacity-50 bg-red-600 hover:bg-red-700"
                       >
                         Descalificar pareja
-                      </button>
+                      </Button>
                     </div>
                   </div>
-                </div>
+                </Card>
               );
             })}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Reclamos resueltos */}
       {resueltos.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
-            Reclamos resueltos ({resueltos.length})
+        <section>
+          <h3 className="heading-sm mb-2">
+            Reclamos resueltos <span className="pd-count text-ink-3 font-medium">{resueltos.length}</span>
           </h3>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             {resueltos.map((r) => {
               const contexto = [r.grupoNombre, r.cuadroLabel].filter(Boolean).join(" · ");
+              const adheridos = r.adheridos?.length || 0;
               return (
-                <div key={r.id} className="themed-card rounded-2xl p-5 border opacity-75">
-                  <div className="flex items-start justify-between mb-2">
-                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-red-100 text-red-600">
-                      {motivoLabel[r.motivo] || r.motivo}
-                    </span>
-                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                      r.decision === "descalificar" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
-                    }`}>
-                      {r.decision === "descalificar" ? "Descalificada" : "Desestimado"}
-                    </span>
-                  </div>
-                  {contexto && (
-                    <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{contexto}</p>
-                  )}
-                  <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                <Card key={r.id}>
+                  <Card.Row className="items-start!">
+                    <Card.Eyebrow>{contexto || "Reclamo"}</Card.Eyebrow>
+                    {r.decision === "descalificar" ? (
+                      <Badge tone="danger" dot>
+                        Descalificada
+                      </Badge>
+                    ) : (
+                      <Badge tone="success" dot>
+                        Desestimado
+                      </Badge>
+                    )}
+                  </Card.Row>
+                  <Card.Title className="mt-2!">{motivoLabel[r.motivo] || r.motivo}</Card.Title>
+                  <Card.Meta>
                     {getNombrePareja(r.parejaDenunciante)} → {getNombrePareja(r.parejaDenunciada)}
+                  </Card.Meta>
+                  {r.motivoDecision && <p className="body-sm text-ink-2 mt-2">Decisión: {r.motivoDecision}</p>}
+                  <p className="body-sm text-ink-3 mt-1">
+                    {adheridos} pareja{adheridos !== 1 ? "s" : ""} adherida{adheridos !== 1 ? "s" : ""}
                   </p>
-                  {r.motivoDecision && (
-                    <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
-                      Decisión: {r.motivoDecision}
-                    </p>
-                  )}
-                  <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                    {r.adheridos?.length || 0} pareja{(r.adheridos?.length || 0) !== 1 ? "s" : ""} adherida{(r.adheridos?.length || 0) !== 1 ? "s" : ""}
-                  </p>
-                </div>
+                </Card>
               );
             })}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

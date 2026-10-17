@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { AlertTriangle, Bell, Calendar, Check, Hourglass, Info, LayoutGrid, Lock, Pencil, Plus } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { getTorneosByOrganizer } from "../../services/torneoService";
 import {
@@ -15,6 +16,7 @@ import { formatFecha } from "../../utils/formatDate";
 import { formatPrecio } from "../../utils/format";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
+import { Badge, Button, Card, StatTile } from "../../components/ui";
 
 export default function Dashboard() {
   const { user } = useAuthStore();
@@ -73,11 +75,17 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
-        <p style={{ color: "var(--text-muted)" }} className="text-sm">
-          Cargando...
-        </p>
+      <div aria-busy="true">
+        <span className="sr-only">Cargando...</span>
+        <div className="pd-skeleton h-8 w-64 mb-2" />
+        <div className="pd-skeleton h-4 w-80 max-w-full mb-6" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="pd-skeleton h-[92px] rounded-lg" />
+          ))}
+        </div>
+        <div className="pd-skeleton h-40 rounded-lg mb-4" />
+        <div className="pd-skeleton h-40 rounded-lg" />
       </div>
     );
   }
@@ -174,19 +182,28 @@ export default function Dashboard() {
     }
   };
 
-  const cardStyle =
-    "themed-card rounded-2xl p-5 border cursor-pointer card-hover";
+  // Props para que un StatTile o una Card enteros naveguen (mismo navigate que antes) y sean accesibles por teclado
+  const linkProps = (to) => ({
+    role: "link",
+    tabIndex: 0,
+    onClick: () => navigate(to),
+    onKeyDown: (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        navigate(to);
+      }
+    },
+  });
+
+  const torneosProximos = torneos.filter(
+    (t) => t.status === "inscripcion" || t.status === "en_curso",
+  );
 
   return (
     <div>
       <div className="mb-6">
-        <h1
-          className="text-xl font-bold"
-          style={{ color: "var(--text-primary)" }}
-        >
-          {club ? `Bienvenido, ${club.nombre}` : "Dashboard"}
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+        <h1 className="heading-lg m-0">{club ? `Bienvenido, ${club.nombre}` : "Hoy"}</h1>
+        <p className="body-sm text-ink-2 mt-1 mb-0">
           Resumen del día —{" "}
           {new Date().toLocaleDateString("es-AR", {
             weekday: "long",
@@ -201,336 +218,145 @@ export default function Dashboard() {
       {(reservasPendientes.length > 0 || reservasMananaConfirmadas.length > 0) && (
         <div className="flex flex-col gap-2 mb-4">
           {reservasPendientes.length > 0 && (
-            <div className="themed-card rounded-xl p-3 border flex items-center justify-between"
-              style={{ borderLeft: "4px solid #f59e0b" }}>
-              <div className="flex items-center gap-2">
-                <span className="text-sm">⏳</span>
-                <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+            <Card as="div" role="status" className="flex items-center justify-between gap-3 flex-wrap py-3!">
+              <span className="flex items-center gap-2 body-sm">
+                <Hourglass className="pd-icon text-warning" size={20} aria-hidden="true" />
+                <span>
                   Tenés <strong>{reservasPendientes.length}</strong> reserva{reservasPendientes.length !== 1 ? "s" : ""} pendiente{reservasPendientes.length !== 1 ? "s" : ""} de aprobación
                 </span>
-              </div>
-              <button onClick={() => navigate("/admin/canchas")}
-                className="text-xs font-semibold px-3 py-1 rounded-lg transition"
-                style={{ color: "var(--accent)", backgroundColor: "var(--accent-light)" }}>
+              </span>
+              <Button size="sm" onClick={() => navigate("/admin/canchas")}>
                 Ver reservas
-              </button>
-            </div>
+              </Button>
+            </Card>
           )}
           {reservasMananaConfirmadas.length > 0 && (
-            <div className="themed-card rounded-xl p-3 border flex items-center gap-2"
-              style={{ borderLeft: "4px solid var(--accent)" }}>
-              <span className="text-sm">📅</span>
-              <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+            <Card as="div" role="status" className="flex items-center gap-2 body-sm py-3!">
+              <Calendar className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+              <span>
                 Mañana tenés <strong>{reservasMananaConfirmadas.length}</strong> reserva{reservasMananaConfirmadas.length !== 1 ? "s" : ""} programada{reservasMananaConfirmadas.length !== 1 ? "s" : ""}
               </span>
-            </div>
+            </Card>
           )}
         </div>
       )}
 
       {/* Ayuda contextual */}
       {mostrarAyuda && (
-        <div className="themed-card rounded-2xl p-4 border mb-4" style={{ borderColor: "rgba(59,130,246,0.2)", backgroundColor: "rgba(59,130,246,0.04)" }}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm">💡</span>
-              <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Funcionalidades automáticas</span>
-            </div>
-            <button onClick={() => setMostrarAyuda(false)} className="text-xs font-semibold px-2 py-1 rounded-lg transition" style={{ color: "var(--text-muted)" }}>
+        <Card as="aside" className="mb-4">
+          <Card.Row className="mb-3">
+            <span className="flex items-center gap-2 heading-sm">
+              <Info className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+              Funcionalidades automáticas
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => setMostrarAyuda(false)}>
               Ocultar
-            </button>
-          </div>
-          <div className="flex flex-col gap-2">
-            <div className="flex items-start gap-2">
-              <span className="text-xs mt-0.5">🔔</span>
-              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Cuando un jugador reserva una cancha, recibís una <strong>notificación automática</strong>. Si tenés aprobación manual activa, podés confirmar o rechazar desde acá.</p>
-            </div>
-            <div className="flex items-start gap-2">
-              <span className="text-xs mt-0.5">📝</span>
-              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Podés crear <strong>reservas manuales</strong> tocando los horarios libres en la grilla de canchas.</p>
-            </div>
-            <div className="flex items-start gap-2">
-              <span className="text-xs mt-0.5">🔒</span>
-              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Podés <strong>bloquear horarios</strong> temporalmente pasando el mouse sobre un horario libre y tocando el candado.</p>
-            </div>
-            <div className="flex items-start gap-2">
-              <span className="text-xs mt-0.5">📅</span>
-              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>En Canchas podés alternar entre <strong>vista diaria y semanal</strong> para planificar mejor la semana.</p>
-            </div>
-          </div>
-        </div>
+            </Button>
+          </Card.Row>
+          <ul className="m-0 p-0 list-none grid gap-2">
+            <li className="flex items-start gap-2">
+              <Bell className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+              <p className="body-sm text-ink-2 m-0">Cuando un jugador reserva una cancha, recibís una <strong>notificación automática</strong>. Si tenés aprobación manual activa, podés confirmar o rechazar desde acá.</p>
+            </li>
+            <li className="flex items-start gap-2">
+              <Pencil className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+              <p className="body-sm text-ink-2 m-0">Podés crear <strong>reservas manuales</strong> tocando los horarios libres en la grilla de canchas.</p>
+            </li>
+            <li className="flex items-start gap-2">
+              <Lock className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+              <p className="body-sm text-ink-2 m-0">Podés <strong>bloquear horarios</strong> temporalmente pasando el mouse sobre un horario libre y tocando el candado.</p>
+            </li>
+            <li className="flex items-start gap-2">
+              <Calendar className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+              <p className="body-sm text-ink-2 m-0">En Canchas podés alternar entre <strong>vista diaria y semanal</strong> para planificar mejor la semana.</p>
+            </li>
+          </ul>
+        </Card>
       )}
 
       {/* Recordatorio completar perfil */}
       {club && (!club.telefono || !club.direccion) && (
-        <div
-          onClick={() => navigate("/admin/configuracion")}
-          className="rounded-2xl p-4 mb-4 cursor-pointer hover:shadow-md transition border"
-          style={{ backgroundColor: "var(--accent-light)", borderColor: "var(--accent)" }}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(245, 158, 11, 0.15)" }}>
-              <span className="text-lg">⚠️</span>
-            </div>
-            <div>
-              <p className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>Completá los datos de tu club</p>
-              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                Agregá teléfono, dirección y redes sociales para que los jugadores te encuentren
-              </p>
-            </div>
+        <Card variant="hover" as="div" className="mb-4 flex items-start gap-3" {...linkProps("/admin/configuracion")}>
+          <AlertTriangle className="pd-icon text-warning mt-0.5" size={20} aria-hidden="true" />
+          <div>
+            <p className="heading-sm m-0">Completá los datos de tu club</p>
+            <p className="body-sm text-ink-2 m-0">
+              Agregá teléfono, dirección y redes sociales para que los jugadores te encuentren
+            </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Tarjetas resumen */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div onClick={() => navigate("/admin/canchas")} className={cardStyle}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p
-                className="text-3xl font-bold"
-                style={{ color: "var(--accent)" }}
-              >
-                {reservasConfirmadas.length}
-              </p>
-              <p
-                className="text-xs mt-1"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Reservas hoy
-              </p>
-            </div>
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: "var(--accent-light)" }}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                className="w-5 h-5"
-                style={{ color: "var(--accent)" }}
-              >
-                <rect x="3" y="4" width="18" height="18" rx="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        <div
-          onClick={() => navigate("/admin/estadisticas")}
-          className={cardStyle}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-3xl font-bold" style={{ color: "#3b82f6" }}>
-                {formatPrecio(ingresosHoy)}
-              </p>
-              <p
-                className="text-xs mt-1"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Ingresos hoy
-              </p>
-            </div>
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: "rgba(59,130,246,0.1)" }}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#3b82f6"
-                strokeWidth="1.8"
-                className="w-5 h-5"
-              >
-                <line x1="12" y1="1" x2="12" y2="23" />
-                <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        <div onClick={() => navigate("/admin/canchas")} className={cardStyle}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-3xl font-bold" style={{ color: "#8b5cf6" }}>
-                {turnosFijosActivos.length}
-              </p>
-              <p
-                className="text-xs mt-1"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Turnos fijos activos
-              </p>
-            </div>
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: "rgba(139,92,246,0.1)" }}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#8b5cf6"
-                strokeWidth="1.8"
-                className="w-5 h-5"
-              >
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-                <circle cx="12" cy="10" r="3" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        <div onClick={() => navigate("/admin/canchas")} className={cardStyle}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-3xl font-bold" style={{ color: "#f97316" }}>
-                {canchasLibresAhora}
-              </p>
-              <p
-                className="text-xs mt-1"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Canchas libres ahora
-              </p>
-            </div>
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: "rgba(249,115,22,0.1)" }}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#f97316"
-                strokeWidth="1.8"
-                className="w-5 h-5"
-              >
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <line x1="12" y1="3" x2="12" y2="21" />
-                <line x1="3" y1="12" x2="21" y2="12" />
-              </svg>
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <StatTile value={reservasConfirmadas.length} label="Reservas hoy" className="cursor-pointer hover:bg-surface-hover!" {...linkProps("/admin/canchas")} />
+        <StatTile value={formatPrecio(ingresosHoy)} label="Ingresos hoy" className="cursor-pointer hover:bg-surface-hover!" {...linkProps("/admin/estadisticas")} />
+        <StatTile value={turnosFijosActivos.length} label="Turnos fijos activos" className="cursor-pointer hover:bg-surface-hover!" {...linkProps("/admin/canchas")} />
+        <StatTile value={canchasLibresAhora} label="Canchas libres ahora" className="cursor-pointer hover:bg-surface-hover!" {...linkProps("/admin/canchas")} />
       </div>
 
       {/* Reservas pendientes */}
-      <div className="themed-card rounded-2xl p-5 border mb-4"
-        style={{ borderColor: reservasPendientes.length > 0 ? "rgba(245,158,11,0.3)" : undefined }}>
-        <h2 className="font-semibold mb-3" style={{ color: reservasPendientes.length > 0 ? "#f59e0b" : "var(--text-primary)" }}>
-          Reservas pendientes {reservasPendientes.length > 0 && `(${reservasPendientes.length})`}
+      <section className="mb-8">
+        <h2 className="heading-md m-0 mb-3">
+          Reservas pendientes{" "}
+          {reservasPendientes.length > 0 && <span className="pd-count text-ink-3 font-medium">{reservasPendientes.length}</span>}
         </h2>
         {reservasPendientes.length === 0 ? (
-          <p className="text-sm text-center py-3" style={{ color: "var(--text-muted)" }}>
-            No hay reservas pendientes ✓
-          </p>
+          <p className="body-sm text-ink-2 m-0">No hay reservas pendientes</p>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="grid gap-4 md:grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
             {reservasPendientes.map((r) => (
-              <div key={r.id} className="rounded-xl px-4 py-3 border"
-                style={{ backgroundColor: "rgba(245,158,11,0.05)", borderLeft: "3px solid #f59e0b", borderColor: "rgba(245,158,11,0.2)" }}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                      {r.nombreJugador || "Jugador"}
-                    </p>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {r.canchaName || "Cancha"} · {formatFecha(r.fecha)} · {r.hora} {r.precio != null && <span style={{ color: "var(--accent)" }}> · {formatPrecio(r.precio)}</span>}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleConfirmarReserva(r.id)}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg text-green-700 transition"
-                      style={{ backgroundColor: "rgba(34,197,94,0.1)" }}>
-                      Confirmar
-                    </button>
-                    <button onClick={() => handleRechazarReserva(r.id)}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg text-red-500 transition"
-                      style={{ backgroundColor: "rgba(239,68,68,0.08)" }}>
-                      Rechazar
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <Card key={r.id}>
+                <Card.Row>
+                  <Card.Eyebrow>
+                    {r.canchaName || "Cancha"} · {formatFecha(r.fecha)} · {r.hora}
+                  </Card.Eyebrow>
+                  <Badge tone="warning" dot>
+                    Pendiente
+                  </Badge>
+                </Card.Row>
+                <Card.Title className="mt-2!">{r.nombreJugador || "Jugador"}</Card.Title>
+                {r.precio != null && <Card.Meta className="pd-tnum">{formatPrecio(r.precio)}</Card.Meta>}
+                <Card.Foot>
+                  <Button size="sm" icon={<Check className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleConfirmarReserva(r.id)}>
+                    Confirmar
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => handleRechazarReserva(r.id)}>
+                    Rechazar
+                  </Button>
+                </Card.Foot>
+              </Card>
             ))}
           </div>
         )}
-      </div>
+      </section>
 
       {/* Próximas reservas */}
-      <div className="themed-card rounded-2xl p-5 border mb-4">
-        <h2
-          className="font-semibold mb-3"
-          style={{ color: "var(--text-primary)" }}
-        >
-          Próximas reservas hoy
-        </h2>
+      <Card className="mb-4">
+        <Card.Title>Próximas reservas hoy</Card.Title>
         {proximasReservas.length === 0 ? (
-          <p
-            className="text-sm text-center py-4"
-            style={{ color: "var(--text-muted)" }}
-          >
-            No hay más reservas para hoy
-          </p>
+          <p className="body-sm text-ink-2 mt-3 mb-0">No hay más reservas para hoy</p>
         ) : (
-          <div className="flex flex-col gap-2">
+          <ul className="m-0 mt-2 p-0 list-none divide-y divide-line">
             {proximasReservas.map((r, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between rounded-xl px-4 py-3"
-                style={{ backgroundColor: "var(--bg-card-hover)" }}
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className="text-sm font-bold w-14"
-                    style={{ color: "var(--accent)" }}
-                  >
-                    {r.hora}
-                  </span>
-                  <div>
-                    <p
-                      className="text-sm font-medium"
-                      style={{ color: "var(--text-primary)" }}
-                    >
-                      {r.nombreJugador || "Jugador"}
-                    </p>
-                    <p
-                      className="text-xs"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {r.canchaName || "Cancha"}
-                    </p>
+              <li key={i} className="flex items-center justify-between gap-3 py-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="numeral-md pd-tnum w-14 flex-none">{r.hora}</span>
+                  <div className="min-w-0">
+                    <p className="body-md font-medium! m-0 truncate">{r.nombreJugador || "Jugador"}</p>
+                    <p className="body-sm text-ink-2 m-0">{r.canchaName || "Cancha"}</p>
                   </div>
                 </div>
-                <span
-                  className="text-xs font-semibold"
-                  style={{ color: "var(--accent)" }}
-                >
-                  {formatPrecio(r.precio || 0)}
-                </span>
-              </div>
+                <span className="body-sm font-semibold! pd-tnum">{formatPrecio(r.precio || 0)}</span>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
+      </Card>
 
       {/* Turnos activos ahora */}
-      <div className="themed-card rounded-2xl p-5 border mb-4">
-        <h2
-          className="font-semibold mb-3"
-          style={{ color: "var(--text-primary)" }}
-        >
-          Turnos activos ahora
-        </h2>
+      <Card className="mb-4">
+        <Card.Title>Turnos activos ahora</Card.Title>
         {(() => {
           const turnosAhora = reservasConfirmadas.filter(
             (r) => parseInt(r.hora) === horaActual,
@@ -540,176 +366,71 @@ export default function Dashboard() {
               t.dia === diaHoy && (t.horas || [t.hora]).includes(horaAhora),
           );
           if (turnosAhora.length === 0 && turnosFijosAhora.length === 0) {
-            return (
-              <p
-                className="text-sm text-center py-4"
-                style={{ color: "var(--text-muted)" }}
-              >
-                No hay turnos activos en este momento
-              </p>
-            );
+            return <p className="body-sm text-ink-2 mt-3 mb-0">No hay turnos activos en este momento</p>;
           }
           return (
-            <div className="flex flex-col gap-2">
+            <ul className="m-0 mt-2 p-0 list-none divide-y divide-line">
               {turnosAhora.map((r, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between rounded-xl px-4 py-3"
-                  style={{ backgroundColor: "var(--accent-light)" }}
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="text-sm font-bold"
-                      style={{ color: "var(--accent)" }}
-                    >
-                      {r.hora}
-                    </span>
-                    <div>
-                      <p
-                        className="text-sm font-medium"
-                        style={{ color: "var(--text-primary)" }}
-                      >
-                        {r.nombreJugador || "Jugador"}
-                      </p>
-                      <p
-                        className="text-xs"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        {r.canchaName || "Cancha"}
-                      </p>
+                <li key={i} className="flex items-center justify-between gap-3 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="numeral-md pd-tnum w-14 flex-none">{r.hora}</span>
+                    <div className="min-w-0">
+                      <p className="body-md font-medium! m-0 truncate">{r.nombreJugador || "Jugador"}</p>
+                      <p className="body-sm text-ink-2 m-0">{r.canchaName || "Cancha"}</p>
                     </div>
                   </div>
-                  <span
-                    className="text-xs font-semibold px-2 py-1 rounded-full"
-                    style={{
-                      backgroundColor: "rgba(5,150,105,0.15)",
-                      color: "var(--accent)",
-                    }}
-                  >
-                    En juego
-                  </span>
-                </div>
+                  <Badge tone="lime">En juego</Badge>
+                </li>
               ))}
               {turnosFijosAhora.map((tf, i) => (
-                <div
-                  key={`tf-${i}`}
-                  className="flex items-center justify-between rounded-xl px-4 py-3"
-                  style={{ backgroundColor: "rgba(139,92,246,0.08)" }}
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="text-sm font-bold"
-                      style={{ color: "#8b5cf6" }}
-                    >
-                      {(tf.horas || [tf.hora]).join(", ")}
-                    </span>
-                    <div>
-                      <p
-                        className="text-sm font-medium"
-                        style={{ color: "var(--text-primary)" }}
-                      >
-                        {tf.nombreJugador}
-                      </p>
-                      <p
-                        className="text-xs"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        {tf.canchaName} · Turno fijo
-                      </p>
+                <li key={`tf-${i}`} className="flex items-center justify-between gap-3 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="numeral-md pd-tnum flex-none">{(tf.horas || [tf.hora]).join(", ")}</span>
+                    <div className="min-w-0">
+                      <p className="body-md font-medium! m-0 truncate">{tf.nombreJugador}</p>
+                      <p className="body-sm text-ink-2 m-0">{tf.canchaName} · Turno fijo</p>
                     </div>
                   </div>
-                  <span
-                    className="text-xs font-semibold px-2 py-1 rounded-full"
-                    style={{
-                      backgroundColor: "rgba(139,92,246,0.15)",
-                      color: "#8b5cf6",
-                    }}
-                  >
-                    Fijo
-                  </span>
-                </div>
+                  <Badge tone="night">Fijo</Badge>
+                </li>
               ))}
-            </div>
+            </ul>
           );
         })()}
-      </div>
+      </Card>
 
       {/* Torneos próximos */}
       {torneos.length > 0 && (
-        <div className="themed-card rounded-2xl p-5 border mb-4">
-          <h2
-            className="font-semibold mb-3"
-            style={{ color: "var(--text-primary)" }}
-          >
-            Torneos próximos
-          </h2>
-          <div className="flex flex-col gap-2">
-            {torneos
-              .filter(
-                (t) => t.status === "inscripcion" || t.status === "en_curso",
-              )
-              .slice(0, 3)
-              .map((t) => (
-                <div
-                  key={t.id}
-                  onClick={() => navigate(`/admin/torneos/${t.id}`)}
-                  className="flex items-center justify-between rounded-xl px-4 py-3 cursor-pointer transition"
-                  style={{ backgroundColor: "var(--bg-card-hover)" }}
-                >
-                  <div>
-                    <p
-                      className="text-sm font-semibold"
-                      style={{ color: "var(--text-primary)" }}
-                    >
-                      {t.nombre}
-                    </p>
-                    <p
-                      className="text-xs"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {t.sede} — {formatFecha(t.fechaInicio)} → {formatFecha(t.fechaFin)}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                      t.status === "inscripcion"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-emerald-100 text-emerald-700"
-                    }`}
-                  >
+        <section className="mb-8">
+          <h2 className="heading-md m-0 mb-3">Torneos próximos</h2>
+          <div className="grid gap-4 md:grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
+            {torneosProximos.slice(0, 3).map((t) => (
+              <Card key={t.id} variant="hover" {...linkProps(`/admin/torneos/${t.id}`)}>
+                <Card.Row>
+                  <Card.Eyebrow>{t.sede}</Card.Eyebrow>
+                  <Badge tone={t.status === "inscripcion" ? "court" : "lime"}>
                     {t.status === "inscripcion" ? "Inscripción" : "En curso"}
-                  </span>
-                </div>
-              ))}
-            {torneos.filter(
-              (t) => t.status === "inscripcion" || t.status === "en_curso",
-            ).length === 0 && (
-              <p
-                className="text-sm text-center py-4"
-                style={{ color: "var(--text-muted)" }}
-              >
-                No hay torneos próximos
-              </p>
-            )}
+                  </Badge>
+                </Card.Row>
+                <Card.Title className="mt-2!">{t.nombre}</Card.Title>
+                <Card.Meta>
+                  {formatFecha(t.fechaInicio)} – {formatFecha(t.fechaFin)}
+                </Card.Meta>
+              </Card>
+            ))}
           </div>
-        </div>
+          {torneosProximos.length === 0 && <p className="body-sm text-ink-2 m-0">No hay torneos próximos</p>}
+        </section>
       )}
 
       {/* Accesos rápidos */}
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          onClick={() => navigate("/admin/torneos/nuevo")}
-          className="rounded-2xl p-4 text-sm font-semibold text-white transition hover:opacity-90"
-          style={{ backgroundColor: "var(--accent)" }}
-        >
-          + Crear torneo
-        </button>
-        <button
-          onClick={() => navigate("/admin/canchas")}
-          className="rounded-2xl p-4 text-sm font-semibold text-white transition hover:opacity-90 bg-blue-600"
-        >
+      <div className="pd-btn-group">
+        <Button icon={<Plus className="pd-icon" size={20} aria-hidden="true" />} onClick={() => navigate("/admin/torneos/nuevo")}>
+          Crear torneo
+        </Button>
+        <Button icon={<LayoutGrid className="pd-icon" size={20} aria-hidden="true" />} onClick={() => navigate("/admin/canchas")}>
           Gestionar canchas
-        </button>
+        </Button>
       </div>
     </div>
   );

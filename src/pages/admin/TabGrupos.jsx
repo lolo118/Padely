@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { AlertTriangle, ArrowRight, Check, Info, Lock, MessageCircle, Pencil, Plus, RefreshCw, X } from "lucide-react";
 import {
   getParejas,
   getGrupos,
@@ -15,6 +16,48 @@ import {
 } from "../../utils/torneo";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
+import { Button, Card, Field, Input, MatchCard, Pills, Select, Standings } from "../../components/ui";
+
+// Nombre para mostrar: "Pérez / Gómez" (nombrePareja se guarda como "Pérez-Gómez")
+const nombreDePareja = (p) =>
+  p?.nombrePareja ? p.nombrePareja.replace("-", " / ") : `${p?.jugador1} / ${p?.jugador2}`;
+
+// "1" → "Cancha 1"; un texto libre ("Central") va tal cual
+const textoCancha = (cancha) => {
+  const texto = String(cancha ?? "").trim();
+  if (!texto) return undefined;
+  return /^\d+$/.test(texto) ? `Cancha ${texto}` : texto;
+};
+
+// Partidos de una liga agrupados por fecha, en orden: [["1", [...]], ["2", [...]]]
+function partidosPorFecha(partidos) {
+  const fechasMap = {};
+  partidos.forEach((p) => {
+    const f = p.fecha || 1;
+    if (!fechasMap[f]) fechasMap[f] = [];
+    fechasMap[f].push(p);
+  });
+  return Object.entries(fechasMap).sort(([a], [b]) => Number(a) - Number(b));
+}
+
+// Standings muestra todas las columnas en escritorio y las compactas en teléfonos
+const QUERY_ESCRITORIO = "(min-width: 768px)";
+function suscribirEscritorio(callback) {
+  const mq = window.matchMedia(QUERY_ESCRITORIO);
+  mq.addEventListener("change", callback);
+  return () => mq.removeEventListener("change", callback);
+}
+function leerEscritorio() {
+  return window.matchMedia(QUERY_ESCRITORIO).matches;
+}
+function useEsEscritorio() {
+  return useSyncExternalStore(suscribirEscritorio, leerEscritorio, () => true);
+}
+
+const icono = (componente) => {
+  const Icono = componente;
+  return <Icono className="pd-icon" size={20} aria-hidden="true" />;
+};
 
 function generarPartidos(parejas) {
   const partidos = [];
@@ -32,7 +75,8 @@ function generarPartidos(parejas) {
   return partidos;
 }
 
-function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm }) {
+// principal: el botón de confirmar es el primary de la pantalla mientras no haya una vista previa
+function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm, principal = true }) {
   const cantGrupos = Math.ceil(parejas.length / parejasXGrupo);
   const [gruposManuales, setGruposManuales] = useState(
     Array.from({ length: cantGrupos }, (_, i) => ({
@@ -66,80 +110,73 @@ function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm }) {
   };
 
   return (
-    <div className="flex flex-col gap-3 mt-2">
+    <div className="mt-2 flex flex-col gap-4">
       {sinAsignar.length > 0 && (
         <div>
-          <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
-            Parejas sin asignar ({sinAsignar.length})
+          <p className="heading-sm mb-2">
+            Parejas sin asignar <span className="pd-count font-medium pd-ink-3">{sinAsignar.length}</span>
           </p>
-          <div className="flex flex-col gap-1">
+          <ul className="flex flex-col gap-2">
             {sinAsignar.map((p) => (
-              <div
+              <li
                 key={p.id}
-                className="flex items-center justify-between rounded-xl px-4 py-2 border"
-                style={{ backgroundColor: "rgba(234,179,8,0.08)", borderColor: "rgba(234,179,8,0.3)" }}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-surface-sunken px-3 py-2"
               >
-                <span className="text-sm" style={{ color: "var(--text-primary)" }}>
-                  {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
-                </span>
-                <div className="flex gap-1">
+                <span className="body-md">{nombreDePareja(p)}</span>
+                <span className="pd-btn-group" role="group" aria-label={`Asignar a ${nombreDePareja(p)}`}>
                   {gruposManuales.map((g, gi) => (
-                    <button
+                    <Button
                       key={gi}
+                      size="sm"
+                      icon={icono(ArrowRight)}
                       onClick={() => asignar(p, gi)}
                       disabled={g.parejas.length >= parejasXGrupo}
-                      className="px-2 py-1 rounded-lg text-xs font-semibold bg-green-100 text-green-700 hover:bg-green-200 transition disabled:opacity-30 disabled:cursor-not-allowed"
+                      aria-label={`Asignar al ${g.nombre}`}
                     >
-                      → {g.nombre.replace("Grupo ", "")}
-                    </button>
+                      {g.nombre.replace("Grupo ", "")}
+                    </Button>
                   ))}
-                </div>
-              </div>
+                </span>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
       {gruposManuales.map((g, gi) => (
         <div key={gi}>
-          <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-primary)" }}>
-            {g.nombre} ({g.parejas.length}/{parejasXGrupo})
+          <p className="heading-sm mb-2">
+            {g.nombre}{" "}
+            <span className="pd-count font-medium pd-ink-3 pd-tnum">
+              {g.parejas.length}/{parejasXGrupo}
+            </span>
           </p>
           {g.parejas.length === 0 ? (
-            <div className="text-sm rounded-lg px-3 py-2 text-center" style={{ color: "var(--text-muted)", opacity: 0.4, backgroundColor: "var(--bg-card-hover)" }}>
-              Sin parejas asignadas
-            </div>
+            <p className="rounded-md bg-surface-sunken px-3 py-2 text-center body-sm pd-ink-3">Sin parejas asignadas</p>
           ) : (
-            <div className="flex flex-col gap-1">
+            <ul className="flex flex-col gap-2">
               {g.parejas.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-center justify-between rounded-lg px-3 py-2"
-                  style={{ backgroundColor: "var(--bg-card-hover)" }}
-                >
-                  <span className="text-sm" style={{ color: "var(--text-primary)" }}>
-                    {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
-                  </span>
-                  <button
-                    onClick={() => desasignar(p, gi)}
-                    className="text-xs text-red-400 hover:text-red-600 font-semibold"
-                  >
+                <li key={p.id} className="flex items-center justify-between gap-2 rounded-md bg-surface-sunken px-3 py-2">
+                  <span className="body-md">{nombreDePareja(p)}</span>
+                  <Button size="sm" variant="ghost" icon={icono(X)} onClick={() => desasignar(p, gi)}>
                     Quitar
-                  </button>
-                </div>
+                  </Button>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </div>
       ))}
-      <button
-        onClick={() => onConfirm(gruposManuales)}
-        disabled={sinAsignar.length > 0}
-        className="bg-green-600 text-white font-semibold py-2 rounded-xl hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {sinAsignar.length === 0
-          ? "Generar grupos manuales"
-          : `Faltan ${sinAsignar.length} pareja${sinAsignar.length !== 1 ? "s" : ""} por asignar`}
-      </button>
+      <div>
+        <Button
+          variant={principal ? "primary" : "secondary"}
+          onClick={() => onConfirm(gruposManuales)}
+          disabled={sinAsignar.length > 0}
+        >
+          {sinAsignar.length === 0
+            ? "Generar grupos manuales"
+            : `Faltan ${sinAsignar.length} pareja${sinAsignar.length !== 1 ? "s" : ""} por asignar`}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -205,6 +242,9 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
   const [setsInput, setSetsInput] = useState([]);
   const [tiebreakInput, setTiebreakInput] = useState([]);
   const [errorModal, setErrorModal] = useState("");
+  const escritorio = useEsEscritorio();
+  const dialogoRef = useRef(null);
+  const tituloDialogoId = useId();
 
   useEffect(() => {
     const cargar = async () => {
@@ -227,6 +267,11 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
     };
     cargar();
   }, [torneoId, cuadroActual.id, primerCuadroId]);
+
+  // El foco entra al diálogo de resultado al abrirlo (también al pasar al siguiente partido)
+  useEffect(() => {
+    if (editandoResultado) dialogoRef.current?.focus();
+  }, [editandoResultado]);
 
   const generarGruposAleatorio = () => {
     const shuffled = [...parejas].sort(() => Math.random() - 0.5);
@@ -321,6 +366,13 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
     setTiebreakInput(tbs);
     setErrorModal("");
     setEditandoResultado({ grupoIdx, partidoIdx });
+  };
+
+  const cerrarEditarResultado = () => {
+    setEditandoResultado(null);
+    setSetsInput([]);
+    setTiebreakInput([]);
+    setErrorModal("");
   };
 
   const validarResultado = () => {
@@ -438,10 +490,7 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
     } catch (err) { console.error("Error notificando resultado:", err); }
 
     if (!keepOpen) {
-      setEditandoResultado(null);
-      setSetsInput([]);
-      setTiebreakInput([]);
-      setErrorModal("");
+      cerrarEditarResultado();
     }
   };
 
@@ -470,33 +519,39 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
 
   if (loading)
     return (
-      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando grupos...</div>
+      <div className="flex flex-col gap-4" aria-busy="true" aria-label="Cargando grupos">
+        <div className="pd-skeleton h-12" />
+        <div className="pd-skeleton h-56" />
+        <div className="pd-skeleton h-56" />
+      </div>
     );
 
   // Parejas sin categoría: no entran en ningún cuadro hasta que el organizador les asigne una
   const avisoSinCuadro = sinCuadro.length > 0 ? (
-    <div
-      className="text-xs rounded-lg px-3 py-2 border"
-      style={{ color: "#b45309", backgroundColor: "rgba(245,158,11,0.08)", borderColor: "rgba(245,158,11,0.3)" }}
-    >
-      ⚠ {sinCuadro.length} pareja{sinCuadro.length !== 1 ? "s" : ""} sin categoría — asignales una en la pestaña Parejas
-    </div>
+    <p className="flex items-center gap-2 rounded-md bg-warning-soft px-3 py-2 body-sm text-warning" role="status">
+      {icono(AlertTriangle)}
+      <span>
+        {sinCuadro.length} pareja{sinCuadro.length !== 1 ? "s" : ""} sin categoría — asignales una en la pestaña Parejas
+      </span>
+    </p>
   ) : null;
 
   if (parejas.length < 3) {
     return (
       <div className="flex flex-col gap-4">
         {avisoSinCuadro}
-        <div className="themed-card rounded-2xl p-5 border text-center py-12">
-          <div className="text-4xl mb-3">👥</div>
-          <p className="font-medium" style={{ color: "var(--text-muted)" }}>
-            Necesitás al menos 3 parejas inscriptas{variosCuadros ? ` en ${cuadroActual.label}` : ""}
-          </p>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-            Actualmente hay {parejas.length} pareja
-            {parejas.length !== 1 ? "s" : ""}
-          </p>
-        </div>
+        <Card as="section">
+          <div className="py-6 text-center">
+            <span className="pd-ball block! mx-auto mb-3" aria-hidden="true" />
+            <p className="heading-md">
+              Necesitás al menos 3 parejas inscriptas{variosCuadros ? ` en ${cuadroActual.label}` : ""}
+            </p>
+            <p className="mt-1 body-sm pd-ink-2">
+              Actualmente hay {parejas.length} pareja
+              {parejas.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+        </Card>
       </div>
     );
   }
@@ -506,139 +561,250 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
     : null;
 
   const parejasQueAvanzan = Number(torneo.parejasQueAvanzan) || 2;
+  const tieneResultados = grupos.some((g) => (g.partidos || []).some((p) => p.resultado));
+  const hayVistaPrevia = grupos.length > 0 && !gruposGenerados;
+  const columnasTabla = escritorio ? "completa" : "compacta";
+  const ayudaDesempate = "Desempate: partidos ganados, diferencia de sets y después de games.";
+  const cuadroLabel = variosCuadros ? cuadroActual.label : undefined;
+
+  // Siguiente partido sin resultado (en este grupo o en los que siguen) para "Guardar y cargar siguiente"
+  let siguiente = null;
+  if (editandoResultado) {
+    const { grupoIdx, partidoIdx } = editandoResultado;
+    const partidosGrupo = grupos[grupoIdx]?.partidos || [];
+    const siguienteIdx = partidosGrupo.findIndex((p, i) => i > partidoIdx && !p.resultado);
+    if (siguienteIdx !== -1) {
+      siguiente = { grupoIdx, partidoIdx: siguienteIdx };
+    } else {
+      for (let gi = grupoIdx + 1; gi < grupos.length; gi++) {
+        const pi = (grupos[gi]?.partidos || []).findIndex((p) => !p.resultado);
+        if (pi !== -1) { siguiente = { grupoIdx: gi, partidoIdx: pi }; break; }
+      }
+    }
+  }
+
+  const guardarYCargarSiguiente = async () => {
+    const err = validarResultado();
+    if (err) { setErrorModal(err); return; }
+    await guardarResultado(true);
+    if (siguiente) abrirEditarResultado(siguiente.grupoIdx, siguiente.partidoIdx);
+  };
+
+  // Un partido confirmado: la tarjeta (tocarla abre la carga del resultado) y debajo horario y cancha
+  const renderPartido = (grupoIdx, partidoIdx, p, ronda) => {
+    const ganador = getGanador(p.resultado);
+    const sets = p.resultado?.sets || [];
+    const puedeCargar = torneo.status === "en_curso" || torneo.status === "finalizado";
+    const editable = !!p.resultado || puedeCargar;
+    const tiebreaks = sets
+      .map((s, i) =>
+        s.tb1 !== undefined && s.tb2 !== undefined
+          ? `tie break ${s.tb1}–${s.tb2}${sets.length > 1 ? ` en el set ${i + 1}` : ""}`
+          : null,
+      )
+      .filter(Boolean);
+    let foot, footIcon;
+    if (p.resultado) {
+      foot = tiebreaks.length > 0 ? `Resultado cargado · ${tiebreaks.join(" · ")}` : "Resultado cargado · tocá para editar";
+      footIcon = Check;
+    } else if (puedeCargar) {
+      foot = "Tocá para cargar el resultado";
+      footIcon = Pencil;
+    } else {
+      foot = "Iniciá el torneo primero";
+      footIcon = Lock;
+    }
+    const abrir = () => abrirEditarResultado(grupoIdx, partidoIdx);
+    const mensajeWhatsApp = `🎾 ¡Partido listo!\n\nTorneo: ${torneo.nombre}\n⏰ Hora: ${p.hora}\n📍 Cancha: ${p.cancha}\n\n${p.pareja1.nombrePareja || `${p.pareja1.jugador1} / ${p.pareja1.jugador2}`}\nvs\n${p.pareja2.nombrePareja || `${p.pareja2.jugador1} / ${p.pareja2.jugador2}`}\n\n¡Nos vemos en la cancha!`;
+
+    return (
+      <li key={partidoIdx} className="flex w-full max-w-[360px] flex-col gap-2">
+        <MatchCard
+          ronda={ronda}
+          cuadro={cuadroLabel}
+          cancha={textoCancha(p.cancha)}
+          hora={p.hora || undefined}
+          parejas={[
+            { nombre: nombreDePareja(p.pareja1), sets: sets.map((s) => s.g1) },
+            { nombre: nombreDePareja(p.pareja2), sets: sets.map((s) => s.g2) },
+          ]}
+          ganador={ganador === 1 ? 0 : ganador === 2 ? 1 : null}
+          foot={foot}
+          footIcon={footIcon}
+          onClick={editable ? abrir : undefined}
+          role={editable ? "button" : undefined}
+          tabIndex={editable ? 0 : undefined}
+          onKeyDown={
+            editable
+              ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    abrir();
+                  }
+                }
+              : undefined
+          }
+        />
+        {/* Horario y cancha */}
+        <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+          <Field label="Hora">
+            <Input
+              type="time"
+              value={p.hora || ""}
+              onChange={(e) => actualizarPartidoInfo(grupoIdx, partidoIdx, "hora", e.target.value)}
+            />
+          </Field>
+          <Field label="Cancha">
+            <Input
+              type="text"
+              value={p.cancha || ""}
+              placeholder="Ej.: 1"
+              onChange={(e) => actualizarPartidoInfo(grupoIdx, partidoIdx, "cancha", e.target.value)}
+            />
+          </Field>
+          {p.hora && p.cancha && (
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(mensajeWhatsApp)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="pd-btn pd-btn-icon"
+              aria-label="Enviar por WhatsApp"
+              title="Enviar por WhatsApp"
+            >
+              <MessageCircle className="pd-icon" size={20} aria-hidden="true" />
+            </a>
+          )}
+        </div>
+      </li>
+    );
+  };
+
+  const filasTabla = (tabla, clasifica) =>
+    tabla.map((row, ri) => ({ ...row, nombre: nombreDePareja(row), clasifica: clasifica(row, ri) }));
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 md:gap-6">
       {avisoSinCuadro}
 
       {/* Regenerar arriba */}
       {gruposGenerados && (
         <div className="flex justify-end">
-          {(() => {
-            const tieneResultados = grupos.some((g) => (g.partidos || []).some((p) => p.resultado));
-            return tieneResultados ? (
-              <span className="px-3 py-1 rounded-lg text-xs font-semibold" style={{ color: "var(--text-muted)", backgroundColor: "var(--bg-card-hover)" }}>
-                No podés regenerar grupos después de cargar resultados
-              </span>
-            ) : (
-              <button
-                onClick={async () => {
-                  const ok = await confirmar({
-                    titulo: "Regenerar grupos",
-                    mensaje: "Se perderán los grupos actuales.",
-                    confirmText: "Regenerar",
-                    danger: true,
-                  });
-                  if (ok) {
-                    setGruposGenerados(false);
-                    setGrupos([]);
-                  }
-                }}
-                className="px-3 py-1 rounded-lg text-xs font-semibold text-red-500 transition"
-                style={{ backgroundColor: "rgba(239,68,68,0.08)" }}
-              >
-                Regenerar grupos desde cero
-              </button>
-            );
-          })()}
+          {tieneResultados ? (
+            <p className="body-sm pd-ink-2">No podés regenerar grupos después de cargar resultados</p>
+          ) : (
+            <Button
+              icon={icono(RefreshCw)}
+              onClick={async () => {
+                const ok = await confirmar({
+                  titulo: "Regenerar grupos",
+                  mensaje: "Se perderán los grupos actuales.",
+                  confirmText: "Regenerar",
+                  danger: true,
+                });
+                if (ok) {
+                  setGruposGenerados(false);
+                  setGrupos([]);
+                }
+              }}
+            >
+              Regenerar grupos desde cero
+            </Button>
+          )}
         </div>
       )}
 
       {/* Tip */}
       {gruposGenerados && !modoLiga && (
-        <div className="text-xs rounded-lg px-3 py-2 border"
-          style={{ color: "#3b82f6", backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.15)" }}>
-          💡 Asigná horario y cancha a cada partido tocando los campos debajo de
-          cada enfrentamiento. Cargá los resultados con el botón "Cargar
-          resultado".
-        </div>
+        <p className="flex gap-2 body-sm pd-ink-2">
+          {icono(Info)}
+          <span>
+            Asigná horario y cancha a cada partido tocando los campos debajo de cada enfrentamiento. Cargá los
+            resultados tocando cada partido.
+          </span>
+        </p>
       )}
       {gruposGenerados && modoLiga && (
-        <div className="text-xs rounded-lg px-3 py-2 border"
-          style={{ color: "#3b82f6", backgroundColor: "rgba(59,130,246,0.08)", borderColor: "rgba(59,130,246,0.15)" }}>
-          💡 Asigná horario y cancha a cada partido de cada fecha. La tabla de posiciones se actualiza automáticamente al cargar resultados.
-        </div>
+        <p className="flex gap-2 body-sm pd-ink-2">
+          {icono(Info)}
+          <span>
+            Asigná horario y cancha a cada partido de cada fecha. La tabla de posiciones se actualiza
+            automáticamente al cargar resultados.
+          </span>
+        </p>
       )}
 
       {!gruposGenerados && modoLiga && (
-        <div className="themed-card rounded-2xl p-5 border">
-          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-            Generar fixture{variosCuadros ? ` — ${cuadroActual.label}` : ""}
-          </h2>
-          <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
+        <Card as="section">
+          <Card.Title as="h2">Generar fixture{variosCuadros ? ` — ${cuadroActual.label}` : ""}</Card.Title>
+          <Card.Meta>
             Se generará un fixture round-robin donde todas las {parejas.length} parejas juegan entre sí.
             Total de partidos: {parejas.length * (parejas.length - 1) / 2} · Fechas: {parejas.length % 2 === 0 ? parejas.length - 1 : parejas.length}
-          </p>
-          <button
-            onClick={() => {
-              const fechas = generarFixtureRoundRobin(parejas);
-              const allMatches = fechas.flat();
-              setGrupos([{ nombre: "Liga", parejas: parejas, partidos: allMatches }]);
-            }}
-            className="w-full bg-green-600 text-white font-semibold py-2 rounded-xl hover:bg-green-700 transition"
-          >
-            Generar fixture automático
-          </button>
-        </div>
+          </Card.Meta>
+          <Card.Foot>
+            <Button
+              variant={hayVistaPrevia ? "secondary" : "primary"}
+              onClick={() => {
+                const fechas = generarFixtureRoundRobin(parejas);
+                const allMatches = fechas.flat();
+                setGrupos([{ nombre: "Liga", parejas: parejas, partidos: allMatches }]);
+              }}
+            >
+              Generar fixture automático
+            </Button>
+          </Card.Foot>
+        </Card>
       )}
 
       {!gruposGenerados && !modoLiga && (
-        <div className="themed-card rounded-2xl p-5 border">
-          <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-            Generar grupos{variosCuadros ? ` — ${cuadroActual.label}` : ""}
-          </h2>
-          <div className="flex flex-col gap-3">
-            <div>
-              <label className="text-sm block mb-1" style={{ color: "var(--text-muted)" }}>
-                Parejas por grupo
-              </label>
-              <select
-                value={parejasXGrupo}
-                onChange={(e) => setParejasXGrupo(Number(e.target.value))}
-                className="w-full border border-[var(--border-card)] rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              >
-                {opcionesParejasXGrupo(modoGeneracion).map((n) => (
-                  <option key={n} value={n}>
-                    {n} parejas por grupo ({Math.ceil(parejas.length / n)}{" "}
-                    grupos)
-                  </option>
-                ))}
-              </select>
+        <Card as="section">
+          <Card.Title as="h2">Generar grupos{variosCuadros ? ` — ${cuadroActual.label}` : ""}</Card.Title>
+          <div className="mt-4 flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Field label="Parejas por grupo">
+                <Select
+                  value={parejasXGrupo}
+                  onChange={(e) => setParejasXGrupo(Number(e.target.value))}
+                >
+                  {opcionesParejasXGrupo(modoGeneracion).map((n) => (
+                    <option key={n} value={n}>
+                      {n} parejas por grupo · {Math.ceil(parejas.length / n)} grupos
+                    </option>
+                  ))}
+                </Select>
+              </Field>
               {modoGeneracion === "aleatorio" && parejas.length % parejasXGrupo !== 0 && (
-                <p className="text-xs text-amber-600 mt-1">
-                  ⚠ {parejas.length} parejas no se dividen exactamente en grupos de {parejasXGrupo}. El último grupo tendrá {parejas.length % parejasXGrupo} pareja{parejas.length % parejasXGrupo !== 1 ? "s" : ""}.
+                <p className="flex gap-2 body-sm text-warning">
+                  {icono(AlertTriangle)}
+                  <span>
+                    {parejas.length} parejas no se dividen exactamente en grupos de {parejasXGrupo}. El último grupo tendrá {parejas.length % parejasXGrupo} pareja{parejas.length % parejasXGrupo !== 1 ? "s" : ""}.
+                  </span>
                 </p>
               )}
             </div>
-            <div>
-              <label className="text-sm block mb-1" style={{ color: "var(--text-muted)" }}>Modo</label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => cambiarModoGeneracion("aleatorio")}
-                  className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "aleatorio" ? "bg-green-600 text-white" : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"}`}
-                >
-                  Aleatorio
-                </button>
-                <button
-                  onClick={() => cambiarModoGeneracion("manual")}
-                  className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition ${modoGeneracion === "manual" ? "bg-green-600 text-white" : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"}`}
-                >
-                  Manual
-                </button>
-              </div>
-            </div>
+            <Field as="div" label="Modo">
+              <Pills
+                ariaLabel="Modo de generación"
+                items={[
+                  { value: "aleatorio", label: "Aleatorio" },
+                  { value: "manual", label: "Manual" },
+                ]}
+                value={modoGeneracion}
+                onChange={cambiarModoGeneracion}
+              />
+            </Field>
             {modoGeneracion === "aleatorio" && (
-              <button
-                onClick={generarGruposAleatorio}
-                className="bg-green-600 text-white font-semibold py-2 rounded-xl hover:bg-green-700 transition"
-              >
-                Generar grupos aleatorios
-              </button>
+              <div>
+                <Button variant={hayVistaPrevia ? "secondary" : "primary"} onClick={generarGruposAleatorio}>
+                  Generar grupos aleatorios
+                </Button>
+              </div>
             )}
             {modoGeneracion === "manual" && (
               <ManualGroupBuilder
                 parejas={parejas}
                 parejasXGrupo={parejasXGrupo}
+                principal={!hayVistaPrevia}
                 onConfirm={(gm) =>
                   setGrupos(
                     gm.map((g) => ({
@@ -650,88 +816,76 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
               />
             )}
           </div>
-        </div>
+        </Card>
       )}
 
       {grupos.length > 0 && !gruposGenerados && modoLiga && (
-        <div className="themed-card rounded-2xl p-5 border">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>Vista previa del fixture</h2>
-            <div className="flex gap-2">
-              <button onClick={() => setGrupos([])}
-                className="px-3 py-1 rounded-lg text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition">
+        <Card as="section">
+          <Card.Row className="flex-wrap">
+            <Card.Title as="h2">Vista previa del fixture</Card.Title>
+            <span className="pd-btn-group">
+              <Button size="sm" onClick={() => setGrupos([])}>
                 Regenerar
-              </button>
-              <button onClick={guardarGruposEnFirebase}
-                className="px-3 py-1 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition">
+              </Button>
+              <Button size="sm" variant="primary" onClick={guardarGruposEnFirebase}>
                 Confirmar fixture
-              </button>
-            </div>
-          </div>
-          {(() => {
-            const partidos = grupos[0]?.partidos || [];
-            const fechasMap = {};
-            partidos.forEach((p) => { const f = p.fecha || 1; if (!fechasMap[f]) fechasMap[f] = []; fechasMap[f].push(p); });
-            return Object.entries(fechasMap).sort(([a], [b]) => Number(a) - Number(b)).map(([fecha, matches]) => (
-              <div key={fecha} className="mb-3 last:mb-0">
-                <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-primary)" }}>Fecha {fecha}</p>
-                <div className="flex flex-col gap-1">
+              </Button>
+            </span>
+          </Card.Row>
+          <div className="mt-4 flex flex-col gap-4">
+            {partidosPorFecha(grupos[0]?.partidos || []).map(([fecha, matches]) => (
+              <div key={fecha}>
+                <p className="heading-sm mb-2">Fecha {fecha}</p>
+                <ul className="flex flex-col gap-2">
                   {matches.map((m, mi) => (
-                    <div key={mi} className="text-sm rounded-lg px-3 py-2" style={{ color: "var(--text-primary)", backgroundColor: "var(--bg-card-hover)" }}>
-                      {m.pareja1.nombrePareja || `${m.pareja1.jugador1} / ${m.pareja1.jugador2}`}
-                      <span style={{ color: "var(--text-muted)" }}> vs </span>
-                      {m.pareja2.nombrePareja || `${m.pareja2.jugador1} / ${m.pareja2.jugador2}`}
-                    </div>
+                    <li key={mi} className="rounded-md bg-surface-sunken px-3 py-2 body-md">
+                      {nombreDePareja(m.pareja1)}
+                      <span className="pd-ink-3"> vs </span>
+                      {nombreDePareja(m.pareja2)}
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
-            ));
-          })()}
-        </div>
+            ))}
+          </div>
+        </Card>
       )}
 
       {grupos.length > 0 && !gruposGenerados && !modoLiga && (
-        <div className="themed-card rounded-2xl p-5 border">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
-              Vista previa ({grupos.length} {grupos.length === 1 ? "grupo" : "grupos"})
-            </h2>
-            <div className="flex gap-2">
+        <Card as="section">
+          <Card.Row className="flex-wrap">
+            <Card.Title as="h2">
+              Vista previa{" "}
+              <span className="pd-count body-md font-medium! pd-ink-3">
+                {grupos.length} {grupos.length === 1 ? "grupo" : "grupos"}
+              </span>
+            </Card.Title>
+            <span className="pd-btn-group">
               {modoGeneracion === "aleatorio" && (
-                <button
-                  onClick={generarGruposAleatorio}
-                  className="px-3 py-1 rounded-lg text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
-                >
+                <Button size="sm" onClick={generarGruposAleatorio}>
                   Regenerar
-                </button>
+                </Button>
               )}
-              <button
-                onClick={guardarGruposEnFirebase}
-                className="px-3 py-1 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition"
-              >
+              <Button size="sm" variant="primary" onClick={guardarGruposEnFirebase}>
                 Confirmar grupos
-              </button>
-            </div>
-          </div>
-          {grupos.map((g, gi) => (
-            <div key={gi} className="mb-3 last:mb-0">
-              <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-primary)" }}>
-                {g.nombre}
-              </p>
-              <div className="flex flex-col gap-1">
-                {g.parejas.map((p, pi) => (
-                  <div
-                    key={pi}
-                    className="text-sm rounded-lg px-3 py-2"
-                    style={{ color: "var(--text-primary)", backgroundColor: "var(--bg-card-hover)" }}
-                  >
-                    {p.nombrePareja || `${p.jugador1} / ${p.jugador2}`}
-                  </div>
-                ))}
+              </Button>
+            </span>
+          </Card.Row>
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {grupos.map((g, gi) => (
+              <div key={gi}>
+                <p className="heading-sm mb-2">{g.nombre}</p>
+                <ul className="flex flex-col gap-2">
+                  {g.parejas.map((p, pi) => (
+                    <li key={pi} className="rounded-md bg-surface-sunken px-3 py-2 body-md">
+                      {nombreDePareja(p)}
+                    </li>
+                  ))}
+                </ul>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </Card>
       )}
 
       {/* Liga confirmada */}
@@ -739,115 +893,27 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
         const grupo = grupos[0];
         const tabla = calcularTabla(grupo);
         const partidos = grupo.partidos || [];
-        const fechasMap = {};
-        partidos.forEach((p) => { const f = p.fecha || 1; if (!fechasMap[f]) fechasMap[f] = []; fechasMap[f].push(p); });
-        const fechasOrdenadas = Object.entries(fechasMap).sort(([a], [b]) => Number(a) - Number(b));
+        const fechasOrdenadas = partidosPorFecha(partidos);
 
         return (
           <>
-            {/* Position table */}
-            <div className="themed-card rounded-2xl p-5 border">
-              <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Tabla de posiciones</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-xs border-b border-[var(--border-card)]" style={{ color: "var(--text-muted)" }}>
-                      <th className="text-left py-2 pr-2">#</th>
-                      <th className="text-left py-2">Pareja</th>
-                      <th className="text-center py-2">PJ</th>
-                      <th className="text-center py-2">PG</th>
-                      <th className="text-center py-2">PP</th>
-                      <th className="text-center py-2">SF</th>
-                      <th className="text-center py-2">SC</th>
-                      <th className="text-center py-2">GF</th>
-                      <th className="text-center py-2">GC</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tabla.map((row, ri) => (
-                      <tr key={row.id} className="border-b border-[var(--border-card)]"
-                        style={ri === 0 && tabla[0].pg > 0 ? { backgroundColor: "rgba(34,197,94,0.08)" } : undefined}>
-                        <td className="py-2 pr-2 font-bold" style={{ color: ri === 0 && tabla[0].pg > 0 ? "var(--accent)" : "var(--text-muted)" }}>{ri + 1}</td>
-                        <td className="py-2 font-medium" style={{ color: "var(--text-primary)" }}>{ri === 0 && tabla[0].pg > 0 && "👑 "}{row.nombre}</td>
-                        <td className="text-center py-2" style={{ color: "var(--text-secondary)" }}>{row.pj}</td>
-                        <td className="text-center py-2 font-semibold text-green-600">{row.pg}</td>
-                        <td className="text-center py-2 text-red-400">{row.pp}</td>
-                        <td className="text-center py-2" style={{ color: "var(--text-secondary)" }}>{row.sf}</td>
-                        <td className="text-center py-2" style={{ color: "var(--text-secondary)" }}>{row.sc}</td>
-                        <td className="text-center py-2" style={{ color: "var(--text-secondary)" }}>{row.gf}</td>
-                        <td className="text-center py-2" style={{ color: "var(--text-secondary)" }}>{row.gc}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {/* Position table: la pelota marca al puntero cuando ya ganó algún partido */}
+            <Standings
+              grupo="Tabla de posiciones"
+              cuadroLabel={cuadroLabel}
+              columnas={columnasTabla}
+              rows={filasTabla(tabla, (row, ri) => ri === 0 && tabla[0].pg > 0)}
+              help={ayudaDesempate}
+            />
 
             {/* Matches by fecha */}
             {fechasOrdenadas.map(([fecha, matches]) => (
-              <div key={fecha} className="themed-card rounded-2xl p-5 border">
-                <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Fecha {fecha}</h2>
-                <div className="flex flex-col gap-2">
-                  {matches.map((p, pi) => {
-                    const globalIdx = partidos.indexOf(p);
-                    const ganador = getGanador(p.resultado);
-                    return (
-                      <div key={pi} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <p className={`text-sm font-medium ${ganador === 1 ? "text-green-700 font-bold" : ganador === 2 ? "text-red-400" : ""}`}
-                              style={!ganador ? { color: "var(--text-primary)" } : undefined}>
-                              {ganador === 1 && "🏆 "}{p.pareja1.nombrePareja || `${p.pareja1.jugador1} / ${p.pareja1.jugador2}`}
-                            </p>
-                            <p className="text-xs" style={{ color: "var(--text-muted)" }}>vs</p>
-                            <p className={`text-sm font-medium ${ganador === 2 ? "text-green-700 font-bold" : ganador === 1 ? "text-red-400" : ""}`}
-                              style={!ganador ? { color: "var(--text-primary)" } : undefined}>
-                              {ganador === 2 && "🏆 "}{p.pareja2.nombrePareja || `${p.pareja2.jugador1} / ${p.pareja2.jugador2}`}
-                            </p>
-                          </div>
-                          <div>
-                            {p.resultado ? (
-                              <div className="flex flex-col items-end gap-1">
-                                <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                                  {p.resultado.sets.map((s) => `${s.g1}-${s.g2}`).join(" / ")}
-                                </span>
-                                <button onClick={() => abrirEditarResultado(0, globalIdx)}
-                                  className="text-xs text-green-600 hover:underline">Editar</button>
-                              </div>
-                            ) : torneo.status === "en_curso" || torneo.status === "finalizado" ? (
-                              <button onClick={() => abrirEditarResultado(0, globalIdx)}
-                                className="px-3 py-1 rounded-lg text-xs font-semibold text-white hover:opacity-90 transition"
-                                style={{ backgroundColor: "var(--accent)" }}>
-                                Cargar resultado
-                              </button>
-                            ) : (
-                              <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
-                                Iniciá el torneo primero
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-2 mt-2">
-                          <input type="time" value={p.hora || ""}
-                            onChange={(e) => actualizarPartidoInfo(0, globalIdx, "hora", e.target.value)}
-                            className="border border-[var(--border-card)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500" />
-                          <input type="text" value={p.cancha || ""} placeholder="Cancha (ej: 1)"
-                            onChange={(e) => actualizarPartidoInfo(0, globalIdx, "cancha", e.target.value)}
-                            className="border border-[var(--border-card)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500 w-28" />
-                          {p.hora && p.cancha && (
-                            <a href={`https://wa.me/?text=${encodeURIComponent(`🎾 ¡Partido listo!\n\nTorneo: ${torneo.nombre}\n⏰ Hora: ${p.hora}\n📍 Cancha: ${p.cancha}\n\n${p.pareja1.nombrePareja || `${p.pareja1.jugador1} / ${p.pareja1.jugador2}`}\nvs\n${p.pareja2.nombrePareja || `${p.pareja2.jugador1} / ${p.pareja2.jugador2}`}\n\n¡Nos vemos en la cancha!`)}`}
-                              target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
-                              className="flex items-center justify-center w-8 h-8 rounded-lg transition hover:opacity-80"
-                              style={{ backgroundColor: "#25d366" }} title="Enviar por WhatsApp">
-                              <span className="text-white text-xs font-bold">W</span>
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <section key={fecha} className="flex flex-col gap-3">
+                <h3 className="heading-sm">Fecha {fecha}</h3>
+                <ul className="grid gap-4 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
+                  {matches.map((p) => renderPartido(0, partidos.indexOf(p), p, `Fecha ${fecha}`))}
+                </ul>
+              </section>
             ))}
           </>
         );
@@ -858,359 +924,157 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
         grupos.map((grupo, gi) => {
           const tabla = calcularTabla(grupo);
           return (
-            <div
-              key={grupo.id || gi}
-              className="themed-card rounded-2xl p-5 border"
-            >
-              <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-                {grupo.nombre}
-              </h2>
-              <div className="overflow-x-auto mb-4">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-xs border-b border-[var(--border-card)]" style={{ color: "var(--text-muted)" }}>
-                      <th className="text-left py-2 pr-2">#</th>
-                      <th className="text-left py-2">Pareja</th>
-                      <th className="text-center py-2">PJ</th>
-                      <th className="text-center py-2">PG</th>
-                      <th className="text-center py-2">PP</th>
-                      <th className="text-center py-2">SF</th>
-                      <th className="text-center py-2">SC</th>
-                      <th className="text-center py-2">GF</th>
-                      <th className="text-center py-2">GC</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tabla.map((row, ri) => (
-                      <tr
-                        key={row.id}
-                        className="border-b border-[var(--border-card)]"
-                        style={ri < parejasQueAvanzan ? { backgroundColor: "rgba(34,197,94,0.08)" } : undefined}
-                      >
-                        <td className="py-2 pr-2 font-bold" style={{ color: "var(--text-muted)" }}>
-                          {ri + 1}
-                        </td>
-                        <td className="py-2 font-medium" style={{ color: "var(--text-primary)" }}>
-                          {row.nombre}
-                        </td>
-                        <td className="text-center py-2">{row.pj}</td>
-                        <td className="text-center py-2 font-semibold text-green-600">
-                          {row.pg}
-                        </td>
-                        <td className="text-center py-2 text-red-400">
-                          {row.pp}
-                        </td>
-                        <td className="text-center py-2">{row.sf}</td>
-                        <td className="text-center py-2">{row.sc}</td>
-                        <td className="text-center py-2">{row.gf}</td>
-                        <td className="text-center py-2">{row.gc}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-muted)" }}>
-                Partidos
-              </h3>
-              <div className="flex flex-col gap-2">
-                {(grupo.partidos || []).map((p, pi) => {
-                  const ganador = getGanador(p.resultado);
-                  return (
-                    <div key={pi} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <p
-                            className={`text-sm font-medium ${ganador === 1 ? "text-green-700 font-bold" : ganador === 2 ? "text-red-400" : ""}`}
-                          style={!ganador ? { color: "var(--text-primary)" } : undefined}
-                          >
-                            {ganador === 1 && "🏆 "}
-                            {p.pareja1.nombrePareja ||
-                              `${p.pareja1.jugador1} / ${p.pareja1.jugador2}`}
-                          </p>
-                          <p className="text-xs" style={{ color: "var(--text-muted)" }}>vs</p>
-                          <p
-                            className={`text-sm font-medium ${ganador === 2 ? "text-green-700 font-bold" : ganador === 1 ? "text-red-400" : ""}`}
-                            style={!ganador ? { color: "var(--text-primary)" } : undefined}
-                          >
-                            {ganador === 2 && "🏆 "}
-                            {p.pareja2.nombrePareja ||
-                              `${p.pareja2.jugador1} / ${p.pareja2.jugador2}`}
-                          </p>
-                        </div>
-                        <div>
-                          {p.resultado ? (
-                            <div className="flex flex-col items-end gap-1">
-                              <div className="flex flex-wrap gap-1 justify-end">
-                                {p.resultado.sets.map((s, si) => (
-                                  <span
-                                    key={si}
-                                    className="text-sm font-bold rounded-lg px-2 py-0.5 themed-card border border-[var(--border-card)]"
-                                    style={{ color: "var(--text-primary)" }}
-                                  >
-                                    {s.g1}-{s.g2}
-                                    {s.tb1 !== undefined &&
-                                      s.tb2 !== undefined && (
-                                        <span className="text-xs font-normal text-orange-500 ml-1">
-                                          TB {s.tb1}-{s.tb2}
-                                        </span>
-                                      )}
-                                  </span>
-                                ))}
-                              </div>
-                              <button
-                                onClick={() => abrirEditarResultado(gi, pi)}
-                                className="text-xs text-green-600 hover:underline"
-                              >
-                                Editar
-                              </button>
-                            </div>
-                          ) : torneo.status === "en_curso" || torneo.status === "finalizado" ? (
-                            <button onClick={() => abrirEditarResultado(gi, pi)}
-                              className="px-3 py-1 rounded-lg text-xs font-semibold text-white hover:opacity-90 transition"
-                              style={{ backgroundColor: "var(--accent)" }}>
-                              Cargar resultado
-                            </button>
-                          ) : (
-                            <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
-                              Iniciá el torneo primero
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {/* Horario y cancha */}
-                      <div className="flex gap-2 mt-2">
-                        <input
-                          type="time"
-                          value={p.hora || ""}
-                          onChange={(e) =>
-                            actualizarPartidoInfo(
-                              gi,
-                              pi,
-                              "hora",
-                              e.target.value,
-                            )
-                          }
-                          className="border border-[var(--border-card)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
-                          placeholder="Hora"
-                        />
-                        <input
-                          type="text"
-                          value={p.cancha || ""}
-                          onChange={(e) =>
-                            actualizarPartidoInfo(
-                              gi,
-                              pi,
-                              "cancha",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="Cancha (ej: 1)"
-                          className="border border-[var(--border-card)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500 w-28"
-                        />
-                        {p.hora && p.cancha && (
-                          <a
-                            href={`https://wa.me/?text=${encodeURIComponent(
-                              `🎾 ¡Partido listo!\n\nTorneo: ${torneo.nombre}\n⏰ Hora: ${p.hora}\n📍 Cancha: ${p.cancha}\n\n${p.pareja1.nombrePareja || `${p.pareja1.jugador1} / ${p.pareja1.jugador2}`}\nvs\n${p.pareja2.nombrePareja || `${p.pareja2.jugador1} / ${p.pareja2.jugador2}`}\n\n¡Nos vemos en la cancha!`
-                            )}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex items-center justify-center w-8 h-8 rounded-lg transition hover:opacity-80"
-                            style={{ backgroundColor: "#25d366" }}
-                            title="Enviar por WhatsApp"
-                          >
-                            <span className="text-white text-xs font-bold">W</span>
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <section key={grupo.id || gi} className="flex flex-col gap-4">
+              <Standings
+                grupo={grupo.nombre}
+                cuadroLabel={cuadroLabel}
+                columnas={columnasTabla}
+                rows={filasTabla(tabla, (row, ri) => ri < parejasQueAvanzan)}
+                help={ayudaDesempate}
+              />
+              <h3 className="pd-eyebrow">Partidos</h3>
+              <ul className="grid gap-4 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
+                {(grupo.partidos || []).map((p, pi) => renderPartido(gi, pi, p, grupo.nombre))}
+              </ul>
+            </section>
           );
         })}
 
       {/* Modal cargar resultado */}
       {editandoResultado && partido && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="themed-card rounded-2xl p-6 w-full max-w-sm mx-4">
-            <h3 className="font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
+        <div className="pd-backdrop z-50">
+          <div
+            ref={dialogoRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={tituloDialogoId}
+            className="pd-dialog max-h-full overflow-y-auto outline-none"
+          >
+            <h2 className="pd-dialog-title" id={tituloDialogoId}>
               Cargar resultado
-            </h3>
+            </h2>
             {partido.resultado && (
-              <p className="text-xs mb-2 rounded-lg px-3 py-2" style={{ color: "var(--text-muted)", backgroundColor: "var(--bg-card-hover)" }}>
-                Editar un resultado no vuelve a otorgar puntos.
-              </p>
+              <p className="pd-help mb-2">Editar un resultado no vuelve a otorgar puntos.</p>
             )}
-            <div className="mb-4 text-sm">
-              <p className="font-medium" style={{ color: "var(--text-primary)" }}>
-                {partido.pareja1.nombrePareja ||
-                  `${partido.pareja1.jugador1} / ${partido.pareja1.jugador2}`}
-              </p>
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>vs</p>
-              <p className="font-medium" style={{ color: "var(--text-primary)" }}>
-                {partido.pareja2.nombrePareja ||
-                  `${partido.pareja2.jugador1} / ${partido.pareja2.jugador2}`}
-              </p>
-            </div>
+            <p className="pd-dialog-body">
+              <span className="font-semibold text-ink">{nombreDePareja(partido.pareja1)}</span>
+              <span className="pd-ink-3"> vs </span>
+              <span className="font-semibold text-ink">{nombreDePareja(partido.pareja2)}</span>
+            </p>
 
             {errorModal && (
-              <div className="rounded-lg px-3 py-2 mb-3 text-xs text-red-600 border"
-                style={{ backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.2)" }}>
+              <p className="pd-error mt-3" role="alert">
                 {errorModal}
-              </div>
+              </p>
             )}
 
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <span className="w-12"></span>
-                <span className="w-16 text-xs text-center text-green-600 font-semibold truncate">
+            <div className="mt-4 flex flex-col gap-3">
+              <div className="flex items-center gap-3" aria-hidden="true">
+                <span className="label w-16 truncate text-center pd-ink-3">
                   {partido.pareja1.jugador1?.split(" ").pop() ||
                     partido.pareja1.jugador1}
                 </span>
-                <span></span>
-                <span className="w-16 text-xs text-center text-green-600 font-semibold truncate">
+                <span className="w-4" />
+                <span className="label w-16 truncate text-center pd-ink-3">
                   {partido.pareja2.jugador1?.split(" ").pop() ||
                     partido.pareja2.jugador1}
                 </span>
               </div>
               {setsInput.slice(0, setsVisibles()).map((set, si) => (
-                <div key={si}>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm w-12" style={{ color: "var(--text-muted)" }}>
-                      Set {si + 1}
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={set.g1}
-                      onChange={(e) => {
-                        const n = [...setsInput];
-                        n[si] = { ...n[si], g1: Number(e.target.value) };
-                        setSetsInput(n);
-                      }}
-                      className="w-16 border border-[var(--border-card)] rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                    <span style={{ color: "var(--text-muted)" }}>-</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={set.g2}
-                      onChange={(e) => {
-                        const n = [...setsInput];
-                        n[si] = { ...n[si], g2: Number(e.target.value) };
-                        setSetsInput(n);
-                      }}
-                      className="w-16 border border-[var(--border-card)] rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-                  <div className="ml-12 mt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const n = [...tiebreakInput];
-                        n[si] = {
-                          ...n[si],
-                          activo: !n[si].activo,
-                          tb1: 0,
-                          tb2: 0,
-                        };
-                        setTiebreakInput(n);
-                      }}
-                      className={`text-xs font-semibold transition ${tiebreakInput[si]?.activo ? "text-orange-600" : ""}`}
-                      style={!tiebreakInput[si]?.activo ? { color: "var(--text-muted)" } : undefined}
-                    >
-                      {tiebreakInput[si]?.activo
-                        ? "✓ Tie break"
-                        : "+ Tie break"}
-                    </button>
-                    {tiebreakInput[si]?.activo && (
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-xs text-orange-500 w-12">TB</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={tiebreakInput[si].tb1}
-                          onChange={(e) => {
-                            const n = [...tiebreakInput];
-                            n[si] = { ...n[si], tb1: Number(e.target.value) };
-                            setTiebreakInput(n);
-                          }}
-                          className="w-16 border border-orange-200 rounded-lg px-3 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-orange-400"
-                        />
-                        <span style={{ color: "var(--text-muted)" }}>-</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={tiebreakInput[si].tb2}
-                          onChange={(e) => {
-                            const n = [...tiebreakInput];
-                            n[si] = { ...n[si], tb2: Number(e.target.value) };
-                            setTiebreakInput(n);
-                          }}
-                          className="w-16 border border-orange-200 rounded-lg px-3 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-orange-400"
-                        />
-                      </div>
-                    )}
-                  </div>
+                <div key={si} className="flex flex-col gap-2">
+                  <Field as="div" label={`Set ${si + 1}`}>
+                    <div className="flex items-center gap-3">
+                      <Input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        className="w-16! text-center"
+                        aria-label={`Set ${si + 1}, games de ${nombreDePareja(partido.pareja1)}`}
+                        value={set.g1}
+                        onChange={(e) => {
+                          const n = [...setsInput];
+                          n[si] = { ...n[si], g1: Number(e.target.value) };
+                          setSetsInput(n);
+                        }}
+                      />
+                      <span className="w-4 text-center pd-ink-3" aria-hidden="true">–</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        className="w-16! text-center"
+                        aria-label={`Set ${si + 1}, games de ${nombreDePareja(partido.pareja2)}`}
+                        value={set.g2}
+                        onChange={(e) => {
+                          const n = [...setsInput];
+                          n[si] = { ...n[si], g2: Number(e.target.value) };
+                          setSetsInput(n);
+                        }}
+                      />
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-pressed={!!tiebreakInput[si]?.activo}
+                        icon={icono(tiebreakInput[si]?.activo ? Check : Plus)}
+                        onClick={() => {
+                          const n = [...tiebreakInput];
+                          n[si] = {
+                            ...n[si],
+                            activo: !n[si].activo,
+                            tb1: 0,
+                            tb2: 0,
+                          };
+                          setTiebreakInput(n);
+                        }}
+                      >
+                        Tie break
+                      </Button>
+                    </div>
+                  </Field>
+                  {tiebreakInput[si]?.activo && (
+                    <div className="flex items-center gap-3">
+                      <Input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        className="w-16! text-center"
+                        aria-label={`Tie break del set ${si + 1}, puntos de ${nombreDePareja(partido.pareja1)}`}
+                        value={tiebreakInput[si].tb1}
+                        onChange={(e) => {
+                          const n = [...tiebreakInput];
+                          n[si] = { ...n[si], tb1: Number(e.target.value) };
+                          setTiebreakInput(n);
+                        }}
+                      />
+                      <span className="w-4 text-center pd-ink-3" aria-hidden="true">–</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        className="w-16! text-center"
+                        aria-label={`Tie break del set ${si + 1}, puntos de ${nombreDePareja(partido.pareja2)}`}
+                        value={tiebreakInput[si].tb2}
+                        onChange={(e) => {
+                          const n = [...tiebreakInput];
+                          n[si] = { ...n[si], tb2: Number(e.target.value) };
+                          setTiebreakInput(n);
+                        }}
+                      />
+                      <span className="caption text-warning">Tie break</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
-            <div className="flex flex-col gap-2 mt-4">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setEditandoResultado(null);
-                    setSetsInput([]);
-                    setTiebreakInput([]);
-                    setErrorModal("");
-                  }}
-                  className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)] transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => guardarResultado(false)}
-                  className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition"
-                >
-                  Guardar
-                </button>
-              </div>
-              {(() => {
-                if (!editandoResultado) return null;
-                const { grupoIdx, partidoIdx } = editandoResultado;
-                const partidosGrupo = grupos[grupoIdx]?.partidos || [];
-                const siguienteIdx = partidosGrupo.findIndex((p, i) => i > partidoIdx && !p.resultado);
-                let siguienteGrupo = null;
-                if (siguienteIdx === -1) {
-                  for (let gi = grupoIdx + 1; gi < grupos.length; gi++) {
-                    const pi = (grupos[gi]?.partidos || []).findIndex(p => !p.resultado);
-                    if (pi !== -1) { siguienteGrupo = { grupoIdx: gi, partidoIdx: pi }; break; }
-                  }
-                }
-                const haySiguiente = siguienteIdx !== -1 || siguienteGrupo;
-                if (!haySiguiente) return null;
-                return (
-                  <button
-                    onClick={async () => {
-                      const err = validarResultado();
-                      if (err) { setErrorModal(err); return; }
-                      await guardarResultado(true);
-                      if (siguienteIdx !== -1) {
-                        abrirEditarResultado(grupoIdx, siguienteIdx);
-                      } else if (siguienteGrupo) {
-                        abrirEditarResultado(siguienteGrupo.grupoIdx, siguienteGrupo.partidoIdx);
-                      }
-                    }}
-                    className="px-4 py-2 rounded-xl text-sm font-semibold transition border-2"
-                    style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
-                  >
-                    Guardar y cargar siguiente →
-                  </button>
-                );
-              })()}
+            <div className="pd-dialog-actions">
+              <Button onClick={cerrarEditarResultado}>Cancelar</Button>
+              {siguiente && (
+                <Button onClick={guardarYCargarSiguiente}>Guardar y cargar siguiente</Button>
+              )}
+              <Button variant="primary" onClick={() => guardarResultado(false)}>
+                Guardar
+              </Button>
             </div>
           </div>
         </div>

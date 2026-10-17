@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Check, Lock, Plus, Settings, Trash2, X } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import PerfilIncompleto from "../../components/PerfilIncompleto";
 import {
@@ -20,6 +21,7 @@ import { formatPrecio } from "../../utils/format";
 import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
+import { Badge, Button, Card, Field, Input, Pills, Select, SlotCell, Tabs } from "../../components/ui";
 
 const superficies = ["Cemento", "Sintético", "Césped", "Otro"];
 
@@ -28,12 +30,13 @@ const horasDelDia = Array.from({ length: 24 }, (_, i) => {
   return `${h}:00`;
 });
 
-const inputClass =
-  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
-const selectClass =
-  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
-const labelClass = "text-xs font-semibold mb-1 block";
 const diasLabels = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+// Las horas como pastillas multi-selección (pd-pills con aria-pressed)
+const itemsHoras = horasDelDia.map((h) => ({ value: h, label: h }));
+
+// El motivo de un bloqueo se guarda como "🔒 Motivo" (dato); acá solo se saca el candado para mostrarlo
+const motivoDeBloqueo = (nombre) => (nombre || "").replace(/^🔒\s*/, "");
 
 function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData }) {
   const [weekData, setWeekData] = useState({});
@@ -79,65 +82,73 @@ function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData
     );
   };
 
-  if (loadingWeek) return <div className="text-center py-8" style={{ color: "var(--text-muted)" }}>Cargando semana...</div>;
+  if (loadingWeek) {
+    return (
+      <div className="flex flex-col gap-3" aria-busy="true" aria-label="Cargando semana">
+        <div className="pd-skeleton h-5 w-32" />
+        <div className="pd-skeleton h-64 w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  const columnas = { gridTemplateColumns: "56px repeat(7, minmax(88px, 1fr))" };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
       {canchas.map((cancha) => {
         const horasCancha = cancha.horariosDisponibles || [];
         if (horasCancha.length === 0) return null;
         return (
           <div key={cancha.id}>
-            <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>{cancha.nombre}</p>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b" style={{ borderColor: "var(--border-card)" }}>
-                  <th className="text-left py-2 pr-2" style={{ color: "var(--text-muted)" }}>Hora</th>
-                  {dias.map((d) => (
-                    <th key={d.date} className="text-center py-2 px-1" style={{ color: d.date === fechaBase ? "var(--accent)" : "var(--text-muted)" }}>
-                      <div>{d.label}</div>
-                      <div className="font-bold">{d.dayNum}</div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
+            <p className="heading-sm m-0 mb-2">{cancha.nombre}</p>
+            <div className="overflow-x-auto">
+              <div className="pd-grid pd-grid-quiet min-w-[680px]" style={columnas} role="grid" aria-label={`Semana de ${cancha.nombre}`}>
+                <div />
+                {dias.map((d) => (
+                  <div
+                    key={d.date}
+                    className={["pd-grid-head", d.date === fechaBase && "text-ink!"].filter(Boolean).join(" ")}
+                    aria-current={d.date === fechaBase ? "date" : undefined}
+                  >
+                    {d.label}
+                    <span className="block font-display text-[18px] leading-5 font-bold normal-case tracking-normal">{d.dayNum}</span>
+                  </div>
+                ))}
                 {horasCancha.map((hora) => (
-                  <tr key={hora} className="border-b" style={{ borderColor: "var(--border-card)" }}>
-                    <td className="py-1.5 pr-2 font-medium" style={{ color: "var(--text-muted)" }}>{hora}</td>
+                  <div key={hora} className="contents">
+                    <div className="pd-grid-time">{hora}</div>
                     {dias.map((d) => {
                       const reservas = weekData[d.date] || [];
                       const reserva = reservas.find((r) => r.canchaId === cancha.id && r.hora === hora && r.status !== "cancelada");
                       const turnoFijo = esTurnoFijoSemana(cancha.id, hora, d.date);
 
+                      if (reserva && reserva.status === "bloqueado") {
+                        return <SlotCell key={d.date} estado="bloqueada" linea2={motivoDeBloqueo(reserva.nombreJugador) || undefined} />;
+                      }
                       if (reserva) {
                         return (
-                          <td key={d.date} className="text-center py-1.5 px-1">
-                            <div className={`rounded px-1 py-0.5 ${reserva.status === "pendiente" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
-                              <span className="font-semibold truncate block" style={{ maxWidth: "60px", fontSize: "9px" }}>
-                                {reserva.nombreJugador?.split(" ")[0] || "Res"}
-                              </span>
-                            </div>
-                          </td>
+                          <SlotCell
+                            key={d.date}
+                            estado={reserva.status === "pendiente" ? "pendiente" : "reservada"}
+                            linea1={reserva.nombreJugador?.split(" ")[0] || undefined}
+                            linea2={reserva.status === "pendiente" ? "pendiente" : "confirmada"}
+                          />
                         );
                       }
                       if (turnoFijo) {
-                        return (
-                          <td key={d.date} className="text-center py-1.5 px-1">
-                            <div className="rounded px-1 py-0.5 bg-purple-100 text-purple-700" style={{ fontSize: "9px" }}>Fijo</div>
-                          </td>
-                        );
+                        return <SlotCell key={d.date} estado="fijo" />;
                       }
+                      // Vista de solo lectura: la celda libre es una celda quieta, no un botón
                       return (
-                        <td key={d.date} className="text-center py-1.5 px-1">
-                          <span className="text-green-500 font-semibold" style={{ fontSize: "9px" }}>•</span>
-                        </td>
+                        <div key={d.date} className="pd-slot pd-slot-free cursor-default! hover:border-line! hover:text-ink-3!">
+                          Libre
+                        </div>
                       );
                     })}
-                  </tr>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </div>
           </div>
         );
       })}
@@ -145,11 +156,11 @@ function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData
   );
 }
 
-const statusBadge = {
-  pendiente: "bg-yellow-100 text-yellow-700",
-  confirmada: "bg-green-100 text-green-700",
-  cancelada: "bg-red-100 text-red-500",
-  bloqueado: "bg-red-100 text-red-600",
+const statusTone = {
+  pendiente: "warning",
+  confirmada: "success",
+  cancelada: "danger",
+  bloqueado: "neutral",
 };
 
 const statusLabel = {
@@ -265,15 +276,25 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
   const confirmadas = reservas.filter((r) => r.status === "confirmada").length;
 
   if (loading) {
-    return <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando reservas...</div>;
+    return (
+      <div className="flex flex-col gap-4" aria-busy="true" aria-label="Cargando reservas">
+        <div className="flex gap-2">
+          <div className="pd-skeleton h-9 w-28 rounded-pill" />
+          <div className="pd-skeleton h-9 w-28 rounded-pill" />
+          <div className="pd-skeleton h-9 w-24 rounded-pill" />
+        </div>
+        <div className="pd-skeleton h-28 w-full rounded-lg" />
+        <div className="pd-skeleton h-28 w-full rounded-lg" />
+      </div>
+    );
   }
 
   const filtros = [
-    { key: "pendiente", label: `Pendientes (${pendientes})`, active: "bg-yellow-100 text-yellow-700" },
-    { key: "confirmada", label: `Confirmadas (${confirmadas})`, active: "bg-green-100 text-green-700" },
-    { key: "cancelada", label: "Canceladas", active: "bg-red-100 text-red-500" },
-    { key: "bloqueado", label: "Bloqueados", active: "bg-red-100 text-red-600" },
-    { key: "todas", label: "Todas", active: "bg-[var(--bg-card-hover)] text-[var(--text-primary)]" },
+    { value: "pendiente", label: "Pendientes", count: pendientes },
+    { value: "confirmada", label: "Confirmadas", count: confirmadas },
+    { value: "cancelada", label: "Canceladas" },
+    { value: "bloqueado", label: "Bloqueados" },
+    { value: "todas", label: "Todas" },
   ];
 
   const filtroLabel = { pendiente: "pendientes", confirmada: "confirmadas", cancelada: "canceladas", bloqueado: "bloqueadas", todas: "" };
@@ -281,97 +302,79 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
   return (
     <div className="flex flex-col gap-4">
       {/* Filtros */}
-      <div className="flex flex-wrap gap-2 items-center">
-        {filtros.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFiltro(f.key)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-              filtro === f.key
-                ? f.active
-                : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap gap-3 items-center">
+        <Pills items={filtros} value={filtro} onChange={setFiltro} ariaLabel="Estado de la reserva" />
         <div className="flex items-center gap-1 ml-auto">
-          <input
+          <Input
             type="date"
             value={fechaFiltro}
             onChange={(e) => setFechaFiltro(e.target.value)}
-            className="themed-input rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
+            aria-label="Filtrar por fecha"
+            className="h-9! w-auto!"
           />
           {fechaFiltro && (
-            <button
-              onClick={() => setFechaFiltro("")}
-              className="text-xs font-semibold hover:opacity-80 px-2 py-1.5 rounded-lg"
-              style={{ color: "var(--text-muted)" }}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setFechaFiltro("")}>
               Limpiar
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
       {/* Lista */}
       {filtradas.length === 0 ? (
-        <div className="themed-card rounded-2xl p-8 border text-center">
-          <div className="text-4xl mb-3">📋</div>
-          <p className="font-semibold" style={{ color: "var(--text-primary)" }}>
-            No hay reservas {filtroLabel[filtro]}
-          </p>
-        </div>
+        <Card className="text-center py-10">
+          <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
+          <p className="heading-sm m-0">No hay reservas {filtroLabel[filtro]}</p>
+        </Card>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="grid gap-4 md:grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
           {filtradas.map((r) => (
-            <div key={r.id} className="themed-card rounded-2xl p-4 border">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="font-semibold" style={{ color: "var(--text-primary)" }}>
-                    {r.nombreJugador || "Sin nombre"}
-                  </p>
-                  <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    {getCanchaName(r.canchaId)} · {formatFecha(r.fecha)} · {r.hora}
-                  </p>
-                  {(r.email || r.telefono) && (
-                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                      {r.email}{r.email && r.telefono ? " · " : ""}{r.telefono}
-                    </p>
+            <Card key={r.id}>
+              <Card.Row className="items-start!">
+                <Card.Eyebrow className="pd-tnum">
+                  {getCanchaName(r.canchaId)} · {formatFecha(r.fecha)} · {r.hora}
+                </Card.Eyebrow>
+                <Badge tone={statusTone[r.status] || statusTone.pendiente} dot>
+                  {statusLabel[r.status] || "Pendiente"}
+                </Badge>
+              </Card.Row>
+              <Card.Title className="mt-2! truncate">{r.nombreJugador || "Sin nombre"}</Card.Title>
+              {(r.email || r.telefono) && (
+                <Card.Meta className="truncate">
+                  {r.email}{r.email && r.telefono ? " · " : ""}{r.telefono}
+                </Card.Meta>
+              )}
+              <Card.Foot className="flex-wrap">
+                {r.precio != null && <span className="numeral-md pd-tnum">{formatPrecio(r.precio)}</span>}
+                <div className="pd-btn-group ml-auto">
+                  {r.status === "pendiente" && (
+                    <>
+                      <Button size="sm" icon={<Check className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleConfirmar(r.id)}>
+                        Confirmar
+                      </Button>
+                      <Button size="sm" variant="ghost" icon={<X className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleRechazar(r.id)}>
+                        Rechazar
+                      </Button>
+                    </>
+                  )}
+                  {r.status === "confirmada" && (
+                    <Button size="sm" variant="ghost" icon={<X className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleRechazar(r.id)}>
+                      Cancelar
+                    </Button>
+                  )}
+                  {r.status === "bloqueado" && (
+                    <Button size="sm" onClick={() => handleDesbloquear(r.id)}>
+                      Desbloquear
+                    </Button>
+                  )}
+                  {r.status === "cancelada" && (
+                    <Button size="sm" variant="ghost" icon={<Trash2 className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleEliminar(r.id)}>
+                      Eliminar
+                    </Button>
                   )}
                 </div>
-                <div className="text-right flex flex-col items-end gap-1">
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusBadge[r.status] || statusBadge.pendiente}`}>
-                    {statusLabel[r.status] || "Pendiente"}
-                  </span>
-                  {r.precio != null && (
-                    <p className="font-bold text-sm" style={{ color: "var(--accent)" }}>{formatPrecio(r.precio)}</p>
-                  )}
-                  <div className="flex gap-2 mt-1">
-                    {r.status === "pendiente" && (
-                      <>
-                        <button onClick={() => handleConfirmar(r.id)}
-                          className="text-xs font-semibold text-green-600 hover:underline">Confirmar</button>
-                        <button onClick={() => handleRechazar(r.id)}
-                          className="text-xs font-semibold text-red-400 hover:text-red-600">Rechazar</button>
-                      </>
-                    )}
-                    {r.status === "confirmada" && (
-                      <button onClick={() => handleRechazar(r.id)}
-                        className="text-xs font-semibold text-red-400 hover:text-red-600">Cancelar</button>
-                    )}
-                    {r.status === "bloqueado" && (
-                      <button onClick={() => handleDesbloquear(r.id)}
-                        className="text-xs font-semibold text-red-400 hover:text-red-600">Desbloquear</button>
-                    )}
-                    {r.status === "cancelada" && (
-                      <button onClick={() => handleEliminar(r.id)}
-                        className="text-xs font-semibold text-red-400 hover:text-red-600">Eliminar</button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+              </Card.Foot>
+            </Card>
           ))}
         </div>
       )}
@@ -660,23 +663,21 @@ export default function Canchas() {
 
   if (loading) {
     return (
-      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
-        Cargando...
+      <div className="flex flex-col gap-4" aria-busy="true" aria-label="Cargando">
+        <div className="pd-skeleton h-8 w-56" />
+        <div className="pd-skeleton h-10 w-72" />
+        <div className="pd-skeleton h-40 w-full rounded-lg" />
       </div>
     );
   }
 
   if (!club) {
     return (
-      <div className="text-center py-16 themed-card rounded-2xl border">
-        <div className="text-5xl mb-4">🏟️</div>
-        <p className="font-medium" style={{ color: "var(--text-muted)" }}>
-          No tenés un club registrado
-        </p>
-        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-          Registrate como club para gestionar canchas y turnos
-        </p>
-      </div>
+      <Card className="text-center py-12">
+        <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
+        <p className="heading-sm m-0">No tenés un club registrado</p>
+        <p className="body-sm text-ink-2 mt-1 m-0">Registrate como club para gestionar canchas y turnos</p>
+      </Card>
     );
   }
 
@@ -684,71 +685,140 @@ export default function Canchas() {
     return <PerfilIncompleto tipo="club" ruta="/admin/configuracion" />;
   }
 
+  // Un solo botón lime por pantalla: el formulario abierto se lo lleva; si no, el panel de configuración;
+  // si no, "Nueva cancha" en la cabecera.
+  const primariaEn = mostrarForm ? "form" : mostrarConfig ? "config" : "header";
+
+  // Lo que comparten el formulario de alta y el de edición: presets de horarios, pastillas de horas,
+  // precio para todos y la tabla de precio por horario. Función, no componente, así no se desmonta en cada render.
+  function editorHorarios({ horarios, precioBase, setHorarios, toggleHora, setPrecioHora, batchId }) {
+    const aplicarPreset = (desde, hasta) => {
+      const nuevos = {};
+      for (let h = desde; h <= hasta; h++) nuevos[`${h.toString().padStart(2, "0")}:00`] = precioBase || 0;
+      setHorarios(nuevos);
+    };
+    const horasElegidas = Object.keys(horarios).sort();
+    return (
+      <Field label="Horarios y precios" as="div">
+        <div className="pd-btn-group">
+          <Button type="button" size="sm" onClick={() => aplicarPreset(7, 23)}>07:00 – 23:00</Button>
+          <Button type="button" size="sm" onClick={() => aplicarPreset(8, 22)}>08:00 – 22:00</Button>
+          <Button type="button" size="sm" onClick={() => aplicarPreset(9, 21)}>09:00 – 21:00</Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setHorarios({})}>Limpiar</Button>
+        </div>
+        <Pills
+          multi
+          items={itemsHoras}
+          value={horasElegidas}
+          onChange={toggleHora}
+          ariaLabel="Horas disponibles"
+          className="mt-2"
+        />
+        {horasElegidas.length > 0 && (
+          <div className="mt-3 rounded-md bg-surface-sunken p-3">
+            <div className="flex flex-wrap items-end gap-2">
+              <Field label="Precio para todos" className="flex-1 min-w-[160px]">
+                <Input type="number" min="0" inputMode="numeric" placeholder="Ej: 15000" id={batchId} className="h-9!" />
+              </Field>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  const precio = Number(document.getElementById(batchId).value);
+                  if (precio >= 0) {
+                    const nuevos = { ...horarios };
+                    Object.keys(nuevos).forEach((h) => { nuevos[h] = precio; });
+                    setHorarios(nuevos);
+                  }
+                }}
+              >
+                Aplicar
+              </Button>
+            </div>
+            <p className="pd-help mt-2 m-0">Aplicá un precio a todos, después ajustá individualmente</p>
+          </div>
+        )}
+        {horasElegidas.length > 0 && (
+          <div className="pd-table-wrap mt-3">
+            <table className="pd-table">
+              <thead>
+                <tr>
+                  <th>Hora</th>
+                  <th className="num">Precio</th>
+                </tr>
+              </thead>
+              <tbody>
+                {horasElegidas.map((hora) => (
+                  <tr key={hora}>
+                    <td className="py-1!">{hora}</td>
+                    <td className="num py-1!">
+                      <Input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        value={horarios[hora]}
+                        onChange={(e) => setPrecioHora(hora, e.target.value)}
+                        aria-label={`Precio a las ${hora}`}
+                        className="h-9! w-32! text-right pd-tnum"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="pd-help m-0">{horasElegidas.length} horarios seleccionados</p>
+      </Field>
+    );
+  }
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h1
-          className="text-xl font-bold"
-          style={{ color: "var(--text-primary)" }}
-        >
-          Canchas y turnos
-        </h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setMostrarConfig(!mostrarConfig)}
-            className="px-3 py-2 rounded-xl text-sm font-semibold transition hover:opacity-80"
-            style={{
-              backgroundColor: "var(--bg-card)",
-              color: "var(--text-primary)",
-              border: "1px solid var(--border-card)",
-            }}
-          >
-            ⚙ Config
-          </button>
-          <button
-            onClick={() => setMostrarForm(!mostrarForm)}
-            className="text-white px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90 transition"
-            style={{ backgroundColor: "var(--accent)" }}
-          >
-            + Nueva cancha
-          </button>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h1 className="heading-lg m-0">Canchas y turnos</h1>
+        {tabCanchas === "Canchas" && (
+          <div className="pd-btn-group">
+            <Button
+              onClick={() => setMostrarConfig(!mostrarConfig)}
+              aria-expanded={mostrarConfig}
+              icon={<Settings className="pd-icon" size={20} aria-hidden="true" />}
+            >
+              Configuración
+            </Button>
+            <Button
+              variant={primariaEn === "header" ? "primary" : "secondary"}
+              onClick={() => setMostrarForm(!mostrarForm)}
+              aria-expanded={mostrarForm}
+              icon={<Plus className="pd-icon" size={20} aria-hidden="true" />}
+            >
+              Nueva cancha
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
-      <div
-        className="flex gap-2 mb-6 border-b"
-        style={{ borderColor: "var(--border-card)" }}
-      >
-        {["Canchas", "Reservas", "Turnos fijos"].map((t) => (
-          <button
-            key={t}
-            onClick={() => setTabCanchas(t)}
-            className={`px-4 py-2 text-sm font-semibold transition border-b-2 -mb-px ${
-              tabCanchas === t
-                ? "border-green-600 text-green-600"
-                : "border-transparent hover:opacity-80"
-            }`}
-            style={tabCanchas !== t ? { color: "var(--text-muted)" } : {}}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        items={[
+          { value: "Canchas", label: "Canchas" },
+          { value: "Reservas", label: "Reservas" },
+          { value: "Turnos fijos", label: "Turnos fijos" },
+        ]}
+        value={tabCanchas}
+        onChange={setTabCanchas}
+        ariaLabel="Secciones de canchas y turnos"
+        className="mb-6"
+      />
 
       {tabCanchas === "Canchas" && (
         <>
           {/* Configuración del club */}
           {mostrarConfig && (
-            <div className="themed-card rounded-2xl p-5 border mb-4">
-              <h2
-                className="font-semibold mb-3"
-                style={{ color: "var(--text-primary)" }}
-              >
-                Configuración de reservas
-              </h2>
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-3">
+            <Card className="mb-4">
+              <Card.Title>Configuración de reservas</Card.Title>
+              <div className="flex flex-col gap-3 mt-3">
+                <label className="flex items-center gap-3 pd-label">
                   <input
                     type="checkbox"
                     checked={configForm.reservaDirecta}
@@ -758,26 +828,16 @@ export default function Canchas() {
                         reservaDirecta: e.target.checked,
                       })
                     }
-                    className="w-4 h-4 accent-green-600"
+                    className="w-4 h-4 accent-ink"
                   />
-                  <span
-                    className="text-sm"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Reserva directa (sin aprobación del club)
-                  </span>
-                </div>
-                <div>
-                  <label
-                    className={labelClass}
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Días de anticipación máxima
-                  </label>
-                  <input
+                  Reserva directa (sin aprobación del club)
+                </label>
+                <Field label="Días de anticipación máxima" className="max-w-xs">
+                  <Input
                     type="number"
                     min="1"
                     max="60"
+                    inputMode="numeric"
                     value={configForm.diasAnticipacion}
                     onChange={(e) =>
                       setConfigForm({
@@ -785,57 +845,36 @@ export default function Canchas() {
                         diasAnticipacion: Number(e.target.value),
                       })
                     }
-                    className={inputClass}
                   />
+                </Field>
+                <div>
+                  <Button variant={primariaEn === "config" ? "primary" : "secondary"} onClick={handleGuardarConfig}>
+                    Guardar configuración
+                  </Button>
                 </div>
-                <button
-                  onClick={handleGuardarConfig}
-                  className="text-white font-semibold py-2 rounded-xl hover:opacity-90 transition"
-                  style={{ backgroundColor: "var(--accent)" }}
-                >
-                  Guardar configuración
-                </button>
               </div>
-            </div>
+            </Card>
           )}
 
           {/* Formulario nueva cancha */}
           {mostrarForm && (
-            <div className="themed-card rounded-2xl p-5 border mb-4" style={{ borderColor: "rgba(34,197,94,0.35)" }}>
-              <h2 className="font-semibold mb-3" style={{ color: "#22c55e" }}>
-                Nueva cancha
-              </h2>
-              <form
-                onSubmit={handleCrearCancha}
-                className="flex flex-col gap-3"
-              >
-                <div>
-                  <label
-                    className={labelClass}
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Nombre
-                  </label>
-                  <input
+            <Card className="mb-4">
+              <Card.Title>Nueva cancha</Card.Title>
+              <form onSubmit={handleCrearCancha} className="flex flex-col gap-4 mt-3">
+                <Field label="Nombre">
+                  <Input
                     type="text"
                     placeholder="Ej: Cancha 1"
                     value={formCancha.nombre}
                     onChange={(e) =>
                       setFormCancha({ ...formCancha, nombre: e.target.value })
                     }
-                    className={inputClass}
                     required
                   />
-                </div>
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <label
-                      className={labelClass}
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Superficie
-                    </label>
-                    <select
+                </Field>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Superficie">
+                    <Select
                       value={formCancha.superficie}
                       onChange={(e) =>
                         setFormCancha({
@@ -843,25 +882,19 @@ export default function Canchas() {
                           superficie: e.target.value,
                         })
                       }
-                      className={selectClass}
                     >
                       {superficies.map((s) => (
                         <option key={s} value={s}>
                           {s}
                         </option>
                       ))}
-                    </select>
-                  </div>
-                  <div className="flex-1">
-                    <label
-                      className={labelClass}
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Precio base por turno ($)
-                    </label>
-                    <input
+                    </Select>
+                  </Field>
+                  <Field label="Precio base por turno ($)" help="Se aplica al seleccionar horarios nuevos">
+                    <Input
                       type="number"
                       min="0"
+                      inputMode="numeric"
                       value={formCancha.precioBase}
                       onChange={(e) =>
                         setFormCancha({
@@ -869,17 +902,10 @@ export default function Canchas() {
                           precioBase: Number(e.target.value),
                         })
                       }
-                      className={inputClass}
                     />
-                    <p
-                      className="text-xs mt-1"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Se aplica al seleccionar horarios nuevos
-                    </p>
-                  </div>
+                  </Field>
                 </div>
-                <div className="flex items-center gap-3">
+                <label className="flex items-center gap-3 pd-label">
                   <input
                     type="checkbox"
                     checked={formCancha.techada}
@@ -889,218 +915,77 @@ export default function Canchas() {
                         techada: e.target.checked,
                       })
                     }
-                    className="w-4 h-4 accent-green-600"
+                    className="w-4 h-4 accent-ink"
                   />
-                  <span
-                    className="text-sm"
-                    style={{ color: "var(--text-muted)" }}
+                  Cancha techada
+                </label>
+                {editorHorarios({
+                  horarios: formCancha.horarios,
+                  precioBase: formCancha.precioBase,
+                  setHorarios: (nuevos) => setFormCancha({ ...formCancha, horarios: nuevos }),
+                  toggleHora: toggleHorario,
+                  setPrecioHora: setPrecioHorario,
+                  batchId: "batchPriceNew",
+                })}
+                <div className="pd-btn-group">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    disabled={guardando || !formCancha.nombre.trim()}
+                    cargando={guardando ? "Creando…" : ""}
                   >
-                    Cancha techada
-                  </span>
+                    Crear cancha
+                  </Button>
                 </div>
-                <div>
-                  <label
-                    className={labelClass}
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Horarios y precios
-                  </label>
-                  <div className="flex gap-1 mb-2 flex-wrap">
-                    <button type="button" onClick={() => {
-                      const nuevos = {};
-                      for (let h = 7; h <= 23; h++) nuevos[`${h.toString().padStart(2,"0")}:00`] = formCancha.precioBase || 0;
-                      setFormCancha({ ...formCancha, horarios: nuevos });
-                    }} className="text-[10px] font-semibold px-2 py-1 rounded-lg transition"
-                      style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>7:00-23:00</button>
-                    <button type="button" onClick={() => {
-                      const nuevos = {};
-                      for (let h = 8; h <= 22; h++) nuevos[`${h.toString().padStart(2,"0")}:00`] = formCancha.precioBase || 0;
-                      setFormCancha({ ...formCancha, horarios: nuevos });
-                    }} className="text-[10px] font-semibold px-2 py-1 rounded-lg transition"
-                      style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>8:00-22:00</button>
-                    <button type="button" onClick={() => {
-                      const nuevos = {};
-                      for (let h = 9; h <= 21; h++) nuevos[`${h.toString().padStart(2,"0")}:00`] = formCancha.precioBase || 0;
-                      setFormCancha({ ...formCancha, horarios: nuevos });
-                    }} className="text-[10px] font-semibold px-2 py-1 rounded-lg transition"
-                      style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>9:00-21:00</button>
-                    <button type="button" onClick={() => setFormCancha({ ...formCancha, horarios: {} })}
-                      className="text-[10px] font-semibold px-2 py-1 rounded-lg transition text-red-400"
-                      style={{ backgroundColor: "var(--bg-card-hover)" }}>Limpiar</button>
-                  </div>
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {horasDelDia.map((hora) => (
-                      <button
-                        key={hora}
-                        type="button"
-                        onClick={() => toggleHorario(hora)}
-                        className={`px-2 py-1 rounded-lg text-xs font-semibold transition ${
-                          formCancha.horarios[hora] !== undefined
-                            ? "bg-green-600 text-white"
-                            : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
-                        }`}
-                      >
-                        {hora}
-                      </button>
-                    ))}
-                  </div>
-                  {Object.keys(formCancha.horarios).length > 0 && (
-                    <div className="rounded-xl p-3 mb-2" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Precio para todos</label>
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs" style={{ color: "var(--text-muted)" }}>$</span>
-                          <input type="number" min="0" placeholder="Ej: 15000" id="batchPriceNew"
-                            className="themed-input w-24 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-2 focus:ring-green-500" />
-                          <button type="button" onClick={() => {
-                            const precio = Number(document.getElementById("batchPriceNew").value);
-                            if (precio >= 0) {
-                              const nuevos = { ...formCancha.horarios };
-                              Object.keys(nuevos).forEach(h => { nuevos[h] = precio; });
-                              setFormCancha({ ...formCancha, horarios: nuevos });
-                            }
-                          }} className="text-xs font-semibold px-2 py-1 rounded-lg transition"
-                            style={{ backgroundColor: "var(--accent)", color: "white" }}>Aplicar</button>
-                        </div>
-                      </div>
-                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                        Aplicá un precio a todos, después ajustá individualmente
-                      </p>
-                    </div>
-                  )}
-                  {Object.keys(formCancha.horarios).length > 0 && (
-                    <div
-                      className="rounded-xl p-3 flex flex-col gap-1"
-                      style={{ backgroundColor: "var(--bg-card-hover)" }}
-                    >
-                      <p
-                        className="text-xs font-semibold mb-1"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        Precio por horario
-                      </p>
-                      {Object.keys(formCancha.horarios)
-                        .sort()
-                        .map((hora) => (
-                          <div key={hora} className="flex items-center gap-2">
-                            <span
-                              className="text-xs w-14"
-                              style={{ color: "var(--text-muted)" }}
-                            >
-                              {hora}
-                            </span>
-                            <input
-                              type="number"
-                              min="0"
-                              value={formCancha.horarios[hora]}
-                              onChange={(e) =>
-                                setPrecioHorario(hora, e.target.value)
-                              }
-                              className="themed-input w-24 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-2 focus:ring-green-500"
-                            />
-                            <span
-                              className="text-xs"
-                              style={{ color: "var(--text-muted)" }}
-                            >
-                              $
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                  <p
-                    className="text-xs mt-1"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {Object.keys(formCancha.horarios).length} horarios
-                    seleccionados
-                  </p>
-                </div>
-                <button
-                  type="submit"
-                  disabled={guardando || !formCancha.nombre.trim()}
-                  className="text-white font-semibold py-2 rounded-xl hover:opacity-90 transition disabled:opacity-50"
-                  style={{ backgroundColor: "var(--accent)" }}
-                >
-                  {guardando ? "Creando..." : "Crear cancha"}
-                </button>
               </form>
-            </div>
+            </Card>
           )}
 
           {/* Lista de canchas */}
           {canchas.length === 0 && !mostrarForm && (
-            <div className="text-center py-16 themed-card rounded-2xl border mb-4">
-              <div className="text-5xl mb-4">🏸</div>
-              <p className="font-medium" style={{ color: "var(--text-muted)" }}>
-                No tenés canchas creadas
-              </p>
-              <p
-                className="text-sm mt-1"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Hacé clic en "+ Nueva cancha" para empezar
-              </p>
-            </div>
+            <Card className="text-center py-12 mb-4">
+              <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
+              <p className="heading-sm m-0">No tenés canchas creadas</p>
+              <p className="body-sm text-ink-2 mt-1 m-0">Hacé clic en "Nueva cancha" para empezar</p>
+            </Card>
           )}
 
           {canchas.length > 0 && (
-            <div className="flex flex-col gap-3 mb-6">
+            <div className="grid gap-4 md:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] mb-6">
               {canchas.map((cancha) => (
-                <div
-                  key={cancha.id}
-                  className="themed-card rounded-2xl p-5 border"
-                >
+                <Card key={cancha.id} className={editandoCancha === cancha.id && editForm ? "md:col-span-full" : undefined}>
                   {editandoCancha === cancha.id && editForm ? (
-                    <div className="flex flex-col gap-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <h3 className="font-semibold text-green-700">
-                          Editando cancha
-                        </h3>
-                        <div className="flex gap-2">
-                          <button
+                    <div className="flex flex-col gap-4">
+                      <Card.Row>
+                        <Card.Title>Editando cancha</Card.Title>
+                        <div className="pd-btn-group">
+                          <Button
+                            size="sm"
+                            variant="ghost"
                             onClick={() => {
                               setEditandoCancha(null);
                               setEditForm(null);
                             }}
-                            className="text-xs font-semibold hover:opacity-80"
-                            style={{ color: "var(--text-muted)" }}
                           >
                             Cancelar
-                          </button>
-                          <button
-                            onClick={handleGuardarEdicion}
-                            className="text-xs font-semibold text-green-600 hover:underline"
-                          >
+                          </Button>
+                          <Button size="sm" onClick={handleGuardarEdicion}>
                             Guardar
-                          </button>
+                          </Button>
                         </div>
-                      </div>
-                      <div>
-                        <label
-                          className={labelClass}
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          Nombre
-                        </label>
-                        <input
+                      </Card.Row>
+                      <Field label="Nombre">
+                        <Input
                           type="text"
                           value={editForm.nombre}
                           onChange={(e) =>
                             setEditForm({ ...editForm, nombre: e.target.value })
                           }
-                          className={inputClass}
                         />
-                      </div>
-                      <div className="flex gap-3">
-                        <div className="flex-1">
-                          <label
-                            className={labelClass}
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            Superficie
-                          </label>
-                          <select
+                      </Field>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <Field label="Superficie">
+                          <Select
                             value={editForm.superficie}
                             onChange={(e) =>
                               setEditForm({
@@ -1108,25 +993,19 @@ export default function Canchas() {
                                 superficie: e.target.value,
                               })
                             }
-                            className={selectClass}
                           >
                             {superficies.map((s) => (
                               <option key={s} value={s}>
                                 {s}
                               </option>
                             ))}
-                          </select>
-                        </div>
-                        <div className="flex-1">
-                          <label
-                            className={labelClass}
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            Precio base ($)
-                          </label>
-                          <input
+                          </Select>
+                        </Field>
+                        <Field label="Precio base ($)">
+                          <Input
                             type="number"
                             min="0"
+                            inputMode="numeric"
                             value={editForm.precioBase || 0}
                             onChange={(e) =>
                               setEditForm({
@@ -1134,11 +1013,10 @@ export default function Canchas() {
                                 precioBase: Number(e.target.value),
                               })
                             }
-                            className={inputClass}
                           />
-                        </div>
+                        </Field>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-3 pd-label">
                         <input
                           type="checkbox"
                           checked={editForm.techada || false}
@@ -1148,250 +1026,107 @@ export default function Canchas() {
                               techada: e.target.checked,
                             })
                           }
-                          className="w-4 h-4 accent-green-600"
+                          className="w-4 h-4 accent-ink"
                         />
-                        <span
-                          className="text-sm"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          Techada
-                        </span>
-                      </div>
-                      <div>
-                        <label
-                          className={labelClass}
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          Horarios y precios
-                        </label>
-                        <div className="flex gap-1 mb-2 flex-wrap">
-                          <button type="button" onClick={() => {
-                            const nuevos = {};
-                            for (let h = 7; h <= 23; h++) nuevos[`${h.toString().padStart(2,"0")}:00`] = editForm.precioBase || 0;
-                            setEditForm({ ...editForm, horarios: nuevos });
-                          }} className="text-[10px] font-semibold px-2 py-1 rounded-lg transition"
-                            style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>7:00-23:00</button>
-                          <button type="button" onClick={() => {
-                            const nuevos = {};
-                            for (let h = 8; h <= 22; h++) nuevos[`${h.toString().padStart(2,"0")}:00`] = editForm.precioBase || 0;
-                            setEditForm({ ...editForm, horarios: nuevos });
-                          }} className="text-[10px] font-semibold px-2 py-1 rounded-lg transition"
-                            style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>8:00-22:00</button>
-                          <button type="button" onClick={() => {
-                            const nuevos = {};
-                            for (let h = 9; h <= 21; h++) nuevos[`${h.toString().padStart(2,"0")}:00`] = editForm.precioBase || 0;
-                            setEditForm({ ...editForm, horarios: nuevos });
-                          }} className="text-[10px] font-semibold px-2 py-1 rounded-lg transition"
-                            style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>9:00-21:00</button>
-                          <button type="button" onClick={() => setEditForm({ ...editForm, horarios: {} })}
-                            className="text-[10px] font-semibold px-2 py-1 rounded-lg transition text-red-400"
-                            style={{ backgroundColor: "var(--bg-card-hover)" }}>Limpiar</button>
-                        </div>
-                        <div className="flex flex-wrap gap-1 mb-2">
-                          {horasDelDia.map((hora) => (
-                            <button
-                              key={hora}
-                              type="button"
-                              onClick={() => toggleHorarioEdit(hora)}
-                              className={`px-2 py-1 rounded-lg text-xs font-semibold transition ${
-                                (editForm.horarios || {})[hora] !== undefined
-                                  ? "bg-green-600 text-white"
-                                  : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
-                              }`}
-                            >
-                              {hora}
-                            </button>
-                          ))}
-                        </div>
-                        {Object.keys(editForm.horarios || {}).length > 0 && (
-                          <div className="rounded-xl p-3 mb-2" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-                            <div className="flex items-center gap-2 mb-2">
-                              <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Precio para todos</label>
-                              <div className="flex items-center gap-1">
-                                <span className="text-xs" style={{ color: "var(--text-muted)" }}>$</span>
-                                <input type="number" min="0" placeholder="Ej: 15000" id="batchPriceEdit"
-                                  className="themed-input w-24 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-2 focus:ring-green-500" />
-                                <button type="button" onClick={() => {
-                                  const precio = Number(document.getElementById("batchPriceEdit").value);
-                                  if (precio >= 0) {
-                                    const nuevos = { ...(editForm.horarios || {}) };
-                                    Object.keys(nuevos).forEach(h => { nuevos[h] = precio; });
-                                    setEditForm({ ...editForm, horarios: nuevos });
-                                  }
-                                }} className="text-xs font-semibold px-2 py-1 rounded-lg transition"
-                                  style={{ backgroundColor: "var(--accent)", color: "white" }}>Aplicar</button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        {Object.keys(editForm.horarios || {}).length > 0 && (
-                          <div
-                            className="rounded-xl p-3 flex flex-col gap-1"
-                            style={{ backgroundColor: "var(--bg-card-hover)" }}
-                          >
-                            <p
-                              className="text-xs font-semibold mb-1"
-                              style={{ color: "var(--text-muted)" }}
-                            >
-                              Precio por horario
-                            </p>
-                            {Object.keys(editForm.horarios || {})
-                              .sort()
-                              .map((hora) => (
-                                <div
-                                  key={hora}
-                                  className="flex items-center gap-2"
-                                >
-                                  <span
-                                    className="text-xs w-14"
-                                    style={{ color: "var(--text-muted)" }}
-                                  >
-                                    {hora}
-                                  </span>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    value={(editForm.horarios || {})[hora]}
-                                    onChange={(e) =>
-                                      setPrecioHorarioEdit(hora, e.target.value)
-                                    }
-                                    className="themed-input w-24 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-2 focus:ring-green-500"
-                                  />
-                                  <span
-                                    className="text-xs"
-                                    style={{ color: "var(--text-muted)" }}
-                                  >
-                                    $
-                                  </span>
-                                </div>
-                              ))}
-                          </div>
-                        )}
-                      </div>
+                        Techada
+                      </label>
+                      {editorHorarios({
+                        horarios: editForm.horarios || {},
+                        precioBase: editForm.precioBase,
+                        setHorarios: (nuevos) => setEditForm({ ...editForm, horarios: nuevos }),
+                        toggleHora: toggleHorarioEdit,
+                        setPrecioHora: setPrecioHorarioEdit,
+                        batchId: "batchPriceEdit",
+                      })}
                     </div>
                   ) : (
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3
-                            className="font-semibold"
-                            style={{ color: "var(--text-primary)" }}
-                          >
-                            {cancha.nombre}
-                          </h3>
-                          <div className="flex gap-2 mt-1 flex-wrap">
-                            <span
-                              className="text-xs px-2 py-0.5 rounded-full"
-                              style={{
-                                backgroundColor: "var(--bg-card-hover)",
-                                color: "var(--text-muted)",
-                              }}
-                            >
-                              {cancha.superficie}
-                            </span>
-                            <span
-                              className="text-xs px-2 py-0.5 rounded-full"
-                              style={{
-                                backgroundColor: "var(--bg-card-hover)",
-                                color: "var(--text-muted)",
-                              }}
-                            >
-                              {cancha.techada ? "Techada" : "Al aire libre"}
-                            </span>
-                            <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
-                              Desde{" "}
-                              {formatPrecio(
-                                cancha.precioBase ||
-                                  Math.min(...Object.values(cancha.horarios || { 0: 0 })),
-                              )}
-                              /turno
-                            </span>
-                            <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">
-                              {(cancha.horariosDisponibles || []).length}{" "}
-                              horarios
-                            </span>
+                    <>
+                      <Card.Row className="items-start!">
+                        <div className="min-w-0">
+                          <Card.Title className="truncate">{cancha.nombre}</Card.Title>
+                          <div className="flex gap-1 mt-2 flex-wrap">
+                            <Badge>{cancha.superficie}</Badge>
+                            <Badge>{cancha.techada ? "Techada" : "Al aire libre"}</Badge>
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <button
+                        <div className="pd-btn-group flex-nowrap!">
+                          <Button
+                            size="sm"
                             onClick={() => {
                               setEditandoCancha(cancha.id);
                               setEditForm({ ...cancha });
                             }}
-                            className="text-xs font-semibold text-green-600 hover:underline"
                           >
                             Editar
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            iconOnly
+                            aria-label={`Eliminar ${cancha.nombre}`}
+                            icon={<Trash2 className="pd-icon" size={20} aria-hidden="true" />}
                             onClick={() => handleEliminarCancha(cancha.id)}
-                            className="text-xs font-semibold text-red-400 hover:text-red-600"
-                          >
-                            Eliminar
-                          </button>
+                          />
                         </div>
-                      </div>
-                    </div>
+                      </Card.Row>
+                      <Card.Foot className="flex-wrap">
+                        <span className="numeral-md pd-tnum">
+                          {formatPrecio(
+                            cancha.precioBase ||
+                              Math.min(...Object.values(cancha.horarios || { 0: 0 })),
+                          )}
+                        </span>
+                        <span className="body-sm text-ink-3">desde, por turno</span>
+                        <span className="body-sm text-ink-3 ml-auto pd-tnum">
+                          Horarios {(cancha.horariosDisponibles || []).length}
+                        </span>
+                      </Card.Foot>
+                    </>
                   )}
-                </div>
+                </Card>
               ))}
             </div>
           )}
 
           {/* Grilla de turnos */}
           {canchas.length > 0 && (
-            <div className="themed-card rounded-2xl p-5 border">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
-                    {vistaGrilla === "dia" ? "Turnos del día" : "Vista semanal"}
-                  </h2>
-                  <div className="flex gap-1">
-                    <button onClick={() => setVistaGrilla("dia")}
-                      className="px-3 py-1 rounded-lg text-xs font-semibold transition"
-                      style={{ backgroundColor: vistaGrilla === "dia" ? "var(--accent)" : "var(--bg-card-hover)", color: vistaGrilla === "dia" ? "white" : "var(--text-muted)" }}>
-                      Día
-                    </button>
-                    <button onClick={() => setVistaGrilla("semana")}
-                      className="px-3 py-1 rounded-lg text-xs font-semibold transition"
-                      style={{ backgroundColor: vistaGrilla === "semana" ? "var(--accent)" : "var(--bg-card-hover)", color: vistaGrilla === "semana" ? "white" : "var(--text-muted)" }}>
-                      Semana
-                    </button>
-                  </div>
+            <Card>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Card.Title>{vistaGrilla === "dia" ? "Turnos del día" : "Vista semanal"}</Card.Title>
+                  <Pills
+                    items={[
+                      { value: "dia", label: "Día" },
+                      { value: "semana", label: "Semana" },
+                    ]}
+                    value={vistaGrilla}
+                    onChange={setVistaGrilla}
+                    ariaLabel="Vista de la grilla"
+                  />
                 </div>
-                <input
+                <Input
                   type="date"
                   value={fechaSeleccionada}
                   onChange={(e) => setFechaSeleccionada(e.target.value)}
-                  className="themed-input rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  aria-label="Fecha"
+                  className="h-9! w-auto!"
                 />
               </div>
 
               {vistaGrilla === "dia" && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr
-                      className="border-b"
-                      style={{ borderColor: "var(--border-card)" }}
-                    >
-                      <th
-                        className="text-left py-2 pr-3 text-xs"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        Hora
-                      </th>
-                      {canchas.map((c) => (
-                        <th
-                          key={c.id}
-                          className="text-center py-2 px-2 text-xs"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          {c.nombre}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
+                <div className="overflow-x-auto">
+                  <div
+                    className="pd-grid pd-grid-quiet"
+                    style={{ gridTemplateColumns: `56px repeat(${canchas.length}, minmax(128px, 1fr))` }}
+                    role="grid"
+                    aria-label={`Turnos del ${formatFecha(fechaSeleccionada)}`}
+                  >
+                    <div />
+                    {canchas.map((c) => (
+                      <div key={c.id} className="pd-grid-head truncate">
+                        {c.nombre}
+                      </div>
+                    ))}
                     {horasDelDia.map((hora) => {
                       const algunaCanchaDisponible = canchas.some((c) =>
                         (c.horariosDisponibles || []).includes(hora),
@@ -1399,90 +1134,61 @@ export default function Canchas() {
                       if (!algunaCanchaDisponible) return null;
 
                       return (
-                        <tr
-                          key={hora}
-                          className="border-b"
-                          style={{ borderColor: "var(--border-card)" }}
-                        >
-                          <td
-                            className="py-2 pr-3 font-medium"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            {hora}
-                          </td>
+                        <div key={hora} className="contents">
+                          <div className="pd-grid-time">{hora}</div>
                           {canchas.map((cancha) => {
                             const disponible = (
                               cancha.horariosDisponibles || []
                             ).includes(hora);
                             if (!disponible) {
-                              return (
-                                <td
-                                  key={cancha.id}
-                                  className="text-center py-2 px-2"
-                                >
-                                  <span
-                                    className="text-xs"
-                                    style={{
-                                      color: "var(--text-muted)",
-                                      opacity: 0.3,
-                                    }}
-                                  >
-                                    —
-                                  </span>
-                                </td>
-                              );
+                              return <SlotCell key={cancha.id} estado="pasado" linea1="No disponible" />;
                             }
 
                             const reserva = getReservaParaSlot(cancha.id, hora);
                             if (reserva && reserva.status === "bloqueado") {
                               return (
-                                <td key={cancha.id} className="text-center py-2 px-2">
-                                  <div className="rounded-lg px-2 py-1 text-xs" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
-                                    <p className="font-semibold truncate">{reserva.nombreJugador || "🔒 Bloqueado"}</p>
-                                    <button onClick={() => handleCancelarReserva(reserva.id)}
-                                      className="text-red-400 hover:underline mt-0.5">Desbloquear</button>
+                                <div key={cancha.id} className="flex flex-col gap-1">
+                                  <SlotCell estado="bloqueada" linea2={motivoDeBloqueo(reserva.nombreJugador) || undefined} className="flex-1" />
+                                  <div className="flex justify-center">
+                                    <Button size="sm" variant="ghost" className="h-7!" onClick={() => handleCancelarReserva(reserva.id)}>
+                                      Desbloquear
+                                    </Button>
                                   </div>
-                                </td>
+                                </div>
                               );
                             }
                             if (reserva) {
                               return (
-                                <td
-                                  key={cancha.id}
-                                  className="text-center py-2 px-2"
-                                >
-                                  <div
-                                    className={`rounded-lg px-2 py-1 text-xs ${
-                                      reserva.status === "pendiente"
-                                        ? "bg-yellow-100 text-yellow-700"
-                                        : "bg-green-100 text-green-700"
-                                    }`}
-                                  >
-                                    <p className="font-semibold truncate">
-                                      {reserva.nombreJugador || "Reservado"}
-                                    </p>
-                                    <div className="flex gap-1 justify-center mt-1">
-                                      {reserva.status === "pendiente" && (
-                                        <button
-                                          onClick={() =>
-                                            handleConfirmarReserva(reserva.id)
-                                          }
-                                          className="text-green-600 hover:underline"
-                                        >
-                                          ✓
-                                        </button>
-                                      )}
-                                      <button
-                                        onClick={() =>
-                                          handleCancelarReserva(reserva.id)
-                                        }
-                                        className="text-red-400 hover:underline"
-                                      >
-                                        ✕
-                                      </button>
-                                    </div>
+                                <div key={cancha.id} className="flex flex-col gap-1">
+                                  <SlotCell
+                                    estado={reserva.status === "pendiente" ? "pendiente" : "reservada"}
+                                    linea1={reserva.nombreJugador || "Reservado"}
+                                    linea2={reserva.status === "pendiente" ? "pendiente" : "confirmada"}
+                                    className="flex-1"
+                                  />
+                                  <div className="flex justify-center gap-1">
+                                    {reserva.status === "pendiente" && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        iconOnly
+                                        className="h-7! w-7!"
+                                        aria-label={`Confirmar reserva de ${reserva.nombreJugador || "jugador"} a las ${hora}`}
+                                        icon={<Check size={16} aria-hidden="true" />}
+                                        onClick={() => handleConfirmarReserva(reserva.id)}
+                                      />
+                                    )}
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      iconOnly
+                                      className="h-7! w-7!"
+                                      aria-label={`Cancelar reserva de ${reserva.nombreJugador || "jugador"} a las ${hora}`}
+                                      icon={<X size={16} aria-hidden="true" />}
+                                      onClick={() => handleCancelarReserva(reserva.id)}
+                                    />
                                   </div>
-                                </td>
+                                </div>
                               );
                             }
 
@@ -1495,17 +1201,12 @@ export default function Canchas() {
                                   t.status === "activo",
                               );
                               return (
-                                <td
+                                <SlotCell
                                   key={cancha.id}
-                                  className="text-center py-2 px-2"
-                                >
-                                  <div className="rounded-lg px-2 py-1 text-xs bg-purple-100 text-purple-700">
-                                    <p className="font-semibold truncate">
-                                      {tf?.nombreJugador || "Turno fijo"}
-                                    </p>
-                                    <p className="text-purple-500">Fijo</p>
-                                  </div>
-                                </td>
+                                  estado="fijo"
+                                  linea1=""
+                                  linea2={tf?.nombreJugador ? `Turno fijo · ${tf.nombreJugador}` : "Turno fijo"}
+                                />
                               );
                             }
 
@@ -1514,44 +1215,41 @@ export default function Canchas() {
                               cancha.precioBase ??
                               0;
                             return (
-                              <td
-                                key={cancha.id}
-                                className="text-center py-2 px-2"
-                              >
-                                <div className="relative group">
-                                  <button
-                                    onClick={() => {
-                                      setModalManualData({ cancha, hora, precio: precioHora });
-                                      setFormManual({ nombreJugador: "", telefono: "" });
-                                      setMostrarModalManual(true);
-                                    }}
-                                    className="w-full rounded-lg px-2 py-1 transition hover:ring-2 hover:ring-green-400"
-                                    style={{ backgroundColor: "rgba(34,197,94,0.06)" }}
-                                  >
-                                    <span className="text-xs text-green-500 font-semibold block">Libre</span>
-                                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>{formatPrecio(precioHora)}</span>
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setBloqueoData({ cancha, hora });
-                                      setMotivoBloqueo("Mantenimiento");
-                                      setMostrarModalBloqueo(true);
-                                    }}
-                                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[8px] opacity-0 group-hover:opacity-100 transition"
-                                    style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}
-                                    title="Bloquear horario"
-                                  >🔒</button>
-                                </div>
-                              </td>
+                              <div key={cancha.id} className="relative group flex flex-col">
+                                <SlotCell
+                                  estado="libre"
+                                  linea2={formatPrecio(precioHora)}
+                                  className="flex-1"
+                                  aria-label={`Reservar ${cancha.nombre} a las ${hora}, ${formatPrecio(precioHora)}`}
+                                  onClick={() => {
+                                    setModalManualData({ cancha, hora, precio: precioHora });
+                                    setFormManual({ nombreJugador: "", telefono: "" });
+                                    setMostrarModalManual(true);
+                                  }}
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  iconOnly
+                                  className="absolute top-0.5 right-0.5 h-7! w-7! md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                                  aria-label={`Bloquear ${cancha.nombre} a las ${hora}`}
+                                  title="Bloquear horario"
+                                  icon={<Lock size={16} aria-hidden="true" />}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setBloqueoData({ cancha, hora });
+                                    setMotivoBloqueo("Mantenimiento");
+                                    setMostrarModalBloqueo(true);
+                                  }}
+                                />
+                              </div>
                             );
                           })}
-                        </tr>
+                        </div>
                       );
                     })}
-                  </tbody>
-                </table>
-              </div>
+                  </div>
+                </div>
               )}
 
               {vistaGrilla === "semana" && (
@@ -1563,7 +1261,7 @@ export default function Canchas() {
                   getTurnosFijosData={turnosFijos}
                 />
               )}
-            </div>
+            </Card>
           )}
         </>
       )}
@@ -1578,49 +1276,48 @@ export default function Canchas() {
 
       {/* Modal reserva manual */}
       {mostrarModalManual && modalManualData && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="themed-card rounded-2xl p-6 w-full max-w-sm mx-4 border">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "var(--accent-light)" }}>
-                <span className="text-lg">📝</span>
-              </div>
-              <div>
-                <h3 className="font-bold" style={{ color: "var(--text-primary)" }}>Reserva manual</h3>
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  {modalManualData.cancha.nombre} · {fechaSeleccionada} · {modalManualData.hora}
-                </p>
-              </div>
+        <div
+          className="pd-backdrop z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setMostrarModalManual(false);
+          }}
+        >
+          <div className="pd-dialog" role="dialog" aria-modal="true" aria-labelledby="reserva-manual-titulo" aria-describedby="reserva-manual-cuerpo">
+            <h2 className="pd-dialog-title" id="reserva-manual-titulo">Reserva manual</h2>
+            <p className="pd-dialog-body pd-tnum" id="reserva-manual-cuerpo">
+              {modalManualData.cancha.nombre} · {formatFecha(fechaSeleccionada)} · {modalManualData.hora}
+            </p>
+
+            <div className="rounded-md bg-surface-sunken p-3 mt-4 flex items-center justify-between">
+              <span className="body-sm text-ink-2">Precio</span>
+              <span className="numeral-md pd-tnum">{formatPrecio(modalManualData.precio)}</span>
             </div>
 
-            <div className="rounded-xl p-3 mb-4 flex items-center justify-between" style={{ backgroundColor: "var(--bg-card-hover)" }}>
-              <span className="text-sm" style={{ color: "var(--text-muted)" }}>Precio</span>
-              <span className="text-lg font-bold" style={{ color: "var(--accent)" }}>{formatPrecio(modalManualData.precio)}</span>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>Nombre del jugador *</label>
-                <input type="text" required value={formManual.nombreJugador}
+            <div className="flex flex-col gap-3 mt-4">
+              <Field label="Nombre del jugador">
+                <Input
+                  type="text"
+                  required
+                  value={formManual.nombreJugador}
                   onChange={(e) => setFormManual({ ...formManual, nombreJugador: e.target.value })}
                   placeholder="Ej: Juan Pérez"
-                  className="themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full" />
-              </div>
-              <div>
-                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>Teléfono (opcional)</label>
-                <input type="tel" value={formManual.telefono}
+                />
+              </Field>
+              <Field label="Teléfono (opcional)">
+                <Input
+                  type="tel"
+                  inputMode="numeric"
+                  value={formManual.telefono}
                   onChange={(e) => setFormManual({ ...formManual, telefono: e.target.value.replace(/\D/g, "") })}
                   placeholder="Ej: 3851234567"
-                  className="themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full" />
-              </div>
+                />
+              </Field>
             </div>
 
-            <div className="flex gap-2 mt-4">
-              <button onClick={() => setMostrarModalManual(false)}
-                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition"
-                style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
-                Cancelar
-              </button>
-              <button
+            <div className="pd-dialog-actions">
+              <Button onClick={() => setMostrarModalManual(false)}>Cancelar</Button>
+              <Button
+                variant="primary"
                 onClick={async () => {
                   if (!formManual.nombreJugador.trim()) return;
                   setGuardandoManual(true);
@@ -1654,10 +1351,10 @@ export default function Canchas() {
                   setGuardandoManual(false);
                 }}
                 disabled={guardandoManual || !formManual.nombreJugador.trim()}
-                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold text-white transition disabled:opacity-50"
-                style={{ backgroundColor: "var(--accent)" }}>
-                {guardandoManual ? "Guardando..." : "Reservar"}
-              </button>
+                cargando={guardandoManual ? "Guardando…" : ""}
+              >
+                Reservar
+              </Button>
             </div>
           </div>
         </div>
@@ -1665,40 +1362,36 @@ export default function Canchas() {
 
       {/* Modal bloqueo de horario */}
       {mostrarModalBloqueo && bloqueoData && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="themed-card rounded-2xl p-6 w-full max-w-sm mx-4 border">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(239,68,68,0.1)" }}>
-                <span className="text-lg">🔒</span>
-              </div>
-              <div>
-                <h3 className="font-bold" style={{ color: "var(--text-primary)" }}>Bloquear horario</h3>
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  {bloqueoData.cancha.nombre} · {fechaSeleccionada} · {bloqueoData.hora}
-                </p>
-              </div>
-            </div>
+        <div
+          className="pd-backdrop z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setMostrarModalBloqueo(false);
+          }}
+        >
+          <div className="pd-dialog" role="dialog" aria-modal="true" aria-labelledby="bloqueo-titulo" aria-describedby="bloqueo-cuerpo">
+            <h2 className="pd-dialog-title flex items-center gap-2" id="bloqueo-titulo">
+              <Lock className="pd-icon" size={20} aria-hidden="true" />
+              Bloquear horario
+            </h2>
+            <p className="pd-dialog-body pd-tnum" id="bloqueo-cuerpo">
+              {bloqueoData.cancha.nombre} · {formatFecha(fechaSeleccionada)} · {bloqueoData.hora}
+            </p>
 
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="text-xs font-semibold mb-1 block" style={{ color: "var(--text-muted)" }}>Motivo</label>
-                <select value={motivoBloqueo} onChange={(e) => setMotivoBloqueo(e.target.value)}
-                  className="themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full">
+            <div className="flex flex-col gap-3 mt-4">
+              <Field label="Motivo">
+                <Select value={motivoBloqueo} onChange={(e) => setMotivoBloqueo(e.target.value)}>
                   <option value="Mantenimiento">Mantenimiento</option>
                   <option value="Evento privado">Evento privado</option>
-                  <option value="Clima">Clima / Condiciones</option>
+                  <option value="Clima">Clima / condiciones</option>
                   <option value="Otro">Otro</option>
-                </select>
-              </div>
+                </Select>
+              </Field>
             </div>
 
-            <div className="flex gap-2 mt-4">
-              <button onClick={() => setMostrarModalBloqueo(false)}
-                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition"
-                style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
-                Cancelar
-              </button>
-              <button
+            <div className="pd-dialog-actions">
+              <Button onClick={() => setMostrarModalBloqueo(false)}>Cancelar</Button>
+              <Button
+                variant="danger"
                 onClick={async () => {
                   setGuardandoBloqueo(true);
                   try {
@@ -1731,9 +1424,10 @@ export default function Canchas() {
                   setGuardandoBloqueo(false);
                 }}
                 disabled={guardandoBloqueo}
-                className="flex-1 px-4 py-2 rounded-xl text-sm font-semibold text-white transition disabled:opacity-50 bg-red-600 hover:bg-red-700">
-                {guardandoBloqueo ? "Bloqueando..." : "Bloquear"}
-              </button>
+                cargando={guardandoBloqueo ? "Bloqueando…" : ""}
+              >
+                Bloquear
+              </Button>
             </div>
           </div>
         </div>

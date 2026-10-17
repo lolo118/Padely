@@ -1,5 +1,22 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Bell,
+  Check,
+  CircleDot,
+  Coins,
+  Copy,
+  Eye,
+  Info,
+  Link as LinkIcon,
+  List,
+  MessageCircle,
+  Pencil,
+  Trophy,
+  Zap,
+} from "lucide-react";
 import { getTorneoById, actualizarTorneo, getParejas, getGrupos, getCuadros } from "../../services/torneoService";
 import { cuadrosDeTorneo, parejasDeCuadro, parejasSinCuadro, cuadroDeGrupo } from "../../utils/torneo";
 import { toast } from "../../components/Toast";
@@ -12,12 +29,14 @@ import TabReclamos from "./TabReclamos";
 import { formatFecha } from "../../utils/formatDate";
 import { CATEGORIAS_TORNEO } from "../../utils/categorias";
 import { formatPrecio } from "../../utils/format";
+import { Badge, Button, Card, Field, Input, MarcaCategoria, Select, Tabs, Textarea } from "../../components/ui";
 
-const estadoBadge = {
-  inscripcion: "bg-blue-100 text-blue-700",
-  en_curso: "bg-green-100 text-green-700",
-  finalizado: "bg-[var(--bg-card-hover)] text-[var(--text-muted)]",
-  cancelado: "bg-red-100 text-red-500",
+// Tono del badge de estado del torneo
+const estadoTone = {
+  inscripcion: "court",
+  en_curso: "lime",
+  finalizado: "neutral",
+  cancelado: "danger",
 };
 
 const estadoLabel = {
@@ -39,6 +58,16 @@ const formatoDesc = {
   normal: "Fase de grupos seguida de un bracket de eliminación.",
   liga: "Todos contra todos, se acumulan puntos por partido.",
   eliminacion: "Bracket de eliminación directa desde la primera ronda.",
+};
+
+// Tono del badge de estado de un cuadro (tarjeta "Cuadros")
+const tonoEstadoCuadro = {
+  "Sin parejas": "neutral",
+  Inscripción: "court",
+  Finalizado: "neutral",
+  Bracket: "lime",
+  Liga: "lime",
+  Grupos: "lime",
 };
 
 const provinciasArgentina = [
@@ -67,12 +96,6 @@ const provinciasArgentina = [
   "Tierra del Fuego",
   "Tucumán",
 ];
-
-const inputClass =
-  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
-const selectClass =
-  "themed-input rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-full";
-const labelClass = "text-xs font-semibold mb-1 block";
 
 const getTabs = (formato) => {
   if (formato === "liga") return ["Info", "Parejas", "Liga", "Reclamos"];
@@ -168,30 +191,52 @@ function capitalizar(texto) {
   return texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : texto;
 }
 
+// Un consejo de la tarjeta "¿Sabías que...?": ícono Lucide + texto
+function Tip({ icon, children }) {
+  const Icono = icon;
+  return (
+    <li className="flex items-start gap-2 body-sm text-ink-2">
+      <Icono className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+      <p>{children}</p>
+    </li>
+  );
+}
+
+// Una nota contextual de la pestaña Info (tip, aviso): ícono Lucide + texto sobre surface-sunken
+function Nota({ icon, children }) {
+  const Icono = icon;
+  return (
+    <p className="flex items-start gap-2 rounded-md bg-surface-sunken px-4 py-3 body-sm text-ink-2">
+      <Icono className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+      <span>{children}</span>
+    </p>
+  );
+}
+
 // Stepper por cuadro: el paso actual es el del cuadro menos avanzado entre los que tienen parejas;
 // las acciones pendientes se listan por cuadro (con su nombre cuando hay más de uno).
 // Un cuadro sin parejas no se juega y no cuenta acá.
 function TournamentStepper({ torneo, cuadros, datosPorCuadro, parejasSinCuadro: sinCuadro }) {
   const steps = torneo.formato === "liga"
     ? [
-        { key: "inscripcion", label: "Inscripción", icon: "📝" },
-        { key: "fixture", label: "Fixture", icon: "📋" },
-        { key: "en_curso", label: "En curso", icon: "🎾" },
-        { key: "finalizado", label: "Finalizado", icon: "🏆" },
+        { key: "inscripcion", label: "Inscripción" },
+        { key: "fixture", label: "Fixture" },
+        { key: "en_curso", label: "En curso" },
+        { key: "finalizado", label: "Finalizado" },
       ]
     : torneo.formato === "eliminacion"
     ? [
-        { key: "inscripcion", label: "Inscripción", icon: "📝" },
-        { key: "en_curso", label: "En curso", icon: "🎾" },
-        { key: "bracket", label: "Bracket", icon: "🏆" },
-        { key: "finalizado", label: "Finalizado", icon: "🎉" },
+        { key: "inscripcion", label: "Inscripción" },
+        { key: "en_curso", label: "En curso" },
+        { key: "bracket", label: "Bracket" },
+        { key: "finalizado", label: "Finalizado" },
       ]
     : [
-        { key: "inscripcion", label: "Inscripción", icon: "📝" },
-        { key: "grupos", label: "Grupos", icon: "👥" },
-        { key: "en_curso", label: "En curso", icon: "🎾" },
-        { key: "bracket", label: "Bracket", icon: "🏆" },
-        { key: "finalizado", label: "Finalizado", icon: "🎉" },
+        { key: "inscripcion", label: "Inscripción" },
+        { key: "grupos", label: "Grupos" },
+        { key: "en_curso", label: "En curso" },
+        { key: "bracket", label: "Bracket" },
+        { key: "finalizado", label: "Finalizado" },
       ];
 
   const variosCuadros = cuadros.length > 1;
@@ -222,43 +267,25 @@ function TournamentStepper({ torneo, cuadros, datosPorCuadro, parejasSinCuadro: 
   }
 
   return (
-    <div className="themed-card rounded-2xl p-5 border mb-4">
-      <div className="flex items-center justify-between mb-4">
+    <Card className="mb-4">
+      <ol className="flex flex-wrap gap-2" aria-label="Etapas del torneo">
         {steps.map((step, i) => (
-          <div key={step.key} className="flex items-center flex-1">
-            <div className="flex flex-col items-center flex-1">
-              <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-lg mb-1 transition ${i <= currentIdx ? "" : "opacity-30"}`}
-                style={{
-                  backgroundColor: i === currentIdx ? "var(--accent)" : i < currentIdx ? "rgba(34,197,94,0.15)" : "var(--bg-card-hover)",
-                }}
-              >
-                {i < currentIdx ? "✓" : step.icon}
-              </div>
-              <span className="text-[10px] font-semibold text-center"
-                style={{ color: i <= currentIdx ? "var(--text-primary)" : "var(--text-muted)" }}>
-                {step.label}
-              </span>
-            </div>
-            {i < steps.length - 1 && (
-              <div className="h-0.5 flex-1 mx-1 rounded-full mt-[-14px]"
-                style={{ backgroundColor: i < currentIdx ? "var(--accent)" : "var(--bg-card-hover)" }} />
-            )}
-          </div>
+          <li key={step.key} aria-current={i === currentIdx ? "step" : undefined}>
+            <Badge tone={i < currentIdx ? "success" : i === currentIdx ? "lime" : "neutral"}>{step.label}</Badge>
+          </li>
         ))}
-      </div>
+      </ol>
       {pendingActions.length > 0 && (
-        <div className="flex flex-col gap-1.5">
+        <ul className="flex flex-col gap-2 mt-4">
           {pendingActions.map((action, i) => (
-            <div key={i} className="flex items-center gap-2 rounded-lg px-3 py-2"
-              style={{ backgroundColor: "var(--bg-card-hover)" }}>
-              <span className="text-xs">💡</span>
-              <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{action}</span>
-            </div>
+            <li key={i} className="flex items-start gap-2 rounded-md bg-surface-sunken px-3 py-2 body-sm text-ink-2">
+              <Info className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+              <span>{action}</span>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -399,13 +426,22 @@ export default function DetalleTorneo() {
   };
 
   if (loading)
-    return <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>Cargando...</div>;
+    return (
+      <div className="max-w-3xl mx-auto flex flex-col gap-4" aria-busy="true" aria-label="Cargando torneo">
+        <div className="pd-skeleton h-16" />
+        <div className="pd-skeleton h-28" />
+        <div className="pd-skeleton h-64" />
+      </div>
+    );
 
   if (!torneo)
     return (
-      <div className="text-center py-12" style={{ color: "var(--text-muted)" }}>
-        Torneo no encontrado
-      </div>
+      <Card className="max-w-md mx-auto text-center py-12">
+        <div className="mb-3">
+          <span className="pd-ball" aria-hidden="true" />
+        </div>
+        <p className="heading-sm">Torneo no encontrado</p>
+      </Card>
     );
 
   // Cuadros del torneo con sus parejas, grupos y bracket
@@ -435,122 +471,171 @@ export default function DetalleTorneo() {
   const onBracketDelCuadro = (rondas) =>
     setCuadrosStepper((prev) => ({ ...prev, [cuadroActual.id]: { label: cuadroActual.label, rondas } }));
 
+  // Link público del torneo (el que copia "Copiar link")
+  const linkPublico = `${window.location.origin}/torneos/${id}`;
+
   const selectorCuadros = variosCuadros ? (
-    <div className="flex flex-wrap gap-2 mb-4">
+    <div className="pd-pills mb-4" role="tablist" aria-label="Cuadro">
       {cuadros.map((c) => {
         const n = datosPorCuadro[c.id].parejas.length;
         const activo = c.id === cuadroActual.id;
         return (
           <button
             key={c.id}
+            type="button"
+            role="tab"
+            className="pd-pill"
+            aria-selected={activo}
             onClick={() => {
               setCuadroSel(c.id);
               setCuadroElegido(true);
             }}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold transition border"
-            style={
-              activo
-                ? { backgroundColor: "var(--accent)", color: "white", borderColor: "var(--accent)" }
-                : { backgroundColor: "var(--bg-card)", color: "var(--text-secondary)", borderColor: "var(--border-card)" }
-            }
           >
-            {c.label} <span className="font-normal opacity-80">({n} pareja{n !== 1 ? "s" : ""})</span>
+            <MarcaCategoria cat={c.nivel} size={20} />
+            {c.label}
+            <span className="pd-count">{n}</span>
           </button>
         );
       })}
     </div>
   ) : null;
 
+  const tabsItems = getTabs(torneo?.formato || "normal").map((t) => ({
+    value: t,
+    label: t,
+    count: t === "Parejas" ? parejasStepper.length : undefined,
+  }));
+
+  // Chips de categoría de un género en el modo edición (bloqueadas cuando ya hay un cuadro generado)
+  const chipsNivelEdit = (genero) => (
+    <div className="pd-pills" role="group" aria-label={`Categorías ${genero}`}>
+      {CATEGORIAS_TORNEO.map((nivel) => (
+        <button
+          key={nivel}
+          type="button"
+          className="pd-pill disabled:opacity-50 disabled:cursor-not-allowed!"
+          disabled={bloqueoCategorias}
+          aria-pressed={((editForm.categoriasConfig || {})[genero] || []).includes(nivel)}
+          onClick={() => toggleNivelEdit(genero, nivel)}
+        >
+          <MarcaCategoria cat={nivel} size={20} />
+          {nivel}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <button
+      <div className="flex items-start gap-3 mb-6">
+        <Button
+          variant="ghost"
+          iconOnly
+          aria-label="Volver"
+          icon={<ArrowLeft className="pd-icon" size={20} aria-hidden="true" />}
           onClick={() => navigate(-1)}
-          className="text-xl hover:opacity-70"
-          style={{ color: "var(--text-muted)" }}
-        >
-          ←
-        </button>
-        <div className="flex-1">
-          <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>{torneo.nombre}</h1>
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h1 className="heading-lg">{torneo.nombre}</h1>
+            <Badge tone={estadoTone[torneo.status]} dot>
+              {estadoLabel[torneo.status]}
+            </Badge>
+          </div>
+          <p className="body-sm text-ink-2">
             {torneo.sede} — {torneo.ciudad}, {torneo.provincia}
           </p>
         </div>
-        <span
-          className={`text-xs font-semibold px-3 py-1 rounded-full ${estadoBadge[torneo.status]}`}
-        >
-          {estadoLabel[torneo.status]}
-        </span>
 
         {/* Notificar */}
         {mostrarNotificar && (
-          <div className="fixed inset-0 z-10" onClick={() => setMostrarNotificar(false)} />
+          <div className="fixed inset-0 z-10" aria-hidden="true" onClick={() => setMostrarNotificar(false)} />
         )}
-        <div className="relative">
-          <button
+        <div
+          className="relative"
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && mostrarNotificar) setMostrarNotificar(false);
+          }}
+        >
+          <Button
+            iconOnly
+            aria-label="Enviar mensaje por WhatsApp"
+            aria-haspopup="menu"
+            aria-expanded={mostrarNotificar}
+            icon={<MessageCircle className="pd-icon" size={20} aria-hidden="true" />}
             onClick={() => setMostrarNotificar(!mostrarNotificar)}
-            className="px-3 py-2 rounded-xl text-sm font-semibold transition"
-            style={{ backgroundColor: "#25d366", color: "white" }}
-          >
-            📱
-          </button>
+          />
           {mostrarNotificar && (
-            <div className="absolute right-0 top-12 themed-card rounded-xl border shadow-lg p-3 z-20 w-72">
-              <p className="text-xs font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
-                Enviar mensaje por WhatsApp
-              </p>
-              <div className="flex flex-col gap-1.5">
+            <div
+              className="pd-card absolute right-0 top-12 z-20 w-72 p-3!"
+              role="menu"
+              aria-label="Enviar mensaje por WhatsApp"
+              style={{ boxShadow: "var(--shadow-overlay)" }}
+            >
+              <p className="pd-eyebrow mb-2!">Enviar mensaje por WhatsApp</p>
+              <div className="flex flex-col gap-1">
                 {torneo.status === "en_curso" && (
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    block
+                    role="menuitem"
+                    className="justify-start!"
                     onClick={() => {
                       const msg = encodeURIComponent(`¡Los grupos del torneo "${torneo.nombre}" ya fueron publicados! Consultá tus partidos acá: ${window.location.origin}/torneos/${id}`);
                       window.open(`https://wa.me/?text=${msg}`, "_blank");
                       setMostrarNotificar(false);
                     }}
-                    className="text-left rounded-lg px-3 py-2 text-xs transition hover:opacity-80"
-                    style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-secondary)" }}
                   >
-                    📋 Grupos publicados — compartir link
-                  </button>
+                    Grupos publicados — compartir link
+                  </Button>
                 )}
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  block
+                  role="menuitem"
+                  className="justify-start!"
                   onClick={() => {
                     const msg = encodeURIComponent(`📢 Información del torneo "${torneo.nombre}"\n📍 Sede: ${torneo.sede}\n📅 Fecha: ${formatFecha(torneo.fechaInicio)}\n🔗 Más info: ${window.location.origin}/torneos/${id}`);
                     window.open(`https://wa.me/?text=${msg}`, "_blank");
                     setMostrarNotificar(false);
                   }}
-                  className="text-left rounded-lg px-3 py-2 text-xs transition hover:opacity-80"
-                  style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-secondary)" }}
                 >
-                  📢 Info general del torneo
-                </button>
+                  Info general del torneo
+                </Button>
                 {torneo.status === "inscripcion" && (
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    block
+                    role="menuitem"
+                    className="justify-start!"
                     onClick={() => {
                       const cats = torneo.categoriasConfig ? Object.values(torneo.categoriasConfig).flat().join(", ") : "";
                       const msg = encodeURIComponent(`🏆 ¡Inscripciones abiertas!\n\nTorneo: ${torneo.nombre}\n📍 ${torneo.sede}, ${torneo.ciudad}\n📅 ${formatFecha(torneo.fechaInicio)}\n🎾 Categorías: ${cats}\n💰 Inscripción: ${torneo.inscripcion > 0 ? formatPrecio(torneo.inscripcion) : "Gratis"}\n\n✍️ Inscribite acá: ${window.location.origin}/torneos/${id}`);
                       window.open(`https://wa.me/?text=${msg}`, "_blank");
                       setMostrarNotificar(false);
                     }}
-                    className="text-left rounded-lg px-3 py-2 text-xs transition hover:opacity-80"
-                    style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-secondary)" }}
                   >
-                    📝 Invitar a inscribirse
-                  </button>
+                    Invitar a inscribirse
+                  </Button>
                 )}
                 {torneo.status === "finalizado" && (
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    block
+                    role="menuitem"
+                    className="justify-start!"
                     onClick={() => {
                       const msg = encodeURIComponent(`🏆 ¡Finalizó el torneo "${torneo.nombre}"!\n\nMirá los resultados acá: ${window.location.origin}/torneos/${id}`);
                       window.open(`https://wa.me/?text=${msg}`, "_blank");
                       setMostrarNotificar(false);
                     }}
-                    className="text-left rounded-lg px-3 py-2 text-xs transition hover:opacity-80"
-                    style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-secondary)" }}
                   >
-                    🎉 Compartir resultados finales
-                  </button>
+                    Compartir resultados finales
+                  </Button>
                 )}
               </div>
             </div>
@@ -561,519 +646,461 @@ export default function DetalleTorneo() {
       <TournamentStepper torneo={torneo} cuadros={cuadros} datosPorCuadro={datosPorCuadro} parejasSinCuadro={sinCuadro.length} />
 
       {mostrarAyuda && (
-        <div className="themed-card rounded-2xl p-4 border mb-4" style={{ borderColor: "rgba(59,130,246,0.2)", backgroundColor: "rgba(59,130,246,0.04)" }}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm">💡</span>
-              <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>¿Sabías que...?</span>
-            </div>
-            <button onClick={() => setMostrarAyuda(false)} className="text-xs font-semibold px-2 py-1 rounded-lg transition" style={{ color: "var(--text-muted)" }}>
+        <Card className="mb-4">
+          <Card.Row>
+            <span className="flex items-center gap-2 heading-sm">
+              <Info className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+              ¿Sabías que...?
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => setMostrarAyuda(false)}>
               Ocultar
-            </button>
-          </div>
-          <div className="flex flex-col gap-2">
+            </Button>
+          </Card.Row>
+          <ul className="flex flex-col gap-2 mt-3">
             {torneo.status === "inscripcion" && (
               <>
-                <div className="flex items-start gap-2">
-                  <span className="text-xs mt-0.5">📝</span>
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Cuando un jugador se inscribe, recibís una <strong>notificación automática</strong> en la campana de la app.</p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-xs mt-0.5">🔗</span>
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Podés <strong>vincular jugadores a sus parejas</strong> desde la pestaña Parejas. Cada jugador recibe un link único para asociar su cuenta.</p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-xs mt-0.5">📱</span>
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Usá el botón <strong>"📱"</strong> para compartir la info del torneo por WhatsApp e invitar jugadores a inscribirse.</p>
-                </div>
+                <Tip icon={Bell}>Cuando un jugador se inscribe, recibís una <strong>notificación automática</strong> en la campana de la app.</Tip>
+                <Tip icon={LinkIcon}>Podés <strong>vincular jugadores a sus parejas</strong> desde la pestaña Parejas. Cada jugador recibe un link único para asociar su cuenta.</Tip>
+                <Tip icon={MessageCircle}>Usá el botón de <strong>WhatsApp</strong> para compartir la info del torneo e invitar jugadores a inscribirse.</Tip>
               </>
             )}
             {torneo.status === "en_curso" && (
               <>
-                <div className="flex items-start gap-2">
-                  <span className="text-xs mt-0.5">🎾</span>
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Cuando asignás <strong>horario y cancha</strong> a un partido, los jugadores vinculados reciben una notificación automática.</p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-xs mt-0.5">📊</span>
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Al cargar un resultado, los <strong>puntos se calculan automáticamente</strong> y los jugadores reciben notificación.</p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-xs mt-0.5">⚡</span>
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Usá <strong>"Guardar y cargar siguiente"</strong> en el modal de resultados para cargar varios partidos en secuencia.</p>
-                </div>
+                <Tip icon={CircleDot}>Cuando asignás <strong>horario y cancha</strong> a un partido, los jugadores vinculados reciben una notificación automática.</Tip>
+                <Tip icon={Coins}>Al cargar un resultado, los <strong>puntos se calculan automáticamente</strong> y los jugadores reciben notificación.</Tip>
+                <Tip icon={Zap}>Usá <strong>"Guardar y cargar siguiente"</strong> en el modal de resultados para cargar varios partidos en secuencia.</Tip>
                 {torneo.formato === "liga" && (
-                  <div className="flex items-start gap-2">
-                    <span className="text-xs mt-0.5">📋</span>
-                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>En formato <strong>Liga</strong>, todas las parejas juegan entre sí. Los partidos están organizados por <strong>fechas</strong>. El líder de la tabla al finalizar es el campeón.</p>
-                  </div>
+                  <Tip icon={List}>En formato <strong>Liga</strong>, todas las parejas juegan entre sí. Los partidos están organizados por <strong>fechas</strong>. El líder de la tabla al finalizar es el campeón.</Tip>
                 )}
                 {torneo.habilitarReclamos && (
-                  <div className="flex items-start gap-2">
-                    <span className="text-xs mt-0.5">⚠️</span>
-                    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Los jugadores vinculados pueden <strong>abrir reclamos</strong>. Revisalos en la pestaña Reclamos.</p>
-                  </div>
+                  <Tip icon={AlertTriangle}>Los jugadores vinculados pueden <strong>abrir reclamos</strong>. Revisalos en la pestaña Reclamos.</Tip>
                 )}
               </>
             )}
             {torneo.status === "finalizado" && (
               <>
-                <div className="flex items-start gap-2">
-                  <span className="text-xs mt-0.5">🏆</span>
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Los <strong>puntos de campeón y subcampeón</strong> ya fueron asignados automáticamente a los jugadores vinculados.</p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-xs mt-0.5">📱</span>
-                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>Compartí los resultados finales por WhatsApp con el botón <strong>"📱"</strong>.</p>
-                </div>
+                <Tip icon={Trophy}>Los <strong>puntos de campeón y subcampeón</strong> ya fueron asignados automáticamente a los jugadores vinculados.</Tip>
+                <Tip icon={MessageCircle}>Compartí los resultados finales por WhatsApp con el botón de <strong>WhatsApp</strong>.</Tip>
               </>
             )}
-          </div>
-        </div>
+          </ul>
+        </Card>
       )}
 
-      <div className="flex gap-2 mb-6 border-b" style={{ borderColor: "var(--border-card)" }}>
-        {getTabs(torneo?.formato || "normal").map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-semibold transition border-b-2 -mb-px ${
-              tab === t
-                ? "border-green-600 text-green-600"
-                : "border-transparent hover:opacity-80"
-            }`}
-            style={tab !== t ? { color: "var(--text-muted)" } : {}}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      <Tabs items={tabsItems} value={tab} onChange={setTab} ariaLabel="Secciones del torneo" className="mb-6" />
 
       {tab === "Info" && !editando && (
         <div className="flex flex-col gap-4">
-          <div className="themed-card rounded-2xl p-5 border">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>
-                Detalles del torneo
-              </h2>
-              <button
+          <Card>
+            <Card.Row className="mb-3">
+              <Card.Title as="h2">Detalles del torneo</Card.Title>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Pencil className="pd-icon" size={20} aria-hidden="true" />}
                 onClick={iniciarEdicion}
-                className="text-xs font-semibold text-green-600 hover:underline"
               >
                 Editar
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+              </Button>
+            </Card.Row>
+            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <span className="block" style={{ color: "var(--text-muted)" }}>Formato</span>
-                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                  {formatoLabel[torneo.formato]}
-                </span>
+                <dt className="body-sm text-ink-3">Formato</dt>
+                <dd className="body-md font-medium!">{formatoLabel[torneo.formato]}</dd>
                 {formatoDesc[torneo.formato] && (
-                  <span className="text-xs mt-0.5 block" style={{ color: "var(--text-muted)" }}>
-                    {formatoDesc[torneo.formato]}
-                  </span>
+                  <dd className="body-sm text-ink-3 mt-0.5">{formatoDesc[torneo.formato]}</dd>
                 )}
               </div>
               <div>
-                <span className="block" style={{ color: "var(--text-muted)" }}>Categoría Género</span>
-                <span className="font-medium capitalize" style={{ color: "var(--text-primary)" }}>
+                <dt className="body-sm text-ink-3">Categoría género</dt>
+                <dd className="body-md font-medium! capitalize">
                   {Array.isArray(torneo.categoriaGenero)
                     ? torneo.categoriaGenero.join(", ")
                     : torneo.categoria || "—"}
-                </span>
+                </dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="body-sm text-ink-3">Categoría nivel</dt>
+                <dd className="body-md font-medium!">
+                  {torneo.categoriasConfig ? (
+                    <div className="flex flex-col gap-1">
+                      {Object.entries(torneo.categoriasConfig).map(([genero, niveles]) => (
+                        <div key={genero} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span>{capitalizar(genero)}:</span>
+                          {(Array.isArray(niveles) ? niveles : []).map((nivel) => (
+                            <span key={nivel} className="inline-flex items-center gap-1 font-normal">
+                              <MarcaCategoria cat={nivel} size={20} />
+                              {nivel}
+                            </span>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    torneo.nivel || "—"
+                  )}
+                </dd>
               </div>
               <div>
-                <span className="block" style={{ color: "var(--text-muted)" }}>Categoría Nivel</span>
-                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                  {torneo.categoriasConfig
-                    ? Object.entries(torneo.categoriasConfig)
-                        .map(
-                          ([genero, niveles]) =>
-                            `${genero.charAt(0).toUpperCase() + genero.slice(1)}: ${niveles.join(", ")}`,
-                        )
-                        .join(" | ")
-                    : torneo.nivel || "—"}
-                </span>
+                <dt className="body-sm text-ink-3">Máx. parejas</dt>
+                <dd className="body-md font-medium! pd-tnum">{torneo.maxParejas}</dd>
               </div>
               <div>
-                <span className="block" style={{ color: "var(--text-muted)" }}>Máx. parejas</span>
-                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                  {torneo.maxParejas}
-                </span>
-              </div>
-              <div>
-                <span className="block" style={{ color: "var(--text-muted)" }}>Sets por partido</span>
-                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+                <dt className="body-sm text-ink-3">Sets por partido</dt>
+                <dd className="body-md font-medium!">
                   {torneo.sets} set{torneo.sets > 1 ? "s" : ""}
-                </span>
+                </dd>
               </div>
               <div>
-                <span className="block" style={{ color: "var(--text-muted)" }}>Games por set</span>
-                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                  {torneo.gamesPorSet} games
-                </span>
+                <dt className="body-sm text-ink-3">Games por set</dt>
+                <dd className="body-md font-medium!">{torneo.gamesPorSet} games</dd>
               </div>
               <div>
-                <span className="block" style={{ color: "var(--text-muted)" }}>Inscripción</span>
-                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+                <dt className="body-sm text-ink-3">Inscripción</dt>
+                <dd className="body-md font-medium! pd-tnum">
                   {torneo.inscripcion > 0
                     ? formatPrecio(torneo.inscripcion)
                     : "Gratuita"}
-                </span>
+                </dd>
               </div>
               <div>
-                <span className="block" style={{ color: "var(--text-muted)" }}>Super tiebreak</span>
-                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                  {torneo.superTiebreak ? "Sí" : "No"}
-                </span>
+                <dt className="body-sm text-ink-3">Super tiebreak</dt>
+                <dd className="body-md font-medium!">{torneo.superTiebreak ? "Sí" : "No"}</dd>
               </div>
               <div>
-                <span className="block" style={{ color: "var(--text-muted)" }}>Fecha inicio</span>
-                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                  {formatFecha(torneo.fechaInicio)}
-                </span>
+                <dt className="body-sm text-ink-3">Fecha inicio</dt>
+                <dd className="body-md font-medium! pd-tnum">{formatFecha(torneo.fechaInicio)}</dd>
               </div>
               <div>
-                <span className="block" style={{ color: "var(--text-muted)" }}>Fecha fin</span>
-                <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                  {formatFecha(torneo.fechaFin)}
-                </span>
+                <dt className="body-sm text-ink-3">Fecha fin</dt>
+                <dd className="body-md font-medium! pd-tnum">{formatFecha(torneo.fechaFin)}</dd>
               </div>
-            </div>
+            </dl>
 
             {/* Sede */}
-            <div className="mt-3 pt-3 border-t" style={{ borderColor: "var(--border-card)" }}>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <span className="block" style={{ color: "var(--text-muted)" }}>Sede</span>
-                  <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                    {torneo.sede}
-                  </span>
-                </div>
-                {torneo.direccionSede && (
-                  <div>
-                    <span className="block" style={{ color: "var(--text-muted)" }}>Dirección</span>
-                    <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                      {torneo.direccionSede}
-                    </span>
-                  </div>
-                )}
-                {torneo.instagramSede && (
-                  <div>
-                    <span className="block" style={{ color: "var(--text-muted)" }}>Instagram sede</span>
-                    <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                      {torneo.instagramSede}
-                    </span>
-                  </div>
-                )}
-                {torneo.facebookSede && (
-                  <div>
-                    <span className="block" style={{ color: "var(--text-muted)" }}>Facebook sede</span>
-                    <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                      {torneo.facebookSede}
-                    </span>
-                  </div>
-                )}
+            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 mt-4 pt-4 border-t border-line">
+              <div>
+                <dt className="body-sm text-ink-3">Sede</dt>
+                <dd className="body-md font-medium!">{torneo.sede}</dd>
               </div>
-            </div>
+              {torneo.direccionSede && (
+                <div>
+                  <dt className="body-sm text-ink-3">Dirección</dt>
+                  <dd className="body-md font-medium!">{torneo.direccionSede}</dd>
+                </div>
+              )}
+              {torneo.instagramSede && (
+                <div>
+                  <dt className="body-sm text-ink-3">Instagram sede</dt>
+                  <dd className="body-md font-medium!">{torneo.instagramSede}</dd>
+                </div>
+              )}
+              {torneo.facebookSede && (
+                <div>
+                  <dt className="body-sm text-ink-3">Facebook sede</dt>
+                  <dd className="body-md font-medium!">{torneo.facebookSede}</dd>
+                </div>
+              )}
+            </dl>
 
             {/* Redes organizador */}
             {(torneo.instagramOrganizador ||
               torneo.facebookOrganizador ||
               torneo.whatsappOrganizador) && (
-              <div className="mt-3 pt-3 border-t" style={{ borderColor: "var(--border-card)" }}>
-                <span className="text-sm block mb-2" style={{ color: "var(--text-muted)" }}>
-                  Redes del organizador
-                </span>
-                <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="mt-4 pt-4 border-t border-line">
+                <p className="pd-eyebrow mb-2!">Redes del organizador</p>
+                <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {torneo.instagramOrganizador && (
                     <div>
-                      <span className="block" style={{ color: "var(--text-muted)" }}>Instagram</span>
-                      <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                        {torneo.instagramOrganizador}
-                      </span>
+                      <dt className="body-sm text-ink-3">Instagram</dt>
+                      <dd className="body-md font-medium!">{torneo.instagramOrganizador}</dd>
                     </div>
                   )}
                   {torneo.facebookOrganizador && (
                     <div>
-                      <span className="block" style={{ color: "var(--text-muted)" }}>Facebook</span>
-                      <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                        {torneo.facebookOrganizador}
-                      </span>
+                      <dt className="body-sm text-ink-3">Facebook</dt>
+                      <dd className="body-md font-medium!">{torneo.facebookOrganizador}</dd>
                     </div>
                   )}
                   {torneo.whatsappOrganizador && (
                     <div>
-                      <span className="block" style={{ color: "var(--text-muted)" }}>WhatsApp</span>
-                      <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                        {torneo.whatsappOrganizador}
-                      </span>
+                      <dt className="body-sm text-ink-3">WhatsApp</dt>
+                      <dd className="body-md font-medium! pd-tnum">{torneo.whatsappOrganizador}</dd>
                     </div>
                   )}
-                </div>
+                </dl>
               </div>
             )}
 
             {/* Descripción */}
             {torneo.descripcion && (
-              <div className="mt-3 pt-3 border-t" style={{ borderColor: "var(--border-card)" }}>
-                <span className="text-sm block mb-1" style={{ color: "var(--text-muted)" }}>
-                  Descripción
-                </span>
-                <p className="text-sm" style={{ color: "var(--text-primary)" }}>{torneo.descripcion}</p>
+              <div className="mt-4 pt-4 border-t border-line">
+                <p className="pd-eyebrow mb-1!">Descripción</p>
+                <p className="body-md">{torneo.descripcion}</p>
               </div>
             )}
 
             {/* Reglamento */}
             {torneo.reglamento && (
-              <div className="mt-3 pt-3 border-t" style={{ borderColor: "var(--border-card)" }}>
-                <span className="text-sm block mb-1" style={{ color: "var(--text-muted)" }}>
-                  Reglamento
-                </span>
-                <p className="text-sm whitespace-pre-line" style={{ color: "var(--text-primary)" }}>
-                  {torneo.reglamento}
-                </p>
+              <div className="mt-4 pt-4 border-t border-line">
+                <p className="pd-eyebrow mb-1!">Reglamento</p>
+                <p className="body-md whitespace-pre-line">{torneo.reglamento}</p>
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Cuadros: un sorteo por categoría */}
-          <div className="themed-card rounded-2xl p-5 border">
-            <h2 className="font-semibold mb-1" style={{ color: "var(--text-primary)" }}>Cuadros</h2>
-            <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+          <Card>
+            <Card.Title as="h2" className="mb-1!">
+              Cuadros
+            </Card.Title>
+            <p className="body-sm text-ink-2 mb-3">
               Cada categoría se juega como un cuadro independiente, con sus propios grupos, bracket y campeones.
             </p>
-            <div className="flex flex-col gap-2">
+            <ul className="flex flex-col gap-2">
               {cuadros.map((c) => {
                 const datos = datosPorCuadro[c.id];
                 const n = datos.parejas.length;
+                const etiqueta = etiquetaEstadoCuadro(torneo, datos);
                 return (
-                  <div
+                  <li
                     key={c.id}
-                    className="flex items-center justify-between rounded-xl px-4 py-3"
-                    style={{ backgroundColor: "var(--bg-card-hover)" }}
+                    className="flex items-center justify-between gap-3 rounded-md bg-surface-sunken px-4 py-3"
                   >
-                    <div>
-                      <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{c.label}</p>
-                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    <div className="min-w-0">
+                      <p className="heading-sm flex items-center gap-2">
+                        <MarcaCategoria cat={c.nivel} size={20} />
+                        {c.label}
+                      </p>
+                      <p className="body-sm text-ink-3">
                         {n} pareja{n !== 1 ? "s" : ""}{n === 0 ? " — sin parejas, no se juega" : ""}
                       </p>
                     </div>
-                    <span
-                      className="text-xs font-semibold px-2 py-1 rounded-full"
-                      style={{ backgroundColor: "var(--accent-light)", color: "var(--accent)" }}
-                    >
-                      {etiquetaEstadoCuadro(torneo, datos)}
-                    </span>
-                  </div>
+                    <Badge tone={tonoEstadoCuadro[etiqueta] || "neutral"}>{etiqueta}</Badge>
+                  </li>
                 );
               })}
-              {sinCuadro.length > 0 && (
-                <p className="text-xs" style={{ color: "#b45309" }}>
-                  ⚠ {sinCuadro.length} pareja{sinCuadro.length !== 1 ? "s" : ""} sin categoría — asignales una en la pestaña Parejas
-                </p>
-              )}
-            </div>
-          </div>
+            </ul>
+            {sinCuadro.length > 0 && (
+              <p className="flex items-start gap-2 body-sm text-warning mt-3">
+                <AlertTriangle className="pd-icon" size={20} aria-hidden="true" />
+                <span>
+                  {sinCuadro.length} pareja{sinCuadro.length !== 1 ? "s" : ""} sin categoría — asignales una en la pestaña Parejas
+                </span>
+              </p>
+            )}
+          </Card>
 
           {/* Acciones del torneo */}
-          <div className="themed-card rounded-2xl p-5 border">
-            <h2 className="font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Acciones</h2>
-
-            {/* Acción principal según estado */}
-            {torneo.status === "inscripcion" && (
-              <button
-                onClick={async () => {
-                  // Cada cuadro con parejas necesita el mínimo (3; 2 en eliminación directa) y ninguna pareja puede
-                  // quedar sin cuadro
-                  const minParejas = torneo.formato === "eliminacion" ? 2 : 3;
-                  const problemas = [];
-                  const conParejas = cuadros.filter((c) => datosPorCuadro[c.id].parejas.length > 0);
-                  if (parejasStepper.length === 0) problemas.push("No hay parejas inscriptas.");
-                  conParejas.forEach((c) => {
-                    const n = datosPorCuadro[c.id].parejas.length;
-                    if (n < minParejas) {
+          <Card>
+            <Card.Title as="h2" className="mb-4!">
+              Acciones
+            </Card.Title>
+            <div className="flex flex-col gap-3">
+              {/* Acción principal según estado */}
+              {torneo.status === "inscripcion" && (
+                <Button
+                  variant="primary"
+                  block
+                  onClick={async () => {
+                    // Cada cuadro con parejas necesita el mínimo (3; 2 en eliminación directa) y ninguna pareja puede
+                    // quedar sin cuadro
+                    const minParejas = torneo.formato === "eliminacion" ? 2 : 3;
+                    const problemas = [];
+                    const conParejas = cuadros.filter((c) => datosPorCuadro[c.id].parejas.length > 0);
+                    if (parejasStepper.length === 0) problemas.push("No hay parejas inscriptas.");
+                    conParejas.forEach((c) => {
+                      const n = datosPorCuadro[c.id].parejas.length;
+                      if (n < minParejas) {
+                        problemas.push(
+                          variosCuadros
+                            ? `${c.label} tiene ${n} pareja${n !== 1 ? "s" : ""}; necesita ${minParejas}. Reasignalas o quitá la categoría.`
+                            : `Necesitás al menos ${minParejas} parejas (tenés ${n}).`,
+                        );
+                      }
+                    });
+                    if (sinCuadro.length > 0) {
                       problemas.push(
-                        variosCuadros
-                          ? `${c.label} tiene ${n} pareja${n !== 1 ? "s" : ""}; necesita ${minParejas}. Reasignalas o quitá la categoría.`
-                          : `Necesitás al menos ${minParejas} parejas (tenés ${n}).`,
+                        `${sinCuadro.length} pareja${sinCuadro.length !== 1 ? "s" : ""} sin categoría: asignales una en la pestaña Parejas antes de iniciar.`,
                       );
                     }
-                  });
-                  if (sinCuadro.length > 0) {
-                    problemas.push(
-                      `${sinCuadro.length} pareja${sinCuadro.length !== 1 ? "s" : ""} sin categoría: asignales una en la pestaña Parejas antes de iniciar.`,
-                    );
-                  }
-                  if (problemas.length > 0) {
-                    await confirmar({
-                      titulo: "No se puede iniciar el torneo",
-                      mensaje: problemas.join("\n"),
-                      confirmText: "Entendido",
-                      cancelText: "Cerrar",
+                    if (problemas.length > 0) {
+                      await confirmar({
+                        titulo: "No se puede iniciar el torneo",
+                        mensaje: problemas.join("\n"),
+                        confirmText: "Entendido",
+                        cancelText: "Cerrar",
+                      });
+                      return;
+                    }
+                    const ok = await confirmar({
+                      titulo: "Iniciar torneo",
+                      mensaje: "¿Cerrar inscripciones y comenzar el torneo?",
+                      confirmText: "Iniciar",
                     });
-                    return;
-                  }
-                  const ok = await confirmar({
-                    titulo: "Iniciar torneo",
-                    mensaje: "¿Cerrar inscripciones y comenzar el torneo?",
-                    confirmText: "Iniciar",
-                  });
-                  if (!ok) return;
-                  const seguro = await confirmar({
-                    titulo: "¿Estás seguro?",
-                    mensaje: "Una vez iniciado, no se pueden modificar las inscripciones.",
-                    confirmText: "Sí, iniciar",
-                    danger: true,
-                  });
-                  if (seguro) cambiarEstado("en_curso");
-                }}
-                className="w-full py-2.5 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition mb-3"
-              >
-                🚀 Iniciar torneo
-              </button>
-            )}
-            {torneo.status === "en_curso" && (
-              <button
-                onClick={async () => {
-                  // Avisa qué cuadros no están terminados, pero deja finalizar igual
-                  const sinTerminar = cuadros
-                    .filter((c) => datosPorCuadro[c.id].parejas.length > 0)
-                    .map((c) => ({ cuadro: c, estado: estadoDeCuadro(torneo, datosPorCuadro[c.id]) }))
-                    .filter((x) => !x.estado.terminado);
-                  const aviso = sinTerminar.length === 0
-                    ? ""
-                    : variosCuadros
-                      ? `Cuadros sin terminar: ${sinTerminar.map((x) => `${x.cuadro.label} (${x.estado.motivo})`).join(", ")}.\n`
-                      : `El torneo no está terminado (${sinTerminar[0].estado.motivo}).\n`;
-                  const ok = await confirmar({
-                    titulo: "Finalizar torneo",
-                    mensaje: `${aviso}¿Finalizar el torneo${aviso ? " de todos modos" : ""}?`,
-                    confirmText: "Finalizar",
-                  });
-                  if (!ok) return;
-                  const seguro = await confirmar({
-                    titulo: "¿Estás seguro?",
-                    mensaje: "Esta acción no se puede deshacer. Se asignarán los puntos finales.",
-                    confirmText: "Sí, finalizar",
-                    danger: true,
-                  });
-                  if (seguro) cambiarEstado("finalizado");
-                }}
-                className="w-full py-2.5 rounded-xl text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 transition mb-3"
-              >
-                🏆 Finalizar torneo
-              </button>
-            )}
-            {torneo.status === "finalizado" && (
-              <div className="text-sm text-center py-2 mb-3 rounded-xl" style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}>
-                Torneo finalizado
+                    if (!ok) return;
+                    const seguro = await confirmar({
+                      titulo: "¿Estás seguro?",
+                      mensaje: "Una vez iniciado, no se pueden modificar las inscripciones.",
+                      confirmText: "Sí, iniciar",
+                      danger: true,
+                    });
+                    if (seguro) cambiarEstado("en_curso");
+                  }}
+                >
+                  Iniciar torneo
+                </Button>
+              )}
+              {torneo.status === "en_curso" && (
+                <Button
+                  variant="primary"
+                  block
+                  onClick={async () => {
+                    // Avisa qué cuadros no están terminados, pero deja finalizar igual
+                    const sinTerminar = cuadros
+                      .filter((c) => datosPorCuadro[c.id].parejas.length > 0)
+                      .map((c) => ({ cuadro: c, estado: estadoDeCuadro(torneo, datosPorCuadro[c.id]) }))
+                      .filter((x) => !x.estado.terminado);
+                    const aviso = sinTerminar.length === 0
+                      ? ""
+                      : variosCuadros
+                        ? `Cuadros sin terminar: ${sinTerminar.map((x) => `${x.cuadro.label} (${x.estado.motivo})`).join(", ")}.\n`
+                        : `El torneo no está terminado (${sinTerminar[0].estado.motivo}).\n`;
+                    const ok = await confirmar({
+                      titulo: "Finalizar torneo",
+                      mensaje: `${aviso}¿Finalizar el torneo${aviso ? " de todos modos" : ""}?`,
+                      confirmText: "Finalizar",
+                    });
+                    if (!ok) return;
+                    const seguro = await confirmar({
+                      titulo: "¿Estás seguro?",
+                      mensaje: "Esta acción no se puede deshacer. Se asignarán los puntos finales.",
+                      confirmText: "Sí, finalizar",
+                      danger: true,
+                    });
+                    if (seguro) cambiarEstado("finalizado");
+                  }}
+                >
+                  Finalizar torneo
+                </Button>
+              )}
+              {torneo.status === "finalizado" && (
+                <p className="body-sm text-ink-3 text-center rounded-md bg-surface-sunken py-2">Torneo finalizado</p>
+              )}
+
+              {/* Compartir */}
+              <Field label="Link público" as="div">
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input readOnly value={linkPublico} aria-label="Link público del torneo" className="flex-1" />
+                  <Button
+                    icon={<Copy className="pd-icon" size={20} aria-hidden="true" />}
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/torneos/${id}`);
+                    }}
+                  >
+                    Copiar link
+                  </Button>
+                </div>
+              </Field>
+              <div className="pd-btn-group">
+                <Button
+                  icon={<Eye className="pd-icon" size={20} aria-hidden="true" />}
+                  onClick={() => window.open(`/torneos/${id}`, "_blank")}
+                >
+                  Ver como jugador
+                </Button>
+                <Button
+                  icon={<MessageCircle className="pd-icon" size={20} aria-hidden="true" />}
+                  onClick={() => {
+                    const url = `https://wa.me/?text=${encodeURIComponent(`¡Inscribite al torneo ${torneo.nombre}! ${window.location.origin}/torneos/${id}`)}`;
+                    window.open(url, "_blank");
+                  }}
+                >
+                  WhatsApp
+                </Button>
               </div>
-            )}
 
-            {/* Compartir */}
-            <div className="flex gap-2 mb-3 flex-wrap">
-              <button
-                onClick={() => window.open(`/torneos/${id}`, "_blank")}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2"
-                style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-primary)", border: "1px solid var(--border-card)" }}
-              >
-                👁️ Ver como jugador
-              </button>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(`${window.location.origin}/torneos/${id}`);
-                }}
-                className="flex-1 py-2 rounded-xl text-xs font-semibold border transition hover:opacity-80"
-                style={{ borderColor: "var(--border-card)", color: "var(--text-secondary)", backgroundColor: "var(--bg-card)" }}
-              >
-                🔗 Copiar link
-              </button>
-              <button
-                onClick={() => {
-                  const url = `https://wa.me/?text=${encodeURIComponent(`¡Inscribite al torneo ${torneo.nombre}! ${window.location.origin}/torneos/${id}`)}`;
-                  window.open(url, "_blank");
-                }}
-                className="flex-1 py-2 rounded-xl text-xs font-semibold border transition hover:opacity-80"
-                style={{ borderColor: "var(--border-card)", color: "var(--text-secondary)", backgroundColor: "var(--bg-card)" }}
-              >
-                💬 WhatsApp
-              </button>
+              {/* Cancelar */}
+              {torneo.status !== "cancelado" && torneo.status !== "finalizado" && (
+                <Button
+                  variant="ghost"
+                  block
+                  className="text-danger!"
+                  onClick={async () => {
+                    const ok = await confirmar({
+                      titulo: "Cancelar torneo",
+                      mensaje: "¿Cancelar el torneo? Esta acción no se puede deshacer.",
+                      confirmText: "Cancelar torneo",
+                      cancelText: "Volver",
+                      danger: true,
+                    });
+                    if (ok) cambiarEstado("cancelado");
+                  }}
+                >
+                  Cancelar torneo
+                </Button>
+              )}
             </div>
-
-            {/* Cancelar */}
-            {torneo.status !== "cancelado" && torneo.status !== "finalizado" && (
-              <button
-                onClick={async () => {
-                  const ok = await confirmar({
-                    titulo: "Cancelar torneo",
-                    mensaje: "¿Cancelar el torneo? Esta acción no se puede deshacer.",
-                    confirmText: "Cancelar torneo",
-                    cancelText: "Volver",
-                    danger: true,
-                  });
-                  if (ok) cambiarEstado("cancelado");
-                }}
-                className="w-full py-2 rounded-xl text-xs font-semibold border text-red-400 hover:bg-red-500/10 transition"
-                style={{ borderColor: "rgba(239,68,68,0.3)" }}
-              >
-                Cancelar torneo
-              </button>
-            )}
-          </div>
+          </Card>
 
           {/* Tip contextual */}
           {torneo.status === "inscripcion" && (
-            <div className="rounded-xl px-4 py-3 text-sm border" style={{ backgroundColor: "rgba(59,130,246,0.07)", borderColor: "rgba(59,130,246,0.25)", color: "var(--text-secondary)" }}>
-              💡 <strong>Tip:</strong> Podés iniciar el torneo cuando hayas confirmado todas las parejas. Las inscripciones se cerrarán automáticamente.
-            </div>
+            <Nota icon={Info}>
+              <strong>Tip:</strong> Podés iniciar el torneo cuando hayas confirmado todas las parejas. Las inscripciones se cerrarán automáticamente.
+            </Nota>
           )}
           {torneo.status === "en_curso" && (
-            <div className="rounded-xl px-4 py-3 text-sm border" style={{ backgroundColor: "rgba(34,197,94,0.07)", borderColor: "rgba(34,197,94,0.25)", color: "var(--text-secondary)" }}>
-              💡 <strong>Tip:</strong> Cargá los resultados desde la pestaña Grupos o Bracket. Al finalizar, se otorgarán puntos automáticamente.
-            </div>
+            <Nota icon={Info}>
+              <strong>Tip:</strong> Cargá los resultados desde la pestaña Grupos o Bracket. Al finalizar, se otorgarán puntos automáticamente.
+            </Nota>
           )}
           {torneo.status === "finalizado" && (
-            <div className="rounded-xl px-4 py-3 text-sm border" style={{ backgroundColor: "var(--bg-card-hover)", borderColor: "var(--border-card)", color: "var(--text-muted)" }}>
-              ✅ El torneo ha finalizado. Podés revisar los reclamos desde la pestaña correspondiente.
-            </div>
+            <Nota icon={Check}>El torneo ha finalizado. Podés revisar los reclamos desde la pestaña correspondiente.</Nota>
           )}
 
           {/* Premios */}
           {torneo.premios && (
-            <div className="themed-card rounded-2xl p-5 border">
-              <h2 className="font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Premios</h2>
-              <p className="text-sm whitespace-pre-line" style={{ color: "var(--text-secondary)" }}>{torneo.premios}</p>
-            </div>
+            <Card>
+              <Card.Title as="h2" className="mb-2!">
+                Premios
+              </Card.Title>
+              <p className="body-md text-ink-2 whitespace-pre-line">{torneo.premios}</p>
+            </Card>
           )}
 
           {/* Qué incluye la inscripción */}
           {torneo.inscripcionIncluye && (
-            <div className="themed-card rounded-2xl p-5 border">
-              <h2 className="font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Incluye la inscripción</h2>
-              <p className="text-sm whitespace-pre-line" style={{ color: "var(--text-secondary)" }}>{torneo.inscripcionIncluye}</p>
-            </div>
+            <Card>
+              <Card.Title as="h2" className="mb-2!">
+                Incluye la inscripción
+              </Card.Title>
+              <p className="body-md text-ink-2 whitespace-pre-line">{torneo.inscripcionIncluye}</p>
+            </Card>
           )}
 
           {/* Administradores */}
           {torneo.administradores && torneo.administradores.length > 0 && (
-            <div className="themed-card rounded-2xl p-5 border">
-              <h2 className="font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Administradores</h2>
-              <div className="flex flex-col gap-2">
+            <Card>
+              <Card.Title as="h2" className="mb-3!">
+                Administradores
+              </Card.Title>
+              <ul className="flex flex-col gap-2">
                 {torneo.administradores.map((admin, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold bg-gradient-to-br from-green-400 to-emerald-600">
+                  <li key={i} className="flex items-center gap-3">
+                    <span
+                      className="flex h-8 w-8 flex-none items-center justify-center rounded-pill bg-surface-sunken caption text-ink"
+                      aria-hidden="true"
+                    >
                       {(admin.nombre || admin.email || "A").charAt(0).toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="body-md font-medium!">{admin.nombre || admin.email}</p>
+                      {admin.nombre && <p className="body-sm text-ink-3">{admin.email}</p>}
                     </div>
-                    <div>
-                      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{admin.nombre || admin.email}</p>
-                      {admin.nombre && <p className="text-xs" style={{ color: "var(--text-muted)" }}>{admin.email}</p>}
-                    </div>
-                  </div>
+                  </li>
                 ))}
-              </div>
-            </div>
+              </ul>
+            </Card>
           )}
         </div>
       )}
@@ -1081,308 +1108,186 @@ export default function DetalleTorneo() {
       {/* MODO EDICIÓN */}
       {tab === "Info" && editando && (
         <div className="flex flex-col gap-4">
-          <div className="themed-card rounded-2xl p-5 border" style={{ borderColor: "rgba(34,197,94,0.35)" }}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold" style={{ color: "#22c55e" }}>Editando torneo</h2>
-              <div className="flex gap-2">
-                <button
-                  onClick={cancelarEdicion}
-                  className="px-3 py-1 rounded-lg text-sm font-semibold transition"
-                  style={{ backgroundColor: "var(--bg-card-hover)", color: "var(--text-muted)" }}
-                >
+          <Card>
+            <Card.Row className="mb-4">
+              <Card.Title as="h2">Editando torneo</Card.Title>
+              <div className="pd-btn-group">
+                <Button variant="ghost" onClick={cancelarEdicion}>
                   Cancelar
-                </button>
-                <button
-                  onClick={guardarEdicion}
-                  disabled={guardandoEdit}
-                  className="px-3 py-1 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-50"
-                >
-                  {guardandoEdit ? "Guardando..." : "Guardar"}
-                </button>
+                </Button>
+                <Button variant="primary" onClick={guardarEdicion} cargando={guardandoEdit ? "Guardando…" : ""}>
+                  Guardar
+                </Button>
               </div>
-            </div>
+            </Card.Row>
 
             <div className="flex flex-col gap-4">
-              <div>
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Nombre del torneo</label>
-                <input
-                  type="text"
-                  value={editForm.nombre}
-                  onChange={setEdit("nombre")}
-                  className={inputClass}
-                />
-              </div>
+              <Field label="Nombre del torneo">
+                <Input type="text" value={editForm.nombre} onChange={setEdit("nombre")} />
+              </Field>
 
-              <div>
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Descripción</label>
-                <textarea
-                  value={editForm.descripcion || ""}
-                  onChange={setEdit("descripcion")}
-                  rows={3}
-                  className={`${inputClass} resize-none`}
-                />
-              </div>
+              <Field label="Descripción">
+                <Textarea value={editForm.descripcion || ""} onChange={setEdit("descripcion")} rows={3} />
+              </Field>
 
               {/* Categoría Género */}
-              <div>
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Categoría Género</label>
-                {bloqueoCategorias && (
-                  <p className="text-xs mb-2" style={{ color: "#b45309" }}>
-                    No se pueden cambiar las categorías después de generar un cuadro
-                  </p>
-                )}
-                <div className="flex gap-2">
+              <Field
+                label="Categoría género"
+                as="div"
+                help={bloqueoCategorias ? "No se pueden cambiar las categorías después de generar un cuadro" : undefined}
+              >
+                <div className="pd-pills" role="group" aria-label="Categoría género">
                   {["masculino", "femenino", "mixto"].map((g) => (
                     <button
                       key={g}
                       type="button"
+                      className="pd-pill disabled:opacity-50 disabled:cursor-not-allowed!"
                       disabled={bloqueoCategorias}
+                      aria-pressed={(editForm.categoriaGenero || []).includes(g)}
                       onClick={() => toggleGeneroEdit(g)}
-                      className={`flex-1 px-4 py-2 rounded-xl text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${
-                        (editForm.categoriaGenero || []).includes(g)
-                          ? "bg-green-600 text-white"
-                          : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
-                      }`}
                     >
-                      {g.charAt(0).toUpperCase() + g.slice(1)}
+                      {capitalizar(g)}
                     </button>
                   ))}
                 </div>
-              </div>
+              </Field>
 
               {/* Categoría Nivel por género */}
               {(editForm.categoriaGenero || []).map((genero) => (
-                <div key={genero}>
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>
-                    Categoría Nivel —{" "}
-                    {genero.charAt(0).toUpperCase() + genero.slice(1)}
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {CATEGORIAS_TORNEO.map((nivel) => (
-                      <button
-                        key={nivel}
-                        type="button"
-                        disabled={bloqueoCategorias}
-                        onClick={() => toggleNivelEdit(genero, nivel)}
-                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${
-                          (
-                            (editForm.categoriasConfig || {})[genero] || []
-                          ).includes(nivel)
-                            ? "bg-green-600 text-white"
-                            : "bg-[var(--bg-card)] text-[var(--text-muted)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-card)]"
-                        }`}
-                      >
-                        {nivel}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <Field key={genero} label={`Categoría nivel — ${capitalizar(genero)}`} as="div">
+                  {chipsNivelEdit(genero)}
+                </Field>
               ))}
 
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Formato</label>
-                  <select
-                    value={editForm.formato}
-                    onChange={setEdit("formato")}
-                    className={selectClass}
-                  >
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label="Formato">
+                  <Select value={editForm.formato} onChange={setEdit("formato")}>
                     <option value="mini">Mini torneo</option>
                     <option value="normal">Torneo normal</option>
                     <option value="liga">Liga</option>
                     <option value="eliminacion">Eliminación directa</option>
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Máx. parejas</label>
-                  <input
+                  </Select>
+                </Field>
+                <Field label="Máx. parejas">
+                  <Input
                     type="number"
+                    inputMode="numeric"
                     min="4"
                     max="256"
                     value={editForm.maxParejas}
                     onChange={setEdit("maxParejas")}
-                    className={inputClass}
                   />
-                </div>
+                </Field>
               </div>
 
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Sets por partido</label>
-                  <select
-                    value={editForm.sets}
-                    onChange={setEdit("sets")}
-                    className={selectClass}
-                  >
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label="Sets por partido">
+                  <Select value={editForm.sets} onChange={setEdit("sets")}>
                     <option value={1}>1 set</option>
                     <option value={3}>3 sets</option>
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Games por set</label>
-                  <select
-                    value={editForm.gamesPorSet}
-                    onChange={setEdit("gamesPorSet")}
-                    className={selectClass}
-                  >
+                  </Select>
+                </Field>
+                <Field label="Games por set">
+                  <Select value={editForm.gamesPorSet} onChange={setEdit("gamesPorSet")}>
                     <option value={4}>4 games</option>
                     <option value={6}>6 games</option>
-                  </select>
-                </div>
+                  </Select>
+                </Field>
               </div>
 
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Inscripción ($)</label>
-                  <input
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label="Inscripción ($)">
+                  <Input
                     type="number"
+                    inputMode="numeric"
                     min="0"
                     value={editForm.inscripcion}
                     onChange={setEdit("inscripcion")}
-                    className={inputClass}
                   />
-                </div>
-                <div className="flex-1 flex items-end gap-2 pb-2">
+                </Field>
+                <label className="flex items-center gap-3 body-md md:self-end md:pb-3">
                   <input
                     type="checkbox"
                     checked={editForm.superTiebreak || false}
                     onChange={setEdit("superTiebreak")}
-                    className="w-4 h-4 accent-green-600"
+                    className="h-5 w-5 accent-ink"
                   />
-                  <span className="text-sm" style={{ color: "var(--text-muted)" }}>Super tiebreak</span>
-                </div>
+                  Super tiebreak
+                </label>
               </div>
 
-              <div>
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Sede</label>
-                <input
-                  type="text"
-                  value={editForm.sede}
-                  onChange={setEdit("sede")}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Dirección</label>
-                <input
-                  type="text"
-                  value={editForm.direccionSede || ""}
-                  onChange={setEdit("direccionSede")}
-                  className={inputClass}
-                />
-              </div>
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Instagram sede</label>
-                  <input
-                    type="text"
-                    value={editForm.instagramSede || ""}
-                    onChange={setEdit("instagramSede")}
-                    className={inputClass}
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Facebook sede</label>
-                  <input
-                    type="text"
-                    value={editForm.facebookSede || ""}
-                    onChange={setEdit("facebookSede")}
-                    className={inputClass}
-                  />
-                </div>
+              <Field label="Sede">
+                <Input type="text" value={editForm.sede} onChange={setEdit("sede")} />
+              </Field>
+              <Field label="Dirección">
+                <Input type="text" value={editForm.direccionSede || ""} onChange={setEdit("direccionSede")} />
+              </Field>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label="Instagram sede">
+                  <Input type="text" value={editForm.instagramSede || ""} onChange={setEdit("instagramSede")} />
+                </Field>
+                <Field label="Facebook sede">
+                  <Input type="text" value={editForm.facebookSede || ""} onChange={setEdit("facebookSede")} />
+                </Field>
               </div>
 
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Ciudad</label>
-                  <input
-                    type="text"
-                    value={editForm.ciudad}
-                    onChange={setEdit("ciudad")}
-                    className={inputClass}
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Provincia</label>
-                  <select
-                    value={editForm.provincia}
-                    onChange={setEdit("provincia")}
-                    className={selectClass}
-                  >
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label="Ciudad">
+                  <Input type="text" value={editForm.ciudad} onChange={setEdit("ciudad")} />
+                </Field>
+                <Field label="Provincia">
+                  <Select value={editForm.provincia} onChange={setEdit("provincia")}>
                     <option value="">Seleccionar</option>
                     {provinciasArgentina.map((p) => (
                       <option key={p} value={p}>
                         {p}
                       </option>
                     ))}
-                  </select>
-                </div>
+                  </Select>
+                </Field>
               </div>
 
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Fecha inicio</label>
-                  <input
-                    type="date"
-                    value={editForm.fechaInicio}
-                    onChange={setEdit("fechaInicio")}
-                    className={inputClass}
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className={labelClass} style={{ color: "var(--text-muted)" }}>Fecha fin</label>
-                  <input
-                    type="date"
-                    value={editForm.fechaFin}
-                    onChange={setEdit("fechaFin")}
-                    className={inputClass}
-                  />
-                </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label="Fecha inicio">
+                  <Input type="date" value={editForm.fechaInicio} onChange={setEdit("fechaInicio")} />
+                </Field>
+                <Field label="Fecha fin">
+                  <Input type="date" value={editForm.fechaFin} onChange={setEdit("fechaFin")} />
+                </Field>
               </div>
 
-              <div>
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Reglamento</label>
-                <textarea
-                  value={editForm.reglamento || ""}
-                  onChange={setEdit("reglamento")}
-                  rows={4}
-                  className={`${inputClass} resize-none`}
-                />
-              </div>
+              <Field label="Reglamento">
+                <Textarea value={editForm.reglamento || ""} onChange={setEdit("reglamento")} rows={4} />
+              </Field>
 
-              <div>
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Instagram organizador</label>
-                <input
+              <Field label="Instagram organizador">
+                <Input
                   type="text"
                   value={editForm.instagramOrganizador || ""}
                   onChange={setEdit("instagramOrganizador")}
-                  className={inputClass}
                 />
-              </div>
-              <div>
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>Facebook organizador</label>
-                <input
+              </Field>
+              <Field label="Facebook organizador">
+                <Input
                   type="text"
                   value={editForm.facebookOrganizador || ""}
                   onChange={setEdit("facebookOrganizador")}
-                  className={inputClass}
                 />
-              </div>
-              <div>
-                <label className={labelClass} style={{ color: "var(--text-muted)" }}>WhatsApp organizador</label>
-                <input
+              </Field>
+              <Field label="WhatsApp organizador">
+                <Input
                   type="text"
+                  inputMode="tel"
                   value={editForm.whatsappOrganizador || ""}
                   onChange={setEdit("whatsappOrganizador")}
-                  className={inputClass}
                 />
-              </div>
+              </Field>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
-      {/* ✅ Tab de parejas reemplazado por el componente independiente */}
+      {/* Tab de parejas reemplazado por el componente independiente */}
       {tab === "Parejas" && <TabParejas torneoId={id} torneo={torneo} onParejasChange={setParejasStepper} />}
       {tab === "Grupos" && (
         <>
