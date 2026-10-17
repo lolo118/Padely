@@ -30,6 +30,18 @@ service cloud.firestore {
         && t.get('club', null) != null
         && get(/databases/$(database)/documents/clubs/$(t.club.id)).data.ownerUid == request.auth.uid;
     }
+    // El vínculo con un club que escribe un organizador: sin club, pendiente, o aceptado solo si el club es suyo.
+    // Así "aceptado" solo lo pone el dueño del club (acá o respondiendo el pedido) y la Function puede confiar en él.
+    function clubVinculoValido() {
+      let c = request.resource.data.get('club', null);
+      return c == null || c.get('estado', null) == 'pendiente' || clubOwner(c.id);
+    }
+    // El vínculo no cambia (mismo club, mismo estado): el organizador está editando otra cosa
+    function clubSinCambios() {
+      let antes = resource.data.get('club', null);
+      let despues = request.resource.data.get('club', null);
+      return antes != null && despues != null && despues.id == antes.id && despues.estado == antes.estado;
+    }
     // Turnos bloqueados por un torneo (tipo "torneo"): los escriben solo las Cloud Functions
     function reservaDeTorneo() {
       return resource.data.get('tipo', null) == 'torneo';
@@ -146,12 +158,17 @@ service cloud.firestore {
 
     match /tournaments/{tid} {
       allow read: if true;
-      allow create: if signedIn() && request.resource.data.organizerId == request.auth.uid;
-      // El organizador edita todo; el dueño del club sede solo responde el pedido (club.estado) sin cambiar el club
-      allow update: if (signedIn() && resource.data.organizerId == request.auth.uid)
+      allow create: if signedIn() && request.resource.data.organizerId == request.auth.uid && clubVinculoValido();
+      // El organizador edita todo salvo poner "aceptado" en un club ajeno; el dueño del club sede solo responde el
+      // pedido (club.estado) sin cambiar el club
+      allow update: if (signedIn() && resource.data.organizerId == request.auth.uid
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['club'])
+                || clubSinCambios()
+                || clubVinculoValido()))
         || (clubOwnerOfTournament(tid)
             && changedOnly(['club'])
             && request.resource.data.club.id == resource.data.club.id
+            && request.resource.data.club.diff(resource.data.club).affectedKeys().hasOnly(['estado'])
             && request.resource.data.club.estado in ['aceptado', 'rechazado']);
       allow delete: if signedIn() && resource.data.organizerId == request.auth.uid;
 

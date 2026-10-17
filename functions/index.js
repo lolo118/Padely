@@ -24,7 +24,7 @@ const db = getFirestore();
 //   fin_{uid}                        torneosJugados contado: al finalizar, o antes con el primer bonus del uid
 //                                    (tipo "torneoJugado"); un jugador en dos cuadros cuenta un solo torneo
 // ============================================================================
-const { onDocumentWritten, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onDocumentWritten, onDocumentUpdated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const puntos = require("./puntos");
 
 const userRef = (uid) => db.collection("users").doc(uid);
@@ -402,6 +402,9 @@ function recolectarPartidos(torneo, gruposDocs, cuadrosDocs) {
 
   const considerar = (partido, meta) => {
     if (!partido || !partido.canchaId || !ES_DIA.test(partido.dia || "") || !ES_HORA.test(partido.hora || "")) return;
+    // Solo las canchas del torneo (ids reales del club): un partido programado antes de vincular el club, o de otro
+    // club, no puede bloquear un turno acá
+    if (!canchas.some((c) => c && c.id === partido.canchaId)) return;
     const id = slotIdDe(partido.canchaId, partido.dia, partido.hora);
     const canchaNombre = nombreCancha(partido);
     if (deseados.has(id)) {
@@ -507,6 +510,7 @@ async function sincronizarBloqueosTorneo(tid, clubIdAnterior = null) {
       }
     });
 
+    const aCrear = [];
     nuevos.forEach(([id, deseado], k) => {
       const ocupante = ocupantes[k];
       const data = ocupante && ocupante.exists ? ocupante.data() || {} : null;
@@ -521,8 +525,25 @@ async function sincronizarBloqueosTorneo(tid, clubIdAnterior = null) {
         });
         return;
       }
-      ops.push((b) =>
-        b.set(reservasCol.doc(id), {
+      aCrear.push([id, deseado]);
+    });
+
+    await escribirEnLotes(ops);
+
+    // Altas de a una, en transacción: si alguien reservó el turno entre la lectura y la escritura, no se pisa.
+    // Una reserva cancelada en el turno se reemplaza y se borra su contacto (como hace crearReserva en el cliente).
+    for (const [id, deseado] of aCrear) {
+      const ref = reservasCol.doc(id);
+      const contactoRef = db.collection("clubs").doc(cid).collection("contactosReservas").doc(id);
+      const resultado = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        const data = snap.exists ? snap.data() || {} : null;
+        if (data && data.status !== "cancelada") {
+          if (data.tipo === "torneo" && data.torneoId === tid) return "ya";
+          return data.tipo === "torneo" ? "torneo" : "reservado";
+        }
+        if (snap.exists) tx.delete(contactoRef);
+        tx.set(ref, {
           canchaId: deseado.canchaId,
           canchaName: deseado.canchaNombre,
           fecha: deseado.fecha,
@@ -535,12 +556,20 @@ async function sincronizarBloqueosTorneo(tid, clubIdAnterior = null) {
           partido: deseado.partido,
           jugadorUid: null,
           createdAt: FieldValue.serverTimestamp(),
-        }),
-      );
-      creados++;
-    });
-
-    await escribirEnLotes(ops);
+        });
+        return "creado";
+      });
+      if (resultado === "creado") creados++;
+      else if (resultado !== "ya") {
+        conflictos.push({
+          dia: deseado.fecha,
+          hora: deseado.hora,
+          canchaId: deseado.canchaId,
+          canchaNombre: deseado.canchaNombre,
+          motivo: resultado,
+        });
+      }
+    }
   }
 
   // Conflictos en el torneo (siempre un array; solo se escribe si cambió, para no disparar el trigger de nuevo)
@@ -570,6 +599,23 @@ async function sincronizarBloqueosTorneo(tid, clubIdAnterior = null) {
       `${actualizados} actualizados, ${borrados} borrados, ${conflictos.length} conflictos`,
   );
 }
+
+// Torneo borrado: sus bloqueos se van del club (sincronizarBloqueosTorneo ya no puede leer el torneo)
+exports.onTournamentDeleted = onDocumentDeleted("tournaments/{tid}", async (event) => {
+  const before = event.data ? event.data.data() : null;
+  const clubId = before && before.club && before.club.id ? before.club.id : null;
+  if (!clubId) return;
+  const { tid } = event.params;
+  const snap = await db
+    .collection("clubs")
+    .doc(clubId)
+    .collection("reservas")
+    .where("tipo", "==", "torneo")
+    .where("torneoId", "==", tid)
+    .get();
+  await escribirEnLotes(snap.docs.map((d) => (b) => b.delete(d.ref)));
+  logger.info(`onTournamentDeleted ${tid}: ${snap.size} bloqueos borrados en ${clubId}`);
+});
 
 // ============================================================================
 // MANTENIMIENTO — reservas pendientes vencidas y limpieza de cuentas eliminadas
