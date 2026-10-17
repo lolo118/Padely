@@ -382,6 +382,15 @@ function nombreDePareja(p) {
   return p.nombrePareja || [p.jugador1, p.jugador2].filter(Boolean).join(" / ") || "Por definir";
 }
 
+// Comparaciones estables (Firestore no garantiza el orden de las claves de un mapa)
+const CAMPOS_PARTIDO = ["cuadroId", "grupoId", "ronda", "indice", "pareja1", "pareja2"];
+const mismoPartido = (a, b) => CAMPOS_PARTIDO.every((k) => (a && a[k] !== undefined ? a[k] : null) === (b && b[k] !== undefined ? b[k] : null));
+const firmaConflictos = (lista) =>
+  (Array.isArray(lista) ? lista : [])
+    .map((c) => `${c.dia}_${c.hora}_${c.canchaId}_${c.motivo}`)
+    .sort()
+    .join(";");
+
 // Partidos programados de todos los grupos y de los brackets de todos los cuadros → { slotId: deseado }.
 // Si dos partidos caen en el mismo turno, queda el primero y el segundo se anota como conflicto "duplicado".
 function recolectarPartidos(torneo, gruposDocs, cuadrosDocs) {
@@ -481,7 +490,7 @@ async function sincronizarBloqueosTorneo(tid, clubIdAnterior = null) {
       if (ex) {
         const data = ex.data() || {};
         const cambio =
-          JSON.stringify(data.partido || null) !== JSON.stringify(deseado.partido) ||
+          !mismoPartido(data.partido, deseado.partido) ||
           data.torneoNombre !== (torneo.nombre || "") ||
           data.canchaName !== deseado.canchaNombre;
         if (cambio) {
@@ -537,7 +546,7 @@ async function sincronizarBloqueosTorneo(tid, clubIdAnterior = null) {
   // Conflictos en el torneo (siempre un array; solo se escribe si cambió, para no disparar el trigger de nuevo)
   conflictos.sort((a, b) => `${a.dia}${a.hora}${a.canchaId}`.localeCompare(`${b.dia}${b.hora}${b.canchaId}`));
   const anteriores = Array.isArray(torneo.conflictos) ? torneo.conflictos : [];
-  if (JSON.stringify(anteriores) !== JSON.stringify(conflictos)) {
+  if (firmaConflictos(anteriores) !== firmaConflictos(conflictos)) {
     await torneoRef.update({ conflictos });
     const clave = (c) => `${c.dia}_${c.hora}_${c.canchaId}`;
     const vistos = new Set(anteriores.map(clave));
