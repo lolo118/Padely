@@ -54,26 +54,6 @@
   --radius-pill: var(--radius-pill);
 }
 
-/* Alias legacy SOLO durante el port (los borra el paso 5): las pantallas todavía no portadas siguen leyendo
-   los nombres viejos, que ahora apuntan a los tokens del design system. */
-:root {
-  --bg-primary: var(--surface);
-  --bg-card: var(--surface-raised);
-  --bg-card-hover: var(--surface-hover);
-  --bg-input: var(--surface-raised);
-  --border-card: var(--line);
-  --border-input: var(--line-strong);
-  --text-primary: var(--ink);
-  --text-secondary: var(--ink-2);
-  --text-muted: var(--ink-3);
-  --sidebar-bg: var(--surface-raised);
-  --sidebar-border: var(--line);
-  --sidebar-active-bg: var(--lime-soft);
-  --sidebar-active-text: var(--lime-text);
-  --accent: var(--lime-text);
-  --accent-light: var(--lime-soft);
-}
-
 * {
   -webkit-tap-highlight-color: transparent;
 }
@@ -108,24 +88,6 @@ input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--focus);
   box-shadow: 0 0 0 3px var(--court-soft);
-}
-
-/* Legacy (solo durante el port; los borra el paso 5) */
-.themed-card {
-  background-color: var(--surface-raised);
-  border-color: var(--line);
-  color: var(--ink);
-}
-.themed-card:hover {
-  background-color: var(--surface-hover);
-}
-.themed-input {
-  background-color: var(--surface-raised);
-  border-color: var(--line-strong);
-  color: var(--ink);
-}
-.card-hover:hover {
-  border-color: var(--line-strong);
 }
 
 /* Scrollbar */
