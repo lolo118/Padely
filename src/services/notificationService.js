@@ -19,6 +19,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { formatDiaCorto } from "../utils/formatDate";
 
 export const crearNotificacion = async (uid, notificacion) => {
   try {
@@ -190,11 +191,15 @@ export const notificarResultadoCargado = async (jugadorUid, torneoNombre, torneo
   });
 };
 
-export const notificarPartidoListo = async (jugadorUid, torneoNombre, torneoId, hora, cancha, rival) => {
+// cancha es el nombre de la cancha ("Cancha 2"); un valor solo numérico (datos viejos) se muestra como "Cancha N".
+// dia ("YYYY-MM-DD") es opcional: con él el mensaje dice el día.
+export const notificarPartidoListo = async (jugadorUid, torneoNombre, torneoId, hora, cancha, rival, dia) => {
+  const nombreCancha = cancha ? (/^\d+$/.test(String(cancha).trim()) ? `Cancha ${String(cancha).trim()}` : cancha) : "";
+  const cuando = dia ? `el ${formatDiaCorto(dia)} a las ${hora}` : `a las ${hora}`;
   await crearNotificacion(jugadorUid, {
     tipo: "partido_listo",
     titulo: "¡Tu partido está listo!",
-    mensaje: `${torneoNombre}: jugás a las ${hora}${cancha ? ` en Cancha ${cancha}` : ""} contra ${rival}.`,
+    mensaje: `${torneoNombre}: jugás ${cuando}${nombreCancha ? ` en ${nombreCancha}` : ""} contra ${rival}.`,
     link: `/torneos/${torneoId}`,
     icono: "🎾",
   });
@@ -208,7 +213,7 @@ export const notificarSolicitudSede = async (ownerUid, torneoNombre, organizador
     tipo: "solicitud_sede",
     titulo: "Pedido de sede",
     mensaje: `${organizadorNombre || "Un organizador"} quiere jugar el torneo "${torneoNombre}" en tu club.`,
-    link: "/admin/torneos",
+    link: "/admin/torneos?tab=solicitudes",
     torneoId,
   });
 };

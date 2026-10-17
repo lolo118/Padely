@@ -17,17 +17,21 @@ import {
   guardarBracket,
   getBracket,
 } from "../../services/torneoService";
-import { notificarResultadoCargado } from "../../services/notificationService";
+import { notificarPartidoListo, notificarResultadoCargado } from "../../services/notificationService";
 import {
   calcularTabla,
   getGanador,
   getNombrePareja,
   cuadrosDeTorneo,
   parejasDeCuadro,
+  canchasDelTorneo,
+  etiquetaProgramacion,
+  partidoProgramado,
 } from "../../utils/torneo";
+import { formatDiaCorto } from "../../utils/formatDate";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
-import { Button, Card, ChampionCard, Field, Input, MatchCard, Pills } from "../../components/ui";
+import { Button, Card, ChampionCard, Field, Input, MatchCard, Pills, Select } from "../../components/ui";
 
 function getNombreRonda(totalRondas, rondaIdx) {
   const faltantes = totalRondas - rondaIdx;
@@ -67,6 +71,39 @@ function etiquetaCancha(cancha) {
   return /^\d+$/.test(texto) ? `Cancha ${texto}` : texto;
 }
 
+// ===== Programación de un partido (día, hora y cancha) =====
+// Los partidos guardan cancha (nombre) y canchaId (id de la cancha del torneo, o null en texto libre).
+
+// Cambios a guardar al elegir una cancha: una del torneo guarda nombre + id; cualquier otro valor es texto libre
+// canchaId solo existe con un club vinculado (es el id real de la cancha del club); sin club queda null
+function cambiosDeCancha(valor, canchas, conClub) {
+  const cancha = canchas.find((c) => c.id === valor);
+  if (cancha) return { cancha: cancha.nombre, canchaId: conClub ? cancha.id : null };
+  return { cancha: String(valor ?? ""), canchaId: null };
+}
+
+// Valor del select de cancha: el id guardado, el de la cancha con ese nombre (datos viejos) o el texto tal cual
+function valorDeCancha(partido, canchas) {
+  if (partido?.canchaId && canchas.some((c) => c.id === partido.canchaId)) return partido.canchaId;
+  const porNombre = canchas.find((c) => c.nombre === partido?.cancha);
+  return porNombre ? porNombre.id : partido?.cancha || "";
+}
+
+// Un partido sin día que recibe hora o cancha toma el primer día del torneo en la misma escritura
+function conDiaPorDefecto(partido, cambios, torneo) {
+  if (partido?.dia || !torneo?.fechaInicio) return cambios;
+  const programa = Boolean(cambios.hora) || Boolean(cambios.cancha);
+  return programa ? { ...cambios, dia: torneo.fechaInicio } : cambios;
+}
+
+// Texto del mensaje de WhatsApp "Partido listo" (es contenido del mensaje, no UI: acá sí van emoji)
+function mensajePartidoListo(torneo, p, nombre1, nombre2) {
+  const lineas = ["🎾 ¡Partido listo!", "", `Torneo: ${torneo.nombre}`];
+  if (p.dia) lineas.push(`📅 Día: ${formatDiaCorto(p.dia)}`);
+  lineas.push(`⏰ Hora: ${p.hora}`, `📍 Cancha: ${etiquetaCancha(p.cancha) || ""}`, "", nombre1, "vs", nombre2, "", "¡Nos vemos en la cancha!");
+  return lineas.join("\n");
+}
+
 // Tie breaks de un resultado para el pie del MatchCard: "TB 7–5 · 10–8"
 function textoTiebreak(sets) {
   const tbs = (sets || [])
@@ -83,7 +120,15 @@ function siguientePotenciaDe2(n) {
 }
 
 function nuevoPartido(pareja1, pareja2) {
-  return { pareja1: pareja1 || null, pareja2: pareja2 || null, resultado: null, hora: "", cancha: "" };
+  return {
+    pareja1: pareja1 || null,
+    pareja2: pareja2 || null,
+    resultado: null,
+    dia: "",
+    hora: "",
+    cancha: "",
+    canchaId: null,
+  };
 }
 
 function mismoGrupo(a, b) {
@@ -395,19 +440,17 @@ export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }
     }
   };
 
-  const actualizarPartidoBracket = async (
-    rondaIdx,
-    partidoIdx,
-    campo,
-    valor,
-  ) => {
+  // cambios: campos de programación a guardar en una sola escritura ({ dia } | { hora, dia? } | { cancha, canchaId, dia? })
+  const actualizarPartidoBracket = async (rondaIdx, partidoIdx, cambios) => {
     const partidoOriginal = rondas[rondaIdx]?.[partidoIdx];
-    const yaEstabaProgramado = partidoOriginal?.hora && partidoOriginal?.cancha;
+    // Los partidos de antes del día (hora + cancha) ya fueron avisados: no se vuelve a notificar
+    const yaEstabaProgramado =
+      partidoProgramado(partidoOriginal) || !!(partidoOriginal?.hora && partidoOriginal?.cancha);
 
     const nuevasRondas = rondas.map((r) => r.map((p) => ({ ...p })));
     nuevasRondas[rondaIdx][partidoIdx] = {
       ...nuevasRondas[rondaIdx][partidoIdx],
-      [campo]: valor,
+      ...cambios,
     };
     setRondas(nuevasRondas);
     try {
@@ -417,20 +460,21 @@ export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }
       console.error("Error al actualizar:", err);
     }
 
+    // Avisar a los jugadores cuando el partido queda programado (día, hora y cancha) por primera vez
     const partidoActualizado = nuevasRondas[rondaIdx][partidoIdx];
-    if (!yaEstabaProgramado && partidoActualizado.hora && partidoActualizado.cancha) {
+    if (!yaEstabaProgramado && partidoProgramado(partidoActualizado)) {
       try {
-        const { notificarPartidoListo } = await import("../../services/notificationService");
         const torneoNombre = torneo.nombre || "torneo";
+        const { dia, hora, cancha } = partidoActualizado;
         const p1 = partidoActualizado.pareja1;
         const p2 = partidoActualizado.pareja2;
         if (!p1 || !p2) return;
         const nombreP1 = p1.nombrePareja || `${p1.jugador1} / ${p1.jugador2}`;
         const nombreP2 = p2.nombrePareja || `${p2.jugador1} / ${p2.jugador2}`;
-        if (p1.jugador1Uid) notificarPartidoListo(p1.jugador1Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP2);
-        if (p1.jugador2Uid) notificarPartidoListo(p1.jugador2Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP2);
-        if (p2.jugador1Uid) notificarPartidoListo(p2.jugador1Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP1);
-        if (p2.jugador2Uid) notificarPartidoListo(p2.jugador2Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP1);
+        if (p1.jugador1Uid) notificarPartidoListo(p1.jugador1Uid, torneoNombre, torneoId, hora, cancha, nombreP2, dia);
+        if (p1.jugador2Uid) notificarPartidoListo(p1.jugador2Uid, torneoNombre, torneoId, hora, cancha, nombreP2, dia);
+        if (p2.jugador1Uid) notificarPartidoListo(p2.jugador1Uid, torneoNombre, torneoId, hora, cancha, nombreP1, dia);
+        if (p2.jugador2Uid) notificarPartidoListo(p2.jugador2Uid, torneoNombre, torneoId, hora, cancha, nombreP1, dia);
       } catch (err) { console.error("Error notificando partido listo:", err); }
     }
   };
@@ -610,7 +654,7 @@ export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }
 
   if (!esEliminacionDirecta && grupos.length === 0) {
     return (
-      <Card className="text-center py-12">
+      <Card className="text-center py-12!">
         <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
         <p className="heading-sm m-0">
           Primero generá los grupos{variosCuadros ? ` de ${cuadroActual.label}` : ""}.
@@ -624,7 +668,7 @@ export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }
 
   if (esEliminacionDirecta && parejas.length < 2 && rondas.length === 0) {
     return (
-      <Card className="text-center py-12">
+      <Card className="text-center py-12!">
         <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
         <p className="heading-sm m-0">
           Necesitás al menos 2 parejas inscriptas{variosCuadros ? ` en ${cuadroActual.label}` : ""}.
@@ -643,6 +687,10 @@ export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }
   const tieneResultados = rondas.some((r) => (r || []).some((p) => p && p.resultado));
   const puedeCargarResultados = torneo.status === "en_curso" || torneo.status === "finalizado";
   const cuadroLabel = variosCuadros ? cuadroActual.label : undefined;
+  // Canchas del torneo (las del club o las tipeadas); sin ninguna, la cancha se escribe a mano
+  const canchas = canchasDelTorneo(torneo);
+  // Con un club que todavía no confirmó la sede, los partidos no bloquean turnos hasta que acepte
+  const clubSinConfirmar = !!torneo?.club && torneo.club.estado !== "aceptado";
   const apellido1 = partido?.pareja1?.jugador1?.split(" ").pop() || "P1";
   const apellido2 = partido?.pareja2?.jugador1?.split(" ").pop() || "P2";
 
@@ -691,6 +739,9 @@ export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }
             automáticamente a la siguiente ronda.
           </span>
         </p>
+      )}
+      {bracketGenerado && clubSinConfirmar && (
+        <p className="pd-help -mt-4">Los turnos del club se bloquean cuando el club confirme la sede.</p>
       )}
 
       {/* Campeones */}
@@ -786,13 +837,17 @@ export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }
                       foot = puedeCargarResultados ? "Tocá para cargar el resultado" : "Iniciá el torneo primero";
                       footIcon = puedeCargarResultados ? Pencil : Lock;
                     }
+                    // "sáb 18 oct · 20:00 · Cancha 2" (el MatchCard une cancha y hora en ese orden; el formato del
+                    // sistema pone el día primero y la cancha al final, así que va armado en una sola pieza)
+                    const programacion = etiquetaProgramacion({ ...p, cancha: etiquetaCancha(p.cancha) }, formatDiaCorto);
+                    const cambiarCancha = (valor) =>
+                      actualizarPartidoBracket(ri, pi, conDiaPorDefecto(p, cambiosDeCancha(valor, canchas, !!torneo?.club?.id), torneo));
                     return (
                       <div key={pi} className="flex w-full max-w-[360px] flex-col gap-2">
                         <MatchCard
                           ronda={ronda.length > 1 ? `${corto} ${pi + 1}` : corto}
                           cuadro={cuadroLabel}
-                          cancha={etiquetaCancha(p.cancha)}
-                          hora={p.hora || undefined}
+                          hora={programacion || undefined}
                           parejas={[
                             { nombre: p.pareja1 ? getNombrePareja(p.pareja1) : "", sets: sets.map((s) => s.g1) },
                             { nombre: p.pareja2 ? getNombrePareja(p.pareja2) : "", sets: sets.map((s) => s.g2) },
@@ -815,42 +870,59 @@ export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }
                               : undefined
                           }
                         />
-                        {/* Horario y cancha */}
+                        {/* Programación: día, hora y cancha */}
                         {bracketGenerado && ambas && (
                           <div className="flex flex-wrap items-end gap-2">
-                            <Field label="Hora" className="flex-1 min-w-[120px]">
+                            <Field label="Día" className="min-w-[140px] flex-1">
+                              <Input
+                                type="date"
+                                value={p.dia || ""}
+                                min={torneo.fechaInicio || undefined}
+                                max={torneo.fechaFin || undefined}
+                                onChange={(e) => actualizarPartidoBracket(ri, pi, { dia: e.target.value })}
+                              />
+                            </Field>
+                            <Field label="Hora" className="min-w-[140px] flex-1">
                               <Input
                                 type="time"
                                 value={p.hora || ""}
                                 onChange={(e) =>
-                                  actualizarPartidoBracket(
-                                    ri,
-                                    pi,
-                                    "hora",
-                                    e.target.value,
-                                  )
+                                  actualizarPartidoBracket(ri, pi, conDiaPorDefecto(p, { hora: e.target.value }, torneo))
                                 }
                               />
                             </Field>
-                            <Field label="Cancha" className="flex-1 min-w-[120px]">
-                              <Input
-                                type="text"
-                                value={p.cancha || ""}
-                                placeholder="Cancha (ej: 1)"
-                                onChange={(e) =>
-                                  actualizarPartidoBracket(
-                                    ri,
-                                    pi,
-                                    "cancha",
-                                    e.target.value,
-                                  )
-                                }
-                              />
+                            <Field label="Cancha" className="min-w-[140px] flex-1">
+                              {canchas.length > 0 ? (
+                                <Select value={valorDeCancha(p, canchas)} onChange={(e) => cambiarCancha(e.target.value)}>
+                                  <option value="">Sin cancha</option>
+                                  {canchas.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      {c.nombre}
+                                    </option>
+                                  ))}
+                                  {/* Cancha cargada antes de definir las canchas del torneo (datos viejos) */}
+                                  {p.cancha && !canchas.some((c) => c.id === p.canchaId || c.nombre === p.cancha) && (
+                                    <option value={p.cancha}>{etiquetaCancha(p.cancha)}</option>
+                                  )}
+                                </Select>
+                              ) : (
+                                <Input
+                                  type="text"
+                                  value={p.cancha || ""}
+                                  placeholder="Cancha (ej: 1)"
+                                  onChange={(e) => cambiarCancha(e.target.value)}
+                                />
+                              )}
                             </Field>
                             {p.hora && p.cancha && (
                               <a
                                 href={`https://wa.me/?text=${encodeURIComponent(
-                                  `🎾 ¡Partido listo!\n\nTorneo: ${torneo.nombre}\n⏰ Hora: ${p.hora}\n📍 Cancha: ${p.cancha}\n\n${p.pareja1?.nombrePareja || "Pareja 1"}\nvs\n${p.pareja2?.nombrePareja || "Pareja 2"}\n\n¡Nos vemos en la cancha!`
+                                  mensajePartidoListo(
+                                    torneo,
+                                    p,
+                                    p.pareja1?.nombrePareja || "Pareja 1",
+                                    p.pareja2?.nombrePareja || "Pareja 2",
+                                  ),
                                 )}`}
                                 target="_blank"
                                 rel="noopener noreferrer"

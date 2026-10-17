@@ -6,14 +6,18 @@ import {
   guardarGrupos,
   actualizarGrupo,
 } from "../../services/torneoService";
-import { notificarResultadoCargado } from "../../services/notificationService";
+import { notificarPartidoListo, notificarResultadoCargado } from "../../services/notificationService";
 import {
   calcularTabla,
   getGanador,
   cuadrosDeTorneo,
   parejasDeCuadro,
   parejasSinCuadro,
+  canchasDelTorneo,
+  etiquetaProgramacion,
+  partidoProgramado,
 } from "../../utils/torneo";
+import { formatDiaCorto } from "../../utils/formatDate";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
 import { Button, Card, Field, Input, MatchCard, Pills, Select, Standings } from "../../components/ui";
@@ -28,6 +32,39 @@ const textoCancha = (cancha) => {
   if (!texto) return undefined;
   return /^\d+$/.test(texto) ? `Cancha ${texto}` : texto;
 };
+
+// ===== Programación de un partido (día, hora y cancha) =====
+// Los partidos guardan cancha (nombre) y canchaId (id de la cancha del torneo, o null en texto libre).
+
+// Cambios a guardar al elegir una cancha: una del torneo guarda nombre + id; cualquier otro valor es texto libre
+// canchaId solo existe con un club vinculado (es el id real de la cancha del club); sin club queda null
+function cambiosDeCancha(valor, canchas, conClub) {
+  const cancha = canchas.find((c) => c.id === valor);
+  if (cancha) return { cancha: cancha.nombre, canchaId: conClub ? cancha.id : null };
+  return { cancha: String(valor ?? ""), canchaId: null };
+}
+
+// Valor del select de cancha: el id guardado, el de la cancha con ese nombre (datos viejos) o el texto tal cual
+function valorDeCancha(partido, canchas) {
+  if (partido?.canchaId && canchas.some((c) => c.id === partido.canchaId)) return partido.canchaId;
+  const porNombre = canchas.find((c) => c.nombre === partido?.cancha);
+  return porNombre ? porNombre.id : partido?.cancha || "";
+}
+
+// Un partido sin día que recibe hora o cancha toma el primer día del torneo en la misma escritura
+function conDiaPorDefecto(partido, cambios, torneo) {
+  if (partido?.dia || !torneo?.fechaInicio) return cambios;
+  const programa = Boolean(cambios.hora) || Boolean(cambios.cancha);
+  return programa ? { ...cambios, dia: torneo.fechaInicio } : cambios;
+}
+
+// Texto del mensaje de WhatsApp "Partido listo" (es contenido del mensaje, no UI: acá sí van emoji)
+function mensajePartidoListo(torneo, p, nombre1, nombre2) {
+  const lineas = ["🎾 ¡Partido listo!", "", `Torneo: ${torneo.nombre}`];
+  if (p.dia) lineas.push(`📅 Día: ${formatDiaCorto(p.dia)}`);
+  lineas.push(`⏰ Hora: ${p.hora}`, `📍 Cancha: ${textoCancha(p.cancha) || ""}`, "", nombre1, "vs", nombre2, "", "¡Nos vemos en la cancha!");
+  return lineas.join("\n");
+}
 
 // Partidos de una liga agrupados por fecha, en orden: [["1", [...]], ["2", [...]]]
 function partidosPorFecha(partidos) {
@@ -67,8 +104,10 @@ function generarPartidos(parejas) {
         pareja1: parejas[i],
         pareja2: parejas[j],
         resultado: null,
+        dia: "",
         hora: "",
         cancha: "",
+        canchaId: null,
       });
     }
   }
@@ -197,13 +236,13 @@ function generarFixtureRoundRobin(parejas) {
     const matches = [];
     const opp = rotating[0];
     if (fixed.id !== "BYE" && opp.id !== "BYE") {
-      matches.push({ pareja1: fixed, pareja2: opp, resultado: null, hora: "", cancha: "", fecha: round + 1 });
+      matches.push({ pareja1: fixed, pareja2: opp, resultado: null, dia: "", hora: "", cancha: "", canchaId: null, fecha: round + 1 });
     }
     for (let i = 1; i < matchesPerFecha; i++) {
       const home = rotating[i];
       const away = rotating[totalTeams - 2 - i];
       if (home && away && home.id !== "BYE" && away.id !== "BYE") {
-        matches.push({ pareja1: home, pareja2: away, resultado: null, hora: "", cancha: "", fecha: round + 1 });
+        matches.push({ pareja1: home, pareja2: away, resultado: null, dia: "", hora: "", cancha: "", canchaId: null, fecha: round + 1 });
       }
     }
     fechas.push(matches);
@@ -305,14 +344,17 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
     }
   };
 
-  const actualizarPartidoInfo = async (grupoIdx, partidoIdx, campo, valor) => {
+  // cambios: campos de programación a guardar en una sola escritura ({ dia } | { hora, dia? } | { cancha, canchaId, dia? })
+  const actualizarPartidoInfo = async (grupoIdx, partidoIdx, cambios) => {
     const partidoOriginal = grupos[grupoIdx]?.partidos?.[partidoIdx];
-    const yaEstabaProgramado = partidoOriginal?.hora && partidoOriginal?.cancha;
+    // Los partidos de antes del día (hora + cancha) ya fueron avisados: no se vuelve a notificar
+    const yaEstabaProgramado =
+      partidoProgramado(partidoOriginal) || !!(partidoOriginal?.hora && partidoOriginal?.cancha);
 
     const nuevosGrupos = [...grupos];
     const grupo = { ...nuevosGrupos[grupoIdx] };
     const partidos = [...grupo.partidos];
-    partidos[partidoIdx] = { ...partidos[partidoIdx], [campo]: valor };
+    partidos[partidoIdx] = { ...partidos[partidoIdx], ...cambios };
     grupo.partidos = partidos;
     nuevosGrupos[grupoIdx] = grupo;
     setGrupos(nuevosGrupos);
@@ -325,20 +367,20 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
       }
     }
 
-    // Notify players when match has both hora and cancha assigned for the first time
+    // Avisar a los jugadores cuando el partido queda programado (día, hora y cancha) por primera vez
     const partidoActualizado = partidos[partidoIdx];
-    if (!yaEstabaProgramado && partidoActualizado.hora && partidoActualizado.cancha) {
+    if (!yaEstabaProgramado && partidoProgramado(partidoActualizado)) {
       try {
-        const { notificarPartidoListo } = await import("../../services/notificationService");
         const torneoNombre = torneo.nombre || "torneo";
+        const { dia, hora, cancha } = partidoActualizado;
         const p1 = partidoActualizado.pareja1;
         const p2 = partidoActualizado.pareja2;
         const nombreP1 = p1.nombrePareja || `${p1.jugador1} / ${p1.jugador2}`;
         const nombreP2 = p2.nombrePareja || `${p2.jugador1} / ${p2.jugador2}`;
-        if (p1.jugador1Uid) notificarPartidoListo(p1.jugador1Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP2);
-        if (p1.jugador2Uid) notificarPartidoListo(p1.jugador2Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP2);
-        if (p2.jugador1Uid) notificarPartidoListo(p2.jugador1Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP1);
-        if (p2.jugador2Uid) notificarPartidoListo(p2.jugador2Uid, torneoNombre, torneoId, partidoActualizado.hora, partidoActualizado.cancha, nombreP1);
+        if (p1.jugador1Uid) notificarPartidoListo(p1.jugador1Uid, torneoNombre, torneoId, hora, cancha, nombreP2, dia);
+        if (p1.jugador2Uid) notificarPartidoListo(p1.jugador2Uid, torneoNombre, torneoId, hora, cancha, nombreP2, dia);
+        if (p2.jugador1Uid) notificarPartidoListo(p2.jugador1Uid, torneoNombre, torneoId, hora, cancha, nombreP1, dia);
+        if (p2.jugador2Uid) notificarPartidoListo(p2.jugador2Uid, torneoNombre, torneoId, hora, cancha, nombreP1, dia);
       } catch (err) { console.error("Error notificando partido listo:", err); }
     }
   };
@@ -566,6 +608,10 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
   const columnasTabla = escritorio ? "completa" : "compacta";
   const ayudaDesempate = "Desempate: partidos ganados, diferencia de sets y después de games.";
   const cuadroLabel = variosCuadros ? cuadroActual.label : undefined;
+  // Canchas del torneo (las del club o las tipeadas); sin ninguna, la cancha se escribe a mano
+  const canchas = canchasDelTorneo(torneo);
+  // Con un club que todavía no confirmó la sede, los partidos no bloquean turnos hasta que acepte
+  const clubSinConfirmar = !!torneo?.club && torneo.club.estado !== "aceptado";
 
   // Siguiente partido sin resultado (en este grupo o en los que siguen) para "Guardar y cargar siguiente"
   let siguiente = null;
@@ -615,15 +661,24 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
       footIcon = Lock;
     }
     const abrir = () => abrirEditarResultado(grupoIdx, partidoIdx);
-    const mensajeWhatsApp = `🎾 ¡Partido listo!\n\nTorneo: ${torneo.nombre}\n⏰ Hora: ${p.hora}\n📍 Cancha: ${p.cancha}\n\n${p.pareja1.nombrePareja || `${p.pareja1.jugador1} / ${p.pareja1.jugador2}`}\nvs\n${p.pareja2.nombrePareja || `${p.pareja2.jugador1} / ${p.pareja2.jugador2}`}\n\n¡Nos vemos en la cancha!`;
+    const mensajeWhatsApp = mensajePartidoListo(
+      torneo,
+      p,
+      p.pareja1.nombrePareja || `${p.pareja1.jugador1} / ${p.pareja1.jugador2}`,
+      p.pareja2.nombrePareja || `${p.pareja2.jugador1} / ${p.pareja2.jugador2}`,
+    );
+    // "sáb 18 oct · 20:00 · Cancha 2" (el MatchCard une cancha y hora en ese orden; el formato del sistema pone
+    // el día primero y la cancha al final, así que va armado en una sola pieza)
+    const programacion = etiquetaProgramacion({ ...p, cancha: textoCancha(p.cancha) }, formatDiaCorto);
+    const cambiarCancha = (valor) =>
+      actualizarPartidoInfo(grupoIdx, partidoIdx, conDiaPorDefecto(p, cambiosDeCancha(valor, canchas, !!torneo?.club?.id), torneo));
 
     return (
       <li key={partidoIdx} className="flex w-full max-w-[360px] flex-col gap-2">
         <MatchCard
           ronda={ronda}
           cuadro={cuadroLabel}
-          cancha={textoCancha(p.cancha)}
-          hora={p.hora || undefined}
+          hora={programacion || undefined}
           parejas={[
             { nombre: nombreDePareja(p.pareja1), sets: sets.map((s) => s.g1) },
             { nombre: nombreDePareja(p.pareja2), sets: sets.map((s) => s.g2) },
@@ -645,22 +700,48 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
               : undefined
           }
         />
-        {/* Horario y cancha */}
-        <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
-          <Field label="Hora">
+        {/* Programación: día, hora y cancha */}
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label="Día" className="min-w-[140px] flex-1">
+            <Input
+              type="date"
+              value={p.dia || ""}
+              min={torneo.fechaInicio || undefined}
+              max={torneo.fechaFin || undefined}
+              onChange={(e) => actualizarPartidoInfo(grupoIdx, partidoIdx, { dia: e.target.value })}
+            />
+          </Field>
+          <Field label="Hora" className="min-w-[140px] flex-1">
             <Input
               type="time"
               value={p.hora || ""}
-              onChange={(e) => actualizarPartidoInfo(grupoIdx, partidoIdx, "hora", e.target.value)}
+              onChange={(e) =>
+                actualizarPartidoInfo(grupoIdx, partidoIdx, conDiaPorDefecto(p, { hora: e.target.value }, torneo))
+              }
             />
           </Field>
-          <Field label="Cancha">
-            <Input
-              type="text"
-              value={p.cancha || ""}
-              placeholder="Ej.: 1"
-              onChange={(e) => actualizarPartidoInfo(grupoIdx, partidoIdx, "cancha", e.target.value)}
-            />
+          <Field label="Cancha" className="min-w-[140px] flex-1">
+            {canchas.length > 0 ? (
+              <Select value={valorDeCancha(p, canchas)} onChange={(e) => cambiarCancha(e.target.value)}>
+                <option value="">Sin cancha</option>
+                {canchas.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+                {/* Cancha cargada antes de definir las canchas del torneo (datos viejos) */}
+                {p.cancha && !canchas.some((c) => c.id === p.canchaId || c.nombre === p.cancha) && (
+                  <option value={p.cancha}>{textoCancha(p.cancha)}</option>
+                )}
+              </Select>
+            ) : (
+              <Input
+                type="text"
+                value={p.cancha || ""}
+                placeholder="Ej.: 1"
+                onChange={(e) => cambiarCancha(e.target.value)}
+              />
+            )}
           </Field>
           {p.hora && p.cancha && (
             <a
@@ -732,6 +813,9 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
             automáticamente al cargar resultados.
           </span>
         </p>
+      )}
+      {gruposGenerados && clubSinConfirmar && (
+        <p className="pd-help -mt-2 md:-mt-4">Los turnos del club se bloquean cuando el club confirme la sede.</p>
       )}
 
       {!gruposGenerados && modoLiga && (

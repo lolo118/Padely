@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -8,17 +8,32 @@ import {
   CircleDot,
   Coins,
   Copy,
+  ExternalLink,
   Eye,
   Info,
   Link as LinkIcon,
   List,
+  MapPin,
   MessageCircle,
   Pencil,
   Trophy,
   Zap,
 } from "lucide-react";
 import { getTorneoById, actualizarTorneo, getParejas, getGrupos, getCuadros } from "../../services/torneoService";
-import { cuadrosDeTorneo, parejasDeCuadro, parejasSinCuadro, cuadroDeGrupo } from "../../utils/torneo";
+import { getClubesPublicos, getCanchasDeClub, getClubConfig, getClubByOwner } from "../../services/canchaService";
+import { notificarSolicitudSede } from "../../services/notificationService";
+import { useAuthStore } from "../../store/authStore";
+import {
+  cuadrosDeTorneo,
+  parejasDeCuadro,
+  parejasSinCuadro,
+  cuadroDeGrupo,
+  canchasDelTorneo,
+  canchasDesdeTexto,
+  textoDeCanchas,
+  sedeDeTorneo,
+  etiquetaProgramacion,
+} from "../../utils/torneo";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
 
@@ -26,10 +41,22 @@ import TabGrupos from "./TabGrupos";
 import TabBracket from "./TabBracket";
 import TabParejas from "./TabParejas";
 import TabReclamos from "./TabReclamos";
-import { formatFecha } from "../../utils/formatDate";
+import { formatFecha, formatDiaCorto } from "../../utils/formatDate";
 import { CATEGORIAS_TORNEO } from "../../utils/categorias";
 import { formatPrecio } from "../../utils/format";
-import { Badge, Button, Card, Field, Input, MarcaCategoria, Select, Tabs, Textarea } from "../../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  Input,
+  MarcaCategoria,
+  Pills,
+  SearchInput,
+  Select,
+  Tabs,
+  Textarea,
+} from "../../components/ui";
 
 // Tono del badge de estado del torneo
 const estadoTone = {
@@ -96,6 +123,119 @@ const provinciasArgentina = [
   "Tierra del Fuego",
   "Tucumán",
 ];
+
+// Dónde se juega: en un club de Padely (vínculo + canchas reales del club) o en otra sede (texto libre)
+const tiposSede = [
+  { value: "club", label: "Club de Padely" },
+  { value: "otra", label: "Otra sede" },
+];
+
+// Sección "Sede" del modo edición (misma que en CrearTorneo): pastillas club / otra sede, buscador + selector de
+// club y las canchas del club como badges conmutables. Los campos de "Otra sede" llegan como children.
+function SeccionSede({
+  tipoSede,
+  onTipoSede,
+  clubes,
+  clubPropio,
+  clubId,
+  onClubId,
+  busqueda,
+  onBusqueda,
+  canchasClub,
+  cargandoCanchas,
+  canchasSel,
+  onToggleCancha,
+  errorCanchas,
+  children,
+}) {
+  const bloqueado = !!clubPropio;
+  const texto = busqueda.trim().toLowerCase();
+  const opciones = clubes.filter(
+    (c) => c.id === clubId || !texto || `${c.nombre} ${c.ciudad}`.toLowerCase().includes(texto),
+  );
+  if (clubPropio && !opciones.some((c) => c.id === clubPropio.id)) {
+    opciones.unshift({ id: clubPropio.id, nombre: clubPropio.nombre || "", ciudad: clubPropio.ciudad || "" });
+  }
+  const esDueno = !!clubPropio && clubId === clubPropio.id;
+
+  return (
+    <>
+      <Field label="Dónde se juega" as="div">
+        <Pills items={tiposSede} value={tipoSede} onChange={onTipoSede} ariaLabel="Tipo de sede" />
+      </Field>
+
+      {tipoSede === "club" ? (
+        <>
+          <Field label="Club" as="div" help={bloqueado ? "Tu torneo se juega en tu club" : undefined}>
+            <div className="flex flex-col gap-2">
+              {!bloqueado && (
+                <SearchInput
+                  placeholder="Buscar por nombre o ciudad"
+                  aria-label="Buscar club"
+                  value={busqueda}
+                  onChange={(e) => onBusqueda(e.target.value)}
+                />
+              )}
+              <Select aria-label="Club" value={clubId} onChange={(e) => onClubId(e.target.value)} disabled={bloqueado}>
+                <option value="">Elegí un club</option>
+                {opciones.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                    {c.ciudad ? ` · ${c.ciudad}` : ""}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </Field>
+
+          <Field
+            label="Canchas del torneo"
+            as="div"
+            error={errorCanchas}
+            help="Los partidos programados bloquean estos turnos en el club"
+          >
+            {canchasClub.length > 0 ? (
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Canchas del torneo">
+                {canchasClub.map((c) => {
+                  const elegida = canchasSel.includes(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className={`pd-badge border-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${elegida ? "pd-badge-lime" : ""}`}
+                      aria-pressed={elegida}
+                      onClick={() => onToggleCancha(c.id)}
+                    >
+                      {c.nombre}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : cargandoCanchas ? (
+              <div className="flex flex-wrap gap-2" aria-busy="true" aria-label="Cargando canchas">
+                <span className="pd-skeleton h-6 w-20 rounded-pill!" />
+                <span className="pd-skeleton h-6 w-20 rounded-pill!" />
+                <span className="pd-skeleton h-6 w-20 rounded-pill!" />
+              </div>
+            ) : (
+              <p className="body-sm text-ink-3">
+                {clubId ? "Este club todavía no cargó canchas." : "Elegí un club para ver sus canchas."}
+              </p>
+            )}
+          </Field>
+          {clubId && !esDueno && (
+            <p className="pd-help">
+              El club tiene que aceptar la sede. Podés crear el torneo y abrir la inscripción mientras tanto; los
+              turnos se bloquean cuando acepte.
+            </p>
+          )}
+        </>
+      ) : (
+        children
+      )}
+    </>
+  );
+}
 
 const getTabs = (formato) => {
   if (formato === "liga") return ["Info", "Parejas", "Liga", "Reclamos"];
@@ -307,6 +447,20 @@ export default function DetalleTorneo() {
   // Cuadro elegido en las pestañas Grupos / Liga / Bracket (por defecto, el primero con parejas)
   const [cuadroSel, setCuadroSel] = useState(null);
   const [cuadroElegido, setCuadroElegido] = useState(false);
+  const { user } = useAuthStore();
+  // Documento público del club sede (dirección, dueño) cuando el torneo está vinculado a un club
+  const [clubDoc, setClubDoc] = useState(null);
+  // Sede en el modo edición: club de Padely (vínculo + canchas del club) u otra sede (texto libre)
+  const [tipoSedeEdit, setTipoSedeEdit] = useState("otra");
+  const [clubes, setClubes] = useState([]);
+  const [clubPropio, setClubPropio] = useState(null);
+  const [clubIdEdit, setClubIdEdit] = useState("");
+  const [busquedaClub, setBusquedaClub] = useState("");
+  const [canchasClubEdit, setCanchasClubEdit] = useState([]);
+  const [cargandoCanchas, setCargandoCanchas] = useState(false);
+  const [canchasSelEdit, setCanchasSelEdit] = useState([]);
+  const [errorCanchas, setErrorCanchas] = useState("");
+  const [canchasTextoEdit, setCanchasTextoEdit] = useState("");
 
   useEffect(() => {
     const cargar = async () => {
@@ -321,6 +475,14 @@ export default function DetalleTorneo() {
         setParejasStepper(parejasData);
         setGruposStepper(gruposData);
         setCuadrosStepper(cuadrosData || {});
+        // Dirección y dueño del club sede (documento público)
+        if (torneoData?.club?.id) {
+          try {
+            setClubDoc(await getClubConfig(torneoData.club.id));
+          } catch (err) {
+            console.error("Error al cargar el club sede:", err);
+          }
+        }
       } catch (err) {
         console.error("Error al cargar torneo:", err);
       }
@@ -328,6 +490,30 @@ export default function DetalleTorneo() {
     };
     cargar();
   }, [id]);
+
+  // Canchas del club elegido en el modo edición: se conservan las ya elegidas del torneo; si no queda ninguna
+  // (club nuevo o torneo viejo sin canchas), el torneo usa todas
+  useEffect(() => {
+    if (!editando || !clubIdEdit) return;
+    let activo = true;
+    getCanchasDeClub(clubIdEdit)
+      .then((lista) => {
+        if (!activo) return;
+        setCanchasClubEdit(lista);
+        setCanchasSelEdit((prev) => {
+          const ids = lista.map((c) => c.id);
+          const conservadas = prev.filter((cid) => ids.includes(cid));
+          return conservadas.length > 0 ? conservadas : ids;
+        });
+      })
+      .catch((err) => console.error("Error cargando las canchas del club:", err))
+      .finally(() => {
+        if (activo) setCargandoCanchas(false);
+      });
+    return () => {
+      activo = false;
+    };
+  }, [editando, clubIdEdit]);
 
   const cambiarEstado = async (nuevoEstado) => {
     try {
@@ -344,9 +530,26 @@ export default function DetalleTorneo() {
     // Los puntos y el bonus de campeón/subcampeón de la liga los otorgan las Cloud Functions al finalizar.
   };
 
-  const iniciarEdicion = () => {
+  const iniciarEdicion = async () => {
     setEditForm({ ...torneo });
+    // Sede actual: club vinculado (con las canchas elegidas) u otra sede (las canchas como texto)
+    const clubActual = torneo.club?.id ? torneo.club : null;
+    setTipoSedeEdit(clubActual ? "club" : "otra");
+    setClubIdEdit(clubActual ? clubActual.id : "");
+    setBusquedaClub("");
+    setCanchasClubEdit([]);
+    setCanchasSelEdit(clubActual ? canchasDelTorneo(torneo).map((c) => c.id) : []);
+    setCanchasTextoEdit(clubActual ? "" : textoDeCanchas(torneo.canchas));
+    setCargandoCanchas(!!clubActual);
+    setErrorCanchas("");
     setEditando(true);
+    try {
+      const [lista, propio] = await Promise.all([getClubesPublicos(), user ? getClubByOwner(user.uid) : null]);
+      setClubes(lista);
+      setClubPropio(propio);
+    } catch (err) {
+      console.error("Error cargando los clubes:", err);
+    }
   };
 
   const cancelarEdicion = () => {
@@ -354,7 +557,35 @@ export default function DetalleTorneo() {
     setEditForm(null);
   };
 
+  const elegirClubEdit = (clubId) => {
+    setClubIdEdit(clubId);
+    setCanchasClubEdit([]);
+    setCanchasSelEdit([]);
+    setErrorCanchas("");
+    setCargandoCanchas(!!clubId);
+  };
+
+  const toggleCanchaEdit = (canchaId) => {
+    setErrorCanchas("");
+    setCanchasSelEdit((prev) => (prev.includes(canchaId) ? prev.filter((c) => c !== canchaId) : [...prev, canchaId]));
+  };
+
+  const cambiarTipoSedeEdit = (tipo) => {
+    setTipoSedeEdit(tipo);
+    setErrorCanchas("");
+    if (tipo === "club" && clubPropio && !clubIdEdit) elegirClubEdit(clubPropio.id);
+  };
+
   const guardarEdicion = async () => {
+    const conClub = tipoSedeEdit === "club";
+    if (conClub && !clubIdEdit) {
+      toast.error("Elegí el club donde se juega el torneo.");
+      return;
+    }
+    if (conClub && canchasSelEdit.length === 0) {
+      setErrorCanchas("Elegí al menos una cancha");
+      return;
+    }
     setGuardandoEdit(true);
     try {
       const {
@@ -362,9 +593,61 @@ export default function DetalleTorneo() {
         createdAt: _ca,
         status: _st,
         organizerId: _oi,
+        conflictos: _cf,
         ...datosActualizar
       } = editForm;
+      // Sede: si el club cambió, el vínculo nace aceptado (club propio) o pendiente y se avisa al club; si es el
+      // mismo club, conserva su estado. Con "Otra sede" el vínculo se borra. Los conflictos los escribe la Function.
+      let avisar = null;
+      let clubNuevo = null;
+      if (conClub) {
+        clubNuevo = await getClubConfig(clubIdEdit);
+        if (!clubNuevo) throw new Error("El club elegido ya no existe");
+        const mismoClub = torneo.club?.id === clubNuevo.id;
+        const estado = mismoClub
+          ? torneo.club.estado || "pendiente"
+          : clubNuevo.ownerUid === user?.uid
+            ? "aceptado"
+            : "pendiente";
+        if (mismoClub) {
+          // El vínculo no se reescribe: el estado lo decide el club y pudo cambiar desde que se abrió la página
+          delete datosActualizar.club;
+        } else {
+          datosActualizar.club = {
+            id: clubNuevo.id,
+            nombre: clubNuevo.nombre || "",
+            ciudad: clubNuevo.ciudad || "",
+            estado,
+          };
+        }
+        if (canchasClubEdit.length === 0) {
+          if (!mismoClub) {
+            toast.error("Todavía estamos cargando las canchas del club. Probá de nuevo en un momento.");
+            setGuardandoEdit(false);
+            return;
+          }
+          // Las canchas del club no cargaron: se conservan las del torneo
+          delete datosActualizar.canchas;
+        } else {
+          datosActualizar.canchas = canchasClubEdit
+            .filter((c) => canchasSelEdit.includes(c.id))
+            .map((c) => ({ id: c.id, nombre: c.nombre }));
+        }
+        datosActualizar.sede = clubNuevo.nombre || "";
+        datosActualizar.ciudad = clubNuevo.ciudad || "";
+        datosActualizar.provincia = clubNuevo.provincia || "";
+        datosActualizar.direccionSede = clubNuevo.direccion || "";
+        if (!mismoClub && estado === "pendiente") {
+          avisar = () =>
+            notificarSolicitudSede(clubNuevo.ownerUid, datosActualizar.nombre, torneo.organizadorNombre, id);
+        }
+      } else {
+        datosActualizar.club = null;
+        datosActualizar.canchas = canchasDesdeTexto(canchasTextoEdit);
+      }
       await actualizarTorneo(id, datosActualizar);
+      if (avisar) avisar().catch((err) => console.error("Error avisando al club:", err));
+      setClubDoc(conClub ? clubNuevo : null);
       setTorneo({ ...torneo, ...datosActualizar });
       setEditando(false);
       setEditForm(null);
@@ -436,13 +719,21 @@ export default function DetalleTorneo() {
 
   if (!torneo)
     return (
-      <Card className="max-w-md mx-auto text-center py-12">
+      <Card className="max-w-md mx-auto text-center py-12!">
         <div className="mb-3">
           <span className="pd-ball" aria-hidden="true" />
         </div>
         <p className="heading-sm">Torneo no encontrado</p>
       </Card>
     );
+
+  // Sede (club vinculado u otra sede), canchas del torneo y turnos en conflicto (los anota la Function).
+  // Los torneos viejos no tienen club ni canchas: todo tolera que falten.
+  const sede = sedeDeTorneo(torneo);
+  const direccionSede = (sede.clubId && clubDoc?.direccion) || sede.direccion || "";
+  const ciudadSede = [sede.ciudad, (sede.clubId && clubDoc?.provincia) || sede.provincia].filter(Boolean).join(", ");
+  const canchasTorneo = canchasDelTorneo(torneo);
+  const conflictos = Array.isArray(torneo.conflictos) ? torneo.conflictos : [];
 
   // Cuadros del torneo con sus parejas, grupos y bracket
   const cuadros = cuadrosDeTorneo(torneo);
@@ -541,6 +832,16 @@ export default function DetalleTorneo() {
             <Badge tone={estadoTone[torneo.status]} dot>
               {estadoLabel[torneo.status]}
             </Badge>
+            {sede.estado === "pendiente" && (
+              <Badge tone="warning" dot className="whitespace-normal! h-auto! py-1!">
+                Esperando confirmación de {sede.nombre}
+              </Badge>
+            )}
+            {sede.estado === "rechazado" && (
+              <Badge tone="danger" dot>
+                Sede rechazada
+              </Badge>
+            )}
           </div>
           <p className="body-sm text-ink-2">
             {torneo.sede} — {torneo.ciudad}, {torneo.provincia}
@@ -691,6 +992,26 @@ export default function DetalleTorneo() {
 
       {tab === "Info" && !editando && (
         <div className="flex flex-col gap-4">
+          {/* Turnos del club que ya estaban reservados cuando se programó un partido (los anota la Function) */}
+          {conflictos.length > 0 && (
+            <Card className="border-danger!">
+              <Card.Title as="h2" className="mb-2! flex items-center gap-2">
+                <AlertTriangle className="pd-icon text-danger" size={20} aria-hidden="true" />
+                {conflictos.length === 1
+                  ? "1 turno ya reservado en el club"
+                  : `${conflictos.length} turnos ya reservados en el club`}
+              </Card.Title>
+              <ul className="flex flex-col gap-1">
+                {conflictos.map((c, i) => (
+                  <li key={i} className="body-md pd-tnum">
+                    {etiquetaProgramacion({ dia: c.dia, hora: c.hora, cancha: c.canchaNombre }, formatDiaCorto)}
+                  </li>
+                ))}
+              </ul>
+              <p className="pd-help mt-3">Cambiá el horario o pedile al club que libere el turno</p>
+            </Card>
+          )}
+
           <Card>
             <Card.Row className="mb-3">
               <Card.Title as="h2">Detalles del torneo</Card.Title>
@@ -777,32 +1098,6 @@ export default function DetalleTorneo() {
               </div>
             </dl>
 
-            {/* Sede */}
-            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 mt-4 pt-4 border-t border-line">
-              <div>
-                <dt className="body-sm text-ink-3">Sede</dt>
-                <dd className="body-md font-medium!">{torneo.sede}</dd>
-              </div>
-              {torneo.direccionSede && (
-                <div>
-                  <dt className="body-sm text-ink-3">Dirección</dt>
-                  <dd className="body-md font-medium!">{torneo.direccionSede}</dd>
-                </div>
-              )}
-              {torneo.instagramSede && (
-                <div>
-                  <dt className="body-sm text-ink-3">Instagram sede</dt>
-                  <dd className="body-md font-medium!">{torneo.instagramSede}</dd>
-                </div>
-              )}
-              {torneo.facebookSede && (
-                <div>
-                  <dt className="body-sm text-ink-3">Facebook sede</dt>
-                  <dd className="body-md font-medium!">{torneo.facebookSede}</dd>
-                </div>
-              )}
-            </dl>
-
             {/* Redes organizador */}
             {(torneo.instagramOrganizador ||
               torneo.facebookOrganizador ||
@@ -847,6 +1142,76 @@ export default function DetalleTorneo() {
                 <p className="body-md whitespace-pre-line">{torneo.reglamento}</p>
               </div>
             )}
+          </Card>
+
+          {/* Sede: club de Padely vinculado (con sus canchas) u otra sede en texto */}
+          <Card>
+            <Card.Row className="mb-3">
+              <Card.Title as="h2">Sede</Card.Title>
+              {sede.estado === "pendiente" && (
+                <Badge tone="warning" dot className="whitespace-normal! h-auto! py-1!">
+                  Esperando confirmación de {sede.nombre}
+                </Badge>
+              )}
+              {sede.estado === "rechazado" && (
+                <Badge tone="danger" dot>
+                  Sede rechazada
+                </Badge>
+              )}
+            </Card.Row>
+            <div className="flex flex-col gap-2">
+              {sede.clubId ? (
+                <Link
+                  to={`/club/${sede.clubId}`}
+                  className="inline-flex items-center gap-2 self-start body-md font-medium! text-court hover:underline"
+                >
+                  {sede.nombre || "Club"}
+                  <ExternalLink className="pd-icon" size={20} aria-hidden="true" />
+                </Link>
+              ) : (
+                <p className="body-md font-medium!">{sede.nombre || "—"}</p>
+              )}
+              {sede.estado === "rechazado" && <p className="body-sm text-ink-2">Elegí otra sede</p>}
+              {(direccionSede || ciudadSede) && (
+                <p className="flex items-start gap-2 body-sm text-ink-2">
+                  <MapPin className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+                  <span>{[direccionSede, ciudadSede].filter(Boolean).join(" · ")}</span>
+                </p>
+              )}
+              {(torneo.instagramSede || torneo.facebookSede) && (
+                <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {torneo.instagramSede && (
+                    <div>
+                      <dt className="body-sm text-ink-3">Instagram sede</dt>
+                      <dd className="body-md font-medium!">{torneo.instagramSede}</dd>
+                    </div>
+                  )}
+                  {torneo.facebookSede && (
+                    <div>
+                      <dt className="body-sm text-ink-3">Facebook sede</dt>
+                      <dd className="body-md font-medium!">{torneo.facebookSede}</dd>
+                    </div>
+                  )}
+                </dl>
+              )}
+              <div className="mt-2">
+                <p className="pd-eyebrow mb-2!">Canchas</p>
+                {canchasTorneo.length > 0 ? (
+                  <ul className="flex flex-wrap gap-2">
+                    {canchasTorneo.map((c) => (
+                      <li key={c.id}>
+                        <Badge>{c.nombre}</Badge>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="body-sm text-ink-3">Sin canchas cargadas</p>
+                )}
+              </div>
+              {sede.estado === "pendiente" && (
+                <p className="pd-help">Los turnos del club se bloquean cuando el club confirme la sede.</p>
+              )}
+            </div>
           </Card>
 
           {/* Cuadros: un sorteo por categoría */}
@@ -1216,36 +1581,60 @@ export default function DetalleTorneo() {
                 </label>
               </div>
 
-              <Field label="Sede">
-                <Input type="text" value={editForm.sede} onChange={setEdit("sede")} />
-              </Field>
-              <Field label="Dirección">
-                <Input type="text" value={editForm.direccionSede || ""} onChange={setEdit("direccionSede")} />
-              </Field>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Instagram sede">
-                  <Input type="text" value={editForm.instagramSede || ""} onChange={setEdit("instagramSede")} />
+              <SeccionSede
+                tipoSede={tipoSedeEdit}
+                onTipoSede={cambiarTipoSedeEdit}
+                clubes={clubes}
+                clubPropio={clubPropio}
+                clubId={clubIdEdit}
+                onClubId={elegirClubEdit}
+                busqueda={busquedaClub}
+                onBusqueda={setBusquedaClub}
+                canchasClub={canchasClubEdit}
+                cargandoCanchas={cargandoCanchas}
+                canchasSel={canchasSelEdit}
+                onToggleCancha={toggleCanchaEdit}
+                errorCanchas={errorCanchas}
+              >
+                <Field label="Sede">
+                  <Input type="text" value={editForm.sede || ""} onChange={setEdit("sede")} />
                 </Field>
-                <Field label="Facebook sede">
-                  <Input type="text" value={editForm.facebookSede || ""} onChange={setEdit("facebookSede")} />
+                <Field label="Dirección">
+                  <Input type="text" value={editForm.direccionSede || ""} onChange={setEdit("direccionSede")} />
                 </Field>
-              </div>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Field label="Instagram sede">
+                    <Input type="text" value={editForm.instagramSede || ""} onChange={setEdit("instagramSede")} />
+                  </Field>
+                  <Field label="Facebook sede">
+                    <Input type="text" value={editForm.facebookSede || ""} onChange={setEdit("facebookSede")} />
+                  </Field>
+                </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Ciudad">
-                  <Input type="text" value={editForm.ciudad} onChange={setEdit("ciudad")} />
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Field label="Ciudad">
+                    <Input type="text" value={editForm.ciudad || ""} onChange={setEdit("ciudad")} />
+                  </Field>
+                  <Field label="Provincia">
+                    <Select value={editForm.provincia || ""} onChange={setEdit("provincia")}>
+                      <option value="">Seleccionar</option>
+                      {provinciasArgentina.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                </div>
+                <Field label="Canchas" help="Separadas por coma">
+                  <Input
+                    type="text"
+                    placeholder="Cancha 1, Cancha 2"
+                    value={canchasTextoEdit}
+                    onChange={(e) => setCanchasTextoEdit(e.target.value)}
+                  />
                 </Field>
-                <Field label="Provincia">
-                  <Select value={editForm.provincia} onChange={setEdit("provincia")}>
-                    <option value="">Seleccionar</option>
-                    {provinciasArgentina.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-              </div>
+              </SeccionSede>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Field label="Fecha inicio">
