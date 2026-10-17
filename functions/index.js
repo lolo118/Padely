@@ -234,10 +234,20 @@ function parseBracket(bracketJson) {
 }
 
 // Trigger A: resultados de la fase de grupos / liga (tournaments/{tid}/groups/{gid}.partidos[i].resultado)
+// y, en toda escritura (también al borrar el grupo), la sincronización de los turnos bloqueados en el club sede.
 exports.onGroupWritten = onDocumentWritten("tournaments/{tid}/groups/{gid}", async (event) => {
+  const { tid, gid } = event.params;
+  try {
+    await puntosDeGrupo(event, tid, gid);
+  } catch (err) {
+    logger.error(`Error otorgando puntos del grupo ${gid}`, err);
+  }
+  await sincronizarBloqueosTorneo(tid);
+});
+
+async function puntosDeGrupo(event, tid, gid) {
   const after = event.data && event.data.after;
   if (!after || !after.exists) return;
-  const { tid, gid } = event.params;
   const grupo = after.data() || {};
   const partidos = Array.isArray(grupo.partidos) ? grupo.partidos : [];
   const conResultado = partidos
@@ -251,15 +261,24 @@ exports.onGroupWritten = onDocumentWritten("tournaments/{tid}/groups/{gid}", asy
     const otorgado = await otorgarPartido(tid, `g_${gid}_${i}`, partido, torneo);
     if (otorgado) logger.info(`Puntos otorgados: grupo ${gid} partido ${i}`, { tid });
   }
-});
+}
 
 // Trigger C: resultados del bracket de un cuadro (tournaments/{tid}/cuadros/{cid}.bracketJson).
 // Cada partido con resultado se puntúa una sola vez (marker b_{cid}_{ri}_{pi}); la final del cuadro
 // (última ronda, partido 0) otorga además el bonus de campeón/subcampeón de ese cuadro.
 exports.onCuadroWritten = onDocumentWritten("tournaments/{tid}/cuadros/{cid}", async (event) => {
+  const { tid, cid } = event.params;
+  try {
+    await puntosDeCuadro(event, tid, cid);
+  } catch (err) {
+    logger.error(`Error otorgando puntos del cuadro ${cid}`, err);
+  }
+  await sincronizarBloqueosTorneo(tid);
+});
+
+async function puntosDeCuadro(event, tid, cid) {
   const after = event.data && event.data.after;
   if (!after || !after.exists) return;
-  const { tid, cid } = event.params;
   const cuadro = after.data() || {};
   if (!cuadro.bracketJson) return;
   const rondas = parseBracket(cuadro.bracketJson);
@@ -281,7 +300,7 @@ exports.onCuadroWritten = onDocumentWritten("tournaments/{tid}/cuadros/{cid}", a
       }
     }
   }
-});
+}
 
 // Trigger B: cierre del torneo (status → finalizado)
 exports.onTournamentUpdated = onDocumentUpdated("tournaments/{tid}", async (event) => {
@@ -289,6 +308,26 @@ exports.onTournamentUpdated = onDocumentUpdated("tournaments/{tid}", async (even
   const after = event.data.after.data();
   if (!after) return;
   const { tid } = event.params;
+  const before = event.data.before.data() || {};
+
+  // Sede: el club (vínculo o su estado), las canchas, el estado del torneo o sus fechas cambiaron → los turnos
+  // bloqueados en el club se recalculan (también cuando el club recién acepta). Si cambió de club, se limpian
+  // los bloqueos que quedaron en el anterior.
+  const clubAntes = before.club && before.club.id ? before.club.id : null;
+  const clubDespues = after.club && after.club.id ? after.club.id : null;
+  const cambioSede =
+    JSON.stringify(before.club || null) !== JSON.stringify(after.club || null) ||
+    JSON.stringify(before.canchas || []) !== JSON.stringify(after.canchas || []) ||
+    before.status !== after.status ||
+    before.fechaInicio !== after.fechaInicio ||
+    before.fechaFin !== after.fechaFin;
+  if (cambioSede) {
+    try {
+      await sincronizarBloqueosTorneo(tid, clubAntes && clubAntes !== clubDespues ? clubAntes : null);
+    } catch (err) {
+      logger.error("Error sincronizando los turnos del torneo", err);
+    }
+  }
 
   // B2: torneo finalizado. Se evalúa en cada escritura mientras el torneo esté finalizado (no solo en la
   // transición): los marcadores garantizan una sola vez, y así una invocación perdida se recupera sola.
@@ -327,6 +366,201 @@ exports.onTournamentUpdated = onDocumentUpdated("tournaments/{tid}", async (even
     }
   }
 });
+
+// ============================================================================
+// SEDE — los partidos programados de un torneo bloquean los turnos de su club
+// clubs/{c}/reservas/{slotId} con tipo "torneo": los escribe solo esta función (las reglas no dejan al
+// cliente crearlos, editarlos ni borrarlos). Deseado = cada partido con dia + hora + canchaId de un torneo con
+// club aceptado y no finalizado/cancelado. Idempotente: se puede correr en cualquier escritura.
+// ============================================================================
+const slotIdDe = (canchaId, fecha, hora) => `${canchaId}_${fecha}_${String(hora).replace(":", "")}`;
+const ES_DIA = /^\d{4}-\d{2}-\d{2}$/;
+const ES_HORA = /^\d{2}:\d{2}$/;
+
+function nombreDePareja(p) {
+  if (!p) return "Por definir";
+  return p.nombrePareja || [p.jugador1, p.jugador2].filter(Boolean).join(" / ") || "Por definir";
+}
+
+// Partidos programados de todos los grupos y de los brackets de todos los cuadros → { slotId: deseado }.
+// Si dos partidos caen en el mismo turno, queda el primero y el segundo se anota como conflicto "duplicado".
+function recolectarPartidos(torneo, gruposDocs, cuadrosDocs) {
+  const deseados = new Map();
+  const conflictos = [];
+  const canchas = Array.isArray(torneo.canchas) ? torneo.canchas : [];
+  const nombreCancha = (partido) =>
+    partido.cancha || (canchas.find((c) => c && c.id === partido.canchaId) || {}).nombre || String(partido.canchaId);
+
+  const considerar = (partido, meta) => {
+    if (!partido || !partido.canchaId || !ES_DIA.test(partido.dia || "") || !ES_HORA.test(partido.hora || "")) return;
+    const id = slotIdDe(partido.canchaId, partido.dia, partido.hora);
+    const canchaNombre = nombreCancha(partido);
+    if (deseados.has(id)) {
+      conflictos.push({ dia: partido.dia, hora: partido.hora, canchaId: partido.canchaId, canchaNombre, motivo: "duplicado" });
+      return;
+    }
+    deseados.set(id, {
+      canchaId: partido.canchaId,
+      canchaNombre,
+      fecha: partido.dia,
+      hora: partido.hora,
+      partido: {
+        cuadroId: meta.cuadroId,
+        grupoId: meta.grupoId,
+        ronda: meta.ronda,
+        indice: meta.indice,
+        pareja1: nombreDePareja(partido.pareja1),
+        pareja2: nombreDePareja(partido.pareja2),
+      },
+    });
+  };
+
+  gruposDocs.forEach((g) => {
+    const grupo = g.data() || {};
+    const cuadroId = puntos.cuadroDeGrupo(grupo, torneo);
+    (Array.isArray(grupo.partidos) ? grupo.partidos : []).forEach((partido, i) =>
+      considerar(partido, { cuadroId, grupoId: g.id, ronda: null, indice: i }),
+    );
+  });
+  cuadrosDocs.forEach((c) => {
+    const data = c.data() || {};
+    const rondas = data.bracketJson ? parseBracket(data.bracketJson) : null;
+    if (!rondas) return;
+    rondas.forEach((ronda, ri) => {
+      (Array.isArray(ronda) ? ronda : []).forEach((partido, pi) =>
+        considerar(partido, { cuadroId: c.id, grupoId: null, ronda: ri, indice: pi }),
+      );
+    });
+  });
+  return { deseados, conflictos };
+}
+
+async function sincronizarBloqueosTorneo(tid, clubIdAnterior = null) {
+  const torneoRef = db.collection("tournaments").doc(tid);
+  const torneoSnap = await torneoRef.get();
+  if (!torneoSnap.exists) return;
+  const torneo = torneoSnap.data() || {};
+  const club = torneo.club && torneo.club.id ? torneo.club : null;
+  const clubId = club ? club.id : null;
+  const activo = !!clubId && club.estado === "aceptado" && !["finalizado", "cancelado"].includes(torneo.status);
+
+  let deseados = new Map();
+  let conflictos = [];
+  if (activo) {
+    const [gruposSnap, cuadrosSnap] = await Promise.all([
+      torneoRef.collection("groups").get(),
+      torneoRef.collection("cuadros").get(),
+    ]);
+    ({ deseados, conflictos } = recolectarPartidos(torneo, gruposSnap.docs, cuadrosSnap.docs));
+  }
+
+  const clubs = [...new Set([clubId, clubIdAnterior].filter(Boolean))];
+  let creados = 0;
+  let borrados = 0;
+  let actualizados = 0;
+  for (const cid of clubs) {
+    const reservasCol = db.collection("clubs").doc(cid).collection("reservas");
+    const propios = cid === clubId && activo ? deseados : new Map();
+    const existentesSnap = await reservasCol.where("tipo", "==", "torneo").where("torneoId", "==", tid).get();
+    const existentes = new Map(existentesSnap.docs.map((d) => [d.id, d]));
+    const ops = [];
+
+    existentes.forEach((d, id) => {
+      if (!propios.has(id)) {
+        ops.push((b) => b.delete(d.ref));
+        borrados++;
+      }
+    });
+
+    const nuevos = [...propios.entries()].filter(([id]) => !existentes.has(id));
+    const ocupantes = nuevos.length ? await db.getAll(...nuevos.map(([id]) => reservasCol.doc(id))) : [];
+    const nombreJugador = `Torneo · ${torneo.nombre || ""}`.trim();
+
+    propios.forEach((deseado, id) => {
+      const ex = existentes.get(id);
+      if (ex) {
+        const data = ex.data() || {};
+        const cambio =
+          JSON.stringify(data.partido || null) !== JSON.stringify(deseado.partido) ||
+          data.torneoNombre !== (torneo.nombre || "") ||
+          data.canchaName !== deseado.canchaNombre;
+        if (cambio) {
+          ops.push((b) =>
+            b.update(ex.ref, {
+              partido: deseado.partido,
+              torneoNombre: torneo.nombre || "",
+              nombreJugador,
+              canchaName: deseado.canchaNombre,
+            }),
+          );
+          actualizados++;
+        }
+      }
+    });
+
+    nuevos.forEach(([id, deseado], k) => {
+      const ocupante = ocupantes[k];
+      const data = ocupante && ocupante.exists ? ocupante.data() || {} : null;
+      if (data && data.status !== "cancelada") {
+        // Turno con una reserva real (o de otro torneo): no se pisa, se avisa
+        conflictos.push({
+          dia: deseado.fecha,
+          hora: deseado.hora,
+          canchaId: deseado.canchaId,
+          canchaNombre: deseado.canchaNombre,
+          motivo: data.tipo === "torneo" ? "torneo" : "reservado",
+        });
+        return;
+      }
+      ops.push((b) =>
+        b.set(reservasCol.doc(id), {
+          canchaId: deseado.canchaId,
+          canchaName: deseado.canchaNombre,
+          fecha: deseado.fecha,
+          hora: deseado.hora,
+          status: "confirmada",
+          tipo: "torneo",
+          torneoId: tid,
+          torneoNombre: torneo.nombre || "",
+          nombreJugador,
+          partido: deseado.partido,
+          jugadorUid: null,
+          createdAt: FieldValue.serverTimestamp(),
+        }),
+      );
+      creados++;
+    });
+
+    await escribirEnLotes(ops);
+  }
+
+  // Conflictos en el torneo (siempre un array; solo se escribe si cambió, para no disparar el trigger de nuevo)
+  conflictos.sort((a, b) => `${a.dia}${a.hora}${a.canchaId}`.localeCompare(`${b.dia}${b.hora}${b.canchaId}`));
+  const anteriores = Array.isArray(torneo.conflictos) ? torneo.conflictos : [];
+  if (JSON.stringify(anteriores) !== JSON.stringify(conflictos)) {
+    await torneoRef.update({ conflictos });
+    const clave = (c) => `${c.dia}_${c.hora}_${c.canchaId}`;
+    const vistos = new Set(anteriores.map(clave));
+    const nuevosConflictos = conflictos.filter((c) => !vistos.has(clave(c)));
+    if (nuevosConflictos.length && torneo.organizerId) {
+      const n = conflictos.length;
+      await nuevaNotificacionRef(torneo.organizerId).set({
+        tipo: "conflicto_turno",
+        titulo: n === 1 ? "Un turno ya reservado" : `${n} turnos ya reservados`,
+        mensaje:
+          `En "${torneo.nombre || "tu torneo"}" hay ${n === 1 ? "un partido programado" : `${n} partidos programados`} ` +
+          "en turnos que el club ya tenía reservados. Cambiá el horario o pedile al club que libere el turno.",
+        link: `/t/${tid}`,
+        leida: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+  }
+  logger.info(
+    `sincronizarBloqueosTorneo ${tid}: ${activo ? deseados.size : 0} deseados, ${creados} creados, ` +
+      `${actualizados} actualizados, ${borrados} borrados, ${conflictos.length} conflictos`,
+  );
+}
 
 // ============================================================================
 // MANTENIMIENTO — reservas pendientes vencidas y limpieza de cuentas eliminadas
@@ -396,7 +630,7 @@ exports.expirarReservasPendientes = onSchedule(
               const fresh = await tx.get(doc.ref);
               if (!fresh.exists) return false;
               const reserva = fresh.data();
-              if (reserva.status !== "pendiente") return false;
+              if (reserva.status !== "pendiente" || reserva.tipo === "torneo") return false;
               const clubNombre = club.nombre || "el club";
               const cancha = reserva.canchaName || reserva.canchaId || "cancha";
               const fecha = reserva.fecha || "";
@@ -469,7 +703,7 @@ exports.onUserDeleted = functionsV1
       .get();
     let reservas = 0;
     reservasSnap.docs.forEach((d) => {
-      if (d.data().status === "cancelada") return;
+      if (d.data().status === "cancelada" || d.data().tipo === "torneo") return;
       ops.push((b) => b.update(d.ref, { status: "cancelada", motivo: "cuenta eliminada" }));
       reservas++;
     });
