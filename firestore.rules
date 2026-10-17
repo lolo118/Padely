@@ -23,6 +23,20 @@ service cloud.firestore {
     function changedOnly(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
+    // Dueño del club vinculado como sede de un torneo (tournaments/{tid}.club.id)
+    function clubOwnerOfTournament(tid) {
+      let t = get(/databases/$(database)/documents/tournaments/$(tid)).data;
+      return signedIn()
+        && t.get('club', null) != null
+        && get(/databases/$(database)/documents/clubs/$(t.club.id)).data.ownerUid == request.auth.uid;
+    }
+    // Turnos bloqueados por un torneo (tipo "torneo"): los escriben solo las Cloud Functions
+    function reservaDeTorneo() {
+      return resource.data.get('tipo', null) == 'torneo';
+    }
+    function nuevaReservaDeTorneo() {
+      return request.resource.data.get('tipo', null) == 'torneo';
+    }
     function pairMember(tid, pairId) {
       let p = get(/databases/$(database)/documents/tournaments/$(tid)/pairs/$(pairId)).data;
       return p.get('jugador1Uid', null) == request.auth.uid || p.get('jugador2Uid', null) == request.auth.uid;
@@ -93,21 +107,23 @@ service cloud.firestore {
         // The club books manually or blocks a slot; a player books for himself with the status the club's config dictates.
         // Email y teléfono de quien reserva van en contactosReservas/{reservaId}, nunca acá.
         allow create: if sinContacto(['email', 'telefono'])
+          && !nuevaReservaDeTorneo()
           && (clubOwner(clubId)
               || (signedIn()
                   && request.resource.data.jugadorUid == request.auth.uid
                   && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
                       || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente'))));
         // The club manages; a player may cancel his own, or re-book a slot whose previous reservation was cancelled
-        allow update: if clubOwner(clubId)
-          || (signedIn() && resource.data.get('jugadorUid', null) == request.auth.uid
-              && changedOnly(['status']) && request.resource.data.status == 'cancelada')
-          || (signedIn() && resource.data.status == 'cancelada'
-              && sinContacto(['email', 'telefono'])
-              && request.resource.data.jugadorUid == request.auth.uid
-              && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
-                  || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente')));
-        allow delete: if clubOwner(clubId);
+        allow update: if !reservaDeTorneo() && !nuevaReservaDeTorneo()
+          && (clubOwner(clubId)
+              || (signedIn() && resource.data.get('jugadorUid', null) == request.auth.uid
+                  && changedOnly(['status']) && request.resource.data.status == 'cancelada')
+              || (signedIn() && resource.data.status == 'cancelada'
+                  && sinContacto(['email', 'telefono'])
+                  && request.resource.data.jugadorUid == request.auth.uid
+                  && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
+                      || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente'))));
+        allow delete: if !reservaDeTorneo() && clubOwner(clubId);
       }
 
       // Contacto (email/teléfono) de quien reservó, con el id de la reserva: lo lee solo el club. Lo escribe
@@ -131,7 +147,13 @@ service cloud.firestore {
     match /tournaments/{tid} {
       allow read: if true;
       allow create: if signedIn() && request.resource.data.organizerId == request.auth.uid;
-      allow update, delete: if signedIn() && resource.data.organizerId == request.auth.uid;
+      // El organizador edita todo; el dueño del club sede solo responde el pedido (club.estado) sin cambiar el club
+      allow update: if (signedIn() && resource.data.organizerId == request.auth.uid)
+        || (clubOwnerOfTournament(tid)
+            && changedOnly(['club'])
+            && request.resource.data.club.id == resource.data.club.id
+            && request.resource.data.club.estado in ['aceptado', 'rechazado']);
+      allow delete: if signedIn() && resource.data.organizerId == request.auth.uid;
 
       match /pairs/{pairId} {
         allow read: if true;

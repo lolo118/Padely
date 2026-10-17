@@ -4,6 +4,7 @@ import {
   addDoc,
   getDocs,
   getDoc,
+  getCountFromServer,
   doc,
   updateDoc,
   deleteDoc,
@@ -228,6 +229,39 @@ export const getClubesConCanchas = async () => {
   }
   return clubes;
 };
+// Clubes para el selector de sede de un torneo ({ id, nombre, ciudad, provincia, cantidadCanchas }), cacheados en
+// el módulo durante la sesión (la lista cambia poco y se abre varias veces).
+let clubesPublicosCache = null;
+export const getClubesPublicos = async ({ recargar = false } = {}) => {
+  if (clubesPublicosCache && !recargar) return clubesPublicosCache;
+  const snap = await getDocs(collection(db, "clubs"));
+  const clubes = await Promise.all(
+    snap.docs.map(async (d) => {
+      const data = d.data();
+      let cantidadCanchas = 0;
+      try {
+        const cuenta = await getCountFromServer(collection(db, "clubs", d.id, "canchas"));
+        cantidadCanchas = cuenta.data().count;
+      } catch (err) {
+        console.error("Error contando canchas del club:", err);
+      }
+      return {
+        id: d.id,
+        nombre: data.nombre || "",
+        ciudad: data.ciudad || "",
+        provincia: data.provincia || "",
+        cantidadCanchas,
+      };
+    }),
+  );
+  clubes.sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  clubesPublicosCache = clubes;
+  return clubes;
+};
+
+// Canchas de un club, para elegir las del torneo (mismo documento que getCanchas)
+export const getCanchasDeClub = (clubId) => getCanchas(clubId);
+
 export const getClubByOwner = async (userId) => {
   const q = query(collection(db, "clubs"), where("ownerUid", "==", userId));
   const snap = await getDocs(q);

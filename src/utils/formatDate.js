@@ -26,3 +26,15 @@ export function addDaysLocal(fechaStr, n) {
 export function horaActualStr() {
   return `${String(new Date().getHours()).padStart(2, "0")}:00`;
 }
+
+const DIAS_CORTOS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+// "YYYY-MM-DD" -> "sáb 18 oct" (formato corto del design system; en hora local, nunca con Date.parse)
+export function formatDiaCorto(fechaStr) {
+  if (!fechaStr || typeof fechaStr !== "string") return "";
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  if (!y || !m || !d) return fechaStr;
+  const date = new Date(y, m - 1, d);
+  return `${DIAS_CORTOS[date.getDay()]} ${d} ${MESES_CORTOS[m - 1]}`;
+}

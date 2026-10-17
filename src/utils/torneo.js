@@ -119,7 +119,8 @@ export function parejaPublica(p) {
   return publica;
 }
 
-// Un partido con sus dos parejas en proyección pública (las demás claves: resultado, hora, cancha, fecha)
+// Un partido con sus dos parejas en proyección pública (las demás claves pasan tal cual: resultado, dia, hora,
+// cancha, canchaId, y en la liga `fecha` = número de fecha del fixture)
 export function partidoPublico(partido) {
   if (!partido || typeof partido !== "object") return partido ?? null;
   return { ...partido, pareja1: parejaPublica(partido.pareja1), pareja2: parejaPublica(partido.pareja2) };
@@ -181,4 +182,92 @@ export function nombreRonda(totalRondas, rondaIdx) {
   if (faltantes === 4) return "Octavos de final";
   if (faltantes === 5) return "16avos de final";
   return `Ronda ${rondaIdx + 1}`;
+}
+
+// ===== Sede y canchas del torneo =====
+// tournaments/{tid}.club = null | { id, nombre, ciudad, estado: "pendiente" | "aceptado" | "rechazado" }
+// tournaments/{tid}.canchas = [{ id, nombre }] (ids del club cuando hay club; slug del nombre si no)
+// Los partidos llevan dia ("YYYY-MM-DD"), hora ("HH:MM"), cancha (nombre) y canchaId (id de la cancha del club o null).
+
+export function slugDeCancha(nombre) {
+  return (
+    String(nombre || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "cancha"
+  );
+}
+
+// "Cancha 1, Cancha 2" -> [{ id: "cancha-1", nombre: "Cancha 1" }, ...] (sin repetidos)
+export function canchasDesdeTexto(texto) {
+  const vistos = new Set();
+  const lista = [];
+  String(texto || "")
+    .split(/[,;\n]/)
+    .map((n) => n.trim())
+    .filter(Boolean)
+    .forEach((nombre) => {
+      let id = slugDeCancha(nombre);
+      let n = 2;
+      while (vistos.has(id)) id = `${slugDeCancha(nombre)}-${n++}`;
+      vistos.add(id);
+      lista.push({ id, nombre });
+    });
+  return lista;
+}
+
+export function textoDeCanchas(canchas) {
+  return (Array.isArray(canchas) ? canchas : []).map((c) => c?.nombre).filter(Boolean).join(", ");
+}
+
+export function canchasDelTorneo(torneo) {
+  return Array.isArray(torneo?.canchas) ? torneo.canchas.filter((c) => c && c.id && c.nombre) : [];
+}
+
+// true cuando el torneo se juega en un club de Padely que ya aceptó
+export function clubAceptado(torneo) {
+  return !!(torneo?.club && torneo.club.id && torneo.club.estado === "aceptado");
+}
+
+// Dónde se juega, para mostrar: el club (si está vinculado) o la sede en texto
+export function sedeDeTorneo(torneo) {
+  const club = torneo?.club;
+  if (club && club.id) {
+    return {
+      nombre: club.nombre || torneo.sede || "",
+      ciudad: club.ciudad || torneo.ciudad || "",
+      provincia: torneo.provincia || "",
+      direccion: torneo.direccionSede || "",
+      clubId: club.id,
+      estado: club.estado || "pendiente",
+      aceptado: club.estado === "aceptado",
+    };
+  }
+  return {
+    nombre: torneo?.sede || "",
+    ciudad: torneo?.ciudad || "",
+    provincia: torneo?.provincia || "",
+    direccion: torneo?.direccionSede || "",
+    clubId: null,
+    estado: null,
+    aceptado: false,
+  };
+}
+
+// Un partido está programado cuando tiene día, hora y cancha (nombre; canchaId cuando hay club)
+export function partidoProgramado(partido) {
+  return !!(partido && partido.dia && partido.hora && partido.cancha);
+}
+
+// "sáb 18 oct · 20:00 · Cancha 2" con lo que haya cargado (las partes vacías se omiten)
+export function etiquetaProgramacion(partido, formatDia) {
+  if (!partido) return "";
+  const partes = [];
+  if (partido.dia) partes.push(typeof formatDia === "function" ? formatDia(partido.dia) : partido.dia);
+  if (partido.hora) partes.push(partido.hora);
+  if (partido.cancha) partes.push(partido.cancha);
+  return partes.join(" · ");
 }

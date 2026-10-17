@@ -199,3 +199,41 @@ export const notificarPartidoListo = async (jugadorUid, torneoNombre, torneoId, 
     icono: "🎾",
   });
 };
+
+// --- Sede del torneo (vínculo torneo–club) ---
+
+// Al dueño del club: un organizador pide jugar su torneo en el club
+export const notificarSolicitudSede = async (ownerUid, torneoNombre, organizadorNombre, torneoId) => {
+  await crearNotificacion(ownerUid, {
+    tipo: "solicitud_sede",
+    titulo: "Pedido de sede",
+    mensaje: `${organizadorNombre || "Un organizador"} quiere jugar el torneo "${torneoNombre}" en tu club.`,
+    link: "/admin/torneos",
+    torneoId,
+  });
+};
+
+// Al organizador: el club aceptó o rechazó ser sede
+export const notificarSedeRespondida = async (organizerUid, clubNombre, estado, torneoId) => {
+  const acepto = estado === "aceptado";
+  await crearNotificacion(organizerUid, {
+    tipo: "sede_respondida",
+    titulo: acepto ? "Sede confirmada" : "Sede rechazada",
+    mensaje: acepto
+      ? `${clubNombre} aceptó ser la sede de tu torneo. Los partidos programados bloquean sus turnos.`
+      : `${clubNombre} no puede ser la sede de tu torneo. Elegí otra sede.`,
+    link: `/t/${torneoId}`,
+    estado,
+  });
+};
+
+// Al organizador: partidos programados sobre turnos que el club ya tenía reservados
+export const notificarConflictoTurno = async (organizerUid, torneoNombre, torneoId, cantidad) => {
+  const n = Number(cantidad) || 0;
+  await crearNotificacion(organizerUid, {
+    tipo: "conflicto_turno",
+    titulo: n === 1 ? "Un turno ya reservado" : `${n} turnos ya reservados`,
+    mensaje: `En "${torneoNombre}" hay ${n === 1 ? "un partido programado" : `${n} partidos programados`} en turnos que el club ya tenía reservados. Cambiá el horario o pedile al club que libere el turno.`,
+    link: `/t/${torneoId}`,
+  });
+};

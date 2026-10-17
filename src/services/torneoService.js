@@ -66,9 +66,33 @@ function parseBracketJson(bracketJson) {
   }
 }
 
+// Vínculo con un club de Padely (sede): club = null | { id, nombre, ciudad, estado } y canchas = [{ id, nombre }].
+// El estado lo decide quien crea: "aceptado" si el organizador es el dueño del club, si no "pendiente"
+// (el club lo responde con responderSolicitudSede). Los bloqueos de turnos (clubs/{c}/reservas tipo "torneo")
+// y `conflictos` los escriben solo las Cloud Functions.
+function normalizarClub(club) {
+  if (!club || !club.id) return null;
+  return {
+    id: club.id,
+    nombre: club.nombre || "",
+    ciudad: club.ciudad || "",
+    estado: ["pendiente", "aceptado", "rechazado"].includes(club.estado) ? club.estado : "pendiente",
+  };
+}
+
+function normalizarCanchas(canchas) {
+  if (!Array.isArray(canchas)) return [];
+  return canchas
+    .filter((c) => c && c.id && c.nombre)
+    .map((c) => ({ id: String(c.id), nombre: String(c.nombre) }));
+}
+
 export const crearTorneo = async (datos, userId) => {
   const ref = await addDoc(collection(db, "tournaments"), {
     ...datos,
+    club: normalizarClub(datos.club),
+    canchas: normalizarCanchas(datos.canchas),
+    conflictos: [],
     organizerId: userId,
     status: "inscripcion",
     createdAt: serverTimestamp(),
@@ -93,7 +117,35 @@ export const getTorneoById = async (id) => {
 };
 
 export const actualizarTorneo = async (id, datos) => {
-  await updateDoc(doc(db, "tournaments", id), datos);
+  const limpios = { ...datos };
+  if ("club" in limpios) limpios.club = normalizarClub(limpios.club);
+  if ("canchas" in limpios) limpios.canchas = normalizarCanchas(limpios.canchas);
+  await updateDoc(doc(db, "tournaments", id), limpios);
+};
+
+// ========== SEDE: TORNEOS DE UN CLUB ==========
+
+// Torneos que se juegan (o pidieron jugarse) en un club, en cualquier estado, por fecha de inicio
+export const getTorneosDeClub = async (clubId) => {
+  const q = query(collection(db, "tournaments"), where("club.id", "==", clubId), orderBy("fechaInicio", "asc"));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+// Pedidos de sede que el club todavía no respondió
+export const getSolicitudesSede = async (clubId) => {
+  const torneos = await getTorneosDeClub(clubId);
+  return torneos.filter((t) => t.club?.estado === "pendiente");
+};
+
+// El dueño del club acepta o rechaza ser sede: cambia solo club.estado (las reglas no dejan tocar otra cosa)
+export const responderSolicitudSede = async (torneoId, estado) => {
+  if (!["aceptado", "rechazado"].includes(estado)) throw new Error("Estado inválido");
+  const ref = doc(db, "tournaments", torneoId);
+  const snap = await getDoc(ref);
+  if (!snap.exists() || !snap.data().club?.id) throw new Error("El torneo no tiene un club vinculado");
+  const club = snap.data().club;
+  await updateDoc(ref, { club: { id: club.id, nombre: club.nombre || "", ciudad: club.ciudad || "", estado } });
 };
 
 export const agregarPareja = async (torneoId, pareja) => {
