@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { getTorneosByOrganizer } from "../../services/torneoService";
 import { formatFecha } from "../../utils/formatDate";
+import { sedeDeTorneo } from "../../utils/torneo";
 import { Badge, Button, Card } from "../../components/ui";
 
 const estadoLabel = {
@@ -22,6 +23,13 @@ const estadoTone = {
 };
 
 const esActivo = (status) => status === "inscripcion" || status === "en_curso";
+
+// Estado del vínculo con el club sede; aceptado (o sin club) no lleva badge
+const badgeSede = (t) => {
+  if (t.club?.estado === "pendiente") return <Badge tone="warning">Esperando confirmación</Badge>;
+  if (t.club?.estado === "rechazado") return <Badge tone="danger">Sede rechazada</Badge>;
+  return null;
+};
 
 const enlaceCard =
   "block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
@@ -65,7 +73,7 @@ export default function OrgTorneos() {
       )}
 
       {!loading && torneos.length === 0 && (
-        <Card className="text-center py-12">
+        <Card className="text-center py-12!">
           <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
           <p className="heading-sm m-0">Todavía no creaste ningún torneo.</p>
           <p className="body-sm text-ink-2 mt-1 mb-0">Creá el primero con "Crear torneo".</p>
@@ -76,6 +84,7 @@ export default function OrgTorneos() {
         <div className="grid gap-4 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
           {torneos.map((t) => {
             const activo = esActivo(t.status);
+            const sede = sedeDeTorneo(t);
             return (
               <Card
                 key={t.id}
@@ -87,11 +96,14 @@ export default function OrgTorneos() {
               >
                 <Card.Row>
                   <Card.Eyebrow>{t.formato || "Torneo"}</Card.Eyebrow>
-                  <Badge tone={estadoTone[t.status] || "neutral"}>{estadoLabel[t.status] || t.status}</Badge>
+                  <span className="flex flex-wrap items-center justify-end gap-2">
+                    {badgeSede(t)}
+                    <Badge tone={estadoTone[t.status] || "neutral"}>{estadoLabel[t.status] || t.status}</Badge>
+                  </span>
                 </Card.Row>
                 <Card.Title className="mt-2!">{t.nombre}</Card.Title>
                 <Card.Meta>
-                  {t.sede} · {t.ciudad}, {t.provincia}
+                  {sede.nombre} · {sede.ciudad}, {sede.provincia}
                 </Card.Meta>
                 <Card.Meta>
                   {formatFecha(t.fechaInicio)} – {formatFecha(t.fechaFin)}

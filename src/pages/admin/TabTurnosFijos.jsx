@@ -412,7 +412,7 @@ export default function TabTurnosFijos({ clubId }) {
 
       {/* Turnos activos */}
       {activos.length === 0 && suspendidos.length === 0 && !mostrarForm && (
-        <Card className="text-center py-12">
+        <Card className="text-center py-12!">
           <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
           <p className="heading-sm m-0">No hay turnos fijos</p>
           <p className="body-sm text-ink-2 mt-1 m-0">

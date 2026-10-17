@@ -18,6 +18,7 @@ import {
 import TabTurnosFijos from "./TabTurnosFijos";
 import { formatFecha, getTodayLocal } from "../../utils/formatDate";
 import { formatPrecio } from "../../utils/format";
+import { getNombrePareja } from "../../utils/torneo";
 import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
@@ -37,6 +38,19 @@ const itemsHoras = horasDelDia.map((h) => ({ value: h, label: h }));
 
 // El motivo de un bloqueo se guarda como "🔒 Motivo" (dato); acá solo se saca el candado para mostrarlo
 const motivoDeBloqueo = (nombre) => (nombre || "").replace(/^🔒\s*/, "");
+
+// Turno bloqueado por un partido de torneo: lo escribe la Cloud Function (tipo "torneo") y el club no lo
+// puede confirmar, cancelar ni borrar. En las grillas es una celda quieta sin acciones.
+const esBloqueoTorneo = (reserva) => reserva?.tipo === "torneo";
+const nombreTorneo = (reserva) => reserva?.torneoNombre || "";
+const tituloBloqueoTorneo = (reserva) => `Lo bloquea el torneo ${nombreTorneo(reserva)}`.trim();
+
+// "Pareja A vs Pareja B" del partido que bloquea el turno, o "" si el bloqueo no trae el partido
+const partidoDeBloqueo = (reserva) => {
+  const p = reserva?.partido;
+  if (!p || (!p.pareja1 && !p.pareja2)) return "";
+  return `${getNombrePareja(p.pareja1)} vs ${getNombrePareja(p.pareja2)}`;
+};
 
 function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData }) {
   const [weekData, setWeekData] = useState({});
@@ -122,6 +136,17 @@ function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData
                       const reserva = reservas.find((r) => r.canchaId === cancha.id && r.hora === hora && r.status !== "cancelada");
                       const turnoFijo = esTurnoFijoSemana(cancha.id, hora, d.date);
 
+                      if (esBloqueoTorneo(reserva)) {
+                        return (
+                          <SlotCell
+                            key={d.date}
+                            estado="bloqueada"
+                            linea1="Torneo"
+                            linea2={nombreTorneo(reserva) || undefined}
+                            title={tituloBloqueoTorneo(reserva)}
+                          />
+                        );
+                      }
                       if (reserva && reserva.status === "bloqueado") {
                         return <SlotCell key={d.date} estado="bloqueada" linea2={motivoDeBloqueo(reserva.nombreJugador) || undefined} />;
                       }
@@ -322,7 +347,7 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
 
       {/* Lista */}
       {filtradas.length === 0 ? (
-        <Card className="text-center py-10">
+        <Card className="text-center py-10!">
           <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
           <p className="heading-sm m-0">No hay reservas {filtroLabel[filtro]}</p>
         </Card>
@@ -334,20 +359,31 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
                 <Card.Eyebrow className="pd-tnum">
                   {getCanchaName(r.canchaId)} · {formatFecha(r.fecha)} · {r.hora}
                 </Card.Eyebrow>
-                <Badge tone={statusTone[r.status] || statusTone.pendiente} dot>
-                  {statusLabel[r.status] || "Pendiente"}
-                </Badge>
+                {esBloqueoTorneo(r) ? (
+                  <Badge tone="night">Torneo</Badge>
+                ) : (
+                  <Badge tone={statusTone[r.status] || statusTone.pendiente} dot>
+                    {statusLabel[r.status] || "Pendiente"}
+                  </Badge>
+                )}
               </Card.Row>
               <Card.Title className="mt-2! truncate">{r.nombreJugador || "Sin nombre"}</Card.Title>
+              {esBloqueoTorneo(r) && partidoDeBloqueo(r) && (
+                <Card.Meta className="truncate">{partidoDeBloqueo(r)}</Card.Meta>
+              )}
               {(r.email || r.telefono) && (
                 <Card.Meta className="truncate">
                   {r.email}{r.email && r.telefono ? " · " : ""}{r.telefono}
                 </Card.Meta>
               )}
               <Card.Foot className="flex-wrap">
-                {r.precio != null && <span className="numeral-md pd-tnum">{formatPrecio(r.precio)}</span>}
+                {r.precio != null && !esBloqueoTorneo(r) && <span className="numeral-md pd-tnum">{formatPrecio(r.precio)}</span>}
+                {/* Un bloqueo de torneo no tiene acciones: solo lo libera la Function al reprogramar o cerrar el torneo */}
+                {esBloqueoTorneo(r) && (
+                  <span className="body-sm text-ink-3">{tituloBloqueoTorneo(r)}</span>
+                )}
                 <div className="pd-btn-group ml-auto">
-                  {r.status === "pendiente" && (
+                  {!esBloqueoTorneo(r) && r.status === "pendiente" && (
                     <>
                       <Button size="sm" icon={<Check className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleConfirmar(r.id)}>
                         Confirmar
@@ -357,17 +393,17 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
                       </Button>
                     </>
                   )}
-                  {r.status === "confirmada" && (
+                  {!esBloqueoTorneo(r) && r.status === "confirmada" && (
                     <Button size="sm" variant="ghost" icon={<X className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleRechazar(r.id)}>
                       Cancelar
                     </Button>
                   )}
-                  {r.status === "bloqueado" && (
+                  {!esBloqueoTorneo(r) && r.status === "bloqueado" && (
                     <Button size="sm" onClick={() => handleDesbloquear(r.id)}>
                       Desbloquear
                     </Button>
                   )}
-                  {r.status === "cancelada" && (
+                  {!esBloqueoTorneo(r) && r.status === "cancelada" && (
                     <Button size="sm" variant="ghost" icon={<Trash2 className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleEliminar(r.id)}>
                       Eliminar
                     </Button>
@@ -673,7 +709,7 @@ export default function Canchas() {
 
   if (!club) {
     return (
-      <Card className="text-center py-12">
+      <Card className="text-center py-12!">
         <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
         <p className="heading-sm m-0">No tenés un club registrado</p>
         <p className="body-sm text-ink-2 mt-1 m-0">Registrate como club para gestionar canchas y turnos</p>
@@ -943,7 +979,7 @@ export default function Canchas() {
 
           {/* Lista de canchas */}
           {canchas.length === 0 && !mostrarForm && (
-            <Card className="text-center py-12 mb-4">
+            <Card className="text-center py-12! mb-4">
               <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
               <p className="heading-sm m-0">No tenés canchas creadas</p>
               <p className="body-sm text-ink-2 mt-1 m-0">Hacé clic en "Nueva cancha" para empezar</p>
@@ -1145,6 +1181,18 @@ export default function Canchas() {
                             }
 
                             const reserva = getReservaParaSlot(cancha.id, hora);
+                            // Bloqueado por un partido de torneo: celda quieta, sin Desbloquear ni el overlay de Bloquear
+                            if (esBloqueoTorneo(reserva)) {
+                              return (
+                                <SlotCell
+                                  key={cancha.id}
+                                  estado="bloqueada"
+                                  linea1="Torneo"
+                                  linea2={nombreTorneo(reserva) || undefined}
+                                  title={tituloBloqueoTorneo(reserva)}
+                                />
+                              );
+                            }
                             if (reserva && reserva.status === "bloqueado") {
                               return (
                                 <div key={cancha.id} className="flex flex-col gap-1">

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   AlertTriangle,
   AtSign,
@@ -25,6 +25,8 @@ import {
   getTurnosFijos,
   crearReserva,
 } from "../services/canchaService";
+import { getTorneosDeClub } from "../services/torneoService";
+import { canchasDelTorneo, listaCategorias } from "../utils/torneo";
 import {
   doc,
   getDoc,
@@ -37,7 +39,7 @@ import { getUserData } from "../services/authService";
 import { notificarNuevaReserva } from "../services/notificationService";
 import { toast } from "../components/Toast";
 import { confirmar } from "../components/ConfirmDialog";
-import { Badge, Button, Card, Field, Input, Pills, SlotCell, Tabs, Textarea } from "../components/ui";
+import { Badge, Button, Card, Field, Input, MarcaCategoria, Pills, SlotCell, Tabs, Textarea } from "../components/ui";
 
 const horasDelDia = Array.from(
   { length: 24 },
@@ -66,6 +68,31 @@ function etiquetaDia(fechaStr, indice) {
   const { d, dia } = partesFecha(fechaStr);
   return `${DIAS_CORTOS[dia]} ${d}`;
 }
+
+// Torneos que se juegan en el club (tab "Torneos"): abierto y en curso llevan el marco heat (Card torneo) y
+// su badge heat; finalizado y cancelado, tarjeta quieta con badge neutro o danger, como en la lista de torneos.
+const torneoEstadoTone = {
+  inscripcion: "heat",
+  en_curso: "heat",
+  finalizado: "neutral",
+  cancelado: "danger",
+};
+
+const torneoEstadoLabel = {
+  inscripcion: "Inscripción abierta",
+  en_curso: "En curso",
+  finalizado: "Finalizado",
+  cancelado: "Cancelado",
+};
+
+const esTorneoActivo = (t) => t?.status === "inscripcion" || t?.status === "en_curso";
+
+// Toda la tarjeta del torneo es el link (Card as={Link}), con el foco visible del sistema
+const enlaceCard =
+  "block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
+
+// Un turno bloqueado por un partido de torneo (lo escribe la Cloud Function): se ve reservado y no se reserva
+const esBloqueoTorneo = (reserva) => reserva?.tipo === "torneo";
 
 // Puntuación de reviews. El sistema no define estrellas: Lucide Star, llena en ink y vacía en ink-3
 function StarRating({ value, onChange }) {
@@ -160,6 +187,9 @@ export default function ClubPublico() {
   const [guardando, setGuardando] = useState(false);
   const [tab, setTab] = useState("canchas");
 
+  // Torneos del club: se cargan una sola vez, la primera vez que se abre la pestaña (null = todavía no)
+  const [torneosClub, setTorneosClub] = useState(null);
+
   // Reviews
   const [reviews, setReviews] = useState([]);
   const [puedeReview, setPuedeReview] = useState(false);
@@ -224,6 +254,21 @@ export default function ClubPublico() {
     };
     cargar();
   }, [id, fechaSeleccionada, user]);
+
+  // Los torneos son de lectura pública: se cargan con o sin sesión, solo al abrir la pestaña
+  const clubId = club?.id;
+  useEffect(() => {
+    if (tab !== "torneos" || !clubId || torneosClub !== null) return;
+    const cargarTorneos = async () => {
+      try {
+        setTorneosClub(await getTorneosDeClub(clubId));
+      } catch (err) {
+        console.error("Error cargando los torneos del club:", err);
+        setTorneosClub([]);
+      }
+    };
+    cargarTorneos();
+  }, [tab, clubId, torneosClub]);
 
   const estaOcupado = (canchaId, hora) => {
     return reservas.some(
@@ -419,7 +464,7 @@ export default function ClubPublico() {
 
   if (!club) {
     return (
-      <Card className="text-center py-10">
+      <Card className="text-center py-10!">
         <div className="flex justify-center mb-3">
           <span className="pd-ball" aria-hidden="true" />
         </div>
@@ -428,8 +473,19 @@ export default function ClubPublico() {
     );
   }
 
+  // Torneos que se ven en la pestaña: el club aceptó ser sede y el torneo está vigente (abierto, en curso o
+  // que todavía no terminó). Tolera torneos sin club o sin fechas.
+  const cargandoTorneos = tab === "torneos" && torneosClub === null;
+  const torneosVisibles = (torneosClub || []).filter(
+    (t) =>
+      t?.club?.estado === "aceptado" &&
+      t.status !== "cancelado" &&
+      (esTorneoActivo(t) || (typeof t.fechaFin === "string" && t.fechaFin >= fechaMin)),
+  );
+
   const tabs = [
     { value: "canchas", label: "Canchas" },
+    { value: "torneos", label: "Torneos", count: torneosClub ? torneosVisibles.length : 0 },
     { value: "info", label: "Info" },
     { value: "reviews", label: "Reviews", count: reviews.length },
   ];
@@ -572,6 +628,18 @@ export default function ClubPublico() {
                       </div>
                       {canchas.map((cancha) => {
                         const estado = estadoDeCelda(cancha, hora);
+                        const reserva = reservaEn(cancha.id, hora);
+                        // Turno de un partido de torneo: se ve reservado con el nombre del torneo y nunca abre el diálogo
+                        if (esBloqueoTorneo(reserva)) {
+                          return (
+                            <SlotCell
+                              key={cancha.id}
+                              estado="reservada"
+                              linea1="Torneo"
+                              linea2={reserva.torneoNombre || undefined}
+                            />
+                          );
+                        }
                         if (estado !== "libre") {
                           return (
                             <SlotCell
@@ -604,6 +672,75 @@ export default function ClubPublico() {
             )}
           </Card>
         </>
+      )}
+
+      {/* Tab: Torneos que se juegan en el club */}
+      {tab === "torneos" && (
+        <div className="flex flex-col gap-4">
+          {cargandoTorneos && (
+            <div className="flex flex-col gap-4" aria-busy="true">
+              <span className="sr-only">Cargando torneos…</span>
+              {[0, 1].map((i) => (
+                <div key={i} className="pd-skeleton h-36 rounded-lg!" />
+              ))}
+            </div>
+          )}
+
+          {!cargandoTorneos && torneosVisibles.length === 0 && (
+            <Card className="text-center py-10!">
+              <div className="flex justify-center mb-3">
+                <span className="pd-ball" aria-hidden="true" />
+              </div>
+              <p className="body-md text-ink-2">Este club todavía no tiene torneos</p>
+            </Card>
+          )}
+
+          {!cargandoTorneos && torneosVisibles.length > 0 && (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
+              {torneosVisibles.map((t) => {
+                const activo = esTorneoActivo(t);
+                const categorias = listaCategorias(t);
+                const canchasTorneo = canchasDelTorneo(t);
+                return (
+                  <Card
+                    key={t.id}
+                    as={Link}
+                    to={`/torneos/${t.id}`}
+                    variant={activo ? "torneo" : "default"}
+                    hover
+                    className={enlaceCard}
+                  >
+                    <Card.Row>
+                      <Card.Eyebrow>
+                        {formatFecha(t.fechaInicio)}
+                        {t.fechaFin && ` – ${formatFecha(t.fechaFin)}`}
+                      </Card.Eyebrow>
+                      <Badge tone={torneoEstadoTone[t.status] || "neutral"}>
+                        {torneoEstadoLabel[t.status] || t.status || "Torneo"}
+                      </Badge>
+                    </Card.Row>
+                    <Card.Title as="h2" className="mt-2!">
+                      {t.nombre || "Torneo"}
+                    </Card.Title>
+                    {(categorias.length > 0 || canchasTorneo.length > 0) && (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {categorias.map((c) => (
+                          <Badge key={c.id}>
+                            <MarcaCategoria cat={c.nivel} size={20} />
+                            {c.label}
+                          </Badge>
+                        ))}
+                        {canchasTorneo.map((c) => (
+                          <Badge key={c.id}>{c.nombre}</Badge>
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Tab: Info */}

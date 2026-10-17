@@ -53,7 +53,7 @@ export default function TabReclamos({ torneoId, torneo }) {
 
   if (!torneo.habilitarReclamos) {
     return (
-      <Card className="text-center py-12">
+      <Card className="text-center py-12!">
         <div className="mb-3">
           <span className="pd-ball" aria-hidden="true" />
         </div>
@@ -65,7 +65,7 @@ export default function TabReclamos({ torneoId, torneo }) {
 
   if (reclamos.length === 0) {
     return (
-      <Card className="text-center py-12">
+      <Card className="text-center py-12!">
         <div className="mb-3">
           <span className="pd-ball" aria-hidden="true" />
         </div>

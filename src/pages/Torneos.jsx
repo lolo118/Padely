@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { formatFecha } from "../utils/formatDate";
 import { formatPrecio } from "../utils/format";
 import { useNavigate } from "react-router-dom";
+import { Building2 } from "lucide-react";
 import { getTodosLosTorneos } from "../services/torneoService";
+import { sedeDeTorneo, clubAceptado } from "../utils/torneo";
 import { Badge, Card, MarcaCategoria, Pills, SearchInput } from "../components/ui";
 
 // Abierto y en curso llevan el marco heat (Card torneo) y su badge; finalizado y cancelado, tarjeta quieta
@@ -29,6 +31,13 @@ const filtros = [
 
 const esActivo = (t) => t.status === "inscripcion" || t.status === "en_curso";
 
+// Dónde se juega, para el público: el club de Padely solo cuando aceptó; si no, la sede en texto de siempre
+const sedePublica = (t) => {
+  const sede = sedeDeTorneo(t);
+  const esClub = clubAceptado(t);
+  return { ...sede, nombre: esClub ? sede.nombre : t.sede || sede.nombre, esClub };
+};
+
 export default function Torneos() {
   const navigate = useNavigate();
   const [torneos, setTorneos] = useState([]);
@@ -44,11 +53,13 @@ export default function Torneos() {
   }, []);
 
   const torneosFiltrados = torneos.filter((t) => {
+    const q = busqueda.trim().toLowerCase();
     const coincideBusqueda =
-      !busqueda.trim() ||
-      t.nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
-      t.sede?.toLowerCase().includes(busqueda.toLowerCase()) ||
-      t.ciudad?.toLowerCase().includes(busqueda.toLowerCase());
+      !q ||
+      t.nombre?.toLowerCase().includes(q) ||
+      t.sede?.toLowerCase().includes(q) ||
+      sedeDeTorneo(t).nombre.toLowerCase().includes(q) ||
+      t.ciudad?.toLowerCase().includes(q);
 
     const coincideEstado =
       filtroEstado === "todos" || t.status === filtroEstado;
@@ -94,6 +105,7 @@ export default function Torneos() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
           {torneosFiltrados.map((t) => {
             const activo = esActivo(t);
+            const sede = sedePublica(t);
             const abrir = () => navigate(`/torneos/${t.id}`);
             return (
               <Card
@@ -117,9 +129,14 @@ export default function Torneos() {
                 <Card.Title as="h2" className="mt-2!">
                   {t.nombre}
                 </Card.Title>
-                <Card.Meta>
-                  {t.sede} · {t.ciudad}, {t.provincia}
+                {/* La tarjeta entera ya es un link: el club va con ícono, sin anidar otro link */}
+                <Card.Meta className="flex flex-wrap items-center gap-1">
+                  {sede.esClub && <Building2 className="pd-icon shrink-0" size={20} aria-hidden="true" />}
+                  <span>
+                    {sede.nombre} · {sede.ciudad}, {sede.provincia}
+                  </span>
                 </Card.Meta>
+                {sede.esClub && sede.direccion && <Card.Meta>{sede.direccion}</Card.Meta>}
                 <div className="flex flex-wrap gap-2 mt-3">
                   {Array.isArray(t.categoriaGenero) &&
                     t.categoriaGenero.map((g) => (

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, Bell, Calendar, Check, CircleDot, Clock, Trophy, UserPlus, X } from "lucide-react";
+import { AlertTriangle, Bell, Building2, Calendar, Check, CircleDot, Clock, Trophy, UserPlus, X } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import {
   getNotificaciones,
@@ -26,6 +26,10 @@ const ICONOS = {
   resultado_cargado: CircleDot,
   partido_listo: CircleDot,
   ascenso: Trophy,
+  // Sede del torneo (vínculo torneo–club)
+  solicitud_sede: Building2,
+  sede_respondida: Building2,
+  conflicto_turno: AlertTriangle,
 };
 
 export default function NotificationBell() {

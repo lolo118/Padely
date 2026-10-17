@@ -104,7 +104,7 @@ export default function OrgEntidad() {
 
   if (!entidad)
     return (
-      <Card className="text-center py-12">
+      <Card className="text-center py-12!">
         <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
         <p className="heading-sm m-0">No se encontró tu entidad organizadora</p>
       </Card>

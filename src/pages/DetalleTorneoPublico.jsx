@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowLeft,
+  Building2,
   Check,
   CircleDot,
   ClipboardList,
@@ -29,11 +30,13 @@ import {
   dejarDescargo,
 } from "../services/torneoService";
 import { getUserData } from "../services/authService";
+import { getClubConfig } from "../services/canchaService";
 import { logEvento } from "../lib/firebase";
-import { formatFecha } from "../utils/formatDate";
+import { formatDiaCorto, formatFecha } from "../utils/formatDate";
 import { formatPrecio } from "../utils/format";
 import {
   calcularTabla,
+  etiquetaProgramacion,
   getGanador,
   getNombrePareja,
   listaCategorias,
@@ -44,6 +47,9 @@ import {
   cuadroDeGrupo,
   labelDeCuadro,
   nombreRonda,
+  sedeDeTorneo,
+  clubAceptado,
+  canchasDelTorneo,
 } from "../utils/torneo";
 import { notificarInscripcionTorneo, notificarReclamoContra, notificarNuevoReclamo } from "../services/notificationService";
 import { toast } from "../components/Toast";
@@ -119,10 +125,13 @@ const pieDePartido = (p) => {
   return tbs.length > 0 ? tbs.map((s) => `TB ${s.tb1}–${s.tb2}`).join(" · ") : undefined;
 };
 
-const lugarDePartido = (p) => ({
-  cancha: p.cancha ? `Cancha ${p.cancha}` : undefined,
-  hora: p.hora || undefined,
-});
+// `cancha` es el nombre de la cancha ("Cancha 2", "Central"); los torneos viejos guardaban solo el número
+// Se muestra como "sáb 18 oct · 20:00 · Cancha 2" (lo que falte se omite); va entero por `hora` porque MatchCard
+// une [cancha, hora] en ese orden.
+const lugarDePartido = (p) => {
+  const cancha = p.cancha ? (/^\d+$/.test(String(p.cancha)) ? `Cancha ${p.cancha}` : String(p.cancha)) : "";
+  return { hora: etiquetaProgramacion({ dia: p.dia, hora: p.hora, cancha }, formatDiaCorto) || undefined };
+};
 
 // La ronda decide el vestido de la tarjeta: final (negro y oro), semi (banda heat), pendiente o normal
 const variantDeRonda = (totalRondas, rondaIdx, partido) => {
@@ -183,6 +192,25 @@ export default function DetalleTorneoPublico() {
   const [enviandoReclamo, setEnviandoReclamo] = useState(false);
   const [descargoTexto, setDescargoTexto] = useState("");
   const [mostrarInfoReclamos, setMostrarInfoReclamos] = useState(false);
+  // Documento público del club sede (solo cuando el club aceptó): de acá sale la dirección
+  const [clubSede, setClubSede] = useState(null);
+
+  // Una sola lectura del club por torneo; si falla, la sede se muestra sin dirección
+  const clubSedeId = clubAceptado(torneo) ? torneo.club.id : null;
+  useEffect(() => {
+    if (!clubSedeId) return;
+    let vigente = true;
+    getClubConfig(clubSedeId)
+      .then((datos) => {
+        if (vigente) setClubSede(datos);
+      })
+      .catch(() => {
+        // Sin dirección: el link al club alcanza
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [clubSedeId]);
 
   useEffect(() => {
     if (!user) return;
@@ -475,6 +503,18 @@ export default function DetalleTorneoPublico() {
   const reclamosAbiertos = reclamos.filter((r) => r.estado === "abierto");
   const avanzan = Number(torneo.parejasQueAvanzan) || 2;
 
+  // Sede: el club de Padely (con link y dirección) cuando aceptó; si no, el texto de siempre
+  const sede = sedeDeTorneo(torneo);
+  const sedeEsClub = clubAceptado(torneo);
+  const direccionSede = sedeEsClub ? clubSede?.direccion || sede.direccion : torneo.direccionSede;
+  const canchasSede = sedeEsClub ? canchasDelTorneo(torneo) : [];
+  const linkClubSede = sedeEsClub ? (
+    <Link to={`/club/${sede.clubId}`} className="inline-flex items-center gap-1 text-court hover:underline">
+      <Building2 className="pd-icon" size={20} aria-hidden="true" />
+      {sede.nombre}
+    </Link>
+  ) : null;
+
   // Un partido de grupo o de liga como MatchCard (sin botones adentro; el reclamo va debajo)
   const tarjetaPartido = (p, ronda, extra = {}) => (
     <MatchCard
@@ -506,11 +546,25 @@ export default function DetalleTorneoPublico() {
           />
           <Badge tone={estadoTone[torneo.status] || "neutral"}>{estadoLabel[torneo.status] || torneo.status}</Badge>
         </div>
-        {formatoLabel[torneo.formato] && <p className="pd-eyebrow mt-3!">{formatoLabel[torneo.formato]}</p>}
+        {sedeEsClub ? (
+          <p className="pd-eyebrow mt-3!">
+            {sede.nombre}
+            {sede.ciudad ? ` · ${sede.ciudad}` : ""}
+          </p>
+        ) : (
+          formatoLabel[torneo.formato] && <p className="pd-eyebrow mt-3!">{formatoLabel[torneo.formato]}</p>
+        )}
         <h1 className="display-lg mt-1">{torneo.nombre}</h1>
-        <p className="body-sm text-ink-2 mt-2">
-          {torneo.sede} — {torneo.ciudad}, {torneo.provincia}
-        </p>
+        {sedeEsClub ? (
+          <p className="body-sm text-ink-2 mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+            {linkClubSede}
+            {direccionSede && <span>{direccionSede}</span>}
+          </p>
+        ) : (
+          <p className="body-sm text-ink-2 mt-2">
+            {torneo.sede} — {torneo.ciudad}, {torneo.provincia}
+          </p>
+        )}
         <p className="body-sm text-ink-2 pd-tnum">
           {formatFecha(torneo.fechaInicio)} → {formatFecha(torneo.fechaFin)}
         </p>
@@ -746,6 +800,29 @@ export default function DetalleTorneoPublico() {
           <Card>
             <Card.Title as="h2">Detalles</Card.Title>
             <dl className="grid gap-3 sm:grid-cols-2 mt-3">
+              {sedeEsClub && (
+                <div className="sm:col-span-2">
+                  <dt className="pd-eyebrow">Sede</dt>
+                  <dd className="body-md">
+                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      {linkClubSede}
+                      {direccionSede && (
+                        <span className="inline-flex items-center gap-2 text-ink-2">
+                          <MapPin className="pd-icon text-ink-3" size={20} aria-hidden="true" />
+                          {direccionSede}
+                        </span>
+                      )}
+                    </span>
+                    {canchasSede.length > 0 && (
+                      <span className="flex flex-wrap gap-2 mt-2">
+                        {canchasSede.map((c) => (
+                          <Badge key={c.id}>{c.nombre}</Badge>
+                        ))}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt className="pd-eyebrow">Formato</dt>
                 <dd className="body-md">{formatoLabel[torneo.formato]}</dd>
@@ -793,7 +870,7 @@ export default function DetalleTorneoPublico() {
               </div>
             </dl>
 
-            {torneo.direccionSede && (
+            {!sedeEsClub && torneo.direccionSede && (
               <div className="mt-3 pt-3 border-t border-line">
                 <p className="pd-eyebrow">Dirección</p>
                 <p className="body-md flex items-center gap-2 mt-0.5">
@@ -905,7 +982,7 @@ export default function DetalleTorneoPublico() {
               Copiar link
             </Button>
             <a
-              href={`https://wa.me/?text=${encodeURIComponent(`🏆 ${torneo.nombre}\n📍 ${torneo.sede} - ${torneo.ciudad}\n📅 ${formatFecha(torneo.fechaInicio)} → ${formatFecha(torneo.fechaFin)}\n${torneo.inscripcion > 0 ? `💰 ${formatPrecio(torneo.inscripcion)}` : "🆓 Gratis"}\n\n${window.location.origin}/torneos/${id}`)}`}
+              href={`https://wa.me/?text=${encodeURIComponent(`🏆 ${torneo.nombre}\n📍 ${sede.nombre} - ${sede.ciudad}\n📅 ${formatFecha(torneo.fechaInicio)} → ${formatFecha(torneo.fechaFin)}\n${torneo.inscripcion > 0 ? `💰 ${formatPrecio(torneo.inscripcion)}` : "🆓 Gratis"}\n\n${window.location.origin}/torneos/${id}`)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="pd-btn flex-1"
@@ -1022,7 +1099,7 @@ export default function DetalleTorneoPublico() {
           )}
 
           {gruposDelCuadro.length === 0 ? (
-            <Card className="text-center py-10">
+            <Card className="text-center py-10!">
               <p className="body-md text-ink-2">Los grupos todavía no fueron generados.</p>
             </Card>
           ) : (
@@ -1231,7 +1308,7 @@ export default function DetalleTorneoPublico() {
       {tab === "Liga" && (
         <div className="grid gap-4">
           {gruposDelCuadro.length === 0 ? (
-            <Card className="text-center py-10">
+            <Card className="text-center py-10!">
               <p className="body-md text-ink-2">El fixture todavía no fue generado.</p>
             </Card>
           ) : (() => {
@@ -1291,7 +1368,7 @@ export default function DetalleTorneoPublico() {
       {tab === "Bracket" && (
         <div className="grid gap-4">
           {!rondas ? (
-            <Card className="text-center py-10">
+            <Card className="text-center py-10!">
               <p className="body-md text-ink-2">El cuadro todavía no fue generado.</p>
             </Card>
           ) : (
@@ -1310,7 +1387,7 @@ export default function DetalleTorneoPublico() {
                   campeones={getNombrePareja(campeon)}
                   subcampeones={getNombrePareja(subcampeon)}
                   torneo={torneo.nombre}
-                  club={torneo.sede}
+                  club={sede.nombre}
                   fecha={formatFecha(torneo.fechaFin)}
                 />
               );

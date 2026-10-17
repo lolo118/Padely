@@ -6,7 +6,15 @@ import { db } from "../../lib/firebase";
 import { useAuthStore } from "../../store/authStore";
 import { getTorneosByOrganizer } from "../../services/torneoService";
 import { formatFecha } from "../../utils/formatDate";
+import { sedeDeTorneo } from "../../utils/torneo";
 import { Badge, Button, Card, StatTile } from "../../components/ui";
+
+// Estado del vínculo con el club sede; aceptado (o sin club) no lleva badge
+const badgeSede = (t) => {
+  if (t.club?.estado === "pendiente") return <Badge tone="warning">Esperando confirmación</Badge>;
+  if (t.club?.estado === "rechazado") return <Badge tone="danger">Sede rechazada</Badge>;
+  return null;
+};
 
 const enlaceCard =
   "block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
@@ -108,12 +116,15 @@ export default function OrgDashboard() {
               <Card key={t.id} as={Link} to={`/org/torneos/${t.id}`} variant="hover" className={enlaceCard}>
                 <Card.Row>
                   <Card.Eyebrow>{formatFecha(t.fechaInicio)}</Card.Eyebrow>
-                  <Badge tone={t.status === "inscripcion" ? "court" : "lime"}>
-                    {t.status === "inscripcion" ? "Inscripción" : "En curso"}
-                  </Badge>
+                  <span className="flex flex-wrap items-center justify-end gap-2">
+                    {badgeSede(t)}
+                    <Badge tone={t.status === "inscripcion" ? "court" : "lime"}>
+                      {t.status === "inscripcion" ? "Inscripción" : "En curso"}
+                    </Badge>
+                  </span>
                 </Card.Row>
                 <Card.Title className="mt-2!">{t.nombre}</Card.Title>
-                <Card.Meta>{t.sede}</Card.Meta>
+                <Card.Meta>{sedeDeTorneo(t).nombre}</Card.Meta>
               </Card>
             ))}
           </div>

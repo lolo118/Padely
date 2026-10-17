@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, Bell, Calendar, Check, Hourglass, Info, LayoutGrid, Lock, Pencil, Plus } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
-import { getTorneosByOrganizer } from "../../services/torneoService";
+import { getTorneosByOrganizer, getTorneosDeClub } from "../../services/torneoService";
 import {
   getClubByOwner,
   getCanchas,
@@ -12,8 +12,9 @@ import {
   actualizarReserva,
 } from "../../services/canchaService";
 import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
-import { formatFecha } from "../../utils/formatDate";
+import { addDaysLocal, formatFecha } from "../../utils/formatDate";
 import { formatPrecio } from "../../utils/format";
+import { canchasDelTorneo } from "../../utils/torneo";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
 import { Badge, Button, Card, StatTile } from "../../components/ui";
@@ -29,6 +30,8 @@ export default function Dashboard() {
   const [reservasManana, setReservasManana] = useState([]);
   // Pendientes de aprobación de todas las fechas (no solo hoy)
   const [reservasPendientes, setReservasPendientes] = useState([]);
+  // Torneos vinculados al club (cualquier estado): de acá sale la tarjeta de la semana
+  const [torneosClub, setTorneosClub] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mostrarAyuda, setMostrarAyuda] = useState(true);
 
@@ -51,18 +54,25 @@ export default function Dashboard() {
         setTorneos(torneosData);
         if (clubData) {
           setClub(clubData);
-          const [canchasData, reservasData, turnosData, reservasMananaData, pendientesData] = await Promise.all([
-            getCanchas(clubData.id),
-            getReservas(clubData.id, hoyStr),
-            getTurnosFijos(clubData.id),
-            getReservas(clubData.id, mananaStr),
-            getReservasPendientes(clubData.id),
-          ]);
+          const [canchasData, reservasData, turnosData, reservasMananaData, pendientesData, torneosClubData] =
+            await Promise.all([
+              getCanchas(clubData.id),
+              getReservas(clubData.id, hoyStr),
+              getTurnosFijos(clubData.id),
+              getReservas(clubData.id, mananaStr),
+              getReservasPendientes(clubData.id),
+              // Si falla, el resto del resumen sigue; solo no se muestra la tarjeta de torneos en el club
+              getTorneosDeClub(clubData.id).catch((err) => {
+                console.error("Error al cargar los torneos del club:", err);
+                return [];
+              }),
+            ]);
           setCanchas(canchasData);
           setReservasHoy(reservasData);
           setTurnosFijos(turnosData);
           setReservasManana(reservasMananaData);
           setReservasPendientes(pendientesData);
+          setTorneosClub(torneosClubData);
         }
       } catch (err) {
         console.error("Error al cargar dashboard:", err);
@@ -197,6 +207,20 @@ export default function Dashboard() {
 
   const torneosProximos = torneos.filter(
     (t) => t.status === "inscripcion" || t.status === "en_curso",
+  );
+
+  // Torneos con sede aceptada que pisan los próximos 7 días. Los cancelados y finalizados no bloquean turnos,
+  // así que no cuentan. Tolera torneos viejos sin `club` o sin fechas.
+  const limiteSemana = addDaysLocal(hoyStr, 7);
+  const torneosClubSemana = torneosClub.filter(
+    (t) =>
+      t.club?.estado === "aceptado" &&
+      t.status !== "cancelado" &&
+      t.status !== "finalizado" &&
+      typeof t.fechaInicio === "string" &&
+      typeof t.fechaFin === "string" &&
+      t.fechaInicio <= limiteSemana &&
+      t.fechaFin >= hoyStr,
   );
 
   return (
@@ -398,6 +422,41 @@ export default function Dashboard() {
           );
         })()}
       </Card>
+
+      {/* Torneos en el club esta semana: sus partidos programados bloquean turnos en la grilla */}
+      {torneosClubSemana.length > 0 && (
+        <Card className="mb-4">
+          <Card.Title>Torneos en el club esta semana</Card.Title>
+          <ul className="m-0 mt-2 p-0 list-none divide-y divide-line">
+            {torneosClubSemana.map((t) => {
+              const canchasTorneo = canchasDelTorneo(t);
+              return (
+                <li key={t.id} className="flex flex-col gap-2 py-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <p className="body-md font-medium! m-0 truncate">{t.nombre}</p>
+                    <span className="body-sm text-ink-2 pd-tnum shrink-0">
+                      {formatFecha(t.fechaInicio)} – {formatFecha(t.fechaFin)}
+                    </span>
+                  </div>
+                  {canchasTorneo.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {canchasTorneo.map((c) => (
+                        <Badge key={c.id}>{c.nombre}</Badge>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="pd-help m-0 mt-2">Los partidos programados bloquean esos turnos en la grilla de canchas.</p>
+          <Card.Foot>
+            <Button as="link" to="/admin/torneos?tab=club">
+              Ver torneos
+            </Button>
+          </Card.Foot>
+        </Card>
+      )}
 
       {/* Torneos próximos */}
       {torneos.length > 0 && (
