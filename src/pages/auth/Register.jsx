@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { registerUser, loginWithGoogle, getUserData } from "../../services/authService";
 import useThemeStore from "../../store/themeStore";
+import { useAuthStore } from "../../store/authStore";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { toast } from "../../components/Toast";
 import { Button, CategorySelect, Field, Input, Pills, Select, Textarea, Wordmark } from "../../components/ui";
@@ -96,7 +97,16 @@ export default function Register() {
       return;
     }
     try {
-      await registerUser(form.email, form.password, { tipo, ...form });
+      const nuevoUsuario = await registerUser(form.email, form.password, { tipo, ...form });
+      // El store resolvió el club del panel apenas cambió la sesión, quizá antes de que existiera clubs/{id}:
+      // se vuelve a resolver ahora que el alta terminó (si el store todavía no vio la sesión, el panel reintenta)
+      try {
+        const store = useAuthStore.getState();
+        await store.refreshPerfil(nuevoUsuario.uid);
+        if (store.user?.uid === nuevoUsuario.uid) await store.recargarStaff();
+      } catch (err) {
+        console.error("Error cargando el club recién creado:", err);
+      }
       const vincularRedirect = localStorage.getItem("padely-vincular-redirect");
       if (vincularRedirect) {
         localStorage.removeItem("padely-vincular-redirect");

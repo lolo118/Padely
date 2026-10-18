@@ -6,6 +6,7 @@ import { useAuthStore } from "../../store/authStore";
 import useThemeStore from "../../store/themeStore";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { toast } from "../../components/Toast";
+import { getStaffDe } from "../../services/staffService";
 import { Button, Field, Input, Wordmark } from "../../components/ui";
 
 // Solo rutas internas para ?next=: se resuelve contra el origen y se exige el mismo origen
@@ -53,10 +54,13 @@ export default function Login() {
   const refreshPerfil = useAuthStore((s) => s.refreshPerfil);
   const usuarioActual = useAuthStore((s) => s.user);
   const rolActual = useAuthStore((s) => s.rol);
+  const staffDe = useAuthStore((s) => s.staffDe);
+  const clubCargado = useAuthStore((s) => s.clubCargado);
 
-  // Ya logueado (por ejemplo al volver del redirect de Google): salimos del login según el rol
+  // Ya logueado (por ejemplo al volver del redirect de Google): salimos del login según el rol (el staff de un
+  // club, al panel)
   useEffect(() => {
-    if (!usuarioActual || !rolActual) return;
+    if (!usuarioActual || !rolActual || !clubCargado) return;
     // ?next= explícito manda sobre un redirect de vinculación guardado de una visita anterior
     if (next) {
       localStorage.removeItem("padely-vincular-redirect");
@@ -69,8 +73,9 @@ export default function Login() {
       navigate(vincularRedirect, { replace: true });
       return;
     }
-    navigate(rolActual === "club" ? "/admin" : rolActual === "organizador" ? "/org" : "/inicio", { replace: true });
-  }, [usuarioActual, rolActual, next, navigate]);
+    const alPanel = rolActual === "club" || staffDe.length > 0;
+    navigate(alPanel ? "/admin" : rolActual === "organizador" ? "/org" : "/inicio", { replace: true });
+  }, [usuarioActual, rolActual, staffDe, clubCargado, next, navigate]);
 
   const redirigirSegunRol = async (user) => {
     if (next) {
@@ -84,10 +89,17 @@ export default function Login() {
       navigate(vincularRedirect);
       return;
     }
-    // Cargamos el perfil en el store y usamos el rol que queda ahí (única fuente de verdad)
+    // Cargamos el perfil en el store y usamos el rol que queda ahí (única fuente de verdad); el staff de un club
+    // entra directo al panel (la membresía se consulta acá porque el store puede no tener el usuario todavía)
     await refreshPerfil(user.uid);
     const rol = useAuthStore.getState().rol;
-    if (rol === "club") navigate("/admin");
+    let esStaff = false;
+    try {
+      esStaff = (await getStaffDe(user.uid)).length > 0;
+    } catch (err) {
+      console.error("Error buscando el equipo del usuario:", err);
+    }
+    if (rol === "club" || esStaff) navigate("/admin");
     else if (rol === "organizador") navigate("/org");
     else navigate("/inicio");
   };

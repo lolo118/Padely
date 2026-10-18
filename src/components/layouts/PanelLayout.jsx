@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { LogOut, Menu, Smartphone } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
@@ -28,16 +28,30 @@ export default function PanelLayout({ rol, inicio, items }) {
   const [abierto, setAbierto] = useState(false);
   const { user } = useAuthStore();
   const clubActual = useAuthStore((s) => s.clubActual);
+  const clubCargado = useAuthStore((s) => s.clubCargado);
+  const rolCuenta = useAuthStore((s) => s.rol);
+  const staffDe = useAuthStore((s) => s.staffDe);
+  const recargarStaff = useAuthStore((s) => s.recargarStaff);
   const puede = useAuthStore((s) => s.puede);
   const esPanelClub = rol === "Club";
-  const rolStaff = esPanelClub ? clubActual?.rolStaff || "dueño" : null;
+  // Sin club cargado, el rol sale de la cuenta: dueño si es una cuenta de club, si no el de su primera membresía
+  const rolStaff = esPanelClub ? clubActual?.rolStaff || (rolCuenta === "club" ? "dueño" : staffDe[0]?.rol || "encargado") : null;
   const etiquetaRol = esPanelClub ? rolLabel(rolStaff) : rol;
   const tonoRol = esPanelClub && rolStaff === "dueño" ? "court" : "neutral";
   const visibles = items.filter((item) => !item.permisos || item.permisos.some((p) => puede(p)));
   const itemsNav =
-    esPanelClub && rolStaff !== "dueño"
+    esPanelClub && rolCuenta !== "club"
       ? [...visibles, { to: "/inicio", label: "App de jugador", icon: Smartphone }]
       : visibles;
+  // Si el club no se resolvió (por ejemplo un club recién registrado, o una lectura que falló al arrancar), se
+  // reintenta una vez al entrar al panel en vez de dejar la sesión sin club
+  const reintentado = useRef(false);
+  useEffect(() => {
+    if (!esPanelClub || !clubCargado || clubActual || reintentado.current) return;
+    if (rolCuenta !== "club" && staffDe.length === 0) return;
+    reintentado.current = true;
+    recargarStaff();
+  }, [esPanelClub, clubCargado, clubActual, rolCuenta, staffDe, recargarStaff]);
   // Los paneles abren en Día; una elección explícita del toggle siempre gana
   const setDefaultTheme = useThemeStore((s) => s.setDefaultTheme);
   const explicit = useThemeStore((s) => s.explicit);

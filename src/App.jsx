@@ -77,12 +77,12 @@ function ProtectedRoute({ children }) {
 // El rol vive en el store (se carga junto con el perfil en onAuthChange); rol === null significa "todavía cargando".
 // El panel del club (/admin) también lo abre el staff de un club (staffDe, cargado antes de terminar loading).
 function RoleRoute({ allowedRoles, children }) {
-  const { user, loading, rol, staffDe } = useAuthStore();
+  const { user, loading, rol, staffDe, clubCargado } = useAuthStore();
   const esStaff = staffDe.length > 0;
 
   if (loading) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
   if (!user) return <Navigate to="/login" />;
-  if (!rol) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
+  if (!rol || !clubCargado) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
   const permitido = allowedRoles.includes(rol) || (allowedRoles.includes("club") && esStaff);
   if (!permitido) {
     if (rol === "club") return <Navigate to="/admin" />;
@@ -92,12 +92,13 @@ function RoleRoute({ allowedRoles, children }) {
   return children;
 }
 
-// El inicio según el rol: dueño o staff de un club → el panel; organizador → su panel; jugador → Inicio
+// El inicio según el rol: cuenta de club → el panel; organizador → su panel; jugador (también el staff de un
+// club, que después del login cae en /admin pero puede volver a su app con "App de jugador") → Inicio
 function RedirigirPorRol() {
-  const { user, rol, staffDe } = useAuthStore();
+  const { user, rol, clubCargado } = useAuthStore();
 
-  if (user && !rol) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
-  if (rol === "club" || staffDe.length > 0) return <Navigate to="/admin" />;
+  if (user && (!rol || !clubCargado)) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
+  if (rol === "club") return <Navigate to="/admin" />;
   if (rol === "organizador") return <Navigate to="/org" />;
   return <Inicio />;
 }
@@ -106,9 +107,9 @@ function RedirigirPorRol() {
 function RedirigirTorneo() {
   const { id } = useParams();
   const location = useLocation();
-  const { user, loading, rol, staffDe } = useAuthStore();
+  const { user, loading, rol, staffDe, clubCargado, puede } = useAuthStore();
 
-  if (loading || (user && !rol)) {
+  if (loading || (user && (!rol || !clubCargado))) {
     return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
   }
   if (!user) {
@@ -116,7 +117,10 @@ function RedirigirTorneo() {
     localStorage.setItem("padely-vincular-redirect", location.pathname);
     return <Navigate to="/login" />;
   }
-  if (rol === "club" || staffDe.length > 0) return <Navigate to={`/admin/torneos/${id}`} replace />;
+  // El staff del club que gestiona torneos ve la vista del panel; el resto del staff, la pública (como jugador)
+  if (rol === "club" || (staffDe.length > 0 && puede("gestionarTorneos"))) {
+    return <Navigate to={`/admin/torneos/${id}`} replace />;
+  }
   if (rol === "organizador") return <Navigate to={`/org/torneos/${id}`} replace />;
   return <Navigate to={`/torneos/${id}`} replace />;
 }

@@ -62,7 +62,7 @@ export function ConfirmHost() {
 
   return (
     <div
-      className="pd-backdrop z-[90]"
+      className="pd-backdrop z-[90]!"
       onClick={(e) => {
         if (e.target === e.currentTarget) cerrar(false);
       }}

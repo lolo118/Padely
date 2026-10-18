@@ -512,6 +512,8 @@ export default function Canchas() {
   // precios y la configuración de reservas piden tarifas. Sin ninguno de los dos, la página no se ve.
   const puedeReservas = puede("gestionarReservas");
   const puedeTarifas = puede("tarifas");
+  // La configuración de reservas (reserva directa, días de anticipación) escribe clubs/{id}: pide configurarClub
+  const puedeConfigurar = puede("configurarClub");
   const puedeEntrar = puedeReservas || puedeTarifas;
   const [canchas, setCanchas] = useState([]);
   const [reservas, setReservas] = useState([]);
@@ -1031,23 +1033,27 @@ export default function Canchas() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h1 className="heading-lg m-0">Canchas y turnos</h1>
-        {tabCanchas === "Canchas" && puedeTarifas && (
+        {tabCanchas === "Canchas" && (puedeTarifas || puedeConfigurar) && (
           <div className="pd-btn-group">
-            <Button
-              onClick={() => setMostrarConfig(!mostrarConfig)}
-              aria-expanded={mostrarConfig}
-              icon={<Settings className="pd-icon" size={20} aria-hidden="true" />}
-            >
-              Configuración
-            </Button>
-            <Button
-              variant={primariaEn === "header" ? "primary" : "secondary"}
-              onClick={() => setMostrarForm(!mostrarForm)}
-              aria-expanded={mostrarForm}
-              icon={<Plus className="pd-icon" size={20} aria-hidden="true" />}
-            >
-              Nueva cancha
-            </Button>
+            {puedeConfigurar && (
+              <Button
+                onClick={() => setMostrarConfig(!mostrarConfig)}
+                aria-expanded={mostrarConfig}
+                icon={<Settings className="pd-icon" size={20} aria-hidden="true" />}
+              >
+                Configuración
+              </Button>
+            )}
+            {puedeTarifas && (
+              <Button
+                variant={primariaEn === "header" ? "primary" : "secondary"}
+                onClick={() => setMostrarForm(!mostrarForm)}
+                aria-expanded={mostrarForm}
+                icon={<Plus className="pd-icon" size={20} aria-hidden="true" />}
+              >
+                Nueva cancha
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -1067,8 +1073,8 @@ export default function Canchas() {
 
       {tabCanchas === "Canchas" && (
         <>
-          {/* Configuración del club (solo con tarifas) */}
-          {puedeTarifas && mostrarConfig && (
+          {/* Configuración de reservas (solo con configurarClub) */}
+          {puedeConfigurar && mostrarConfig && (
             <Card className="mb-4">
               <Card.Title>Configuración de reservas</Card.Title>
               <div className="flex flex-col gap-3 mt-3">

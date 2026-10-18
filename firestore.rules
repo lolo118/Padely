@@ -41,7 +41,11 @@ service cloud.firestore {
         && inv.estado == 'pendiente'
         && inv.vence > request.time
         && data.rol == inv.rol
-        && data.permisos == inv.permisos;
+        && data.permisos == inv.permisos
+        && data.descuentoMax == inv.descuentoMax;
+    }
+    function rolDeStaffValido(rol) {
+      return rol in ['encargado', 'cajero', 'barra'];
     }
     function clubReservaDirecta(clubId) {
       return get(/databases/$(database)/documents/clubs/$(clubId)).data.get('reservaDirecta', true) == true;
@@ -129,8 +133,11 @@ service cloud.firestore {
     match /clubs/{clubId} {
       allow read: if true;
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
-      // Configura el dueño o el staff con 'configurarClub'; borrar el club sigue siendo solo del dueño
-      allow update: if esStaff(clubId, 'configurarClub');
+      // Configura el dueño o el staff con 'configurarClub' (que nunca cambia el dueño ni la fecha de alta);
+      // borrar el club sigue siendo solo del dueño
+      allow update: if clubOwner(clubId)
+        || (signedIn() && staffCon(clubId, 'configurarClub')
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ownerUid', 'createdAt']));
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
 
       // Datos privados del club (CBU, alias, CUIT, razón social): quien configura; los teléfonos de los turnos
@@ -160,15 +167,25 @@ service cloud.firestore {
         allow create: if isSelf(uid)
           && request.resource.data.uid == uid
           && request.resource.data.activo == true
+          && get(/databases/$(database)/documents/clubs/$(clubId)).data.ownerUid != request.auth.uid
+          && request.resource.data.keys().hasOnly(['uid', 'nombre', 'email', 'rol', 'permisos', 'descuentoMax',
+                                                   'activo', 'invitacionId', 'invitadoPor', 'creadoEn', 'actualizadoEn'])
+          && rolDeStaffValido(request.resource.data.rol)
           && invitacionValidaPara(clubId, request.resource.data);
-        allow update: if esStaff(clubId, 'gestionarStaff')
-          && changedOnly(['rol', 'permisos', 'descuentoMax', 'activo', 'nombre', 'actualizadoEn']);
-        allow delete: if esStaff(clubId, 'gestionarStaff') || isSelf(uid);
+        // El dueño edita a cualquiera; quien gestiona el equipo, a los demás (nunca su propio rol, permisos o acceso)
+        allow update: if (clubOwner(clubId) || (signedIn() && staffCon(clubId, 'gestionarStaff') && uid != request.auth.uid))
+          && changedOnly(['rol', 'permisos', 'descuentoMax', 'activo', 'nombre', 'actualizadoEn'])
+          && rolDeStaffValido(request.resource.data.rol);
+        allow delete: if clubOwner(clubId)
+          || (signedIn() && staffCon(clubId, 'gestionarStaff') && uid != request.auth.uid)
+          || isSelf(uid);
       }
 
       match /invitaciones/{invId} {
         allow read: if esStaff(clubId, 'gestionarStaff') || invitadoPorEmail(resource.data);
-        allow create: if esStaff(clubId, 'gestionarStaff') && request.resource.data.estado == 'pendiente';
+        allow create: if esStaff(clubId, 'gestionarStaff')
+          && request.resource.data.estado == 'pendiente'
+          && rolDeStaffValido(request.resource.data.rol);
         // El club la cancela; el invitado la acepta (mismo batch que crea su doc de staff)
         allow update: if (esStaff(clubId, 'gestionarStaff')
               && changedOnly(['estado'])
