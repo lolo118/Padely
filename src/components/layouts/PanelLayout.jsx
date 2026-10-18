@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
-import { LogOut, Menu } from "lucide-react";
+import { LogOut, Menu, Smartphone } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import useThemeStore from "../../store/themeStore";
 import ThemeToggle from "../ThemeToggle";
@@ -9,6 +9,7 @@ import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 import Sidebar from "../ui/Sidebar";
 import { Wordmark } from "../ui/AppBar";
+import { rolLabel } from "../../utils/staff";
 
 async function cerrarSesion() {
   const { signOut } = await import("firebase/auth");
@@ -19,10 +20,24 @@ async function cerrarSesion() {
 
 // Armazón de los paneles de club y organizador (Día por defecto): pd-sidebar fija en escritorio; debajo de md,
 // una barra superior con el botón de menú y la misma pd-sidebar como cajón sobre un pd-backdrop.
-// rol: "Club" | "Organizador" · inicio: la ruta del wordmark · items: [{ to, label, icon, end? }]
+// rol: "Club" | "Organizador" · inicio: la ruta del wordmark · items: [{ to, label, icon, end?, permisos?: [ids] }]
+// En el panel del club el badge muestra el rol de la persona (Dueño / Encargado / Cajero / Barra) y los ítems se
+// filtran por sus permisos (`permisos` = alguno de esos ids alcanza; sin `permisos`, siempre). El staff (no dueño)
+// suma "App de jugador" para volver a su app.
 export default function PanelLayout({ rol, inicio, items }) {
   const [abierto, setAbierto] = useState(false);
   const { user } = useAuthStore();
+  const clubActual = useAuthStore((s) => s.clubActual);
+  const puede = useAuthStore((s) => s.puede);
+  const esPanelClub = rol === "Club";
+  const rolStaff = esPanelClub ? clubActual?.rolStaff || "dueño" : null;
+  const etiquetaRol = esPanelClub ? rolLabel(rolStaff) : rol;
+  const tonoRol = esPanelClub && rolStaff === "dueño" ? "court" : "neutral";
+  const visibles = items.filter((item) => !item.permisos || item.permisos.some((p) => puede(p)));
+  const itemsNav =
+    esPanelClub && rolStaff !== "dueño"
+      ? [...visibles, { to: "/inicio", label: "App de jugador", icon: Smartphone }]
+      : visibles;
   // Los paneles abren en Día; una elección explícita del toggle siempre gana
   const setDefaultTheme = useThemeStore((s) => s.setDefaultTheme);
   const explicit = useThemeStore((s) => s.explicit);
@@ -58,7 +73,7 @@ export default function PanelLayout({ rol, inicio, items }) {
           icon={<Menu className="pd-icon" size={20} aria-hidden="true" />}
         />
         <Wordmark to={inicio} className="text-ink! text-[22px]!" />
-        <Badge>{rol}</Badge>
+        <Badge tone={tonoRol}>{etiquetaRol}</Badge>
         <div className="ml-auto flex items-center gap-1">
           <NotificationBell />
           <ThemeToggle />
@@ -70,8 +85,9 @@ export default function PanelLayout({ rol, inicio, items }) {
         <div className="pd-backdrop z-40 md:hidden block! p-0!" onClick={() => setAbierto(false)}>
           <Sidebar
             id="menu-panel"
-            rol={rol}
-            items={items}
+            rol={etiquetaRol}
+            rolTone={tonoRol}
+            items={itemsNav}
             wordmarkTo={inicio}
             onNavigate={() => setAbierto(false)}
             onClick={(e) => e.stopPropagation()}
@@ -84,7 +100,7 @@ export default function PanelLayout({ rol, inicio, items }) {
 
       {/* Sidebar fija en escritorio */}
       <div className="hidden md:block shrink-0">
-        <Sidebar rol={rol} items={items} wordmarkTo={inicio} className="sticky top-0 h-screen overflow-y-auto">
+        <Sidebar rol={etiquetaRol} rolTone={tonoRol} items={itemsNav} wordmarkTo={inicio} className="sticky top-0 h-screen overflow-y-auto">
           {pie}
         </Sidebar>
       </div>

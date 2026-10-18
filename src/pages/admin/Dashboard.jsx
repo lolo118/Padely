@@ -4,7 +4,6 @@ import { AlertTriangle, Bell, Calendar, Check, Hourglass, Info, LayoutGrid, Lock
 import { useAuthStore } from "../../store/authStore";
 import { getTorneosByOrganizer, getTorneosDeClub } from "../../services/torneoService";
 import {
-  getClubByOwner,
   getCanchas,
   getReservas,
   getReservasPendientes,
@@ -22,8 +21,14 @@ import { Badge, Button, Card, StatTile } from "../../components/ui";
 
 export default function Dashboard() {
   const { user } = useAuthStore();
+  // El club del panel viene del store: el propio (dueño, todos los permisos) o aquel donde la persona es staff.
+  // "Hoy" lo ve todo el que entra al panel; sus acciones y accesos rápidos siguen los permisos.
+  const clubActual = useAuthStore((s) => s.clubActual);
+  const clubCargado = useAuthStore((s) => s.clubCargado);
+  const puede = useAuthStore((s) => s.puede);
+  const club = clubActual;
+  const clubId = clubActual?.id;
   const navigate = useNavigate();
-  const [club, setClub] = useState(null);
   const [torneos, setTorneos] = useState([]);
   const [canchas, setCanchas] = useState([]);
   // Reservas agrupadas (agruparReservas): una entrada por reserva, con horaInicio/horaFin/precioTotal/seña y
@@ -47,25 +52,21 @@ export default function Dashboard() {
   const horaActual = ahora.getHours();
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !clubCargado) return;
     const cargar = async () => {
       try {
-        const [torneosData, clubData] = await Promise.all([
-          getTorneosByOrganizer(user.uid),
-          getClubByOwner(user.uid),
-        ]);
+        const torneosData = await getTorneosByOrganizer(user.uid);
         setTorneos(torneosData);
-        if (clubData) {
-          setClub(clubData);
+        if (clubId) {
           const [canchasData, reservasData, turnosData, reservasMananaData, pendientesData, torneosClubData] =
             await Promise.all([
-              getCanchas(clubData.id),
-              getReservas(clubData.id, hoyStr),
-              getTurnosFijos(clubData.id),
-              getReservas(clubData.id, mananaStr),
-              getReservasPendientes(clubData.id),
+              getCanchas(clubId),
+              getReservas(clubId, hoyStr),
+              getTurnosFijos(clubId),
+              getReservas(clubId, mananaStr),
+              getReservasPendientes(clubId),
               // Si falla, el resto del resumen sigue; solo no se muestra la tarjeta de torneos en el club
-              getTorneosDeClub(clubData.id).catch((err) => {
+              getTorneosDeClub(clubId).catch((err) => {
                 console.error("Error al cargar los torneos del club:", err);
                 return [];
               }),
@@ -84,7 +85,7 @@ export default function Dashboard() {
     };
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, clubCargado, clubId]);
 
   if (loading) {
     return (
@@ -199,6 +200,13 @@ export default function Dashboard() {
     }
   };
 
+  // Permisos: las acciones y los accesos rápidos siguen los de la persona en el club (el dueño puede todo)
+  const puedeReservas = puede("gestionarReservas");
+  const puedeCanchas = puedeReservas || puede("tarifas");
+  const puedeTorneos = puede("gestionarTorneos");
+  const puedeReportes = puede("verReportes");
+  const puedeConfig = puede("configurarClub");
+
   // Props para que un StatTile o una Card enteros naveguen (mismo navigate que antes) y sean accesibles por teclado
   const linkProps = (to) => ({
     role: "link",
@@ -211,6 +219,9 @@ export default function Dashboard() {
       }
     },
   });
+
+  // Un StatTile navega solo si la persona puede abrir esa sección; si no, es un número quieto
+  const tileLink = (ok, to) => (ok ? { className: "cursor-pointer hover:bg-surface-hover!", ...linkProps(to) } : {});
 
   const torneosProximos = torneos.filter(
     (t) => t.status === "inscripcion" || t.status === "en_curso",
@@ -256,9 +267,11 @@ export default function Dashboard() {
                   Tenés <strong>{reservasPendientes.length}</strong> reserva{reservasPendientes.length !== 1 ? "s" : ""} pendiente{reservasPendientes.length !== 1 ? "s" : ""} de aprobación
                 </span>
               </span>
-              <Button size="sm" onClick={() => navigate("/admin/canchas")}>
-                Ver reservas
-              </Button>
+              {puedeReservas && (
+                <Button size="sm" onClick={() => navigate("/admin/canchas")}>
+                  Ver reservas
+                </Button>
+              )}
             </Card>
           )}
           {reservasMananaConfirmadas.length > 0 && (
@@ -305,8 +318,8 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Recordatorio completar perfil */}
-      {club && (!club.telefono || !club.direccion) && (
+      {/* Recordatorio completar perfil: solo para quien puede configurar el club */}
+      {puedeConfig && club && (!club.telefono || !club.direccion) && (
         <Card variant="hover" as="div" className="mb-4 flex items-start gap-3" {...linkProps("/admin/configuracion")}>
           <AlertTriangle className="pd-icon text-warning mt-0.5" size={20} aria-hidden="true" />
           <div>
@@ -320,10 +333,10 @@ export default function Dashboard() {
 
       {/* Tarjetas resumen */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatTile value={reservasConfirmadas.length} label="Reservas hoy" className="cursor-pointer hover:bg-surface-hover!" {...linkProps("/admin/canchas")} />
-        <StatTile value={formatPrecio(ingresosHoy)} label="Ingresos hoy" className="cursor-pointer hover:bg-surface-hover!" {...linkProps("/admin/estadisticas")} />
-        <StatTile value={turnosFijosActivos.length} label="Turnos fijos activos" className="cursor-pointer hover:bg-surface-hover!" {...linkProps("/admin/canchas")} />
-        <StatTile value={canchasLibresAhora} label="Canchas libres ahora" className="cursor-pointer hover:bg-surface-hover!" {...linkProps("/admin/canchas")} />
+        <StatTile value={reservasConfirmadas.length} label="Reservas hoy" {...tileLink(puedeCanchas, "/admin/canchas")} />
+        <StatTile value={formatPrecio(ingresosHoy)} label="Ingresos hoy" {...tileLink(puedeReportes, "/admin/estadisticas")} />
+        <StatTile value={turnosFijosActivos.length} label="Turnos fijos activos" {...tileLink(puedeCanchas, "/admin/canchas")} />
+        <StatTile value={canchasLibresAhora} label="Canchas libres ahora" {...tileLink(puedeCanchas, "/admin/canchas")} />
       </div>
 
       {/* Reservas pendientes */}
@@ -359,14 +372,16 @@ export default function Dashboard() {
                       )}
                     </div>
                   )}
-                  <Card.Foot>
-                    <Button size="sm" icon={<Check className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleConfirmarReserva(r.id)}>
-                      Confirmar
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => handleRechazarReserva(r.id)}>
-                      Rechazar
-                    </Button>
-                  </Card.Foot>
+                  {puedeReservas && (
+                    <Card.Foot>
+                      <Button size="sm" icon={<Check className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleConfirmarReserva(r.id)}>
+                        Confirmar
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => handleRechazarReserva(r.id)}>
+                        Rechazar
+                      </Button>
+                    </Card.Foot>
+                  )}
                 </Card>
               );
             })}
@@ -467,11 +482,13 @@ export default function Dashboard() {
             })}
           </ul>
           <p className="pd-help m-0 mt-2">Los partidos programados bloquean esos turnos en la grilla de canchas.</p>
-          <Card.Foot>
-            <Button as="link" to="/admin/torneos?tab=club">
-              Ver torneos
-            </Button>
-          </Card.Foot>
+          {puedeTorneos && (
+            <Card.Foot>
+              <Button as="link" to="/admin/torneos?tab=club">
+                Ver torneos
+              </Button>
+            </Card.Foot>
+          )}
         </Card>
       )}
 
@@ -481,7 +498,7 @@ export default function Dashboard() {
           <h2 className="heading-md m-0 mb-3">Torneos próximos</h2>
           <div className="grid gap-4 md:grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
             {torneosProximos.slice(0, 3).map((t) => (
-              <Card key={t.id} variant="hover" {...linkProps(`/admin/torneos/${t.id}`)}>
+              <Card key={t.id} variant={puedeTorneos ? "hover" : "default"} {...(puedeTorneos ? linkProps(`/admin/torneos/${t.id}`) : {})}>
                 <Card.Row>
                   <Card.Eyebrow>{t.sede}</Card.Eyebrow>
                   <Badge tone={t.status === "inscripcion" ? "court" : "lime"}>
@@ -499,15 +516,21 @@ export default function Dashboard() {
         </section>
       )}
 
-      {/* Accesos rápidos */}
-      <div className="pd-btn-group">
-        <Button icon={<Plus className="pd-icon" size={20} aria-hidden="true" />} onClick={() => navigate("/admin/torneos/nuevo")}>
-          Crear torneo
-        </Button>
-        <Button icon={<LayoutGrid className="pd-icon" size={20} aria-hidden="true" />} onClick={() => navigate("/admin/canchas")}>
-          Gestionar canchas
-        </Button>
-      </div>
+      {/* Accesos rápidos: cada uno solo si la persona puede abrir esa sección */}
+      {(puedeTorneos || puedeCanchas) && (
+        <div className="pd-btn-group">
+          {puedeTorneos && (
+            <Button icon={<Plus className="pd-icon" size={20} aria-hidden="true" />} onClick={() => navigate("/admin/torneos/nuevo")}>
+              Crear torneo
+            </Button>
+          )}
+          {puedeCanchas && (
+            <Button icon={<LayoutGrid className="pd-icon" size={20} aria-hidden="true" />} onClick={() => navigate("/admin/canchas")}>
+              Gestionar canchas
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

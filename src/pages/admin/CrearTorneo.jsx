@@ -5,9 +5,10 @@ import { ArrowLeft, Info, Plus, X } from "lucide-react";
 import { db, logEvento } from "../../lib/firebase";
 import { useAuthStore } from "../../store/authStore";
 import { crearTorneo } from "../../services/torneoService";
-import { getClubByOwner, getClubesPublicos, getCanchasDeClub, getClubConfig } from "../../services/canchaService";
+import { getClubesPublicos, getCanchasDeClub, getClubConfig } from "../../services/canchaService";
 import { notificarSolicitudSede } from "../../services/notificationService";
 import PerfilIncompleto from "../../components/PerfilIncompleto";
+import SinPermiso from "../../components/SinPermiso";
 import { CATEGORIAS_TORNEO } from "../../utils/categorias";
 import { canchasDesdeTexto } from "../../utils/torneo";
 import { Button, Card, Field, Input, MarcaCategoria, Pills, SearchInput, Select, Textarea } from "../../components/ui";
@@ -181,6 +182,9 @@ function SeccionSede({
 
 export default function CrearTorneo() {
   const { user } = useAuthStore();
+  const rol = useAuthStore((s) => s.rol);
+  const clubActual = useAuthStore((s) => s.clubActual);
+  const clubCargado = useAuthStore((s) => s.clubCargado);
   const navigate = useNavigate();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -202,7 +206,8 @@ export default function CrearTorneo() {
   const [organizadorNombre, setOrganizadorNombre] = useState("");
 
   useEffect(() => {
-    if (!user) return;
+    // El club del panel lo resuelve el store; se espera a tenerlo para saber si la cuenta es la dueña
+    if (!user || !clubCargado) return;
     const verificar = async () => {
       try {
         const { getUserData } = await import("../../services/authService");
@@ -222,7 +227,8 @@ export default function CrearTorneo() {
           }
         } else if (roles.includes("club")) {
           setTipoUsuario("club");
-          const clubData = await getClubByOwner(user.uid);
+          // El club del panel, solo cuando la cuenta es la dueña (el staff no crea torneos)
+          const clubData = clubActual?.rolStaff === "dueño" ? clubActual : null;
           if (clubData && (!clubData.telefono || !clubData.direccion || !clubData.ciudad)) {
             setPerfilCompleto(false);
           }
@@ -240,7 +246,7 @@ export default function CrearTorneo() {
       }
     };
     verificar();
-  }, [user]);
+  }, [user, clubCargado, clubActual]);
 
   // Clubes de Padely para el selector de sede (el servicio los cachea durante la sesión)
   useEffect(() => {
@@ -492,6 +498,25 @@ export default function CrearTorneo() {
   }
 
   const todayStr = getTodayString();
+
+  // El staff del club no organiza torneos: solo el dueño (o un organizador) crea uno
+  if (clubActual && clubActual.rolStaff !== "dueño" && rol !== "organizador") {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center gap-3 mb-6">
+          <Button
+            variant="ghost"
+            iconOnly
+            aria-label="Volver"
+            icon={<ArrowLeft className="pd-icon" size={20} aria-hidden="true" />}
+            onClick={() => navigate(-1)}
+          />
+          <h1 className="heading-lg">Crear torneo</h1>
+        </div>
+        <SinPermiso>Solo el dueño del club crea torneos.</SinPermiso>
+      </div>
+    );
+  }
 
   if (!perfilCompleto) {
     return <PerfilIncompleto tipo={tipoUsuario} ruta={tipoUsuario === "organizador" ? "/org/entidad" : "/admin/configuracion"} />;

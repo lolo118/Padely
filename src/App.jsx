@@ -74,14 +74,17 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-// El rol vive en el store (se carga junto con el perfil en onAuthChange); rol === null significa "todavía cargando"
+// El rol vive en el store (se carga junto con el perfil en onAuthChange); rol === null significa "todavía cargando".
+// El panel del club (/admin) también lo abre el staff de un club (staffDe, cargado antes de terminar loading).
 function RoleRoute({ allowedRoles, children }) {
-  const { user, loading, rol } = useAuthStore();
+  const { user, loading, rol, staffDe } = useAuthStore();
+  const esStaff = staffDe.length > 0;
 
   if (loading) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
   if (!user) return <Navigate to="/login" />;
   if (!rol) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
-  if (!allowedRoles.includes(rol)) {
+  const permitido = allowedRoles.includes(rol) || (allowedRoles.includes("club") && esStaff);
+  if (!permitido) {
     if (rol === "club") return <Navigate to="/admin" />;
     if (rol === "organizador") return <Navigate to="/org" />;
     return <Navigate to="/inicio" />;
@@ -89,11 +92,12 @@ function RoleRoute({ allowedRoles, children }) {
   return children;
 }
 
+// El inicio según el rol: dueño o staff de un club → el panel; organizador → su panel; jugador → Inicio
 function RedirigirPorRol() {
-  const { user, rol } = useAuthStore();
+  const { user, rol, staffDe } = useAuthStore();
 
   if (user && !rol) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
-  if (rol === "club") return <Navigate to="/admin" />;
+  if (rol === "club" || staffDe.length > 0) return <Navigate to="/admin" />;
   if (rol === "organizador") return <Navigate to="/org" />;
   return <Inicio />;
 }
@@ -102,7 +106,7 @@ function RedirigirPorRol() {
 function RedirigirTorneo() {
   const { id } = useParams();
   const location = useLocation();
-  const { user, loading, rol } = useAuthStore();
+  const { user, loading, rol, staffDe } = useAuthStore();
 
   if (loading || (user && !rol)) {
     return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
@@ -112,13 +116,13 @@ function RedirigirTorneo() {
     localStorage.setItem("padely-vincular-redirect", location.pathname);
     return <Navigate to="/login" />;
   }
-  if (rol === "club") return <Navigate to={`/admin/torneos/${id}`} replace />;
+  if (rol === "club" || staffDe.length > 0) return <Navigate to={`/admin/torneos/${id}`} replace />;
   if (rol === "organizador") return <Navigate to={`/org/torneos/${id}`} replace />;
   return <Navigate to={`/torneos/${id}`} replace />;
 }
 
 export default function App() {
-  const { setUser, setPerfil, setLoading } = useAuthStore();
+  const { setUser, setPerfil, setLoading, recargarStaff } = useAuthStore();
   const { initTheme } = useThemeStore();
 
   useEffect(() => {
@@ -140,6 +144,8 @@ export default function App() {
           console.error("Error cargando el perfil:", err);
           setPerfil(null);
         }
+        // Y el club del panel: el propio (dueño) o aquel donde la persona es staff
+        await recargarStaff();
       }
       setLoading(false);
       first = false;
@@ -151,7 +157,7 @@ export default function App() {
       unsub();
       clearTimeout(timeout);
     };
-  }, [setUser, setPerfil, setLoading]);
+  }, [setUser, setPerfil, setLoading, recargarStaff]);
 
   return (
     <BrowserRouter>

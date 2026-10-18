@@ -6,12 +6,12 @@ import Badge from "./Badge";
 // arriba, ítems con ícono Lucide (aria-current="page" en el activo) y el pie (pd-sidebar-foot) con children.
 // items: [{ to, label, icon: ComponenteLucide, end?, count? }] · rol: "Club" | "Organizador"
 // onNavigate: se llama al tocar un ítem (para cerrar el drawer en móvil)
-export default function Sidebar({ rol, items = [], onNavigate, wordmarkTo = "/", className = "", children, ...rest }) {
+export default function Sidebar({ rol, rolTone = "neutral", items = [], onNavigate, wordmarkTo = "/", className = "", children, ...rest }) {
   return (
     <aside className={["pd-sidebar", className].filter(Boolean).join(" ")} {...rest}>
       <div className="pd-sidebar-brand">
         <Wordmark to={wordmarkTo} />
-        {rol && <Badge>{rol}</Badge>}
+        {rol && <Badge tone={rolTone}>{rol}</Badge>}
       </div>
       {items.map(({ to, label, icon: Icono, end, count }) => (
         <NavLink key={to} to={to} end={end} className="pd-sidebar-item" onClick={onNavigate}>

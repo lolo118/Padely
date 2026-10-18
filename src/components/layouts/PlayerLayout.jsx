@@ -1,6 +1,6 @@
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Home, LayoutGrid, LogOut, Menu, Trophy, User, X } from "lucide-react";
+import { Building2, Home, LayoutGrid, LogOut, Menu, Trophy, User, X } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import useThemeStore from "../../store/themeStore";
 import ThemeToggle from "../ThemeToggle";
@@ -38,6 +38,10 @@ async function cerrarSesion() {
 
 export default function PlayerLayout() {
   const { user, perfil } = useAuthStore();
+  const rol = useAuthStore((s) => s.rol);
+  const staffDe = useAuthStore((s) => s.staffDe);
+  // Staff de un club (sin ser dueño): el menú suma el acceso al panel del club
+  const esStaff = rol !== "club" && staffDe.length > 0;
   const [menuOpen, setMenuOpen] = useState(false);
   // Los jugadores abren en Noche; una elección explícita del toggle siempre gana
   const setDefaultTheme = useThemeStore((s) => s.setDefaultTheme);
@@ -99,6 +103,12 @@ export default function PlayerLayout() {
                 {item.label}
               </NavLink>
             ))}
+            {esStaff && (
+              <NavLink to="/admin" onClick={() => setMenuOpen(false)} className="pd-sidebar-item">
+                <Building2 className="pd-icon" size={20} aria-hidden="true" />
+                Panel del club
+              </NavLink>
+            )}
             <div className="border-t border-line mt-1 pt-1">
               <button type="button" onClick={cerrarSesion} className="pd-sidebar-item w-full text-danger!">
                 <LogOut className="pd-icon" size={20} aria-hidden="true" />

@@ -1,4 +1,5 @@
 // Componentes compartidos del design system (pd-*). Importar desde "../components/ui".
+export { default as Alert } from "./Alert";
 export { default as AppBar, Wordmark } from "./AppBar";
 export { default as Badge } from "./Badge";
 export { default as BottomNav } from "./BottomNav";

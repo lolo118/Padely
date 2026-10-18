@@ -4,8 +4,8 @@ import { getTodayLocal } from "../../utils/formatDate";
 import { formatPrecio } from "../../utils/format";
 import { agruparReservas } from "../../utils/reservas";
 import { useAuthStore } from "../../store/authStore";
+import SinPermiso from "../../components/SinPermiso";
 import {
-  getClubByOwner,
   getCanchas,
   getReservas,
   getTurnosFijos,
@@ -53,37 +53,41 @@ const PERIODOS = [
 ];
 
 export default function Estadisticas() {
-  const { user } = useAuthStore();
-  const [club, setClub] = useState(null);
+  // El club del panel viene del store: el propio (dueño, todos los permisos) o aquel donde la persona es staff
+  const clubActual = useAuthStore((s) => s.clubActual);
+  const clubCargado = useAuthStore((s) => s.clubCargado);
+  const puede = useAuthStore((s) => s.puede);
+  const club = clubActual;
+  const clubId = clubActual?.id;
+  const puedeVer = puede("verReportes");
   const [canchas, setCanchas] = useState([]);
   const [todasReservas, setTodasReservas] = useState([]);
   const [turnosFijos, setTurnosFijos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // El id del club cuyos datos ya se cargaron: mientras no coincida con el actual se muestra el esqueleto
+  const [cargadoPara, setCargadoPara] = useState(null);
   const [periodo, setPeriodo] = useState("mes");
 
   useEffect(() => {
-    if (!user) return;
+    if (!clubId || !puedeVer) return;
     const cargar = async () => {
       try {
-        const clubData = await getClubByOwner(user.uid);
-        if (clubData) {
-          setClub(clubData);
-          const [canchasData, reservasData, turnosData] = await Promise.all([
-            getCanchas(clubData.id),
-            getReservas(clubData.id),
-            getTurnosFijos(clubData.id),
-          ]);
-          setCanchas(canchasData);
-          setTodasReservas(reservasData);
-          setTurnosFijos(turnosData);
-        }
+        const [canchasData, reservasData, turnosData] = await Promise.all([
+          getCanchas(clubId),
+          getReservas(clubId),
+          getTurnosFijos(clubId),
+        ]);
+        setCanchas(canchasData);
+        setTodasReservas(reservasData);
+        setTurnosFijos(turnosData);
       } catch (err) {
         console.error("Error al cargar estadísticas:", err);
       }
-      setLoading(false);
+      setCargadoPara(clubId);
     };
     cargar();
-  }, [user]);
+  }, [clubId, puedeVer]);
+
+  const loading = !clubCargado || (!!clubId && puedeVer && cargadoPara !== clubId);
 
   if (loading) {
     return (
@@ -108,6 +112,16 @@ export default function Estadisticas() {
       <Card className="text-center">
         <p className="body-md text-ink-2 m-0">No tenés un club registrado</p>
       </Card>
+    );
+  }
+
+  // Sin verReportes, el aviso en lugar de las métricas
+  if (!puedeVer) {
+    return (
+      <div>
+        <h1 className="heading-lg m-0 mb-6">Estadísticas</h1>
+        <SinPermiso />
+      </div>
     );
   }
 

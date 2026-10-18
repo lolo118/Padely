@@ -6,10 +6,10 @@ import { formatFecha } from "../../utils/formatDate";
 import { ubicacionCorta } from "../../utils/format";
 import { canchasDelTorneo, textoDeCanchas } from "../../utils/torneo";
 import { getTorneosByOrganizer, getTorneosDeClub, responderSolicitudSede } from "../../services/torneoService";
-import { getClubByOwner } from "../../services/canchaService";
 import { notificarSedeRespondida } from "../../services/notificationService";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
+import SinPermiso from "../../components/SinPermiso";
 import { Badge, Button, Card, Tabs } from "../../components/ui";
 
 const estadoLabel = {
@@ -79,15 +79,30 @@ function CardTorneoClub({ torneo, children }) {
 
 export default function Torneos() {
   const { user } = useAuthStore();
+  const rol = useAuthStore((s) => s.rol);
+  const clubActual = useAuthStore((s) => s.clubActual);
+  const clubCargado = useAuthStore((s) => s.clubCargado);
+  const puede = useAuthStore((s) => s.puede);
   const [torneos, setTorneos] = useState([]);
-  // Club del que el usuario es dueño (null si no tiene): habilita las pestañas de sede
-  const [club, setClub] = useState(null);
+  // Club del panel (el propio si la cuenta es la dueña, o aquel donde la persona es staff; null si no hay):
+  // habilita las pestañas de sede
+  const club = clubActual;
+  const clubId = club?.id || null;
+  // El staff (no dueño) no organiza torneos: ve los del club como sede y no crea los suyos
+  const esStaff = !!club && club.rolStaff !== "dueño" && rol !== "organizador";
+  // Aceptar o rechazar un pedido de sede pide el permiso "Torneos como sede" (el dueño siempre lo tiene)
+  const puedeResponder = puede("gestionarTorneos");
   // Torneos vinculados al club en cualquier estado; de acá salen "En mi club" y "Solicitudes"
   const [torneosClub, setTorneosClub] = useState([]);
   const [loading, setLoading] = useState(true);
-  // ?tab=club | solicitudes (los links del panel y de las notificaciones llegan a la pestaña justa)
+  // ?tab=club | solicitudes (los links del panel y de las notificaciones llegan a la pestaña justa); el staff
+  // arranca en "En mi club" porque no tiene torneos propios
   const [searchParams] = useSearchParams();
-  const tabInicial = ["club", "solicitudes"].includes(searchParams.get("tab")) ? searchParams.get("tab") : "mios";
+  const tabInicial = ["club", "solicitudes"].includes(searchParams.get("tab"))
+    ? searchParams.get("tab")
+    : esStaff
+      ? "club"
+      : "mios";
   const [tab, setTab] = useState(tabInicial);
   // { id, estado } del pedido que se está respondiendo
   const [respondiendo, setRespondiendo] = useState(null);
@@ -102,32 +117,26 @@ export default function Torneos() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    // El club del panel lo resuelve el store; hasta que esté, la página sigue cargando
+    if (!user || !clubCargado) return;
     const cargar = async () => {
       try {
-        const [misTorneos, clubData] = await Promise.all([
-          getTorneosByOrganizer(user.uid),
-          getClubByOwner(user.uid).catch((err) => {
-            console.error("Error al buscar el club:", err);
-            return null;
-          }),
-        ]);
-        setTorneos(misTorneos);
-        setClub(clubData);
-        if (clubData) await cargarTorneosClub(clubData.id);
+        setTorneos(await getTorneosByOrganizer(user.uid));
+        if (clubId) await cargarTorneosClub(clubId);
       } catch (err) {
         console.error("Error al cargar torneos:", err);
       }
       setLoading(false);
     };
     cargar();
-  }, [user, cargarTorneosClub]);
+  }, [user, clubCargado, clubId, cargarTorneosClub]);
 
   const uid = user?.uid;
   const enMiClub = torneosClub.filter((t) => t.club?.estado === "aceptado" && t.organizerId !== uid);
   const solicitudes = torneosClub.filter((t) => t.club?.estado === "pendiente");
 
   const responder = async (t, estado) => {
+    if (!puedeResponder) return;
     const acepta = estado === "aceptado";
     const rango = rangoFechas(t);
     const canchas = textoDeCanchas(canchasDelTorneo(t)) || "tus canchas";
@@ -170,7 +179,10 @@ export default function Torneos() {
   const renderMisTorneos = () => {
     if (torneos.length === 0) {
       return (
-        <EstadoVacio titulo="Todavía no creaste ningún torneo." detalle='Creá el primero con "Crear torneo".' />
+        <EstadoVacio
+          titulo="Todavía no creaste ningún torneo."
+          detalle={esStaff ? "Los torneos del club los crea el dueño." : 'Creá el primero con "Crear torneo".'}
+        />
       );
     }
     return (
@@ -240,32 +252,43 @@ export default function Torneos() {
       );
     }
     return (
-      <div className="grid gap-4 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
-        {solicitudes.map((t) => {
-          const enCurso = respondiendo?.id === t.id;
-          return (
-            <CardTorneoClub key={t.id} torneo={t}>
-              <Button
-                size="sm"
-                icon={<Check className="pd-icon" size={20} aria-hidden="true" />}
-                cargando={enCurso && respondiendo.estado === "aceptado" ? "Aceptando…" : ""}
-                disabled={enCurso}
-                onClick={() => responder(t, "aceptado")}
-              >
-                Aceptar
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                cargando={enCurso && respondiendo.estado === "rechazado" ? "Rechazando…" : ""}
-                disabled={enCurso}
-                onClick={() => responder(t, "rechazado")}
-              >
-                Rechazar
-              </Button>
-            </CardTorneoClub>
-          );
-        })}
+      <div className="flex flex-col gap-4">
+        {!puedeResponder && (
+          <SinPermiso>
+            Aceptar o rechazar pedidos de sede pide el permiso "Torneos como sede". Pedíselo al dueño del club.
+          </SinPermiso>
+        )}
+        <div className="grid gap-4 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
+          {solicitudes.map((t) => {
+            const enCurso = respondiendo?.id === t.id;
+            return (
+              <CardTorneoClub key={t.id} torneo={t}>
+                {puedeResponder && (
+                  <>
+                    <Button
+                      size="sm"
+                      icon={<Check className="pd-icon" size={20} aria-hidden="true" />}
+                      cargando={enCurso && respondiendo.estado === "aceptado" ? "Aceptando…" : ""}
+                      disabled={enCurso}
+                      onClick={() => responder(t, "aceptado")}
+                    >
+                      Aceptar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      cargando={enCurso && respondiendo.estado === "rechazado" ? "Rechazando…" : ""}
+                      disabled={enCurso}
+                      onClick={() => responder(t, "rechazado")}
+                    >
+                      Rechazar
+                    </Button>
+                  </>
+                )}
+              </CardTorneoClub>
+            );
+          })}
+        </div>
       </div>
     );
   };
@@ -274,14 +297,16 @@ export default function Torneos() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="heading-lg m-0">{club ? "Torneos" : "Mis torneos"}</h1>
-        <Button
-          as="link"
-          to="/admin/torneos/nuevo"
-          variant="primary"
-          icon={<Plus className="pd-icon" size={20} aria-hidden="true" />}
-        >
-          Crear torneo
-        </Button>
+        {!esStaff && (
+          <Button
+            as="link"
+            to="/admin/torneos/nuevo"
+            variant="primary"
+            icon={<Plus className="pd-icon" size={20} aria-hidden="true" />}
+          >
+            Crear torneo
+          </Button>
+        )}
       </div>
 
       {!loading && club && <Tabs items={tabs} value={tabActiva} onChange={setTab} ariaLabel="Secciones de torneos" />}

@@ -265,3 +265,82 @@ textarea.pd-input { height: auto; min-height: 88px; padding: var(--space-3); res
 @media (prefers-reduced-motion: no-preference) { .pd-skeleton { animation: pd-pulse 1.4s ease-in-out infinite; } }
 @keyframes pd-pulse { 50% { opacity: .55; } }
 @media (prefers-reduced-motion: reduce) { .pd-btn, .pd-input, .pd-card-hover { transition: none; } }
+
+/* ---------- Patterns added after the first port (gaps the app needed) ---------- */
+/* Toast info */
+.pd-toast-info > .pd-icon { color: var(--court); }
+/* A count after a heading or label, outside pills and tabs */
+.pd-count { margin-left: var(--space-1); color: var(--ink-3); font-weight: 500; font-variant-numeric: tabular-nums; }
+/* Layers: backdrops under drawers under toasts */
+.pd-backdrop { z-index: 50; }
+.pd-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 60; width: 280px; max-width: 85vw; overflow-y: auto; box-shadow: var(--shadow-overlay); transform: translateX(0); transition: transform .2s ease-out; }
+.pd-drawer[hidden] { display: flex; transform: translateX(-100%); box-shadow: none; }
+.pd-toast-stack { position: fixed; z-index: 100; left: 50%; bottom: calc(64px + var(--space-4)); transform: translateX(-50%); display: flex; flex-direction: column; gap: var(--space-2); width: calc(100% - 2 * var(--space-4)); max-width: 420px; pointer-events: none; }
+.pd-toast-stack > * { pointer-events: auto; }
+@media (min-width: 768px) { .pd-toast-stack { left: auto; right: var(--space-4); bottom: var(--space-4); transform: none; } }
+/* Panel top bar on phones (the sidebar becomes a drawer) */
+.pd-topbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); height: 56px; padding: 0 var(--space-3) 0 var(--space-2); background: var(--surface-raised); border-bottom: 1px solid var(--line); color: var(--ink); }
+.pd-topbar .pd-wordmark { font-size: 22px; line-height: 22px; color: var(--ink); }
+/* Avatar */
+.pd-avatar { display: inline-grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: var(--radius-pill); background: var(--surface-sunken); color: var(--ink); font-family: var(--font-display); font-size: 14px; font-weight: 700; text-transform: uppercase; overflow: hidden; }
+.pd-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.pd-avatar-sm { width: 24px; height: 24px; font-size: 11px; }
+.pd-avatar-lg { width: 80px; height: 80px; font-size: 32px; }
+/* Loading */
+.pd-spinner { display: inline-block; width: 20px; height: 20px; flex: none; border-radius: var(--radius-pill); border: 2px solid var(--line-strong); border-top-color: var(--ink); animation: pd-spin-ring .8s linear infinite; }
+@keyframes pd-spin-ring { to { transform: rotate(360deg); } }
+.pd-loading { display: flex; align-items: center; justify-content: center; gap: var(--space-3); padding: var(--space-10) var(--space-4); color: var(--ink-3); font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .pd-spinner { animation: none; border-top-color: var(--line-strong); } }
+/* Badge as a toggle (court checklist, category chips) and long badges */
+button.pd-badge { cursor: pointer; border: 0; font-family: var(--font-sans); }
+.pd-badge[aria-pressed="true"] { background: var(--lime-soft); color: var(--lime-text); }
+.pd-badge:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pd-badge:disabled { opacity: .5; cursor: not-allowed; }
+.pd-badge-wrap { height: auto; padding: 2px var(--space-2); white-space: normal; line-height: 16px; }
+.pd-badge-group { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Pill: disabled, and content with a mark inside */
+.pd-pill:disabled { opacity: .5; cursor: not-allowed; }
+.pd-pill .pd-rank { width: 20px; height: 20px; }
+/* Inline alert / callout */
+.pd-alert { display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--surface-sunken); color: var(--ink-2); font-size: 13px; line-height: 18px; }
+.pd-alert > .pd-icon { flex: none; margin-top: -1px; }
+.pd-alert strong { color: var(--ink); font-weight: 600; }
+.pd-alert-danger { background: var(--danger-soft); color: var(--danger); }
+.pd-alert-danger strong { color: inherit; }
+.pd-alert-warning { background: var(--warning-soft); color: var(--warning); }
+.pd-alert-warning strong { color: inherit; }
+.pd-alert-success { background: var(--success-soft); color: var(--success); }
+.pd-alert-success strong { color: inherit; }
+.pd-alert-court { background: var(--court-soft); color: var(--court); }
+.pd-alert-court strong { color: inherit; }
+/* Card variants: danger (a problem that needs the person), link (the whole card navigates) */
+.pd-card-danger { border-color: var(--danger); }
+.pd-card-link { display: block; color: inherit; text-decoration: none; cursor: pointer; transition: border-color .15s ease-out, background-color .15s ease-out; }
+.pd-card-link:hover { border-color: var(--line-strong); background: var(--surface-hover); }
+.pd-card-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* Definition list (detail pages) */
+.pd-dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--space-4) var(--space-6); margin: 0; }
+.pd-dl dt { margin: 0 0 2px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
+.pd-dl dd { margin: 0; font-size: 15px; line-height: 22px; color: var(--ink); }
+/* Slot grid: sticky time column and court header when the grid scrolls */
+.pd-grid-scroll { overflow: auto; max-height: 70vh; }
+.pd-grid-scroll .pd-grid-time { position: sticky; left: 0; z-index: 1; background: var(--surface-sunken); }
+.pd-grid-scroll .pd-grid-head { position: sticky; top: 0; z-index: 2; background: var(--surface-sunken); padding: var(--space-1) 0; }
+/* Match card in a wide column / as a control */
+.pd-match-wide { max-width: none; }
+.pd-match[role="button"] { cursor: pointer; }
+.pd-match[role="button"]:hover { border-color: var(--line-strong); }
+.pd-match[role="button"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* Status line after a save */
+.pd-status { display: inline-flex; align-items: center; gap: var(--space-1); font-size: 13px; line-height: 18px; font-weight: 600; color: var(--success); }
+.pd-status-error { color: var(--danger); }
+.pd-status .pd-icon { width: 16px; height: 16px; }
+/* Native checkbox and radio */
+.pd-check { display: inline-flex; align-items: center; gap: var(--space-2); font-size: 14px; line-height: 20px; color: var(--ink); cursor: pointer; }
+.pd-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink); }
+.pd-check input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* Steps (a process the person is in) */
+.pd-steps { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.pd-steps li { display: inline-flex; align-items: center; gap: var(--space-1); }
+.pd-steps li[aria-current="step"] .pd-badge { background: var(--lime-soft); color: var(--lime-text); }
+.pd-steps li.is-done .pd-badge { background: var(--success-soft); color: var(--success); }

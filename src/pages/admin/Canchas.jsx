@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Coins, Lock, Plus, Settings, Trash2, X } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import PerfilIncompleto from "../../components/PerfilIncompleto";
+import SinPermiso from "../../components/SinPermiso";
 import {
-  getClubByOwner,
   getCanchas,
   crearCancha,
   actualizarCancha,
@@ -502,12 +502,22 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
 }
 
 export default function Canchas() {
-  const { user } = useAuthStore();
-  const [club, setClub] = useState(null);
+  // El club del panel viene del store: el propio (dueño, todos los permisos) o aquel donde la persona es staff
+  const clubActual = useAuthStore((s) => s.clubActual);
+  const clubCargado = useAuthStore((s) => s.clubCargado);
+  const puede = useAuthStore((s) => s.puede);
+  const recargarClub = useAuthStore((s) => s.recargarClub);
+  const club = clubActual;
+  // Permisos: las grillas con acciones, Reservas y Turnos fijos piden gestionarReservas; crear y editar canchas,
+  // precios y la configuración de reservas piden tarifas. Sin ninguno de los dos, la página no se ve.
+  const puedeReservas = puede("gestionarReservas");
+  const puedeTarifas = puede("tarifas");
+  const puedeEntrar = puedeReservas || puedeTarifas;
   const [canchas, setCanchas] = useState([]);
   const [reservas, setReservas] = useState([]);
   const [turnosFijos, setTurnosFijos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // El id del club cuyos datos ya se cargaron: mientras no coincida con el actual se muestra el esqueleto
+  const [cargadoPara, setCargadoPara] = useState(null);
   const [tabCanchas, setTabCanchas] = useState("Canchas");
   const [fechaSeleccionada, setFechaSeleccionada] = useState(getTodayLocal());
 
@@ -558,38 +568,35 @@ export default function Canchas() {
   }, [clubId]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!clubId || !puedeEntrar) return;
     const cargar = async () => {
       try {
-        const clubData = await getClubByOwner(user.uid);
-        if (clubData) {
-          setClub(clubData);
-          const [canchasData, reservasData, turnosData] = await Promise.all([
-            getCanchas(clubData.id),
-            getReservas(clubData.id, fechaSeleccionada),
-            getTurnosFijos(clubData.id),
-          ]);
-          setCanchas(canchasData);
-          setReservas(reservasData);
-          setTurnosFijos(turnosData);
-          setConfigForm({
-            reservaDirecta: clubData.reservaDirecta ?? true,
-            diasAnticipacion: clubData.diasAnticipacion ?? 7,
-          });
-        }
+        const [canchasData, reservasData, turnosData] = await Promise.all([
+          getCanchas(clubId),
+          getReservas(clubId, fechaSeleccionada),
+          getTurnosFijos(clubId),
+        ]);
+        setCanchas(canchasData);
+        setReservas(reservasData);
+        setTurnosFijos(turnosData);
+        // El formulario de configuración arranca con lo que tiene el club del store
+        setConfigForm({
+          reservaDirecta: club.reservaDirecta ?? true,
+          diasAnticipacion: club.diasAnticipacion ?? 7,
+        });
       } catch (err) {
         console.error("Error al cargar canchas:", err);
       }
-      setLoading(false);
+      setCargadoPara(clubId);
     };
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [clubId, puedeEntrar]);
 
   useEffect(() => {
-    if (!club) return;
-    getReservas(club.id, fechaSeleccionada).then(setReservas);
-  }, [fechaSeleccionada, club]);
+    if (!clubId || !puedeEntrar) return;
+    getReservas(clubId, fechaSeleccionada).then(setReservas);
+  }, [fechaSeleccionada, clubId, puedeEntrar]);
   // Habilitar o quitar una hora: vale para la semana y el finde (la hora quitada también sale del mapa de finde)
   const toggleHorario = (hora) => {
     const current = { ...formCancha.horarios };
@@ -717,7 +724,8 @@ export default function Canchas() {
     if (!club) return;
     try {
       await actualizarClubConfig(club.id, configForm);
-      setClub({ ...club, ...configForm });
+      // El club vive en el store: se vuelve a leer conservando rol y permisos
+      await recargarClub();
       setMostrarConfig(false);
       toast.success("Configuración guardada");
     } catch (err) {
@@ -830,6 +838,8 @@ export default function Canchas() {
     });
   };
 
+  const loading = !clubCargado || (!!clubId && puedeEntrar && cargadoPara !== clubId);
+
   if (loading) {
     return (
       <div className="flex flex-col gap-4" aria-busy="true" aria-label="Cargando">
@@ -847,6 +857,16 @@ export default function Canchas() {
         <p className="heading-sm m-0">No tenés un club registrado</p>
         <p className="body-sm text-ink-2 mt-1 m-0">Registrate como club para gestionar canchas y turnos</p>
       </Card>
+    );
+  }
+
+  // Sin gestionarReservas ni tarifas, el aviso en lugar de la página
+  if (!puedeEntrar) {
+    return (
+      <div>
+        <h1 className="heading-lg m-0 mb-4">Canchas y turnos</h1>
+        <SinPermiso />
+      </div>
     );
   }
 
@@ -1011,7 +1031,7 @@ export default function Canchas() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h1 className="heading-lg m-0">Canchas y turnos</h1>
-        {tabCanchas === "Canchas" && (
+        {tabCanchas === "Canchas" && puedeTarifas && (
           <div className="pd-btn-group">
             <Button
               onClick={() => setMostrarConfig(!mostrarConfig)}
@@ -1047,8 +1067,8 @@ export default function Canchas() {
 
       {tabCanchas === "Canchas" && (
         <>
-          {/* Configuración del club */}
-          {mostrarConfig && (
+          {/* Configuración del club (solo con tarifas) */}
+          {puedeTarifas && mostrarConfig && (
             <Card className="mb-4">
               <Card.Title>Configuración de reservas</Card.Title>
               <div className="flex flex-col gap-3 mt-3">
@@ -1090,8 +1110,8 @@ export default function Canchas() {
             </Card>
           )}
 
-          {/* Formulario nueva cancha */}
-          {mostrarForm && (
+          {/* Formulario nueva cancha (solo con tarifas) */}
+          {puedeTarifas && mostrarForm && (
             <Card className="mb-4">
               <Card.Title>Nueva cancha</Card.Title>
               <form onSubmit={handleCrearCancha} className="flex flex-col gap-4 mt-3">
@@ -1186,15 +1206,17 @@ export default function Canchas() {
             <Card className="text-center py-12! mb-4">
               <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
               <p className="heading-sm m-0">No tenés canchas creadas</p>
-              <p className="body-sm text-ink-2 mt-1 m-0">Hacé clic en "Nueva cancha" para empezar</p>
+              <p className="body-sm text-ink-2 mt-1 m-0">
+                {puedeTarifas ? 'Hacé clic en "Nueva cancha" para empezar' : "Pedile al dueño del club que las cargue"}
+              </p>
             </Card>
           )}
 
           {canchas.length > 0 && (
             <div className="grid gap-4 md:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] mb-6">
               {canchas.map((cancha) => (
-                <Card key={cancha.id} className={editandoCancha === cancha.id && editForm ? "md:col-span-full" : undefined}>
-                  {editandoCancha === cancha.id && editForm ? (
+                <Card key={cancha.id} className={puedeTarifas && editandoCancha === cancha.id && editForm ? "md:col-span-full" : undefined}>
+                  {puedeTarifas && editandoCancha === cancha.id && editForm ? (
                     <div className="flex flex-col gap-4">
                       <Card.Row>
                         <Card.Title>Editando cancha</Card.Title>
@@ -1295,26 +1317,28 @@ export default function Canchas() {
                             <Badge>{cancha.techada ? "Techada" : "Al aire libre"}</Badge>
                           </div>
                         </div>
-                        <div className="pd-btn-group flex-nowrap!">
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setEditandoCancha(cancha.id);
-                              setEditForm({ ...cancha, horariosFinde: cancha.horariosFinde || {} });
-                              setVistaTarifaEdit("semana");
-                            }}
-                          >
-                            Editar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            iconOnly
-                            aria-label={`Eliminar ${cancha.nombre}`}
-                            icon={<Trash2 className="pd-icon" size={20} aria-hidden="true" />}
-                            onClick={() => handleEliminarCancha(cancha.id)}
-                          />
-                        </div>
+                        {puedeTarifas && (
+                          <div className="pd-btn-group flex-nowrap!">
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setEditandoCancha(cancha.id);
+                                setEditForm({ ...cancha, horariosFinde: cancha.horariosFinde || {} });
+                                setVistaTarifaEdit("semana");
+                              }}
+                            >
+                              Editar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              iconOnly
+                              aria-label={`Eliminar ${cancha.nombre}`}
+                              icon={<Trash2 className="pd-icon" size={20} aria-hidden="true" />}
+                              onClick={() => handleEliminarCancha(cancha.id)}
+                            />
+                          </div>
+                        )}
                       </Card.Row>
                       <Card.Foot className="flex-wrap">
                         <span className="numeral-md pd-tnum">{formatPrecio(precioMinimo(cancha))}</span>
@@ -1412,6 +1436,10 @@ export default function Canchas() {
                               );
                             }
                             if (reserva && reserva.status === "bloqueado") {
+                              // Sin gestionarReservas el bloqueo se ve pero no se desbloquea
+                              if (!puedeReservas) {
+                                return <SlotCell key={cancha.id} estado="bloqueada" linea2={motivoDeBloqueo(reserva.nombreJugador) || undefined} />;
+                              }
                               return (
                                 <div key={cancha.id} className="flex flex-col gap-1">
                                   <SlotCell estado="bloqueada" linea2={motivoDeBloqueo(reserva.nombreJugador) || undefined} className="flex-1" />
@@ -1425,6 +1453,18 @@ export default function Canchas() {
                             }
                             if (reserva) {
                               const rango = rangoHoras(reserva.horaInicio, reserva.horaFin);
+                              // Sin gestionarReservas la reserva se ve pero no se confirma ni se cancela
+                              if (!puedeReservas) {
+                                return (
+                                  <SlotCell
+                                    key={cancha.id}
+                                    estado={estadoDeReserva(reserva)}
+                                    linea1={reserva.nombreJugador || "Reservado"}
+                                    linea2={rango}
+                                    title={`${reserva.nombreJugador || "Reservado"} · ${rango}`}
+                                  />
+                                );
+                              }
                               return (
                                 <div key={cancha.id} className="flex flex-col gap-1">
                                   <SlotCell
@@ -1479,6 +1519,15 @@ export default function Canchas() {
 
                             // Precio del turno según el día: sáb y dom usan la tarifa de fin de semana
                             const precioHora = precioDeSlot(cancha, fechaSeleccionada, hora);
+                            // Sin gestionarReservas la celda libre es una celda quieta con el precio, no un botón
+                            if (!puedeReservas) {
+                              return (
+                                <div key={cancha.id} className="pd-slot pd-slot-free cursor-default! hover:border-line! hover:text-ink-3!">
+                                  Libre
+                                  <small>{formatPrecio(precioHora)}</small>
+                                </div>
+                              );
+                            }
                             return (
                               <div key={cancha.id} className="relative group flex flex-col">
                                 <SlotCell
@@ -1531,12 +1580,13 @@ export default function Canchas() {
         </>
       )}
 
+      {/* Reservas y Turnos fijos piden gestionarReservas; sin el permiso, el aviso en lugar de la pestaña */}
       {tabCanchas === "Reservas" && club && (
-        <ReservasTab clubId={club.id} canchas={canchas} clubNombre={club.nombre} />
+        puedeReservas ? <ReservasTab clubId={club.id} canchas={canchas} clubNombre={club.nombre} /> : <SinPermiso />
       )}
 
       {tabCanchas === "Turnos fijos" && club && (
-        <TabTurnosFijos clubId={club.id} />
+        puedeReservas ? <TabTurnosFijos clubId={club.id} /> : <SinPermiso />
       )}
 
       {/* Modal reserva manual */}

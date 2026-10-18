@@ -20,7 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import { getTorneoById, actualizarTorneo, getParejas, getGrupos, getCuadros } from "../../services/torneoService";
-import { getClubesPublicos, getCanchasDeClub, getClubConfig, getClubByOwner } from "../../services/canchaService";
+import { getClubesPublicos, getCanchasDeClub, getClubConfig } from "../../services/canchaService";
 import { notificarSolicitudSede } from "../../services/notificationService";
 import { useAuthStore } from "../../store/authStore";
 import {
@@ -448,6 +448,8 @@ export default function DetalleTorneo() {
   const [cuadroSel, setCuadroSel] = useState(null);
   const [cuadroElegido, setCuadroElegido] = useState(false);
   const { user } = useAuthStore();
+  // El club del panel (con rolStaff): el selector de sede queda fijo en él solo cuando la cuenta es la dueña
+  const clubActual = useAuthStore((s) => s.clubActual);
   // Documento público del club sede (dirección, dueño) cuando el torneo está vinculado a un club
   const [clubDoc, setClubDoc] = useState(null);
   // Sede en el modo edición: club de Padely (vínculo + canchas del club) u otra sede (texto libre)
@@ -533,20 +535,20 @@ export default function DetalleTorneo() {
   const iniciarEdicion = async () => {
     setEditForm({ ...torneo });
     // Sede actual: club vinculado (con las canchas elegidas) u otra sede (las canchas como texto)
-    const clubActual = torneo.club?.id ? torneo.club : null;
-    setTipoSedeEdit(clubActual ? "club" : "otra");
-    setClubIdEdit(clubActual ? clubActual.id : "");
+    const clubVinculado = torneo.club?.id ? torneo.club : null;
+    setTipoSedeEdit(clubVinculado ? "club" : "otra");
+    setClubIdEdit(clubVinculado ? clubVinculado.id : "");
     setBusquedaClub("");
     setCanchasClubEdit([]);
-    setCanchasSelEdit(clubActual ? canchasDelTorneo(torneo).map((c) => c.id) : []);
-    setCanchasTextoEdit(clubActual ? "" : textoDeCanchas(torneo.canchas));
-    setCargandoCanchas(!!clubActual);
+    setCanchasSelEdit(clubVinculado ? canchasDelTorneo(torneo).map((c) => c.id) : []);
+    setCanchasTextoEdit(clubVinculado ? "" : textoDeCanchas(torneo.canchas));
+    setCargandoCanchas(!!clubVinculado);
     setErrorCanchas("");
     setEditando(true);
     try {
-      const [lista, propio] = await Promise.all([getClubesPublicos(), user ? getClubByOwner(user.uid) : null]);
+      const lista = await getClubesPublicos();
       setClubes(lista);
-      setClubPropio(propio);
+      setClubPropio(clubActual?.rolStaff === "dueño" ? clubActual : null);
     } catch (err) {
       console.error("Error cargando los clubes:", err);
     }
