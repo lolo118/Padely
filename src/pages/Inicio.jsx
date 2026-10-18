@@ -4,8 +4,9 @@ import { AlertTriangle, Calendar, CircleDot, LayoutGrid, ShoppingBag, Trophy, Us
 import { useAuthStore } from "../store/authStore";
 import { getInscripcionesByJugador } from "../services/torneoService";
 import { getProximaReservaJugador } from "../services/canchaService";
-import { formatFecha } from "../utils/formatDate";
+import { formatDiaCorto } from "../utils/formatDate";
 import { formatPrecio } from "../utils/format";
+import { estadoSeña, rangoHoras } from "../utils/reservas";
 import { Badge, Button, Card, RankMark, StatTile } from "../components/ui";
 
 // Accesos directos del inicio (mismas rutas de siempre), cada uno con su ícono Lucide
@@ -100,6 +101,8 @@ export default function Inicio() {
   const saludo = hora < 12 ? "Buenos días" : hora < 19 ? "Buenas tardes" : "Buenas noches";
 
   const reservaConfirmada = proximaReserva?.status === "confirmada";
+  // Seña de la próxima reserva (null cuando el club no pide); una reserva vieja de una hora ya viene normalizada
+  const señaProxima = proximaReserva ? estadoSeña(proximaReserva) : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -113,9 +116,16 @@ export default function Inicio() {
         <Card.Row>
           <Card.Title as="h2">Mis reservas</Card.Title>
           {proximaReserva && (
-            <Badge dot tone={reservaConfirmada ? "success" : "warning"}>
-              {reservaConfirmada ? "Confirmada" : "Pendiente"}
-            </Badge>
+            <span className="flex flex-wrap items-center justify-end gap-2">
+              {señaProxima && (
+                <Badge tone={señaProxima.tone}>
+                  {señaProxima.tone === "success" ? señaProxima.label : `Seña ${formatPrecio(señaProxima.monto)} pendiente`}
+                </Badge>
+              )}
+              <Badge dot tone={reservaConfirmada ? "success" : "warning"}>
+                {reservaConfirmada ? "Confirmada" : "Pendiente"}
+              </Badge>
+            </span>
           )}
         </Card.Row>
         {proximaReserva ? (
@@ -125,8 +135,9 @@ export default function Inicio() {
               {proximaReserva.clubNombre || "Club"} · {proximaReserva.canchaName || "Cancha"}
             </p>
             <p className="body-sm text-ink-2 pd-tnum">
-              {formatFecha(proximaReserva.fecha)} · {proximaReserva.hora}
-              {proximaReserva.precio != null && ` · ${formatPrecio(proximaReserva.precio)}`}
+              {formatDiaCorto(proximaReserva.fecha)} ·{" "}
+              {rangoHoras(proximaReserva.horaInicio || proximaReserva.hora, proximaReserva.horaFin)}
+              {proximaReserva.precioTotal > 0 && ` · ${formatPrecio(proximaReserva.precioTotal)}`}
             </p>
           </div>
         ) : (

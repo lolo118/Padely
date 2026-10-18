@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { formatFecha } from "../utils/formatDate";
-import { formatPrecio } from "../utils/format";
+import { formatPrecio, ubicacionCorta } from "../utils/format";
 import {
   getTorneoById,
   getInscripciones,
@@ -123,7 +123,7 @@ export default function AceptarInvitacion() {
           <div className="grid grid-cols-2 gap-3">
             <Linea etiqueta="Sede">{torneo.sede}</Linea>
             <Linea etiqueta="Ubicación">
-              {torneo.ciudad}, {torneo.provincia}
+              {ubicacionCorta(torneo)}
             </Linea>
             {torneo.direccionSede && (
               <Linea etiqueta="Dirección" className="col-span-2">

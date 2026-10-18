@@ -33,7 +33,7 @@ import { getUserData } from "../services/authService";
 import { getClubConfig } from "../services/canchaService";
 import { logEvento } from "../lib/firebase";
 import { formatDiaCorto, formatFecha } from "../utils/formatDate";
-import { formatPrecio } from "../utils/format";
+import { formatPrecio, ubicacionCorta } from "../utils/format";
 import {
   calcularTabla,
   etiquetaProgramacion,
@@ -562,7 +562,7 @@ export default function DetalleTorneoPublico() {
           </p>
         ) : (
           <p className="body-sm text-ink-2 mt-2">
-            {torneo.sede} — {torneo.ciudad}, {torneo.provincia}
+            {torneo.sede} — {ubicacionCorta(torneo)}
           </p>
         )}
         <p className="body-sm text-ink-2 pd-tnum">

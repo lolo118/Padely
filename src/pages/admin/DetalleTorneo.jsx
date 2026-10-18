@@ -43,7 +43,7 @@ import TabParejas from "./TabParejas";
 import TabReclamos from "./TabReclamos";
 import { formatFecha, formatDiaCorto } from "../../utils/formatDate";
 import { CATEGORIAS_TORNEO } from "../../utils/categorias";
-import { formatPrecio } from "../../utils/format";
+import { formatPrecio, ubicacionCorta } from "../../utils/format";
 import {
   Badge,
   Button,
@@ -731,7 +731,7 @@ export default function DetalleTorneo() {
   // Los torneos viejos no tienen club ni canchas: todo tolera que falten.
   const sede = sedeDeTorneo(torneo);
   const direccionSede = (sede.clubId && clubDoc?.direccion) || sede.direccion || "";
-  const ciudadSede = [sede.ciudad, (sede.clubId && clubDoc?.provincia) || sede.provincia].filter(Boolean).join(", ");
+  const ciudadSede = ubicacionCorta({ ciudad: sede.ciudad, provincia: (sede.clubId && clubDoc?.provincia) || sede.provincia });
   const canchasTorneo = canchasDelTorneo(torneo);
   const conflictos = Array.isArray(torneo.conflictos) ? torneo.conflictos : [];
 
@@ -844,7 +844,7 @@ export default function DetalleTorneo() {
             )}
           </div>
           <p className="body-sm text-ink-2">
-            {torneo.sede} — {torneo.ciudad}, {torneo.provincia}
+            {torneo.sede} — {ubicacionCorta(torneo)}
           </p>
         </div>
 

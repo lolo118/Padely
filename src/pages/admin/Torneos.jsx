@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Check, Plus } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { formatFecha } from "../../utils/formatDate";
+import { ubicacionCorta } from "../../utils/format";
 import { canchasDelTorneo, textoDeCanchas } from "../../utils/torneo";
 import { getTorneosByOrganizer, getTorneosDeClub, responderSolicitudSede } from "../../services/torneoService";
 import { getClubByOwner } from "../../services/canchaService";
@@ -191,7 +192,7 @@ export default function Torneos() {
               </Card.Row>
               <Card.Title className="mt-2!">{t.nombre}</Card.Title>
               <Card.Meta>
-                {t.sede} · {t.ciudad}, {t.provincia}
+                {t.sede} · {ubicacionCorta(t)}
               </Card.Meta>
               <Card.Meta>
                 {formatFecha(t.fechaInicio)} – {formatFecha(t.fechaFin)}

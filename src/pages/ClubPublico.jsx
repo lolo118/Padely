@@ -18,7 +18,18 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { formatFecha, getTodayLocal, addDaysLocal, horaActualStr } from "../utils/formatDate";
-import { formatPrecio } from "../utils/format";
+import { formatPrecio, ubicacionCorta } from "../utils/format";
+import {
+  calcularSeña,
+  horasDeReserva,
+  maxTurnosDelClub,
+  precioDeReserva,
+  precioDeSlot,
+  precioMinimo,
+  preciosDeReserva,
+  sumarHoras,
+} from "../utils/tarifas";
+import { rangoHoras } from "../utils/reservas";
 import {
   getCanchas,
   getReservas,
@@ -135,7 +146,7 @@ function StarDisplay({ value, size = 16 }) {
   );
 }
 
-// Las canchas del club como tarjetas: nombre, superficie y el precio base
+// Las canchas del club como tarjetas: nombre, superficie y el precio más bajo entre semana y fin de semana
 function ListaCanchas({ canchas }) {
   if (canchas.length === 0) {
     return <p className="body-sm text-ink-2">Este club todavía no cargó sus canchas.</p>;
@@ -151,7 +162,7 @@ function ListaCanchas({ canchas }) {
             </div>
             <div className="shrink-0 text-right">
               <span className="caption text-ink-3 block">Desde</span>
-              <span className="numeral-md pd-tnum text-ink">{formatPrecio(c.precioBase || 0)}</span>
+              <span className="numeral-md pd-tnum text-ink">{formatPrecio(precioMinimo(c))}</span>
             </div>
           </Card.Row>
         </Card>
@@ -178,6 +189,8 @@ export default function ClubPublico() {
   });
   const [mostrarModal, setMostrarModal] = useState(false);
   const [modalData, setModalData] = useState(null);
+  // Horas seguidas elegidas en el diálogo (1 a maxTurnosDelClub); vuelve a 1 cada vez que se abre
+  const [turnos, setTurnos] = useState(1);
   const [reservaExitosa, setReservaExitosa] = useState(null);
   const [formReserva, setFormReserva] = useState({
     nombreJugador: "",
@@ -270,14 +283,7 @@ export default function ClubPublico() {
     cargarTorneos();
   }, [tab, clubId, torneosClub]);
 
-  const estaOcupado = (canchaId, hora) => {
-    return reservas.some(
-      (r) =>
-        r.canchaId === canchaId && r.hora === hora && r.status !== "cancelada",
-    );
-  };
-
-  // La reserva viva de una celda (misma condición que estaOcupado), para elegir la palabra del estado
+  // La reserva viva de una celda (un slot de una hora; en una reserva de varias horas, cada hora tiene el suyo)
   const reservaEn = (canchaId, hora) =>
     reservas.find(
       (r) =>
@@ -318,7 +324,45 @@ export default function ClubPublico() {
     return "libre";
   };
 
-  const abrirModal = async (cancha, hora, precio) => {
+  // Por qué una hora extra de la reserva (la 2.ª o la 3.ª) no se puede sumar, o null si está libre. El orden es
+  // el de estadoDeCelda: primero lo reservado (torneo o jugador), después el turno fijo, al final el horario.
+  const motivoHoraExtra = (cancha, hora) => {
+    if (hora >= "24:00") return "No se puede pasar de medianoche";
+    const reserva = reservaEn(cancha.id, hora);
+    if (esBloqueoTorneo(reserva)) {
+      return reserva.torneoNombre ? `Lo bloquea el torneo ${reserva.torneoNombre}` : "Lo bloquea un torneo";
+    }
+    if (reserva) return `El turno de las ${hora} ya está reservado`;
+    if (esTurnoFijo(cancha.id, hora)) return `Turno fijo a las ${hora}`;
+    if (!(cancha.horariosDisponibles || []).includes(hora)) return `El club cierra a las ${hora}`;
+    return null;
+  };
+
+  // Las duraciones que ofrece el diálogo (1 h … el máximo del club): una duración queda deshabilitada, con el
+  // motivo de la primera hora extra que no entra; las más largas heredan ese mismo motivo.
+  const duracionesPara = (cancha, hora) => {
+    let motivo = null;
+    return Array.from({ length: maxTurnosDelClub(club) }, (_, i) => {
+      const n = i + 1;
+      if (n > 1 && !motivo) motivo = motivoHoraExtra(cancha, sumarHoras(hora, n - 1));
+      return { value: n, label: `${n} h`, motivo };
+    });
+  };
+
+  // Lo que el diálogo abierto va a reservar: si la duración elegida dejó de entrar (se recargaron las reservas),
+  // vuelve a 1 h sin cerrar el diálogo
+  const duraciones = modalData ? duracionesPara(modalData.cancha, modalData.hora) : [];
+  const turnosElegidos = duraciones.some((d) => d.value === turnos && !d.motivo) ? turnos : 1;
+  const horasElegidas = modalData ? horasDeReserva(modalData.hora, turnosElegidos) : [];
+  const horaFinElegida = modalData ? sumarHoras(modalData.hora, turnosElegidos) : "";
+  const precioTotal = modalData
+    ? precioDeReserva(modalData.cancha, fechaSeleccionada, modalData.hora, turnosElegidos)
+    : 0;
+  const señaReserva = calcularSeña(club, precioTotal);
+  const ayudaDuracion = duraciones.find((d) => d.motivo)?.motivo || "";
+
+  const abrirModal = async (cancha, hora) => {
+    setTurnos(1);
     if (user) {
       const userData = await getUserData(user.uid);
       const registradoConGoogle = user.providerData?.some(p => p.providerId === "google.com");
@@ -332,7 +376,7 @@ export default function ClubPublico() {
         if (ir) navigate("/perfil");
         return;
       }
-      setModalData({ cancha, hora, precio });
+      setModalData({ cancha, hora });
       setFormReserva({
         nombreJugador: userData?.nombre || user.displayName || "",
         email: userData?.email || user.email || "",
@@ -340,7 +384,7 @@ export default function ClubPublico() {
       });
       setMostrarModal(true);
     } else {
-      setModalData({ cancha, hora, precio });
+      setModalData({ cancha, hora });
       setFormReserva({
         nombreJugador: "",
         email: "",
@@ -356,44 +400,55 @@ export default function ClubPublico() {
     setGuardando(true);
     // Sin configuración explícita, el club acepta reserva directa (mismo default que las reglas de Firestore)
     const reservaDirecta = club.reservaDirecta ?? true;
+    // Una sola reserva de N horas seguidas (N documentos en una transacción); el rango va en las notificaciones
+    const rango = rangoHoras(modalData.hora, horaFinElegida);
     try {
       await crearReserva(club.id, {
         canchaId: modalData.cancha.id,
         canchaName: modalData.cancha.nombre,
         fecha: fechaSeleccionada,
         hora: modalData.hora,
-        precio: modalData.precio,
+        turnos: turnosElegidos,
+        precios: preciosDeReserva(modalData.cancha, fechaSeleccionada, modalData.hora, turnosElegidos),
+        seña: señaReserva,
         jugadorUid: user?.uid || null,
         nombreJugador: formReserva.nombreJugador,
         email: formReserva.email,
         telefono: formReserva.telefono,
         status: reservaDirecta ? "confirmada" : "pendiente",
       });
-      logEvento("reserva_creada", { clubId: club.id, status: reservaDirecta ? "confirmada" : "pendiente" });
+      logEvento("reserva_creada", {
+        clubId: club.id,
+        status: reservaDirecta ? "confirmada" : "pendiente",
+        turnos: turnosElegidos,
+      });
       const nuevasReservas = await getReservas(club.id, fechaSeleccionada);
       setReservas(nuevasReservas);
       if (club.ownerUid) {
-        notificarNuevaReserva(club.ownerUid, formReserva.nombreJugador, modalData.cancha.nombre, fechaSeleccionada, modalData.hora);
+        notificarNuevaReserva(club.ownerUid, formReserva.nombreJugador, modalData.cancha.nombre, fechaSeleccionada, rango);
       }
       setReservaExitosa({
         cancha: modalData.cancha.nombre,
         fecha: fechaSeleccionada,
-        hora: modalData.hora,
-        precio: modalData.precio,
+        hora: rango,
+        precio: precioTotal,
+        seña: señaReserva,
         status: reservaDirecta ? "confirmada" : "pendiente",
         clubNombre: club.nombre,
       });
       setMostrarModal(false);
     } catch (err) {
       if (err?.code === "SLOT_TAKEN") {
-        // Otro jugador ganó el turno mientras completábamos el formulario
-        toast.error("Ese turno acaba de ser reservado por otra persona");
+        // Otro jugador ganó uno de los turnos mientras completábamos el formulario: el servicio dice cuál
+        toast.error(err.hora ? err.message : "Ese turno acaba de ser reservado por otra persona");
         try {
           setReservas(await getReservas(club.id, fechaSeleccionada));
         } catch (e) {
           console.error("Error recargando reservas:", e);
         }
-        setMostrarModal(false);
+        // Si se perdió el primer turno no queda nada que reservar; si fue una hora extra, el diálogo sigue
+        // abierto con esa duración deshabilitada para elegir una más corta
+        if (!err.hora || err.hora === modalData.hora) setMostrarModal(false);
       } else {
         console.error("Error:", err);
         toast.error("No pudimos crear la reserva. Intentá de nuevo.");
@@ -496,13 +551,14 @@ export default function ClubPublico() {
     dias.push({ value: f, label: etiquetaDia(f, i) });
   }
 
-  // Filas de la grilla: hoy, una hora que ya empezó no se puede reservar; y solo horas con alguna cancha libre
+  // Filas de la grilla: hoy, una hora que ya empezó no se muestra. El resto se muestra cuando alguna cancha tiene
+  // algo en esa hora: abre (libre o reservada) o tiene una reserva, un bloqueo de torneo o un turno fijo. Una hora
+  // en la que ninguna cancha abre ni tiene nada (la madrugada, por ejemplo) se omite.
   const horasVisibles = horasDelDia.filter((hora) => {
     if (esHoy && hora <= horaAhora) return false;
-    return canchas.some((c) => {
-      const disp = (c.horariosDisponibles || []).includes(hora);
-      return disp && !estaOcupado(c.id, hora) && !esTurnoFijo(c.id, hora);
-    });
+    return canchas.some(
+      (c) => (c.horariosDisponibles || []).includes(hora) || !!reservaEn(c.id, hora) || esTurnoFijo(c.id, hora),
+    );
   });
 
   const reservaConfirmada = reservaExitosa?.status === "confirmada";
@@ -649,18 +705,16 @@ export default function ClubPublico() {
                             />
                           );
                         }
-                        const precio =
-                          (cancha.horarios || {})[hora] ??
-                          cancha.precioBase ??
-                          0;
+                        const precio = precioDeSlot(cancha, fechaSeleccionada, hora);
+                        // Con el diálogo abierto, las N horas de la reserva se ven elegidas (todas libres)
                         const elegido =
-                          mostrarModal && modalData?.cancha?.id === cancha.id && modalData?.hora === hora;
+                          mostrarModal && modalData?.cancha?.id === cancha.id && horasElegidas.includes(hora);
                         return (
                           <SlotCell
                             key={cancha.id}
                             estado={elegido ? "elegido" : "libre"}
                             linea2={formatPrecio(precio)}
-                            onClick={() => abrirModal(cancha, hora, precio)}
+                            onClick={() => abrirModal(cancha, hora)}
                             aria-label={`${cancha.nombre}, ${hora}, ${formatPrecio(precio)}, ${elegido ? "elegido" : "libre"}`}
                           />
                         );
@@ -755,9 +809,7 @@ export default function ClubPublico() {
                 {club.direccion && (
                   <li className="flex items-center gap-2 body-sm text-ink-2">
                     <MapPin className="pd-icon text-ink-3" size={20} aria-hidden="true" />
-                    <span>
-                      {club.direccion}, {club.ciudad}, {club.provincia}
-                    </span>
+                    <span>{[club.direccion, ubicacionCorta(club)].filter(Boolean).join(", ")}</span>
                   </li>
                 )}
                 {club.telefono && (
@@ -1016,11 +1068,40 @@ export default function ClubPublico() {
               ¿Confirmar la reserva?
             </h2>
             <p className="pd-dialog-body" id="reserva-cuerpo">
-              {club.nombre} · {modalData.cancha.nombre} · {fechaCorta(fechaSeleccionada)} a las {modalData.hora}
+              {club.nombre} · {modalData.cancha.nombre} · {fechaCorta(fechaSeleccionada)} ·{" "}
+              <span className="pd-tnum">{rangoHoras(modalData.hora, horaFinElegida)}</span>
             </p>
-            <div className="flex items-end justify-between gap-3 mt-4 rounded-md bg-surface-sunken px-4 py-3">
-              <span className="body-sm text-ink-2">Precio</span>
-              <span className="numeral-lg pd-tnum text-ink">{formatPrecio(modalData.precio)}</span>
+            {/* Duración: pastillas a mano porque Pills no deshabilita por ítem; el motivo va en title y en la ayuda */}
+            {duraciones.length > 1 && (
+              <Field as="div" label="Duración" help={ayudaDuracion} className="mt-4">
+                <div className="pd-pills" role="tablist" aria-label="Duración de la reserva">
+                  {duraciones.map((d) => (
+                    <button
+                      key={d.value}
+                      type="button"
+                      role="tab"
+                      className="pd-pill disabled:opacity-50 disabled:cursor-not-allowed! disabled:hover:bg-surface-raised! disabled:hover:text-ink-2!"
+                      aria-selected={d.value === turnosElegidos}
+                      disabled={!!d.motivo}
+                      title={d.motivo || undefined}
+                      onClick={() => setTurnos(d.value)}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            )}
+            <div className="mt-4 rounded-md bg-surface-sunken px-4 py-3" aria-live="polite">
+              <div className="flex items-end justify-between gap-3">
+                <span className="body-sm text-ink-2">Precio</span>
+                <span className="numeral-lg pd-tnum text-ink">{formatPrecio(precioTotal)}</span>
+              </div>
+              {señaReserva > 0 && (
+                <p className="body-sm text-ink-2 mt-1">
+                  Seña {formatPrecio(señaReserva)} · el resto lo pagás en el club
+                </p>
+              )}
             </div>
             <form onSubmit={handleReservar} className="flex flex-col gap-4 mt-4">
               <Field label="Nombre completo *">
@@ -1116,6 +1197,11 @@ export default function ClubPublico() {
                 <dd className="numeral-lg pd-tnum text-ink">{formatPrecio(reservaExitosa.precio)}</dd>
               </div>
             </dl>
+            {reservaExitosa.seña > 0 && (
+              <p className="body-sm text-ink-2 mt-2">
+                Seña {formatPrecio(reservaExitosa.seña)} · el resto lo pagás en el club
+              </p>
+            )}
 
             <div className="pd-dialog-actions">
               <Button onClick={() => { setReservaExitosa(null); navigate("/mis-reservas"); }}>

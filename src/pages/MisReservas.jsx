@@ -3,10 +3,11 @@ import { CircleDot } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { query, where, getDocs, collectionGroup, getDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { actualizarReserva } from "../services/canchaService";
+import { cancelarReservaGrupo } from "../services/canchaService";
 import { notificarReservaCanceladaPorJugador } from "../services/notificationService";
-import { formatFecha, getTodayLocal } from "../utils/formatDate";
+import { formatDiaCorto, getTodayLocal } from "../utils/formatDate";
 import { formatPrecio } from "../utils/format";
+import { agruparReservas, estadoSeña, rangoHoras } from "../utils/reservas";
 import { toast } from "../components/Toast";
 import { confirmar } from "../components/ConfirmDialog";
 import { Badge, Button, Card } from "../components/ui";
@@ -20,6 +21,21 @@ function estadoReserva(status) {
   if (String(status || "").startsWith("pendiente_")) return { tone: "warning", label: "Pendiente de seña" };
   return { tone: "warning", label: "Pendiente" };
 }
+
+// Una reserva ya cerrada (cancelada, rechazada o expirada) no tiene seña pendiente que mostrar
+const ESTADOS_CERRADOS = ["cancelada", "rechazada", "expirada"];
+
+// Badge de seña de una reserva: "Seña $ 5.000 pendiente" (warning) / "Seña cobrada" (success) / nada
+function badgeSeña(r) {
+  const seña = estadoSeña(r);
+  if (!seña) return null;
+  if (seña.tone === "success") return <Badge tone="success">{seña.label}</Badge>;
+  if (ESTADOS_CERRADOS.includes(r.status)) return null;
+  return <Badge tone="warning">Seña {formatPrecio(seña.monto)} pendiente</Badge>;
+}
+
+// Una reserva agrupada se identifica por club + grupoId (el id del grupo es el slot del primer turno)
+const claveReserva = (r) => `${r.clubId || ""}/${r.id}`;
 
 export default function MisReservas() {
   const { user } = useAuthStore();
@@ -35,31 +51,39 @@ export default function MisReservas() {
         const q = query(collectionGroup(db, "reservas"), where("jugadorUid", "==", user.uid));
         const snap = await getDocs(q);
         const datos = [];
+        // Un club se lee una sola vez aunque tenga varios turnos del jugador
+        const clubesPorId = new Map();
 
         for (const d of snap.docs) {
           const data = d.data();
           const clubRef = d.ref.parent.parent;
           const clubId = clubRef.id;
-          let clubNombre = "";
-          let clubOwnerUid = null;
-          try {
-            const clubSnap = await getDoc(clubRef);
-            if (clubSnap.exists()) {
-              clubNombre = clubSnap.data().nombre || clubSnap.data().name || "";
-              clubOwnerUid = clubSnap.data().ownerUid || null;
-            }
-          } catch (err) { console.error(err); }
-          datos.push({ id: d.id, clubId, clubNombre, clubOwnerUid, ...data });
+          if (!clubesPorId.has(clubId)) {
+            let clubNombre = "";
+            let clubOwnerUid = null;
+            try {
+              const clubSnap = await getDoc(clubRef);
+              if (clubSnap.exists()) {
+                clubNombre = clubSnap.data().nombre || clubSnap.data().name || "";
+                clubOwnerUid = clubSnap.data().ownerUid || null;
+              }
+            } catch (err) { console.error(err); }
+            clubesPorId.set(clubId, { clubNombre, clubOwnerUid });
+          }
+          datos.push({ id: d.id, clubId, ...clubesPorId.get(clubId), ...data });
         }
 
-        // Separar y ordenar
-        const proximas = datos
-          .filter((r) => r.fecha >= hoyStr && r.status !== "cancelada")
-          .sort((a, b) => (a.fecha + a.hora).localeCompare(b.fecha + b.hora));
+        // Una tarjeta por reserva: los turnos de varias horas se agrupan por grupoId (los viejos son de una hora)
+        const grupos = agruparReservas(datos);
 
-        const anteriores = datos
+        // Separar y ordenar
+        const proximas = grupos
+          .filter((r) => r.fecha >= hoyStr && r.status !== "cancelada")
+          .sort((a, b) => (a.fecha + a.horaInicio).localeCompare(b.fecha + b.horaInicio));
+
+        const anteriores = grupos
           .filter((r) => r.fecha < hoyStr || r.status === "cancelada")
-          .sort((a, b) => (b.fecha + (b.hora || "")).localeCompare(a.fecha + (a.hora || "")));
+          .sort((a, b) => (b.fecha + (b.horaInicio || "")).localeCompare(a.fecha + (a.horaInicio || "")));
 
         setReservas([...proximas, ...anteriores]);
       } catch (err) {
@@ -70,35 +94,50 @@ export default function MisReservas() {
     cargar();
   }, [user, hoyStr]);
 
-  // Hoy, con menos de 2 horas de anticipación, ya no se puede cancelar
+  // Hoy, con menos de 2 horas de anticipación al inicio, ya no se puede cancelar
   const puedeCancelar = (reserva) => {
     if (reserva.fecha !== getTodayLocal()) return true;
-    const [h, m] = String(reserva.hora || "00:00").split(":").map(Number);
+    const [h, m] = String(reserva.horaInicio || reserva.hora || "00:00").split(":").map(Number);
     const ahora = new Date();
     const inicio = new Date(ahora);
     inicio.setHours(h || 0, m || 0, 0, 0);
     return inicio.getTime() - ahora.getTime() >= 2 * 60 * 60 * 1000;
   };
 
+  // Cancela la reserva entera (todos sus turnos) y avisa al club una sola vez con el rango de horas
   const cancelarReserva = async (reserva) => {
     if (!puedeCancelar(reserva)) {
       toast.error("Las reservas se pueden cancelar hasta 2 horas antes");
       return;
     }
+    const cancha = reserva.canchaName || reserva.cancha || "la cancha";
     const ok = await confirmar({
       titulo: "Cancelar reserva",
-      mensaje: `¿Cancelar la reserva de ${reserva.canchaName || reserva.cancha || "la cancha"} el ${formatFecha(reserva.fecha)} a las ${reserva.hora}?`,
+      mensaje: `¿Cancelar la reserva de ${cancha} el ${formatDiaCorto(reserva.fecha)} de ${reserva.horaInicio} a ${reserva.horaFin}?`,
       confirmText: "Cancelar reserva",
       cancelText: "Volver",
       danger: true,
     });
     if (!ok) return;
     try {
-      await actualizarReserva(reserva.clubId, reserva.id, { status: "cancelada" });
-      setReservas(reservas.map((r) => r.id === reserva.id ? { ...r, status: "cancelada" } : r));
+      await cancelarReservaGrupo(reserva.clubId, reserva.id);
+      const clave = claveReserva(reserva);
+      setReservas(
+        reservas.map((r) =>
+          claveReserva(r) === clave
+            ? { ...r, status: "cancelada", slots: (r.slots || []).map((s) => ({ ...s, status: "cancelada" })) }
+            : r,
+        ),
+      );
       if (reserva.clubOwnerUid) {
         const nombreJugador = reserva.nombreJugador || user?.displayName || user?.email || "Un jugador";
-        notificarReservaCanceladaPorJugador(reserva.clubOwnerUid, nombreJugador, reserva.canchaName || reserva.cancha || "la cancha", reserva.fecha, reserva.hora);
+        notificarReservaCanceladaPorJugador(
+          reserva.clubOwnerUid,
+          nombreJugador,
+          cancha,
+          reserva.fecha,
+          rangoHoras(reserva.horaInicio, reserva.horaFin),
+        );
       }
       toast.success("Reserva cancelada");
     } catch (err) {
@@ -131,23 +170,26 @@ export default function MisReservas() {
   const proximas = reservas.filter((r) => r.fecha >= hoyStr && r.status !== "cancelada");
   const anteriores = reservas.filter((r) => r.fecha < hoyStr || r.status === "cancelada");
 
-  // Una reserva: fecha en el eyebrow, estado en el badge, club como título, cancha/hora/precio en body-sm.
-  // Cancelar es secondary en la tarjeta; el danger vive en el diálogo de confirmación.
+  // Una reserva: fecha en el eyebrow, estado y seña en los badges, club como título, cancha, rango de horas y
+  // total en body-sm. Cancelar es secondary en la tarjeta; el danger vive en el diálogo de confirmación.
   function tarjeta(r, pasada) {
     const estado = estadoReserva(r.status);
     return (
-      <Card key={r.id}>
+      <Card key={claveReserva(r)}>
         <Card.Row>
-          <Card.Eyebrow className="pd-tnum">{formatFecha(r.fecha)}</Card.Eyebrow>
-          <Badge dot tone={estado.tone}>
-            {estado.label}
-          </Badge>
+          <Card.Eyebrow>{formatDiaCorto(r.fecha)}</Card.Eyebrow>
+          <span className="flex flex-wrap items-center justify-end gap-2">
+            {badgeSeña(r)}
+            <Badge dot tone={estado.tone}>
+              {estado.label}
+            </Badge>
+          </span>
         </Card.Row>
         <Card.Title className={pasada ? "mt-2! text-ink-2" : "mt-2!"}>{r.clubNombre || "Club"}</Card.Title>
         <p className="body-sm text-ink-2 mt-1 pd-tnum">
-          {r.canchaName || r.cancha || "Cancha"} · {r.hora}
+          {r.canchaName || r.cancha || "Cancha"} · {rangoHoras(r.horaInicio, r.horaFin)}
         </p>
-        {r.precio != null && <p className="body-sm text-ink-2 pd-tnum">{formatPrecio(r.precio)}</p>}
+        {r.precioTotal > 0 && <p className="body-sm text-ink-2 pd-tnum">{formatPrecio(r.precioTotal)}</p>}
         {!pasada && r.status !== "cancelada" && (
           <Card.Foot>
             <Button size="sm" onClick={() => cancelarReserva(r)}>

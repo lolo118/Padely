@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatFecha } from "../utils/formatDate";
-import { formatPrecio } from "../utils/format";
+import { formatPrecio, ubicacionCorta } from "../utils/format";
 import { useNavigate } from "react-router-dom";
 import { Building2 } from "lucide-react";
 import { getTodosLosTorneos } from "../services/torneoService";
@@ -133,7 +133,7 @@ export default function Torneos() {
                 <Card.Meta className="flex flex-wrap items-center gap-1">
                   {sede.esClub && <Building2 className="pd-icon shrink-0" size={20} aria-hidden="true" />}
                   <span>
-                    {sede.nombre} · {sede.ciudad}, {sede.provincia}
+                    {sede.nombre} · {ubicacionCorta(sede)}
                   </span>
                 </Card.Meta>
                 {sede.esClub && sede.direccion && <Card.Meta>{sede.direccion}</Card.Meta>}

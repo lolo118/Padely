@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { getTorneosByOrganizer } from "../../services/torneoService";
 import { formatFecha } from "../../utils/formatDate";
+import { ubicacionCorta } from "../../utils/format";
 import { sedeDeTorneo } from "../../utils/torneo";
 import { Badge, Button, Card } from "../../components/ui";
 
@@ -103,7 +104,7 @@ export default function OrgTorneos() {
                 </Card.Row>
                 <Card.Title className="mt-2!">{t.nombre}</Card.Title>
                 <Card.Meta>
-                  {sede.nombre} · {sede.ciudad}, {sede.provincia}
+                  {sede.nombre} · {ubicacionCorta(sede)}
                 </Card.Meta>
                 <Card.Meta>
                   {formatFecha(t.fechaInicio)} – {formatFecha(t.fechaFin)}

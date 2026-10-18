@@ -11,6 +11,7 @@ import { doc, updateDoc, getDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { getTodayLocal, addDaysLocal, horaActualStr } from "../utils/formatDate";
 import { formatPrecio } from "../utils/format";
+import { precioDeSlot, precioMinimo } from "../utils/tarifas";
 import { Badge, Button, Card, Field, Input, Pills, SearchInput, Select } from "../components/ui";
 
 // Horas del filtro de rango: de 07:00 a 23:00
@@ -148,7 +149,7 @@ export default function Hub() {
       (cancha.horariosDisponibles || []).forEach((hora) => {
         if (!user) {
           // Sin sesión: solo el precio mínimo; la disponibilidad se ve al iniciar sesión
-          const precio = (cancha.horarios || {})[hora] ?? cancha.precioBase ?? 0;
+          const precio = precioMinimo(cancha);
           if (precio < precioMin) precioMin = precio;
           return;
         }
@@ -157,7 +158,7 @@ export default function Hub() {
           canchaLibres++;
           libres++;
           horasLibres.push(hora);
-          const precio = (cancha.horarios || {})[hora] ?? cancha.precioBase ?? 0;
+          const precio = precioDeSlot(cancha, fechaSeleccionada, hora);
           if (precio < precioMin) precioMin = precio;
           if (horaDesde && horaHasta && hora >= horaDesde && hora < horaHasta) {
             canchaLibresEnRango++;
