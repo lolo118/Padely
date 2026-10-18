@@ -11,4 +11,4 @@ One court at one time, inside the court × time grid that both the player (choos
 - **Pasado** (`pd-slot-past`): the grid ground, `ink-3`, not interactive.
 - Every state has a word: colour is never the only cue, and the states differ in lightness, not just hue.
 - The club's operations view may add `pd-grid-quiet` to the grid so free cells are plain `surface-raised`: there, bookings are the figure and free is the ground.
-- The first column (times) is sticky when the grid scrolls sideways; the header row (courts) is sticky when it scrolls down.
+- Wrap the grid in `pd-grid-scroll` when it is taller than the viewport or has more courts than fit: the time column sticks to the left and the court header to the top.

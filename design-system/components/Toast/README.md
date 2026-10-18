@@ -6,4 +6,5 @@ A short confirmation or failure that appears at the bottom of the screen and lea
 - Failures use `role="alert"` and tell the person what to do ("Revisá la conexión y volvé a intentar"); never show an error code.
 - One optional ghost action ("Ver", "Deshacer"). No close button: it leaves by itself and a tap dismisses it.
 - One toast at a time; a new one replaces the previous.
+- Three tones: success (lime check), `pd-toast-danger` (red triangle), `pd-toast-info` (court-blue info icon). Toasts stack in `pd-toast-stack` (above the bottom nav on phones, bottom-right on desktop).
 - Never use a toast for validation (that is `pd-error` under the field) or for anything the person must read before continuing (that is a Dialog).

@@ -123,14 +123,16 @@ The reference implementation is `components/bundle.css` (`pd-*` classes, plain C
 | --- | --- |
 | Actions | Button |
 | Forms | Input, CategorySelect |
-| Surfaces | Card (reservation, night and tournament variants) |
+| Surfaces | Card (reservation, night, tournament, danger and link variants), Avatar (+ spinner, status line) |
 | Navigation | AppBar, BottomNav, Sidebar, Pill, Tabs |
 | Status | Badge |
-| Feedback | Toast, Dialog |
+| Feedback | Toast, Dialog, Alert |
 | Booking | SlotCell |
 | Tournaments | Standings, MatchCard, ChampionCard |
 | Data | StatTile |
 | Growth | InstallBanner |
+
+Patterns the components share (all in `bundle.css`): `pd-count` for a count after a heading; `pd-alert` tones for inline messages; `pd-dl` for the label/value pairs of a detail page; `pd-steps` for a process (Badges with `aria-current="step"` and `is-done`); `pd-check` for native checkboxes (accent `ink`); `pd-drawer` + `pd-topbar` for the panel on phones; `pd-grid-scroll` for a sticky slot grid; `pd-toast-stack` for toasts. Layers: `pd-backdrop` 50, `pd-drawer` 60, `pd-toast-stack` 100.
 
 States, everywhere: hover is one surface step; pressed moves 1px; disabled is 50% opacity at full width; selected is inverted ink (pills) or lime (slots); focus is the `focus` ring; error is a `danger` border plus a line of text; loading is a skeleton or a verb in progress.
 
@@ -157,6 +159,8 @@ The app (React 19 + Vite, Tailwind utilities plus CSS custom properties in `src/
 | `--accent` (as a fill) | `--lime` with `--on-lime` text |
 | `--accent` (as text or a border) | `--lime-text` |
 | focus ring `rgba(5,150,105,.2)` | `--focus` ring, 2px + 2px offset |
+
+**Tailwind cascade.** `components.css` is plain, unlayered CSS, so a Tailwind utility on a property a `pd-*` class already sets loses unless it is marked important (`py-1!`). The cleaner fix is to import the stylesheet into the components layer — `@import "./styles/components.css" layer(components);` — after which utilities win by default; the existing `!` marks keep working either way. Do this in a dedicated clean-up commit, not mixed with a feature.
 
 2. **Shared components.** `.themed-card` → `pd-card`; `.themed-input` → `pd-input` with `pd-field`/`pd-label`; buttons → `pd-btn` variants (the emerald primary becomes lime with dark text); `ConfirmDialog` → `pd-dialog`; `Toast` → `pd-toast` with `data-theme="dark"`; the sidebar and the mobile nav → `pd-sidebar` / `pd-bottomnav`; `InstallBanner` → `pd-install`. Either import `bundle.css` as is or translate each rule into Tailwind `@apply` — the tokens are the contract, the class names are not.
 3. **Screens, by audience.** Player and public pages first (home, booking grid, tournament detail, profile), Noche by default; then the club panel (today, reservas, turnos fijos, canchas), Día by default; then the organizer panel (tournament tabs: parejas, grupos, cuadro, reclamos). Each screen keeps its behaviour and only changes what it is made of.
