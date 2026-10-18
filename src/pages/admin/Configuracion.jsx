@@ -8,6 +8,8 @@ import {
   actualizarClubPrivado,
 } from "../../services/canchaService";
 import { uploadClubLogo } from "../../services/storageService";
+import { formatPrecio } from "../../utils/format";
+import { MAX_TURNOS_POR_RESERVA, maxTurnosDelClub } from "../../utils/tarifas";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
 import { Badge, Button, Card, Field, Input, Pills, Select, Tabs } from "../../components/ui";
@@ -32,6 +34,28 @@ const rolesDisponibles = [
   { value: "cajero", label: "Cajero", desc: "Solo ver reservas y cobrar" },
 ];
 
+const tiposSeña = [
+  { value: "ninguna", label: "Ninguna" },
+  { value: "porcentaje", label: "Porcentaje" },
+  { value: "monto", label: "Monto" },
+];
+
+const opcionesTurnos = Array.from({ length: MAX_TURNOS_POR_RESERVA }, (_, i) => i + 1);
+
+// Tipo de seña guardado en el club, o "ninguna" si no configuró nada (o tiene un valor que no conocemos)
+const tipoSeñaDelClub = (club) => (tiposSeña.some((t) => t.value === club?.seña?.tipo) ? club.seña.tipo : "ninguna");
+
+// Mensaje de error de la seña del formulario, o "" cuando es válida (porcentaje 1–100, monto mayor a 0)
+function validarSeña(tipo, valor) {
+  if (tipo === "ninguna") return "";
+  const n = Number(valor);
+  if (tipo === "porcentaje") {
+    return Number.isFinite(n) && n >= 1 && n <= 100 ? "" : "Ingresá un porcentaje entre 1 y 100";
+  }
+  if (tipo === "monto") return Number.isFinite(n) && n > 0 ? "" : "Ingresá un monto mayor a 0";
+  return "";
+}
+
 // Consejo contextual (el sistema no define un callout: surface-sunken + ícono Info + body-sm)
 function Consejo({ children }) {
   return (
@@ -51,6 +75,7 @@ export default function Configuracion() {
   const [mensaje, setMensaje] = useState("");
   const [subiendoLogo, setSubiendoLogo] = useState(false);
   const [logoUrl, setLogoUrl] = useState(null);
+  const [errorSeña, setErrorSeña] = useState("");
 
   const [form, setForm] = useState({
     nombre: "",
@@ -79,6 +104,10 @@ export default function Configuracion() {
     titularCuenta: "",
     cuit: "",
     razonSocial: "",
+    // Reservas: seña (tipo + valor, el valor como texto del input) y turnos seguidos por reserva
+    señaTipo: "ninguna",
+    señaValor: "",
+    maxTurnosPorReserva: MAX_TURNOS_POR_RESERVA,
   });
 
   const [usuarios, setUsuarios] = useState([]);
@@ -120,6 +149,9 @@ export default function Configuracion() {
             titularCuenta: privado.titularCuenta || clubData.titularCuenta || "",
             cuit: privado.cuit || clubData.cuit || "",
             razonSocial: privado.razonSocial || clubData.razonSocial || "",
+            señaTipo: tipoSeñaDelClub(clubData),
+            señaValor: Number(clubData.seña?.valor) > 0 ? String(Number(clubData.seña.valor)) : "",
+            maxTurnosPorReserva: maxTurnosDelClub(clubData),
           });
           setUsuarios(privado.usuarios || clubData.usuarios || []);
           if (clubData.logoUrl) setLogoUrl(clubData.logoUrl);
@@ -134,11 +166,26 @@ export default function Configuracion() {
 
   const handleGuardar = async () => {
     if (!club) return;
+    // La seña inválida no se guarda: el error queda bajo el campo, en la sección donde está
+    const error = validarSeña(form.señaTipo, form.señaValor);
+    if (error) {
+      setErrorSeña(error);
+      setTab("horarios");
+      toast.error("Revisá la seña antes de guardar.");
+      return;
+    }
     setGuardando(true);
     setMensaje("");
     try {
       // Lo público va al documento del club; CBU, alias, CUIT, razón social y usuarios, al subdocumento privado
-      const { cbu, alias, titularCuenta, cuit, razonSocial, ...publicos } = form;
+      const { cbu, alias, titularCuenta, cuit, razonSocial, señaTipo, señaValor, maxTurnosPorReserva, ...resto } = form;
+      const publicos = {
+        ...resto,
+        seña: { tipo: señaTipo, valor: señaTipo === "ninguna" ? 0 : Number(señaValor) },
+        maxTurnosPorReserva: Number(maxTurnosPorReserva),
+        // La grilla sigue siendo horaria; se guarda para la próxima etapa
+        duracionTurno: 60,
+      };
       await actualizarClubConfig(club.id, publicos);
       await actualizarClubPrivado(club.id, { cbu, alias, titularCuenta, cuit, razonSocial, usuarios });
       setClub({ ...club, ...publicos });
@@ -346,51 +393,122 @@ export default function Configuracion() {
         </Card>
       )}
 
-      {/* Horarios */}
+      {/* Horarios y reservas (el sistema admite cinco tabs como máximo: la seña y los turnos van en una
+          segunda tarjeta de esta sección) */}
       {tab === "horarios" && (
-        <Card>
-          <Card.Title className="mb-4!">Horario de atención</Card.Title>
-          <div className="grid gap-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Hora de apertura">
-                <Input
-                  type="time"
-                  inputMode="numeric"
-                  value={form.horarioApertura}
-                  onChange={(e) =>
-                    setForm({ ...form, horarioApertura: e.target.value })
-                  }
+        <div className="flex flex-col gap-4">
+          <Card>
+            <Card.Title className="mb-4!">Horario de atención</Card.Title>
+            <div className="grid gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Hora de apertura">
+                  <Input
+                    type="time"
+                    inputMode="numeric"
+                    value={form.horarioApertura}
+                    onChange={(e) =>
+                      setForm({ ...form, horarioApertura: e.target.value })
+                    }
+                  />
+                </Field>
+                <Field label="Hora de cierre">
+                  <Input
+                    type="time"
+                    inputMode="numeric"
+                    value={form.horarioCierre}
+                    onChange={(e) =>
+                      setForm({ ...form, horarioCierre: e.target.value })
+                    }
+                  />
+                </Field>
+              </div>
+
+              <Field as="div" label="Días abiertos">
+                <Pills
+                  multi
+                  items={diasSemana.map((dia) => ({ value: dia, label: dia.slice(0, 3) }))}
+                  value={form.diasAbiertos}
+                  onChange={toggleDia}
+                  ariaLabel="Días abiertos"
                 />
               </Field>
-              <Field label="Hora de cierre">
-                <Input
-                  type="time"
-                  inputMode="numeric"
-                  value={form.horarioCierre}
+
+              <Consejo>
+                Estos horarios se muestran a los jugadores en el hub de
+                canchas. Los horarios específicos de cada cancha se configuran en
+                la sección Canchas.
+              </Consejo>
+            </div>
+          </Card>
+
+          <Card>
+            <Card.Title className="mb-4!">Reservas</Card.Title>
+            <div className="grid gap-4">
+              <div className="grid gap-3">
+                <Field as="div" label="Seña">
+                  <Pills
+                    items={tiposSeña}
+                    value={form.señaTipo}
+                    onChange={(tipo) => {
+                      setForm({ ...form, señaTipo: tipo });
+                      setErrorSeña("");
+                    }}
+                    ariaLabel="Tipo de seña"
+                  />
+                </Field>
+
+                {form.señaTipo === "porcentaje" && (
+                  <Field label="Porcentaje" help="Del total de la reserva" error={errorSeña}>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="Ej: 30"
+                      value={form.señaValor}
+                      onChange={(e) => {
+                        setForm({ ...form, señaValor: e.target.value });
+                        setErrorSeña("");
+                      }}
+                    />
+                  </Field>
+                )}
+
+                {form.señaTipo === "monto" && (
+                  <Field label="Monto" help={formatPrecio(form.señaValor)} error={errorSeña}>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="Ej: 5000"
+                      value={form.señaValor}
+                      onChange={(e) => {
+                        setForm({ ...form, señaValor: e.target.value });
+                        setErrorSeña("");
+                      }}
+                    />
+                  </Field>
+                )}
+
+                <p className="pd-help m-0">
+                  Se informa al reservar; se cobra en el club. En la próxima etapa se cobra online.
+                </p>
+              </div>
+
+              <Field label="Turnos seguidos por reserva" help="Cuántas horas seguidas puede tomar un jugador en una reserva">
+                <Select
+                  value={form.maxTurnosPorReserva}
                   onChange={(e) =>
-                    setForm({ ...form, horarioCierre: e.target.value })
+                    setForm({ ...form, maxTurnosPorReserva: Number(e.target.value) })
                   }
-                />
+                >
+                  {opcionesTurnos.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </Select>
               </Field>
             </div>
-
-            <Field as="div" label="Días abiertos">
-              <Pills
-                multi
-                items={diasSemana.map((dia) => ({ value: dia, label: dia.slice(0, 3) }))}
-                value={form.diasAbiertos}
-                onChange={toggleDia}
-                ariaLabel="Días abiertos"
-              />
-            </Field>
-
-            <Consejo>
-              Estos horarios se muestran a los jugadores en el hub de
-              canchas. Los horarios específicos de cada cancha se configuran en
-              la sección Canchas.
-            </Consejo>
-          </div>
-        </Card>
+          </Card>
+        </div>
       )}
 
       {/* Redes sociales */}

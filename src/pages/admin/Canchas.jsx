@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Lock, Plus, Settings, Trash2, X } from "lucide-react";
+import { Check, Coins, Lock, Plus, Settings, Trash2, X } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import PerfilIncompleto from "../../components/PerfilIncompleto";
 import {
@@ -11,13 +11,26 @@ import {
   getReservas,
   crearReserva,
   actualizarReserva,
-  eliminarReserva,
+  actualizarReservaGrupo,
+  cancelarReservaGrupo,
+  marcarSeñaPagada,
+  eliminarReservaGrupo,
   actualizarClubConfig,
   getTurnosFijos,
 } from "../../services/canchaService";
 import TabTurnosFijos from "./TabTurnosFijos";
 import { formatFecha, getTodayLocal } from "../../utils/formatDate";
 import { formatPrecio } from "../../utils/format";
+import {
+  precioDeSlot,
+  precioDeReserva,
+  preciosDeReserva,
+  precioMinimo,
+  calcularSeña,
+  maxTurnosDelClub,
+  sumarHoras,
+} from "../../utils/tarifas";
+import { grupoDeReserva, rangoHoras, normalizarReserva, esPrimerSlot, agruparReservas, estadoSeña } from "../../utils/reservas";
 import { getNombrePareja } from "../../utils/torneo";
 import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
 import { toast } from "../../components/Toast";
@@ -51,6 +64,32 @@ const partidoDeBloqueo = (reserva) => {
   if (!p || (!p.pareja1 && !p.pareja2)) return "";
   return `${getNombrePareja(p.pareja1)} vs ${getNombrePareja(p.pareja2)}`;
 };
+
+// Estado visual de la celda de una reserva viva (pendiente o reservada)
+const estadoDeReserva = (reserva) => (reserva?.status === "pendiente" ? "pendiente" : "reservada");
+
+// Los N turnos de una reserva comparten grupoId: un cambio local (status, seña cobrada) se aplica a todos sus slots.
+// Una reserva vieja de una hora (sin grupoId) es su propio grupo, igual que un bloqueo del club.
+const actualizarGrupoLocal = (lista, grupoId, cambios) =>
+  lista.map((r) => (grupoDeReserva(r) === grupoId ? { ...r, ...cambios } : r));
+
+// Las horas habilitadas son las mismas para semana y fin de semana (las claves de `horarios`): el mapa de finde
+// solo guarda las horas que siguen habilitadas, como números. Un mapa vacío significa "igual que la semana".
+const podarFinde = (finde, horarios) => {
+  const resultado = {};
+  Object.keys(finde || {}).forEach((h) => {
+    if (horarios?.[h] !== undefined) resultado[h] = Number(finde[h]) || 0;
+  });
+  return resultado;
+};
+
+const itemsTarifa = [
+  { value: "semana", label: "Semana" },
+  { value: "finde", label: "Fin de semana" },
+];
+
+// Etiqueta del Badge de seña: "Seña $ 5.000 pendiente" (warning) o "Seña cobrada" (success)
+const etiquetaSeña = (info) => (info.tone === "success" ? info.label : `Seña ${formatPrecio(info.monto)} ${info.label}`);
 
 function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData }) {
   const [weekData, setWeekData] = useState({});
@@ -133,8 +172,11 @@ function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData
                     <div className="pd-grid-time">{hora}</div>
                     {dias.map((d) => {
                       const reservas = weekData[d.date] || [];
-                      const reserva = reservas.find((r) => r.canchaId === cancha.id && r.hora === hora && r.status !== "cancelada");
+                      const reserva = normalizarReserva(
+                        reservas.find((r) => r.canchaId === cancha.id && r.hora === hora && r.status !== "cancelada"),
+                      );
                       const turnoFijo = esTurnoFijoSemana(cancha.id, hora, d.date);
+                      const nombreCorto = reserva?.nombreJugador?.split(" ")[0] || undefined;
 
                       if (esBloqueoTorneo(reserva)) {
                         return (
@@ -147,6 +189,10 @@ function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData
                           />
                         );
                       }
+                      // Hora siguiente de una reserva de varias horas: sigue el bloque del primer turno
+                      if (reserva && !esPrimerSlot(reserva)) {
+                        return <SlotCell key={d.date} estado={estadoDeReserva(reserva)} linea1="↳" linea2={nombreCorto} />;
+                      }
                       if (reserva && reserva.status === "bloqueado") {
                         return <SlotCell key={d.date} estado="bloqueada" linea2={motivoDeBloqueo(reserva.nombreJugador) || undefined} />;
                       }
@@ -154,9 +200,9 @@ function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData
                         return (
                           <SlotCell
                             key={d.date}
-                            estado={reserva.status === "pendiente" ? "pendiente" : "reservada"}
-                            linea1={reserva.nombreJugador?.split(" ")[0] || undefined}
-                            linea2={reserva.status === "pendiente" ? "pendiente" : "confirmada"}
+                            estado={estadoDeReserva(reserva)}
+                            linea1={nombreCorto}
+                            linea2={rangoHoras(reserva.horaInicio, reserva.horaFin)}
                           />
                         );
                       }
@@ -216,14 +262,19 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
     cargar();
   }, [clubId]);
 
-  const handleConfirmar = async (reservaId) => {
+  // El estado guarda los slots sueltos (uno por hora); la lista muestra una entrada por reserva (grupoId).
+  // Cada entrada trae horaInicio/horaFin, precioTotal, seña y `slotId` (el documento del primer turno).
+  const grupos = useMemo(() => agruparReservas(reservas), [reservas]);
+
+  // Todas las acciones actúan sobre la reserva entera y avisan al jugador UNA vez con el rango de horas
+  const handleConfirmar = async (reserva) => {
+    const grupoId = grupoDeReserva(reserva);
     try {
-      await actualizarReserva(clubId, reservaId, { status: "confirmada" });
-      const reserva = reservas.find((r) => r.id === reservaId);
+      await actualizarReservaGrupo(clubId, grupoId, { status: "confirmada" });
       if (reserva?.jugadorUid) {
-        notificarReservaConfirmada(reserva.jugadorUid, clubNombre, reserva.canchaName || "", reserva.fecha, reserva.hora);
+        notificarReservaConfirmada(reserva.jugadorUid, clubNombre, reserva.canchaName || "", reserva.fecha, rangoHoras(reserva.horaInicio, reserva.horaFin));
       }
-      setReservas(reservas.map((r) => r.id === reservaId ? { ...r, status: "confirmada" } : r));
+      setReservas((prev) => actualizarGrupoLocal(prev, grupoId, { status: "confirmada" }));
       toast.success("Reserva confirmada");
     } catch (err) {
       console.error(err);
@@ -231,8 +282,8 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
     }
   };
 
-  const handleRechazar = async (reservaId) => {
-    const reserva = reservas.find((r) => r.id === reservaId);
+  const handleRechazar = async (reserva) => {
+    const grupoId = grupoDeReserva(reserva);
     const ok = await confirmar({
       titulo: reserva?.status === "confirmada" ? "Cancelar reserva" : "Rechazar reserva",
       mensaje: reserva?.status === "confirmada" ? "¿Cancelar esta reserva? Se le avisará al jugador." : "¿Rechazar esta reserva? Se le avisará al jugador.",
@@ -242,11 +293,11 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
     });
     if (!ok) return;
     try {
-      await actualizarReserva(clubId, reservaId, { status: "cancelada" });
+      await cancelarReservaGrupo(clubId, grupoId);
       if (reserva?.jugadorUid) {
-        notificarReservaRechazada(reserva.jugadorUid, clubNombre, reserva.canchaName || "", reserva.fecha, reserva.hora);
+        notificarReservaRechazada(reserva.jugadorUid, clubNombre, reserva.canchaName || "", reserva.fecha, rangoHoras(reserva.horaInicio, reserva.horaFin));
       }
-      setReservas(reservas.map((r) => r.id === reservaId ? { ...r, status: "cancelada" } : r));
+      setReservas((prev) => actualizarGrupoLocal(prev, grupoId, { status: "cancelada" }));
       toast.success(reserva?.status === "confirmada" ? "Reserva cancelada" : "Reserva rechazada");
     } catch (err) {
       console.error(err);
@@ -254,12 +305,13 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
     }
   };
 
-  const handleDesbloquear = async (reservaId) => {
+  // Un bloqueo del club es siempre un solo turno: se desbloquea su documento, como hasta ahora
+  const handleDesbloquear = async (reserva) => {
     const ok = await confirmar({ titulo: "Desbloquear horario", mensaje: "¿Desbloquear este horario? Volverá a estar disponible.", confirmText: "Desbloquear" });
     if (!ok) return;
     try {
-      await actualizarReserva(clubId, reservaId, { status: "cancelada" });
-      setReservas(reservas.map((r) => r.id === reservaId ? { ...r, status: "cancelada" } : r));
+      await actualizarReserva(clubId, reserva.slotId || reserva.id, { status: "cancelada" });
+      setReservas((prev) => actualizarGrupoLocal(prev, grupoDeReserva(reserva), { status: "cancelada" }));
       toast.success("Horario desbloqueado");
     } catch (err) {
       console.error(err);
@@ -267,16 +319,31 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
     }
   };
 
-  const handleEliminar = async (reservaId) => {
+  const handleEliminar = async (reserva) => {
+    const grupoId = grupoDeReserva(reserva);
     const ok = await confirmar({ titulo: "Eliminar reserva", mensaje: "¿Eliminar esta reserva definitivamente?", confirmText: "Eliminar", danger: true });
     if (!ok) return;
     try {
-      await eliminarReserva(clubId, reservaId);
-      setReservas(reservas.filter((r) => r.id !== reservaId));
+      await eliminarReservaGrupo(clubId, grupoId);
+      setReservas((prev) => prev.filter((r) => grupoDeReserva(r) !== grupoId));
       toast.success("Reserva eliminada");
     } catch (err) {
       console.error(err);
       toast.error("No pudimos eliminar la reserva. Intentá de nuevo.");
+    }
+  };
+
+  // Seña cobrada / pendiente: se marca en todos los turnos de la reserva
+  const handleSeña = async (reserva) => {
+    const grupoId = grupoDeReserva(reserva);
+    const pagada = !reserva.señaPagada;
+    try {
+      await marcarSeñaPagada(clubId, grupoId, pagada);
+      setReservas((prev) => actualizarGrupoLocal(prev, grupoId, { señaPagada: pagada }));
+      toast.success(pagada ? "Seña marcada como cobrada" : "Seña marcada como pendiente");
+    } catch (err) {
+      console.error(err);
+      toast.error("No pudimos actualizar la seña. Intentá de nuevo.");
     }
   };
 
@@ -285,20 +352,21 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
     return c?.nombre || "Cancha";
   };
 
-  let filtradas = reservas;
+  // Filtros y conteos sobre reservas enteras: el estado del grupo es el del primer turno
+  let filtradas = grupos;
   if (filtro !== "todas") {
     filtradas = filtradas.filter((r) => r.status === filtro);
   }
   if (fechaFiltro) {
     filtradas = filtradas.filter((r) => r.fecha === fechaFiltro);
   }
-  filtradas.sort((a, b) => {
-    if (a.fecha !== b.fecha) return b.fecha.localeCompare(a.fecha);
-    return (a.hora || "").localeCompare(b.hora || "");
+  filtradas = [...filtradas].sort((a, b) => {
+    if (a.fecha !== b.fecha) return (b.fecha || "").localeCompare(a.fecha || "");
+    return (a.horaInicio || "").localeCompare(b.horaInicio || "");
   });
 
-  const pendientes = reservas.filter((r) => r.status === "pendiente").length;
-  const confirmadas = reservas.filter((r) => r.status === "confirmada").length;
+  const pendientes = grupos.filter((r) => r.status === "pendiente").length;
+  const confirmadas = grupos.filter((r) => r.status === "confirmada").length;
 
   if (loading) {
     return (
@@ -353,65 +421,80 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
-          {filtradas.map((r) => (
-            <Card key={r.id}>
-              <Card.Row className="items-start!">
-                <Card.Eyebrow className="pd-tnum">
-                  {getCanchaName(r.canchaId)} · {formatFecha(r.fecha)} · {r.hora}
-                </Card.Eyebrow>
-                {esBloqueoTorneo(r) ? (
-                  <Badge tone="night">Torneo</Badge>
-                ) : (
-                  <Badge tone={statusTone[r.status] || statusTone.pendiente} dot>
-                    {statusLabel[r.status] || "Pendiente"}
-                  </Badge>
+          {filtradas.map((r) => {
+            // Una reserva cancelada con seña sin cobrar ya no tiene nada pendiente; "Seña cobrada" sí se sigue viendo
+            const señaInfo = esBloqueoTorneo(r) || (r.status === "cancelada" && !r.señaPagada) ? null : estadoSeña(r);
+            return (
+              <Card key={r.claveGrupo || r.id}>
+                <Card.Row className="items-start!">
+                  <Card.Eyebrow className="pd-tnum">
+                    {getCanchaName(r.canchaId)} · {formatFecha(r.fecha)} · {rangoHoras(r.horaInicio, r.horaFin)}
+                  </Card.Eyebrow>
+                  {esBloqueoTorneo(r) ? (
+                    <Badge tone="night">Torneo</Badge>
+                  ) : (
+                    <Badge tone={statusTone[r.status] || statusTone.pendiente} dot>
+                      {statusLabel[r.status] || "Pendiente"}
+                    </Badge>
+                  )}
+                </Card.Row>
+                <Card.Title className="mt-2! truncate">{r.nombreJugador || "Sin nombre"}</Card.Title>
+                {esBloqueoTorneo(r) && partidoDeBloqueo(r) && (
+                  <Card.Meta className="truncate">{partidoDeBloqueo(r)}</Card.Meta>
                 )}
-              </Card.Row>
-              <Card.Title className="mt-2! truncate">{r.nombreJugador || "Sin nombre"}</Card.Title>
-              {esBloqueoTorneo(r) && partidoDeBloqueo(r) && (
-                <Card.Meta className="truncate">{partidoDeBloqueo(r)}</Card.Meta>
-              )}
-              {(r.email || r.telefono) && (
-                <Card.Meta className="truncate">
-                  {r.email}{r.email && r.telefono ? " · " : ""}{r.telefono}
-                </Card.Meta>
-              )}
-              <Card.Foot className="flex-wrap">
-                {r.precio != null && !esBloqueoTorneo(r) && <span className="numeral-md pd-tnum">{formatPrecio(r.precio)}</span>}
-                {/* Un bloqueo de torneo no tiene acciones: solo lo libera la Function al reprogramar o cerrar el torneo */}
-                {esBloqueoTorneo(r) && (
-                  <span className="body-sm text-ink-3">{tituloBloqueoTorneo(r)}</span>
+                {(r.email || r.telefono) && (
+                  <Card.Meta className="truncate">
+                    {r.email}{r.email && r.telefono ? " · " : ""}{r.telefono}
+                  </Card.Meta>
                 )}
-                <div className="pd-btn-group ml-auto">
-                  {!esBloqueoTorneo(r) && r.status === "pendiente" && (
-                    <>
-                      <Button size="sm" icon={<Check className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleConfirmar(r.id)}>
-                        Confirmar
+                <Card.Foot className="flex-wrap">
+                  {!esBloqueoTorneo(r) && <span className="numeral-md pd-tnum">{formatPrecio(r.precioTotal)}</span>}
+                  {señaInfo && <Badge tone={señaInfo.tone}>{etiquetaSeña(señaInfo)}</Badge>}
+                  {/* Un bloqueo de torneo no tiene acciones: solo lo libera la Function al reprogramar o cerrar el torneo */}
+                  {esBloqueoTorneo(r) && (
+                    <span className="body-sm text-ink-3">{tituloBloqueoTorneo(r)}</span>
+                  )}
+                  <div className="pd-btn-group ml-auto">
+                    {señaInfo && (
+                      <Button
+                        size="sm"
+                        aria-pressed={!!r.señaPagada}
+                        icon={<Coins className="pd-icon" size={20} aria-hidden="true" />}
+                        onClick={() => handleSeña(r)}
+                      >
+                        {r.señaPagada ? "Seña cobrada" : "Marcar seña cobrada"}
                       </Button>
-                      <Button size="sm" variant="ghost" icon={<X className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleRechazar(r.id)}>
-                        Rechazar
+                    )}
+                    {!esBloqueoTorneo(r) && r.status === "pendiente" && (
+                      <>
+                        <Button size="sm" icon={<Check className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleConfirmar(r)}>
+                          Confirmar
+                        </Button>
+                        <Button size="sm" variant="ghost" icon={<X className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleRechazar(r)}>
+                          Rechazar
+                        </Button>
+                      </>
+                    )}
+                    {!esBloqueoTorneo(r) && r.status === "confirmada" && (
+                      <Button size="sm" variant="ghost" icon={<X className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleRechazar(r)}>
+                        Cancelar
                       </Button>
-                    </>
-                  )}
-                  {!esBloqueoTorneo(r) && r.status === "confirmada" && (
-                    <Button size="sm" variant="ghost" icon={<X className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleRechazar(r.id)}>
-                      Cancelar
-                    </Button>
-                  )}
-                  {!esBloqueoTorneo(r) && r.status === "bloqueado" && (
-                    <Button size="sm" onClick={() => handleDesbloquear(r.id)}>
-                      Desbloquear
-                    </Button>
-                  )}
-                  {!esBloqueoTorneo(r) && r.status === "cancelada" && (
-                    <Button size="sm" variant="ghost" icon={<Trash2 className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleEliminar(r.id)}>
-                      Eliminar
-                    </Button>
-                  )}
-                </div>
-              </Card.Foot>
-            </Card>
-          ))}
+                    )}
+                    {!esBloqueoTorneo(r) && r.status === "bloqueado" && (
+                      <Button size="sm" onClick={() => handleDesbloquear(r)}>
+                        Desbloquear
+                      </Button>
+                    )}
+                    {!esBloqueoTorneo(r) && r.status === "cancelada" && (
+                      <Button size="sm" variant="ghost" icon={<Trash2 className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleEliminar(r)}>
+                        Eliminar
+                      </Button>
+                    )}
+                  </div>
+                </Card.Foot>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
@@ -436,8 +519,12 @@ export default function Canchas() {
     techada: false,
     precioBase: 0,
     horarios: {},
+    horariosFinde: {},
   });
   const [guardando, setGuardando] = useState(false);
+  // Qué tarifa edita la tabla de precios de cada formulario: la de semana o la de fin de semana
+  const [vistaTarifaNueva, setVistaTarifaNueva] = useState("semana");
+  const [vistaTarifaEdit, setVistaTarifaEdit] = useState("semana");
 
   // Edición cancha
   const [editandoCancha, setEditandoCancha] = useState(null);
@@ -454,7 +541,7 @@ export default function Canchas() {
   // Manual reservation modal
   const [mostrarModalManual, setMostrarModalManual] = useState(false);
   const [modalManualData, setModalManualData] = useState(null);
-  const [formManual, setFormManual] = useState({ nombreJugador: "", telefono: "" });
+  const [formManual, setFormManual] = useState({ nombreJugador: "", telefono: "", turnos: 1 });
   const [guardandoManual, setGuardandoManual] = useState(false);
 
   // Config club
@@ -503,6 +590,7 @@ export default function Canchas() {
     if (!club) return;
     getReservas(club.id, fechaSeleccionada).then(setReservas);
   }, [fechaSeleccionada, club]);
+  // Habilitar o quitar una hora: vale para la semana y el finde (la hora quitada también sale del mapa de finde)
   const toggleHorario = (hora) => {
     const current = { ...formCancha.horarios };
     if (current[hora] !== undefined) {
@@ -510,7 +598,7 @@ export default function Canchas() {
     } else {
       current[hora] = formCancha.precioBase || 0;
     }
-    setFormCancha({ ...formCancha, horarios: current });
+    setFormCancha({ ...formCancha, horarios: current, horariosFinde: podarFinde(formCancha.horariosFinde, current) });
   };
 
   const setPrecioHorario = (hora, precio) => {
@@ -519,6 +607,15 @@ export default function Canchas() {
       horarios: { ...formCancha.horarios, [hora]: Number(precio) },
     });
   };
+
+  // Precio de finde de una hora: vacío = vuelve a valer lo mismo que en la semana
+  const setPrecioFinde = (hora, precio) => {
+    const finde = { ...(formCancha.horariosFinde || {}) };
+    if (precio === "" || precio === null || precio === undefined) delete finde[hora];
+    else finde[hora] = Number(precio);
+    setFormCancha({ ...formCancha, horariosFinde: finde });
+  };
+
   const toggleHorarioEdit = (hora) => {
     const current = { ...(editForm.horarios || {}) };
     if (current[hora] !== undefined) {
@@ -526,7 +623,7 @@ export default function Canchas() {
     } else {
       current[hora] = editForm.precioBase || 0;
     }
-    setEditForm({ ...editForm, horarios: current });
+    setEditForm({ ...editForm, horarios: current, horariosFinde: podarFinde(editForm.horariosFinde, current) });
   };
 
   const setPrecioHorarioEdit = (hora, precio) => {
@@ -534,6 +631,13 @@ export default function Canchas() {
       ...editForm,
       horarios: { ...(editForm.horarios || {}), [hora]: Number(precio) },
     });
+  };
+
+  const setPrecioFindeEdit = (hora, precio) => {
+    const finde = { ...(editForm.horariosFinde || {}) };
+    if (precio === "" || precio === null || precio === undefined) delete finde[hora];
+    else finde[hora] = Number(precio);
+    setEditForm({ ...editForm, horariosFinde: finde });
   };
 
   const handleCrearCancha = async (e) => {
@@ -547,6 +651,7 @@ export default function Canchas() {
         techada: formCancha.techada,
         precioBase: Number(formCancha.precioBase),
         horarios: formCancha.horarios,
+        horariosFinde: podarFinde(formCancha.horariosFinde, formCancha.horarios),
         horariosDisponibles: Object.keys(formCancha.horarios).sort(),
       };
       const nuevaId = await crearCancha(club.id, datos);
@@ -557,7 +662,9 @@ export default function Canchas() {
         techada: false,
         precioBase: 0,
         horarios: {},
+        horariosFinde: {},
       });
+      setVistaTarifaNueva("semana");
       setMostrarForm(false);
       toast.success("Cancha creada");
     } catch (err) {
@@ -574,6 +681,8 @@ export default function Canchas() {
       const datosActualizar = {
         ...datos,
         precioBase: Number(datos.precioBase),
+        // Una cancha de antes no tiene horariosFinde: se guarda vacío (igual que la semana)
+        horariosFinde: podarFinde(datos.horariosFinde, datos.horarios || {}),
         horariosDisponibles: Object.keys(datos.horarios || {}).sort(),
       };
       await actualizarCancha(club.id, canchaId, datosActualizar);
@@ -617,10 +726,13 @@ export default function Canchas() {
     }
   };
 
+  // El slot vivo de una cancha a una hora, con los campos de grupo completos aunque sea un documento viejo
   const getReservaParaSlot = (canchaId, hora) => {
-    return reservas.find(
-      (r) =>
-        r.canchaId === canchaId && r.hora === hora && r.status !== "cancelada",
+    return normalizarReserva(
+      reservas.find(
+        (r) =>
+          r.canchaId === canchaId && r.hora === hora && r.status !== "cancelada",
+      ),
     );
   };
 
@@ -650,11 +762,13 @@ export default function Canchas() {
     );
   };
 
-  // Cancelar desde la grilla: la reserva queda "cancelada" (no se borra) y se avisa al jugador.
+  // Cancelar desde la grilla: la reserva entera (todos sus turnos) queda "cancelada" (no se borra) y se avisa al
+  // jugador una vez con el rango de horas. Un bloqueo del club es un solo turno y se desbloquea su documento.
   // Borrar definitivamente solo existe en la pestaña Reservas ("Eliminar").
   const handleCancelarReserva = async (reservaId) => {
-    const reserva = reservas.find((r) => r.id === reservaId);
+    const reserva = normalizarReserva(reservas.find((r) => r.id === reservaId));
     const esBloqueo = reserva?.status === "bloqueado";
+    const grupoId = grupoDeReserva(reserva) || reservaId;
     const ok = await confirmar(
       esBloqueo
         ? { titulo: "Desbloquear horario", mensaje: "¿Desbloquear este horario? Volverá a estar disponible.", confirmText: "Desbloquear" }
@@ -662,15 +776,12 @@ export default function Canchas() {
     );
     if (!ok) return;
     try {
-      await actualizarReserva(club.id, reservaId, { status: "cancelada" });
+      if (esBloqueo) await actualizarReserva(club.id, reservaId, { status: "cancelada" });
+      else await cancelarReservaGrupo(club.id, grupoId);
       if (reserva?.jugadorUid) {
-        notificarReservaRechazada(reserva.jugadorUid, club.nombre, reserva.canchaName || "", reserva.fecha, reserva.hora);
+        notificarReservaRechazada(reserva.jugadorUid, club.nombre, reserva.canchaName || "", reserva.fecha, rangoHoras(reserva.horaInicio, reserva.horaFin));
       }
-      setReservas(
-        reservas.map((r) =>
-          r.id === reservaId ? { ...r, status: "cancelada" } : r,
-        ),
-      );
+      setReservas((prev) => actualizarGrupoLocal(prev, grupoId, { status: "cancelada" }));
       toast.success(esBloqueo ? "Horario desbloqueado" : "Reserva cancelada");
     } catch (err) {
       console.error("Error al cancelar reserva:", err);
@@ -679,22 +790,44 @@ export default function Canchas() {
   };
 
   const handleConfirmarReserva = async (reservaId) => {
+    const reserva = normalizarReserva(reservas.find((r) => r.id === reservaId));
+    const grupoId = grupoDeReserva(reserva) || reservaId;
     try {
-      await actualizarReserva(club.id, reservaId, { status: "confirmada" });
-      const reserva = reservas.find((r) => r.id === reservaId);
+      await actualizarReservaGrupo(club.id, grupoId, { status: "confirmada" });
       if (reserva?.jugadorUid) {
-        notificarReservaConfirmada(reserva.jugadorUid, club.nombre, reserva.canchaName || "", reserva.fecha, reserva.hora);
+        notificarReservaConfirmada(reserva.jugadorUid, club.nombre, reserva.canchaName || "", reserva.fecha, rangoHoras(reserva.horaInicio, reserva.horaFin));
       }
-      setReservas(
-        reservas.map((r) =>
-          r.id === reservaId ? { ...r, status: "confirmada" } : r,
-        ),
-      );
+      setReservas((prev) => actualizarGrupoLocal(prev, grupoId, { status: "confirmada" }));
       toast.success("Reserva confirmada");
     } catch (err) {
       console.error("Error al confirmar reserva:", err);
       toast.error("No pudimos confirmar la reserva. Intentá de nuevo.");
     }
+  };
+
+  // Duraciones posibles de una reserva manual desde `hora`: 1 h hasta el máximo del club. Una duración se
+  // deshabilita, con el motivo, cuando alguna de sus horas extra no está habilitada en la cancha, ya tiene una
+  // reserva o un bloqueo, la bloquea un torneo o es un turno fijo.
+  const opcionesDuracionManual = (cancha, hora) => {
+    const horasCancha = cancha?.horariosDisponibles || [];
+    return Array.from({ length: maxTurnosDelClub(club) }, (_, i) => i + 1).map((n) => {
+      const item = { value: n, label: `${n} h`, disabled: false, motivo: "" };
+      for (let i = 1; i < n; i++) {
+        const h = sumarHoras(hora, i);
+        let motivo = "";
+        if (!horasCancha.includes(h)) {
+          motivo = `El club cierra a las ${h}`;
+        } else {
+          const ocupado = getReservaParaSlot(cancha.id, h);
+          if (esBloqueoTorneo(ocupado)) motivo = tituloBloqueoTorneo(ocupado);
+          else if (ocupado?.status === "bloqueado") motivo = `El turno de las ${h} está bloqueado`;
+          else if (ocupado) motivo = `El turno de las ${h} ya está reservado`;
+          else if (esTurnoFijo(cancha.id, h)) motivo = `Turno fijo a las ${h}`;
+        }
+        if (motivo) return { ...item, disabled: true, motivo };
+      }
+      return item;
+    });
   };
 
   if (loading) {
@@ -725,15 +858,38 @@ export default function Canchas() {
   // si no, "Nueva cancha" en la cabecera.
   const primariaEn = mostrarForm ? "form" : mostrarConfig ? "config" : "header";
 
-  // Lo que comparten el formulario de alta y el de edición: presets de horarios, pastillas de horas,
-  // precio para todos y la tabla de precio por horario. Función, no componente, así no se desmonta en cada render.
-  function editorHorarios({ horarios, precioBase, setHorarios, toggleHora, setPrecioHora, batchId }) {
+  // Lo que comparten el formulario de alta y el de edición: presets de horarios, pastillas de horas, el
+  // selector Semana / Fin de semana, precio para todos y la tabla de precio por horario. Las horas habilitadas
+  // son las mismas para los dos días; solo cambian los precios. Función, no componente, así no se desmonta
+  // en cada render.
+  function editorHorarios({
+    horarios,
+    horariosFinde,
+    precioBase,
+    setHorarios,
+    setHorariosFinde,
+    toggleHora,
+    setPrecioHora,
+    setPrecioFindeHora,
+    vista,
+    setVista,
+    batchId,
+  }) {
+    const finde = horariosFinde || {};
+    const esFinde = vista === "finde";
     const aplicarPreset = (desde, hasta) => {
       const nuevos = {};
       for (let h = desde; h <= hasta; h++) nuevos[`${h.toString().padStart(2, "0")}:00`] = precioBase || 0;
       setHorarios(nuevos);
     };
+    const aplicarATodos = (precio) => {
+      const nuevos = {};
+      Object.keys(horarios).forEach((h) => { nuevos[h] = precio; });
+      if (esFinde) setHorariosFinde(nuevos);
+      else setHorarios(nuevos);
+    };
     const horasElegidas = Object.keys(horarios).sort();
+    const findeCargado = Object.keys(finde).length > 0;
     return (
       <Field label="Horarios y precios" as="div">
         <div className="pd-btn-group">
@@ -751,9 +907,33 @@ export default function Canchas() {
           className="mt-2"
         />
         {horasElegidas.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Pills items={itemsTarifa} value={vista} onChange={setVista} ariaLabel="Tarifa por día" />
+            {esFinde && (
+              <div className="pd-btn-group">
+                <Button type="button" size="sm" onClick={() => setHorariosFinde({ ...horarios })}>
+                  Copiar precios de semana
+                </Button>
+                {findeCargado && (
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setHorariosFinde({})}>
+                    Usar los de semana
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {horasElegidas.length > 0 && esFinde && (
+          <p className="pd-help mt-1 m-0">
+            {findeCargado
+              ? "Los sábados y domingos valen estos precios; una hora sin precio vale lo mismo que en la semana."
+              : "Sin precios de fin de semana, los sábados y domingos valen lo mismo que en la semana."}
+          </p>
+        )}
+        {horasElegidas.length > 0 && (
           <div className="mt-3 rounded-md bg-surface-sunken p-3">
             <div className="flex flex-wrap items-end gap-2">
-              <Field label="Precio para todos" className="flex-1 min-w-[160px]">
+              <Field label={esFinde ? "Precio de finde para todos" : "Precio para todos"} className="flex-1 min-w-[160px]">
                 <Input type="number" min="0" inputMode="numeric" placeholder="Ej: 15000" id={batchId} className="h-9!" />
               </Field>
               <Button
@@ -761,11 +941,7 @@ export default function Canchas() {
                 size="sm"
                 onClick={() => {
                   const precio = Number(document.getElementById(batchId).value);
-                  if (precio >= 0) {
-                    const nuevos = { ...horarios };
-                    Object.keys(nuevos).forEach((h) => { nuevos[h] = precio; });
-                    setHorarios(nuevos);
-                  }
+                  if (precio >= 0) aplicarATodos(precio);
                 }}
               >
                 Aplicar
@@ -780,7 +956,7 @@ export default function Canchas() {
               <thead>
                 <tr>
                   <th>Hora</th>
-                  <th className="num">Precio</th>
+                  <th className="num">{esFinde ? "Precio sáb y dom" : "Precio lun a vie"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -788,15 +964,28 @@ export default function Canchas() {
                   <tr key={hora}>
                     <td className="py-1!">{hora}</td>
                     <td className="num py-1!">
-                      <Input
-                        type="number"
-                        min="0"
-                        inputMode="numeric"
-                        value={horarios[hora]}
-                        onChange={(e) => setPrecioHora(hora, e.target.value)}
-                        aria-label={`Precio a las ${hora}`}
-                        className="h-9! w-32! text-right pd-tnum"
-                      />
+                      {esFinde ? (
+                        <Input
+                          type="number"
+                          min="0"
+                          inputMode="numeric"
+                          value={finde[hora] ?? ""}
+                          placeholder={String(horarios[hora] ?? precioBase ?? 0)}
+                          onChange={(e) => setPrecioFindeHora(hora, e.target.value)}
+                          aria-label={`Precio de fin de semana a las ${hora}`}
+                          className="h-9! w-32! text-right pd-tnum"
+                        />
+                      ) : (
+                        <Input
+                          type="number"
+                          min="0"
+                          inputMode="numeric"
+                          value={horarios[hora]}
+                          onChange={(e) => setPrecioHora(hora, e.target.value)}
+                          aria-label={`Precio a las ${hora}`}
+                          className="h-9! w-32! text-right pd-tnum"
+                        />
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -808,6 +997,15 @@ export default function Canchas() {
       </Field>
     );
   }
+
+  // Reserva manual: duraciones posibles desde la celda elegida, total y seña según la duración elegida
+  const opcionesDuracion = modalManualData ? opcionesDuracionManual(modalManualData.cancha, modalManualData.hora) : [];
+  const turnosManual = opcionesDuracion.some((o) => o.value === formManual.turnos && !o.disabled) ? formManual.turnos : 1;
+  const motivoDuracion = opcionesDuracion.find((o) => o.disabled)?.motivo || "";
+  const totalManual = modalManualData
+    ? precioDeReserva(modalManualData.cancha, fechaSeleccionada, modalManualData.hora, turnosManual)
+    : 0;
+  const señaManual = calcularSeña(club, totalManual);
 
   return (
     <div>
@@ -957,10 +1155,16 @@ export default function Canchas() {
                 </label>
                 {editorHorarios({
                   horarios: formCancha.horarios,
+                  horariosFinde: formCancha.horariosFinde,
                   precioBase: formCancha.precioBase,
-                  setHorarios: (nuevos) => setFormCancha({ ...formCancha, horarios: nuevos }),
+                  setHorarios: (nuevos) =>
+                    setFormCancha({ ...formCancha, horarios: nuevos, horariosFinde: podarFinde(formCancha.horariosFinde, nuevos) }),
+                  setHorariosFinde: (nuevos) => setFormCancha({ ...formCancha, horariosFinde: podarFinde(nuevos, formCancha.horarios) }),
                   toggleHora: toggleHorario,
                   setPrecioHora: setPrecioHorario,
+                  setPrecioFindeHora: setPrecioFinde,
+                  vista: vistaTarifaNueva,
+                  setVista: setVistaTarifaNueva,
                   batchId: "batchPriceNew",
                 })}
                 <div className="pd-btn-group">
@@ -1068,10 +1272,16 @@ export default function Canchas() {
                       </label>
                       {editorHorarios({
                         horarios: editForm.horarios || {},
+                        horariosFinde: editForm.horariosFinde || {},
                         precioBase: editForm.precioBase,
-                        setHorarios: (nuevos) => setEditForm({ ...editForm, horarios: nuevos }),
+                        setHorarios: (nuevos) =>
+                          setEditForm({ ...editForm, horarios: nuevos, horariosFinde: podarFinde(editForm.horariosFinde, nuevos) }),
+                        setHorariosFinde: (nuevos) => setEditForm({ ...editForm, horariosFinde: podarFinde(nuevos, editForm.horarios || {}) }),
                         toggleHora: toggleHorarioEdit,
                         setPrecioHora: setPrecioHorarioEdit,
+                        setPrecioFindeHora: setPrecioFindeEdit,
+                        vista: vistaTarifaEdit,
+                        setVista: setVistaTarifaEdit,
                         batchId: "batchPriceEdit",
                       })}
                     </div>
@@ -1090,7 +1300,8 @@ export default function Canchas() {
                             size="sm"
                             onClick={() => {
                               setEditandoCancha(cancha.id);
-                              setEditForm({ ...cancha });
+                              setEditForm({ ...cancha, horariosFinde: cancha.horariosFinde || {} });
+                              setVistaTarifaEdit("semana");
                             }}
                           >
                             Editar
@@ -1106,12 +1317,7 @@ export default function Canchas() {
                         </div>
                       </Card.Row>
                       <Card.Foot className="flex-wrap">
-                        <span className="numeral-md pd-tnum">
-                          {formatPrecio(
-                            cancha.precioBase ||
-                              Math.min(...Object.values(cancha.horarios || { 0: 0 })),
-                          )}
-                        </span>
+                        <span className="numeral-md pd-tnum">{formatPrecio(precioMinimo(cancha))}</span>
                         <span className="body-sm text-ink-3">desde, por turno</span>
                         <span className="body-sm text-ink-3 ml-auto pd-tnum">
                           Horarios {(cancha.horariosDisponibles || []).length}
@@ -1193,6 +1399,18 @@ export default function Canchas() {
                                 />
                               );
                             }
+                            // Hora siguiente de una reserva de varias horas: sigue el bloque del primer turno, sin acciones
+                            if (reserva && !esPrimerSlot(reserva)) {
+                              return (
+                                <SlotCell
+                                  key={cancha.id}
+                                  estado={estadoDeReserva(reserva)}
+                                  linea1="↳"
+                                  linea2={reserva.nombreJugador || "Reservado"}
+                                  title={`${reserva.nombreJugador || "Reservado"} · ${rangoHoras(reserva.horaInicio, reserva.horaFin)}`}
+                                />
+                              );
+                            }
                             if (reserva && reserva.status === "bloqueado") {
                               return (
                                 <div key={cancha.id} className="flex flex-col gap-1">
@@ -1206,12 +1424,13 @@ export default function Canchas() {
                               );
                             }
                             if (reserva) {
+                              const rango = rangoHoras(reserva.horaInicio, reserva.horaFin);
                               return (
                                 <div key={cancha.id} className="flex flex-col gap-1">
                                   <SlotCell
-                                    estado={reserva.status === "pendiente" ? "pendiente" : "reservada"}
+                                    estado={estadoDeReserva(reserva)}
                                     linea1={reserva.nombreJugador || "Reservado"}
-                                    linea2={reserva.status === "pendiente" ? "pendiente" : "confirmada"}
+                                    linea2={rango}
                                     className="flex-1"
                                   />
                                   <div className="flex justify-center gap-1">
@@ -1221,7 +1440,7 @@ export default function Canchas() {
                                         variant="ghost"
                                         iconOnly
                                         className="h-7! w-7!"
-                                        aria-label={`Confirmar reserva de ${reserva.nombreJugador || "jugador"} a las ${hora}`}
+                                        aria-label={`Confirmar reserva de ${reserva.nombreJugador || "jugador"}, ${rango}`}
                                         icon={<Check size={16} aria-hidden="true" />}
                                         onClick={() => handleConfirmarReserva(reserva.id)}
                                       />
@@ -1231,7 +1450,7 @@ export default function Canchas() {
                                       variant="ghost"
                                       iconOnly
                                       className="h-7! w-7!"
-                                      aria-label={`Cancelar reserva de ${reserva.nombreJugador || "jugador"} a las ${hora}`}
+                                      aria-label={`Cancelar reserva de ${reserva.nombreJugador || "jugador"}, ${rango}`}
                                       icon={<X size={16} aria-hidden="true" />}
                                       onClick={() => handleCancelarReserva(reserva.id)}
                                     />
@@ -1258,10 +1477,8 @@ export default function Canchas() {
                               );
                             }
 
-                            const precioHora =
-                              (cancha.horarios || {})[hora] ??
-                              cancha.precioBase ??
-                              0;
+                            // Precio del turno según el día: sáb y dom usan la tarifa de fin de semana
+                            const precioHora = precioDeSlot(cancha, fechaSeleccionada, hora);
                             return (
                               <div key={cancha.id} className="relative group flex flex-col">
                                 <SlotCell
@@ -1270,8 +1487,8 @@ export default function Canchas() {
                                   className="flex-1"
                                   aria-label={`Reservar ${cancha.nombre} a las ${hora}, ${formatPrecio(precioHora)}`}
                                   onClick={() => {
-                                    setModalManualData({ cancha, hora, precio: precioHora });
-                                    setFormManual({ nombreJugador: "", telefono: "" });
+                                    setModalManualData({ cancha, hora });
+                                    setFormManual({ nombreJugador: "", telefono: "", turnos: 1 });
                                     setMostrarModalManual(true);
                                   }}
                                 />
@@ -1333,12 +1550,41 @@ export default function Canchas() {
           <div className="pd-dialog" role="dialog" aria-modal="true" aria-labelledby="reserva-manual-titulo" aria-describedby="reserva-manual-cuerpo">
             <h2 className="pd-dialog-title" id="reserva-manual-titulo">Reserva manual</h2>
             <p className="pd-dialog-body pd-tnum" id="reserva-manual-cuerpo">
-              {modalManualData.cancha.nombre} · {formatFecha(fechaSeleccionada)} · {modalManualData.hora}
+              {modalManualData.cancha.nombre} · {formatFecha(fechaSeleccionada)} ·{" "}
+              {rangoHoras(modalManualData.hora, sumarHoras(modalManualData.hora, turnosManual))}
             </p>
 
-            <div className="rounded-md bg-surface-sunken p-3 mt-4 flex items-center justify-between">
-              <span className="body-sm text-ink-2">Precio</span>
-              <span className="numeral-md pd-tnum">{formatPrecio(modalManualData.precio)}</span>
+            {/* Duración: pastillas a mano porque Pills no deshabilita ítems; el motivo va en el title */}
+            {opcionesDuracion.length > 1 && (
+              <Field label="Duración" as="div" className="mt-4">
+                <div className="pd-pills" role="tablist" aria-label="Duración de la reserva">
+                  {opcionesDuracion.map((o) => (
+                    <button
+                      key={o.value}
+                      type="button"
+                      role="tab"
+                      className="pd-pill disabled:opacity-50 disabled:cursor-not-allowed!"
+                      aria-selected={o.value === turnosManual}
+                      disabled={o.disabled}
+                      title={o.disabled ? o.motivo : undefined}
+                      onClick={() => setFormManual({ ...formManual, turnos: o.value })}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                {motivoDuracion && <span className="pd-help">{motivoDuracion}</span>}
+              </Field>
+            )}
+
+            <div className="rounded-md bg-surface-sunken p-3 mt-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="body-sm text-ink-2">Total</span>
+                <span className="numeral-lg pd-tnum">{formatPrecio(totalManual)}</span>
+              </div>
+              {señaManual > 0 && (
+                <p className="body-sm text-ink-2 pd-tnum text-right m-0 mt-1">Seña {formatPrecio(señaManual)}</p>
+              )}
             </div>
 
             <div className="flex flex-col gap-3 mt-4">
@@ -1375,7 +1621,9 @@ export default function Canchas() {
                       canchaName: modalManualData.cancha.nombre,
                       fecha: fechaSeleccionada,
                       hora: modalManualData.hora,
-                      precio: modalManualData.precio,
+                      turnos: turnosManual,
+                      precios: preciosDeReserva(modalManualData.cancha, fechaSeleccionada, modalManualData.hora, turnosManual),
+                      seña: señaManual,
                       jugadorUid: null,
                       nombreJugador: formManual.nombreJugador.trim(),
                       telefono: formManual.telefono,
@@ -1388,7 +1636,8 @@ export default function Canchas() {
                     toast.success("Reserva creada");
                   } catch (err) {
                     if (err?.code === "SLOT_TAKEN") {
-                      toast.error("Ese turno acaba de ser reservado por otra persona");
+                      // La transacción dice qué hora se ocupó ("El turno de las 21:00 ya está reservado")
+                      toast.error(err.message || "Ese turno acaba de ser reservado por otra persona");
                       try { setReservas(await getReservas(club.id, fechaSeleccionada)); } catch (e) { console.error(e); }
                       setMostrarModalManual(false);
                     } else {

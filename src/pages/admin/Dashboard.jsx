@@ -9,11 +9,12 @@ import {
   getReservas,
   getReservasPendientes,
   getTurnosFijos,
-  actualizarReserva,
+  actualizarReservaGrupo,
 } from "../../services/canchaService";
 import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
 import { addDaysLocal, formatFecha } from "../../utils/formatDate";
 import { formatPrecio } from "../../utils/format";
+import { agruparReservas, estadoSeña, rangoHoras } from "../../utils/reservas";
 import { canchasDelTorneo } from "../../utils/torneo";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
@@ -25,6 +26,8 @@ export default function Dashboard() {
   const [club, setClub] = useState(null);
   const [torneos, setTorneos] = useState([]);
   const [canchas, setCanchas] = useState([]);
+  // Reservas agrupadas (agruparReservas): una entrada por reserva, con horaInicio/horaFin/precioTotal/seña y
+  // `id` = grupoId. Una reserva de varias horas cuenta una sola vez; los documentos viejos son reservas de una hora.
   const [reservasHoy, setReservasHoy] = useState([]);
   const [turnosFijos, setTurnosFijos] = useState([]);
   const [reservasManana, setReservasManana] = useState([]);
@@ -68,10 +71,10 @@ export default function Dashboard() {
               }),
             ]);
           setCanchas(canchasData);
-          setReservasHoy(reservasData);
+          setReservasHoy(agruparReservas(reservasData));
           setTurnosFijos(turnosData);
-          setReservasManana(reservasMananaData);
-          setReservasPendientes(pendientesData);
+          setReservasManana(agruparReservas(reservasMananaData));
+          setReservasPendientes(agruparReservas(pendientesData));
           setTorneosClub(torneosClubData);
         }
       } catch (err) {
@@ -104,7 +107,7 @@ export default function Dashboard() {
     (r) => r.status === "confirmada",
   );
   const ingresosHoy = reservasConfirmadas.reduce(
-    (sum, r) => sum + (Number(r.precio) || 0),
+    (sum, r) => sum + (Number(r.precioTotal) || 0),
     0,
   );
   const turnosFijosActivos = turnosFijos.filter((t) => t.status === "activo");
@@ -127,6 +130,9 @@ export default function Dashboard() {
   };
   const diaHoy = diasMap[fechaLocal.getDay()];
 
+  // Una reserva está en curso mientras horaInicio <= ahora < horaFin (las "HH:MM" se comparan como texto)
+  const enCursoAhora = (r) => !!r.horaInicio && r.horaInicio <= horaAhora && horaAhora < r.horaFin;
+
   const canchasLibresAhora = canchas.filter((c) => {
     const disponible = (c.horariosDisponibles || []).includes(horaAhora);
     if (!disponible) return false;
@@ -134,7 +140,7 @@ export default function Dashboard() {
       reservasHoy.some(
         (r) =>
           r.canchaId === c.id &&
-          r.hora === horaAhora &&
+          enCursoAhora(r) &&
           r.status !== "cancelada",
       )
     )
@@ -158,15 +164,16 @@ export default function Dashboard() {
 
   const reservasMananaConfirmadas = reservasManana.filter((r) => r.status !== "cancelada");
 
-  const handleConfirmarReserva = async (reservaId) => {
+  // Confirmar y rechazar actúan sobre la reserva entera (todos sus turnos) y avisan una sola vez al jugador
+  const handleConfirmarReserva = async (grupoId) => {
     try {
-      await actualizarReserva(club.id, reservaId, { status: "confirmada" });
-      const reserva = reservasPendientes.find((r) => r.id === reservaId);
+      await actualizarReservaGrupo(club.id, grupoId, { status: "confirmada" });
+      const reserva = reservasPendientes.find((r) => r.id === grupoId);
       if (reserva?.jugadorUid) {
-        notificarReservaConfirmada(reserva.jugadorUid, club.nombre, reserva.canchaName || "", reserva.fecha, reserva.hora);
+        notificarReservaConfirmada(reserva.jugadorUid, club.nombre, reserva.canchaName || "", reserva.fecha, rangoHoras(reserva.horaInicio, reserva.horaFin));
       }
-      setReservasPendientes(reservasPendientes.filter((r) => r.id !== reservaId));
-      setReservasHoy(reservasHoy.map((r) => r.id === reservaId ? { ...r, status: "confirmada" } : r));
+      setReservasPendientes(reservasPendientes.filter((r) => r.id !== grupoId));
+      setReservasHoy(reservasHoy.map((r) => r.id === grupoId ? { ...r, status: "confirmada" } : r));
       toast.success("Reserva confirmada");
     } catch (err) {
       console.error(err);
@@ -174,17 +181,17 @@ export default function Dashboard() {
     }
   };
 
-  const handleRechazarReserva = async (reservaId) => {
+  const handleRechazarReserva = async (grupoId) => {
     const ok = await confirmar({ titulo: "Rechazar reserva", mensaje: "¿Rechazar esta reserva? Se le avisará al jugador.", confirmText: "Rechazar", danger: true });
     if (!ok) return;
     try {
-      await actualizarReserva(club.id, reservaId, { status: "cancelada" });
-      const reserva = reservasPendientes.find((r) => r.id === reservaId);
+      await actualizarReservaGrupo(club.id, grupoId, { status: "cancelada" });
+      const reserva = reservasPendientes.find((r) => r.id === grupoId);
       if (reserva?.jugadorUid) {
-        notificarReservaRechazada(reserva.jugadorUid, club.nombre, reserva.canchaName || "", reserva.fecha, reserva.hora);
+        notificarReservaRechazada(reserva.jugadorUid, club.nombre, reserva.canchaName || "", reserva.fecha, rangoHoras(reserva.horaInicio, reserva.horaFin));
       }
-      setReservasPendientes(reservasPendientes.filter((r) => r.id !== reservaId));
-      setReservasHoy(reservasHoy.map((r) => r.id === reservaId ? { ...r, status: "cancelada" } : r));
+      setReservasPendientes(reservasPendientes.filter((r) => r.id !== grupoId));
+      setReservasHoy(reservasHoy.map((r) => r.id === grupoId ? { ...r, status: "cancelada" } : r));
       toast.success("Reserva rechazada");
     } catch (err) {
       console.error(err);
@@ -329,28 +336,40 @@ export default function Dashboard() {
           <p className="body-sm text-ink-2 m-0">No hay reservas pendientes</p>
         ) : (
           <div className="grid gap-4 md:grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
-            {reservasPendientes.map((r) => (
-              <Card key={r.id}>
-                <Card.Row>
-                  <Card.Eyebrow>
-                    {r.canchaName || "Cancha"} · {formatFecha(r.fecha)} · {r.hora}
-                  </Card.Eyebrow>
-                  <Badge tone="warning" dot>
-                    Pendiente
-                  </Badge>
-                </Card.Row>
-                <Card.Title className="mt-2!">{r.nombreJugador || "Jugador"}</Card.Title>
-                {r.precio != null && <Card.Meta className="pd-tnum">{formatPrecio(r.precio)}</Card.Meta>}
-                <Card.Foot>
-                  <Button size="sm" icon={<Check className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleConfirmarReserva(r.id)}>
-                    Confirmar
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => handleRechazarReserva(r.id)}>
-                    Rechazar
-                  </Button>
-                </Card.Foot>
-              </Card>
-            ))}
+            {reservasPendientes.map((r) => {
+              const seña = estadoSeña(r);
+              return (
+                <Card key={r.claveGrupo || r.id}>
+                  <Card.Row>
+                    <Card.Eyebrow>
+                      {r.canchaName || "Cancha"} · {formatFecha(r.fecha)} · {rangoHoras(r.horaInicio, r.horaFin)}
+                    </Card.Eyebrow>
+                    <Badge tone="warning" dot>
+                      Pendiente
+                    </Badge>
+                  </Card.Row>
+                  <Card.Title className="mt-2!">{r.nombreJugador || "Jugador"}</Card.Title>
+                  {(r.precio != null || seña) && (
+                    <div className="flex items-center gap-2 flex-wrap mt-1">
+                      {r.precio != null && <Card.Meta className="pd-tnum m-0!">{formatPrecio(r.precioTotal)}</Card.Meta>}
+                      {seña && (
+                        <Badge tone={seña.tone}>
+                          {seña.tone === "warning" ? `Seña ${formatPrecio(seña.monto)} pendiente` : seña.label}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                  <Card.Foot>
+                    <Button size="sm" icon={<Check className="pd-icon" size={20} aria-hidden="true" />} onClick={() => handleConfirmarReserva(r.id)}>
+                      Confirmar
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => handleRechazarReserva(r.id)}>
+                      Rechazar
+                    </Button>
+                  </Card.Foot>
+                </Card>
+              );
+            })}
           </div>
         )}
       </section>
@@ -365,13 +384,13 @@ export default function Dashboard() {
             {proximasReservas.map((r, i) => (
               <li key={i} className="flex items-center justify-between gap-3 py-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className="numeral-md pd-tnum w-14 flex-none">{r.hora}</span>
+                  <span className="numeral-md pd-tnum min-w-14 flex-none">{rangoHoras(r.horaInicio, r.horaFin)}</span>
                   <div className="min-w-0">
                     <p className="body-md font-medium! m-0 truncate">{r.nombreJugador || "Jugador"}</p>
                     <p className="body-sm text-ink-2 m-0">{r.canchaName || "Cancha"}</p>
                   </div>
                 </div>
-                <span className="body-sm font-semibold! pd-tnum">{formatPrecio(r.precio || 0)}</span>
+                <span className="body-sm font-semibold! pd-tnum">{formatPrecio(r.precioTotal || 0)}</span>
               </li>
             ))}
           </ul>
@@ -382,9 +401,7 @@ export default function Dashboard() {
       <Card className="mb-4">
         <Card.Title>Turnos activos ahora</Card.Title>
         {(() => {
-          const turnosAhora = reservasConfirmadas.filter(
-            (r) => parseInt(r.hora) === horaActual,
-          );
+          const turnosAhora = reservasConfirmadas.filter(enCursoAhora);
           const turnosFijosAhora = turnosFijosActivos.filter(
             (t) =>
               t.dia === diaHoy && (t.horas || [t.hora]).includes(horaAhora),
@@ -397,7 +414,7 @@ export default function Dashboard() {
               {turnosAhora.map((r, i) => (
                 <li key={i} className="flex items-center justify-between gap-3 py-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="numeral-md pd-tnum w-14 flex-none">{r.hora}</span>
+                    <span className="numeral-md pd-tnum min-w-14 flex-none">{rangoHoras(r.horaInicio, r.horaFin)}</span>
                     <div className="min-w-0">
                       <p className="body-md font-medium! m-0 truncate">{r.nombreJugador || "Jugador"}</p>
                       <p className="body-sm text-ink-2 m-0">{r.canchaName || "Cancha"}</p>

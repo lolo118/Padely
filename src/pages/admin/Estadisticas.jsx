@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { LayoutGrid, Share } from "lucide-react";
 import { getTodayLocal } from "../../utils/formatDate";
 import { formatPrecio } from "../../utils/format";
+import { agruparReservas } from "../../utils/reservas";
 import { useAuthStore } from "../../store/authStore";
 import {
   getClubByOwner,
@@ -146,10 +147,14 @@ export default function Estadisticas() {
     0,
   );
 
+  // Las reservas se cuentan por reserva (una de dos horas es una), como en el panel de Hoy; los ingresos y los
+  // horarios siguen por turno (cada slot lleva su precio y su hora)
+  const gruposConfirmados = agruparReservas(reservasConfirmadas);
+
   // Reservas por cancha
   const reservasPorCancha = canchas.map((c) => ({
     nombre: c.nombre,
-    reservas: reservasConfirmadas.filter((r) => r.canchaId === c.id).length,
+    reservas: gruposConfirmados.filter((r) => r.canchaId === c.id).length,
     ingresos: reservasConfirmadas
       .filter((r) => r.canchaId === c.id)
       .reduce((sum, r) => sum + (Number(r.precio) || 0), 0),
@@ -256,7 +261,7 @@ export default function Estadisticas() {
           {/* Tarjetas resumen */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <StatTile value={formatPrecio(ingresosTotales)} label={`Ingresos · ${periodoLabel}`} />
-            <StatTile value={reservasConfirmadas.length} label={`Reservas · ${periodoLabel}`} />
+            <StatTile value={gruposConfirmados.length} label={`Reservas · ${periodoLabel}`} />
             <StatTile value={jugadoresUnicos.size} label="Jugadores únicos" />
             <StatTile value={turnosFijos.filter((t) => t.status === "activo").length} label="Turnos fijos activos" />
           </div>
