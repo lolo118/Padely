@@ -2,6 +2,7 @@
 // Base de datos Firestore en nam5 (multi-región US) → funciones en us-central1.
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
+const { getAuth } = require("firebase-admin/auth");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const logger = require("firebase-functions/logger");
 
@@ -24,7 +25,7 @@ const db = getFirestore();
 //   fin_{uid}                        torneosJugados contado: al finalizar, o antes con el primer bonus del uid
 //                                    (tipo "torneoJugado"); un jugador en dos cuadros cuenta un solo torneo
 // ============================================================================
-const { onDocumentWritten, onDocumentUpdated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
+const { onDocumentWritten, onDocumentUpdated, onDocumentDeleted, onDocumentCreated } = require("firebase-functions/v2/firestore");
 const puntos = require("./puntos");
 
 const userRef = (uid) => db.collection("users").doc(uid);
@@ -618,6 +619,45 @@ exports.onTournamentDeleted = onDocumentDeleted("tournaments/{tid}", async (even
 });
 
 // ============================================================================
+// EQUIPO DEL CLUB — invitación a staff: si el email ya tiene cuenta en Padely, le llega una notificación
+// con el link para aceptar (clubs/{c}/invitaciones/{id}). Sin cuenta no pasa nada: el link se comparte a mano.
+// ============================================================================
+const ROL_STAFF_LABEL = { encargado: "encargado", cajero: "cajero", barra: "barra" };
+
+exports.onInvitacionStaffCreated = onDocumentCreated("clubs/{clubId}/invitaciones/{invId}", async (event) => {
+  try {
+    const inv = event.data ? event.data.data() : null;
+    const { clubId, invId } = event.params;
+    const email = inv && typeof inv.email === "string" ? inv.email.trim().toLowerCase() : "";
+    if (!email || inv.estado !== "pendiente") return;
+    let usuario;
+    try {
+      usuario = await getAuth().getUserByEmail(email);
+    } catch (err) {
+      if (err && err.code === "auth/user-not-found") {
+        logger.info(`onInvitacionStaffCreated ${invId}: ${email} no tiene cuenta todavía`);
+        return;
+      }
+      throw err;
+    }
+    const clubSnap = await db.collection("clubs").doc(clubId).get();
+    const clubNombre = (clubSnap.exists && clubSnap.data().nombre) || "Un club";
+    const rol = ROL_STAFF_LABEL[inv.rol] || String(inv.rol || "staff");
+    await nuevaNotificacionRef(usuario.uid).set({
+      tipo: "invitacion_staff",
+      titulo: "Te invitaron a un club",
+      mensaje: `${clubNombre} te invitó como ${rol} de su equipo.`,
+      link: `/equipo/invitacion/${clubId}/${invId}`,
+      leida: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    logger.info(`onInvitacionStaffCreated ${invId}: notificado ${usuario.uid}`);
+  } catch (err) {
+    logger.error("onInvitacionStaffCreated", err);
+  }
+});
+
+// ============================================================================
 // MANTENIMIENTO — reservas pendientes vencidas y limpieza de cuentas eliminadas
 // ============================================================================
 const { onSchedule } = require("firebase-functions/v2/scheduler");
@@ -766,9 +806,13 @@ exports.onUserDeleted = functionsV1
     const contactosSnap = await db.collectionGroup("contactosReservas").where("jugadorUid", "==", uid).get();
     contactosSnap.docs.forEach((d) => ops.push((b) => b.delete(d.ref)));
 
+    // Su lugar en el equipo de cada club (clubs/{c}/staff/{uid})
+    const staffSnap = await db.collectionGroup("staff").where("uid", "==", uid).get();
+    staffSnap.docs.forEach((d) => ops.push((b) => b.delete(d.ref)));
+
     await escribirEnLotes(ops);
     logger.info(
       `onUserDeleted ${uid}: ${parejas.size} parejas desvinculadas, ${reservas} reservas canceladas, ` +
-        `${contactosSnap.size} contactos de reservas borrados`,
+        `${contactosSnap.size} contactos de reservas borrados, ${staffSnap.size} documentos de staff borrados`,
     );
   });

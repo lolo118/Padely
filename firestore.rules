@@ -13,6 +13,36 @@ service cloud.firestore {
       return signedIn()
         && get(/databases/$(database)/documents/clubs/$(clubId)).data.ownerUid == request.auth.uid;
     }
+    // Staff del club (clubs/{c}/staff/{uid}): activo y con el permiso en su lista efectiva
+    function staffCon(clubId, permiso) {
+      let ref = /databases/$(database)/documents/clubs/$(clubId)/staff/$(request.auth.uid);
+      return exists(ref) && get(ref).data.activo == true && permiso in get(ref).data.permisos;
+    }
+    // El dueño puede todo; el staff, lo que su lista de permisos diga
+    function esStaff(clubId, permiso) {
+      return signedIn() && (clubOwner(clubId) || staffCon(clubId, permiso));
+    }
+    // Dueño o staff (con el permiso) del club vinculado como sede de un torneo
+    function clubStaffOfTournament(tid, permiso) {
+      let t = get(/databases/$(database)/documents/tournaments/$(tid)).data;
+      return signedIn() && t.get('club', null) != null && esStaff(t.club.id, permiso);
+    }
+    // La invitación es para el email con el que se inició sesión
+    function invitadoPorEmail(inv) {
+      return signedIn()
+        && request.auth.token.get('email', '') != ''
+        && request.auth.token.email.lower() == inv.email;
+    }
+    // Un documento de staff que se crea aceptando una invitación: la invitación existe, es para este email, está
+    // pendiente y no vencida, y el rol y los permisos son los de la invitación
+    function invitacionValidaPara(clubId, data) {
+      let inv = get(/databases/$(database)/documents/clubs/$(clubId)/invitaciones/$(data.invitacionId)).data;
+      return invitadoPorEmail(inv)
+        && inv.estado == 'pendiente'
+        && inv.vence > request.time
+        && data.rol == inv.rol
+        && data.permisos == inv.permisos;
+    }
     function clubReservaDirecta(clubId) {
       return get(/databases/$(database)/documents/clubs/$(clubId)).data.get('reservaDirecta', true) == true;
     }
@@ -63,6 +93,11 @@ service cloud.firestore {
       allow read: if signedIn();
     }
 
+    // Al entrar, cada persona busca los clubes donde es staff (la consulta lleva where("uid", "==", auth.uid))
+    match /{path=**}/staff/{uid} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
     // Perfil (email, teléfono, nacimiento...): lo lee solo el propio usuario. Parejas y reservas llevan el
     // nombre a mostrar; un ranking público se publicaría como proyección desde una Cloud Function.
     match /users/{userId} {
@@ -94,24 +129,57 @@ service cloud.firestore {
     match /clubs/{clubId} {
       allow read: if true;
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      // Configura el dueño o el staff con 'configurarClub'; borrar el club sigue siendo solo del dueño
+      allow update: if esStaff(clubId, 'configurarClub');
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
 
-      // Datos privados del club (CBU, alias, CUIT, razón social, usuarios del club): solo el dueño.
-      // El documento clubs/{clubId} es de lectura pública y no debe contenerlos.
+      // Datos privados del club (CBU, alias, CUIT, razón social): quien configura; los teléfonos de los turnos
+      // fijos, quien gestiona reservas. El documento clubs/{clubId} es de lectura pública y no debe contenerlos.
       match /privado/{docId} {
-        allow read, write: if clubOwner(clubId);
+        allow read, write: if (docId == 'datos' && esStaff(clubId, 'configurarClub'))
+          || (docId == 'turnosFijos' && esStaff(clubId, 'gestionarReservas'));
       }
 
       match /canchas/{canchaId} {
         allow read: if true;
-        allow create, update, delete: if clubOwner(clubId);
+        allow create, update, delete: if esStaff(clubId, 'tarifas');
       }
 
       // Los jugadores leen los turnos fijos para la grilla; el teléfono del cliente va en privado/turnosFijos
       match /turnosFijos/{turnoId} {
         allow read: if signedIn();
-        allow create, update: if clubOwner(clubId) && sinContacto(['telefono']);
-        allow delete: if clubOwner(clubId);
+        allow create, update: if esStaff(clubId, 'gestionarReservas') && sinContacto(['telefono']);
+        allow delete: if esStaff(clubId, 'gestionarReservas');
+      }
+
+      // Equipo del club. El dueño no tiene documento acá (clubs/{clubId}.ownerUid puede todo).
+      match /staff/{uid} {
+        allow read: if isSelf(uid) || esStaff(clubId, 'gestionarStaff');
+        // Acepta una invitación: el propio usuario crea su doc con los datos de la invitación pendiente, no vencida,
+        // dirigida a su email (en el mismo batch marca la invitación como aceptada)
+        allow create: if isSelf(uid)
+          && request.resource.data.uid == uid
+          && request.resource.data.activo == true
+          && invitacionValidaPara(clubId, request.resource.data);
+        allow update: if esStaff(clubId, 'gestionarStaff')
+          && changedOnly(['rol', 'permisos', 'descuentoMax', 'activo', 'nombre', 'actualizadoEn']);
+        allow delete: if esStaff(clubId, 'gestionarStaff') || isSelf(uid);
+      }
+
+      match /invitaciones/{invId} {
+        allow read: if esStaff(clubId, 'gestionarStaff') || invitadoPorEmail(resource.data);
+        allow create: if esStaff(clubId, 'gestionarStaff') && request.resource.data.estado == 'pendiente';
+        // El club la cancela; el invitado la acepta (mismo batch que crea su doc de staff)
+        allow update: if (esStaff(clubId, 'gestionarStaff')
+              && changedOnly(['estado'])
+              && request.resource.data.estado == 'cancelada')
+          || (invitadoPorEmail(resource.data)
+              && resource.data.estado == 'pendiente'
+              && resource.data.vence > request.time
+              && changedOnly(['estado', 'uid', 'aceptadaEn'])
+              && request.resource.data.estado == 'aceptada'
+              && request.resource.data.uid == request.auth.uid);
+        allow delete: if esStaff(clubId, 'gestionarStaff');
       }
 
       match /reservas/{reservaId} {
@@ -120,14 +188,14 @@ service cloud.firestore {
         // Email y teléfono de quien reserva van en contactosReservas/{reservaId}, nunca acá.
         allow create: if sinContacto(['email', 'telefono'])
           && !nuevaReservaDeTorneo()
-          && (clubOwner(clubId)
+          && (esStaff(clubId, 'gestionarReservas')
               || (signedIn()
                   && request.resource.data.jugadorUid == request.auth.uid
                   && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
                       || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente'))));
         // The club manages; a player may cancel his own, or re-book a slot whose previous reservation was cancelled
         allow update: if !reservaDeTorneo() && !nuevaReservaDeTorneo()
-          && (clubOwner(clubId)
+          && (esStaff(clubId, 'gestionarReservas')
               || (signedIn() && resource.data.get('jugadorUid', null) == request.auth.uid
                   && changedOnly(['status']) && request.resource.data.status == 'cancelada')
               || (signedIn() && resource.data.status == 'cancelada'
@@ -135,14 +203,14 @@ service cloud.firestore {
                   && request.resource.data.jugadorUid == request.auth.uid
                   && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
                       || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente'))));
-        allow delete: if !reservaDeTorneo() && clubOwner(clubId);
+        allow delete: if !reservaDeTorneo() && esStaff(clubId, 'gestionarReservas');
       }
 
       // Contacto (email/teléfono) de quien reservó, con el id de la reserva: lo lee solo el club. Lo escribe
       // el club, o el jugador en la misma transacción que crea su reserva (getAfter ve la reserva tal como queda).
       match /contactosReservas/{reservaId} {
-        allow read, delete: if clubOwner(clubId);
-        allow create, update: if clubOwner(clubId)
+        allow read, delete: if esStaff(clubId, 'gestionarReservas');
+        allow create, update: if esStaff(clubId, 'gestionarReservas')
           || (signedIn()
               && request.resource.data.jugadorUid == request.auth.uid
               && getAfter(/databases/$(database)/documents/clubs/$(clubId)/reservas/$(reservaId)).data.jugadorUid
@@ -159,13 +227,13 @@ service cloud.firestore {
     match /tournaments/{tid} {
       allow read: if true;
       allow create: if signedIn() && request.resource.data.organizerId == request.auth.uid && clubVinculoValido();
-      // El organizador edita todo salvo poner "aceptado" en un club ajeno; el dueño del club sede solo responde el
-      // pedido (club.estado) sin cambiar el club
+      // El organizador edita todo salvo poner "aceptado" en un club ajeno; el club sede (dueño o staff con
+      // 'gestionarTorneos') solo responde el pedido (club.estado) sin cambiar el club
       allow update: if (signedIn() && resource.data.organizerId == request.auth.uid
             && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['club'])
                 || clubSinCambios()
                 || clubVinculoValido()))
-        || (clubOwnerOfTournament(tid)
+        || (clubStaffOfTournament(tid, 'gestionarTorneos')
             && changedOnly(['club'])
             && request.resource.data.club.id == resource.data.club.id
             && request.resource.data.club.diff(resource.data.club).affectedKeys().hasOnly(['estado'])
