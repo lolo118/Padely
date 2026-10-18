@@ -1,4 +1,4 @@
-// scripts/seed-accounts.mjs — creates or completes the three test accounts. Run: npm run seed:accounts
+// scripts/seed-accounts.mjs — creates or completes the four test accounts. Run: npm run seed:accounts
 // Password comes from SEED_PASSWORD (default "Padely2026!"). Never commit a password.
 import { readFileSync } from "node:fs";
 import { initializeApp } from "firebase/app";
@@ -25,6 +25,8 @@ const cuentas = [
     entidad: { nombre: "Club Padely Central", direccion: "Av. Belgrano 500", ciudad: "Santiago del Estero", provincia: "Santiago del Estero", telefono: "3852222222", reservaDirecta: true, diasAnticipacion: 7 } },
   { email: "org@test.com", tipo: "organizador", nombre: "Organizador Test",
     entidad: { nombre: "Padely Torneos", telefono: "3853333333", whatsapp: "5493853333333", bio: "Organizador de torneos de prueba", ciudad: "Santiago del Estero", provincia: "Santiago del Estero" } },
+  // Jugador que el club invita a su equipo (PROMPT 11): sin perfil de club, entra al panel por clubs/{c}/staff/{uid}
+  { email: "encargado@test.com", tipo: "jugador", nombre: "Encargado Test" },
 ];
 
 async function ensureUser(email) {

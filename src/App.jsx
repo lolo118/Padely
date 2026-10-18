@@ -50,6 +50,7 @@ const Privacidad = lazy(() => import("./pages/Privacidad"));
 
 // Misc
 const AceptarInvitacion = lazy(() => import("./pages/AceptarInvitacion"));
+const AceptarInvitacionStaff = lazy(() => import("./pages/AceptarInvitacionStaff"));
 const VincularJugador = lazy(() => import("./pages/VincularJugador"));
 const NoEncontrado = lazy(() => import("./pages/NoEncontrado"));
 
@@ -178,6 +179,8 @@ export default function App() {
             element={<AceptarInvitacion />}
           />
           <Route path="vincular/:torneoId/:parejaId/:posicion" element={<VincularJugador />} />
+          {/* Invitacion al equipo de un club (staff): la acepta el invitado con su cuenta */}
+          <Route path="equipo/invitacion/:clubId/:invId" element={<AceptarInvitacionStaff />} />
           <Route path="/t/:id" element={<RedirigirTorneo />} />
 
           {/* Páginas públicas: sin sesión se ven con el header Ingresar/Registrarse; con sesión, igual que hoy (PlayerLayout) */}

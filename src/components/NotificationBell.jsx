@@ -30,6 +30,7 @@ const ICONOS = {
   solicitud_sede: Building2,
   sede_respondida: Building2,
   conflicto_turno: AlertTriangle,
+  invitacion_staff: Building2,
 };
 
 export default function NotificationBell() {
