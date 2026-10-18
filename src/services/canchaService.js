@@ -20,7 +20,7 @@ import {
 import { db } from "../lib/firebase";
 import { getTodayLocal, horaActualStr } from "../utils/formatDate";
 import { horasDeReserva, sumarHoras } from "../utils/tarifas";
-import { agruparReservas, normalizarReserva } from "../utils/reservas";
+import { agruparReservas, mismaReserva, normalizarReserva } from "../utils/reservas";
 
 // --- CANCHAS ---
 
@@ -171,11 +171,18 @@ export const crearReserva = async (clubId, reserva) => {
 };
 
 // Los slots de una reserva (por grupoId); una reserva vieja sin grupoId es su propio documento
+// Un slot cancelado de una reserva anterior puede conservar el mismo grupoId (el id del primer turno se reutiliza
+// al volver a reservar esa hora): solo cuentan los slots que son de la misma reserva que la cabeza del grupo.
 const slotsDelGrupo = async (clubId, grupoId) => {
-  const q = query(collection(db, "clubs", clubId, "reservas"), where("grupoId", "==", grupoId));
-  const snap = await getDocs(q);
-  if (snap.docs.length > 0) return snap.docs.map((d) => d.ref);
-  return [doc(db, "clubs", clubId, "reservas", grupoId)];
+  const col = collection(db, "clubs", clubId, "reservas");
+  const cabezaRef = doc(col, grupoId);
+  const [cabezaSnap, snap] = await Promise.all([getDoc(cabezaRef), getDocs(query(col, where("grupoId", "==", grupoId)))]);
+  const cabeza = cabezaSnap.exists() ? { id: cabezaSnap.id, ...cabezaSnap.data() } : null;
+  const refs = snap.docs
+    .filter((d) => !cabeza || mismaReserva(cabeza, { id: d.id, ...d.data() }))
+    .map((d) => d.ref);
+  if (refs.length > 0) return refs;
+  return [cabezaRef];
 };
 
 // Actualiza TODOS los turnos de una reserva en un batch (status, seña cobrada, etc.). La usan el club y el jugador

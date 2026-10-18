@@ -5,6 +5,35 @@ import { sumarHoras } from "./tarifas";
 
 export const grupoDeReserva = (r) => r?.grupoId || r?.id || null;
 
+// Milisegundos de createdAt (Timestamp de Firestore o Date); null si no hay. Los N slots de una reserva se crean
+// en una sola transacción, así que comparten el mismo createdAt del servidor.
+const creadoEnMs = (r) => {
+  const c = r?.createdAt;
+  if (!c) return null;
+  if (typeof c.toMillis === "function") return c.toMillis();
+  if (typeof c.seconds === "number") return c.seconds * 1000;
+  if (c instanceof Date) return c.getTime();
+  return null;
+};
+
+// Un slot cancelado de una reserva vieja conserva su grupoId; si otra persona reserva después la misma primera hora,
+// el id de grupo se repite. Dos slots son de la misma reserva solo si además comparten vigencia (cancelada o no),
+// jugador y, cuando los dos lo tienen, el instante de creación.
+export function mismaReserva(a, b) {
+  if (!a || !b) return false;
+  if (grupoDeReserva(a) !== grupoDeReserva(b)) return false;
+  if ((a.status === "cancelada") !== (b.status === "cancelada")) return false;
+  if ((a.jugadorUid || null) !== (b.jugadorUid || null)) return false;
+  const ca = creadoEnMs(a);
+  const cb = creadoEnMs(b);
+  if (ca !== null && cb !== null && ca !== cb) return false;
+  return true;
+}
+
+// Clave de agrupación con el mismo criterio que mismaReserva
+export const claveDeGrupo = (r) =>
+  `${r?.clubId || ""}/${grupoDeReserva(r)}/${r?.status === "cancelada" ? "c" : "v"}/${r?.jugadorUid || ""}/${creadoEnMs(r) ?? ""}`;
+
 // "20:00 – 22:00" (guion largo con espacios, como el design system)
 export function rangoHoras(horaInicio, horaFin) {
   if (!horaInicio) return "";
@@ -37,7 +66,7 @@ export function agruparReservas(lista) {
   const grupos = new Map();
   (lista || []).forEach((raw) => {
     const r = normalizarReserva(raw);
-    const clave = `${r.clubId || ""}/${r.grupoId}`;
+    const clave = claveDeGrupo(r);
     if (!grupos.has(clave)) grupos.set(clave, []);
     grupos.get(clave).push(r);
   });
@@ -49,6 +78,7 @@ export function agruparReservas(lista) {
     resultado.push({
       ...primero,
       id: primero.grupoId,
+      claveGrupo: claveDeGrupo(primero),
       slotId: primero.id,
       slots,
       turnos,
