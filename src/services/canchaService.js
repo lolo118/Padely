@@ -15,9 +15,12 @@ import {
   runTransaction,
   setDoc,
   deleteField,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { getTodayLocal, horaActualStr } from "../utils/formatDate";
+import { horasDeReserva, sumarHoras } from "../utils/tarifas";
+import { agruparReservas, normalizarReserva } from "../utils/reservas";
 
 // --- CANCHAS ---
 
@@ -98,42 +101,114 @@ function separarContactoReserva(reserva) {
 // Id determinístico por turno: una cancha + fecha + hora = un solo documento posible
 export const slotId = (canchaId, fecha, hora) => `${canchaId}_${fecha}_${hora.replace(":", "")}`;
 
+// El turno de las HH:MM ya tiene una reserva viva: `hora` dice cuál (en una reserva de varias horas, la primera ocupada)
 export class SlotTakenError extends Error {
-  constructor() {
-    super("SLOT_TAKEN");
+  constructor(hora) {
+    super(hora ? `El turno de las ${hora} ya está reservado` : "SLOT_TAKEN");
     this.code = "SLOT_TAKEN";
+    this.hora = hora || null;
   }
 }
 
-// Crea la reserva dentro de una transacción: si el turno ya tiene una reserva no cancelada, falla con
-// SlotTakenError (evita la doble reserva). El contacto va en la misma transacción a contactosReservas:
-// siempre que reserva un jugador (pisa el de una reserva cancelada anterior en el mismo turno); si reserva
-// el club, solo cuando cargó algún dato (un bloqueo borra el contacto viejo del turno).
+// Crea la reserva dentro de una transacción. Una reserva de `turnos` horas seguidas (1 a 3) escribe un documento
+// por turno (id = slotId de cada hora) con los campos del grupo: grupoId (id del primer turno), horaInicio, horaFin,
+// turnos, precioTotal, precio (el de ese turno), seña (la de toda la reserva, repetida en cada slot) y señaPagada.
+// La transacción lee los N turnos primero: si alguno tiene una reserva no cancelada, no escribe nada y falla con
+// SlotTakenError(hora). El contacto va por turno a contactosReservas (las reglas lo atan al id de la reserva):
+// siempre que reserva un jugador (pisa el de una reserva cancelada anterior en el mismo turno); si reserva el
+// club, solo cuando cargó algún dato (un bloqueo borra el contacto viejo del turno).
+// reserva: { canchaId, canchaName, fecha, hora, turnos?, precios?: [por turno], precio?, seña?, jugadorUid,
+//            nombreJugador, email, telefono, status, ...otros }. Devuelve el grupoId.
 export const crearReserva = async (clubId, reserva) => {
   const { publica, contacto } = separarContactoReserva(reserva);
-  const ref = doc(db, "clubs", clubId, "reservas", slotId(publica.canchaId, publica.fecha, publica.hora));
-  const contactoRef = contactoReservaRef(clubId, ref.id);
+  const turnos = Math.min(3, Math.max(1, Number(publica.turnos) || 1));
+  const horas = horasDeReserva(publica.hora, turnos);
+  const preciosPorTurno = Array.isArray(publica.precios) ? publica.precios : [];
+  const precios = horas.map((_, i) => Number(preciosPorTurno[i] ?? publica.precio ?? 0) || 0);
+  const precioTotal = precios.reduce((a, b) => a + b, 0);
+  const seña = Math.max(0, Number(publica.seña) || 0);
+  const { precios: _p, turnos: _t, ...campos } = publica;
+  const refs = horas.map((h) => doc(db, "clubs", clubId, "reservas", slotId(publica.canchaId, publica.fecha, h)));
+  const grupoId = refs[0].id;
+
   await runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    if (snap.exists() && snap.data().status !== "cancelada") throw new SlotTakenError();
-    tx.set(ref, { ...publica, createdAt: serverTimestamp() });
-    if (publica.jugadorUid || Object.keys(contacto).length > 0) {
-      tx.set(contactoRef, {
-        jugadorUid: publica.jugadorUid || null,
-        nombreJugador: publica.nombreJugador || "",
-        canchaId: publica.canchaId,
-        fecha: publica.fecha,
-        hora: publica.hora,
-        email: contacto.email || "",
-        telefono: contacto.telefono || "",
+    const snaps = [];
+    for (const ref of refs) snaps.push(await tx.get(ref));
+    const ocupado = snaps.findIndex((s) => s.exists() && s.data().status !== "cancelada");
+    if (ocupado >= 0) throw new SlotTakenError(horas[ocupado]);
+    refs.forEach((ref, i) => {
+      tx.set(ref, {
+        ...campos,
+        hora: horas[i],
+        precio: precios[i],
+        grupoId,
+        horaInicio: horas[0],
+        horaFin: sumarHoras(horas[0], turnos),
+        turnos,
+        precioTotal,
+        seña,
+        señaPagada: false,
         createdAt: serverTimestamp(),
       });
-    } else {
-      tx.delete(contactoRef);
-    }
+      const contactoRef = contactoReservaRef(clubId, ref.id);
+      if (campos.jugadorUid || Object.keys(contacto).length > 0) {
+        tx.set(contactoRef, {
+          jugadorUid: campos.jugadorUid || null,
+          nombreJugador: campos.nombreJugador || "",
+          canchaId: campos.canchaId,
+          fecha: campos.fecha,
+          hora: horas[i],
+          email: contacto.email || "",
+          telefono: contacto.telefono || "",
+          createdAt: serverTimestamp(),
+        });
+      } else {
+        tx.delete(contactoRef);
+      }
+    });
   });
-  return ref.id;
+  return grupoId;
 };
+
+// Los slots de una reserva (por grupoId); una reserva vieja sin grupoId es su propio documento
+const slotsDelGrupo = async (clubId, grupoId) => {
+  const q = query(collection(db, "clubs", clubId, "reservas"), where("grupoId", "==", grupoId));
+  const snap = await getDocs(q);
+  if (snap.docs.length > 0) return snap.docs.map((d) => d.ref);
+  return [doc(db, "clubs", clubId, "reservas", grupoId)];
+};
+
+// Actualiza TODOS los turnos de una reserva en un batch (status, seña cobrada, etc.). La usan el club y el jugador
+// (el jugador solo puede cancelar: { status: "cancelada" }, como dicen las reglas).
+export const actualizarReservaGrupo = async (clubId, grupoId, datos) => {
+  const refs = await slotsDelGrupo(clubId, grupoId);
+  const batch = writeBatch(db);
+  refs.forEach((ref) => batch.update(ref, datos));
+  await batch.commit();
+  return refs.length;
+};
+
+export const cancelarReservaGrupo = (clubId, grupoId, extra = {}) =>
+  actualizarReservaGrupo(clubId, grupoId, { status: "cancelada", ...extra });
+
+// Marca (o desmarca) la seña como cobrada en todos los turnos de la reserva
+export const marcarSeñaPagada = (clubId, grupoId, pagada = true) =>
+  actualizarReservaGrupo(clubId, grupoId, { señaPagada: !!pagada });
+
+// Borra todos los turnos de una reserva y sus contactos
+export const eliminarReservaGrupo = async (clubId, grupoId) => {
+  const refs = await slotsDelGrupo(clubId, grupoId);
+  const batch = writeBatch(db);
+  refs.forEach((ref) => {
+    batch.delete(ref);
+    batch.delete(contactoReservaRef(clubId, ref.id));
+  });
+  await batch.commit();
+  return refs.length;
+};
+
+// Reservas agrupadas (una por grupoId) a partir de la lista de slots de getReservas
+export const getReservasAgrupadas = async (clubId, fecha, opciones) => agruparReservas(await getReservas(clubId, fecha, opciones));
 
 // Contactos de las reservas del club ({ [reservaId]: { email, telefono } }), solo el club
 export const getContactosReservas = async (clubId) => {
@@ -185,21 +260,19 @@ export const eliminarReserva = async (clubId, reservaId) => {
   await deleteDoc(contactoReservaRef(clubId, reservaId));
 };
 
-// Próxima reserva del jugador (misma consulta de grupo que "Mis reservas"), o null
+// Próxima reserva del jugador (misma consulta de grupo que "Mis reservas"), agrupada (horaInicio – horaFin,
+// precioTotal, seña), o null
 export const getProximaReservaJugador = async (uid) => {
   const q = query(collectionGroup(db, "reservas"), where("jugadorUid", "==", uid));
   const snap = await getDocs(q);
   const hoy = getTodayLocal();
   const horaAhora = horaActualStr();
-  const proximas = snap.docs
-    .map((d) => ({ id: d.id, clubId: d.ref.parent.parent.id, ...d.data() }))
-    .filter(
-      (r) =>
-        r.status !== "cancelada" &&
-        r.fecha &&
-        (r.fecha > hoy || (r.fecha === hoy && (r.hora || "") >= horaAhora)),
-    )
-    .sort((a, b) => (a.fecha + (a.hora || "")).localeCompare(b.fecha + (b.hora || "")));
+  const slots = snap.docs
+    .map((d) => normalizarReserva({ id: d.id, clubId: d.ref.parent.parent.id, ...d.data() }))
+    .filter((r) => r.status !== "cancelada" && r.fecha);
+  const proximas = agruparReservas(slots).filter(
+    (r) => r.fecha > hoy || (r.fecha === hoy && (r.horaFin || r.hora || "") > horaAhora),
+  );
   const proxima = proximas[0];
   if (!proxima) return null;
   try {
