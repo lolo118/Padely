@@ -47,6 +47,8 @@ const OrgEstadisticas = lazy(() => import("./pages/org/OrgEstadisticas"));
 // Super-admin (Sebastián)
 const SuperResumen = lazy(() => import("./pages/superadmin/Resumen"));
 const SuperClubes = lazy(() => import("./pages/superadmin/Clubes"));
+const SuperOrganizadores = lazy(() => import("./pages/superadmin/Organizadores"));
+const SuperUsuarios = lazy(() => import("./pages/superadmin/Usuarios"));
 
 // Landing pública en /
 const Landing = lazy(() => import("./pages/Landing"));
@@ -272,6 +274,8 @@ export default function App() {
           >
             <Route index element={<SuperResumen />} />
             <Route path="clubes" element={<SuperClubes />} />
+            <Route path="organizadores" element={<SuperOrganizadores />} />
+            <Route path="usuarios" element={<SuperUsuarios />} />
           </Route>
 
           <Route path="*" element={<NoEncontrado />} />

@@ -11,7 +11,7 @@ import PerfilIncompleto from "../../components/PerfilIncompleto";
 import SinPermiso from "../../components/SinPermiso";
 import { CATEGORIAS_TORNEO } from "../../utils/categorias";
 import { canchasDesdeTexto } from "../../utils/torneo";
-import { Button, Card, Field, Input, MarcaCategoria, Pills, SearchInput, Select, Textarea } from "../../components/ui";
+import { Alert, Button, Card, Field, Input, MarcaCategoria, Pills, SearchInput, Select, Textarea } from "../../components/ui";
 
 const provinciasArgentina = [
   "Buenos Aires",
@@ -189,6 +189,8 @@ export default function CrearTorneo() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [perfilCompleto, setPerfilCompleto] = useState(true);
+  // Entidad organizadora suspendida por el super-admin: no crea torneos nuevos
+  const [entidadSuspendida, setEntidadSuspendida] = useState(false);
   const [mostrarInfoReclamos, setMostrarInfoReclamos] = useState(false);
   const [tipoUsuario, setTipoUsuario] = useState("club");
   // Sede: club de Padely (vínculo + canchas reales) u otra sede (texto libre). El texto de canchas de "Otra sede"
@@ -221,6 +223,7 @@ export default function CrearTorneo() {
           if (snap.docs.length > 0) {
             const ent = snap.docs[0].data();
             setOrganizadorNombre(ent.nombre || "");
+            if (ent.suspendido === true) setEntidadSuspendida(true);
             if (!ent.telefono || !ent.bio || !ent.ciudad) setPerfilCompleto(false);
           } else {
             setPerfilCompleto(false);
@@ -414,6 +417,10 @@ export default function CrearTorneo() {
   };
 
   const handleSubmit = async (e) => {
+    if (entidadSuspendida) {
+      e?.preventDefault?.();
+      return;
+    }
     e.preventDefault();
     setError("");
 
@@ -520,6 +527,13 @@ export default function CrearTorneo() {
 
   if (!perfilCompleto) {
     return <PerfilIncompleto tipo={tipoUsuario} ruta={tipoUsuario === "organizador" ? "/org/entidad" : "/admin/configuracion"} />;
+  }
+  if (entidadSuspendida) {
+    return (
+      <Alert tone="danger">
+        <strong>Tu entidad está suspendida.</strong> No podés crear torneos nuevos. Escribinos para reactivarla.
+      </Alert>
+    );
   }
 
   // Chips de categoría de un género: pastillas multi (aria-pressed) con la marca de cada categoría
