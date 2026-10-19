@@ -50,7 +50,7 @@ import { getUserData } from "../services/authService";
 import { notificarNuevaReserva } from "../services/notificationService";
 import { toast } from "../components/Toast";
 import { confirmar } from "../components/ConfirmDialog";
-import { Badge, Button, Card, Field, Input, MarcaCategoria, Pills, SlotCell, Tabs, Textarea } from "../components/ui";
+import { Alert, Badge, Button, Card, Field, Input, MarcaCategoria, Pills, SlotCell, Tabs, Textarea } from "../components/ui";
 
 const horasDelDia = Array.from(
   { length: 24 },
@@ -525,6 +525,20 @@ export default function ClubPublico() {
         </div>
         <p className="body-md text-ink-2">Club no encontrado</p>
       </Card>
+    );
+  }
+
+  if (club.suspendido === true) {
+    return (
+      <div className="flex flex-col gap-4">
+        <h1 className="display-lg m-0">{club.nombre || "Club"}</h1>
+        <Alert tone="warning">
+          <strong>Este club no está disponible por el momento.</strong> Mirá otros clubes en la lista de canchas.
+        </Alert>
+        <Button as="link" to="/clubes" className="self-start">
+          Ver clubes
+        </Button>
+      </div>
     );
   }
 

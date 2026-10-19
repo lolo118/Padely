@@ -45,6 +45,8 @@ const OrgEquipo = lazy(() => import("./pages/org/OrgEquipo"));
 const OrgEstadisticas = lazy(() => import("./pages/org/OrgEstadisticas"));
 
 // Super-admin (Sebastián)
+const SuperResumen = lazy(() => import("./pages/superadmin/Resumen"));
+const SuperClubes = lazy(() => import("./pages/superadmin/Clubes"));
 
 // Landing pública en /
 const Landing = lazy(() => import("./pages/Landing"));
@@ -268,6 +270,8 @@ export default function App() {
               </SuperAdminRoute>
             }
           >
+            <Route index element={<SuperResumen />} />
+            <Route path="clubes" element={<SuperClubes />} />
           </Route>
 
           <Route path="*" element={<NoEncontrado />} />

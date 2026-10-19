@@ -1,5 +1,7 @@
 import { BarChart3, LayoutDashboard, LayoutGrid, Settings, Trophy } from "lucide-react";
 import PanelLayout from "./PanelLayout";
+import { useAuthStore } from "../../store/authStore";
+import Alert from "../ui/Alert";
 
 // Cada ítem lleva los permisos que lo habilitan (alguno alcanza); "Hoy" es para todo el que entra al panel
 const navItems = [
@@ -11,5 +13,12 @@ const navItems = [
 ];
 
 export default function ClubLayout() {
-  return <PanelLayout rol="Club" inicio="/admin" items={navItems} />;
+  const suspendido = useAuthStore((s) => s.clubActual?.suspendido === true);
+  const aviso = suspendido ? (
+    <Alert tone="danger">
+      <strong>Tu club está suspendido.</strong> Escribinos para reactivarlo. Mientras tanto no aparece en la lista de
+      clubes y los jugadores no pueden reservar; las reservas que ya tenés siguen acá.
+    </Alert>
+  ) : null;
+  return <PanelLayout rol="Club" inicio="/admin" items={navItems} aviso={aviso} />;
 }

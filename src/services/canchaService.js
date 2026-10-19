@@ -294,10 +294,13 @@ export const getProximaReservaJugador = async (uid) => {
 
 // --- CANCHAS PÚBLICAS (para el hub del jugador) ---
 
+// Un club suspendido por el super-admin no aparece en ninguna lista pública
+export const clubSuspendido = (club) => club?.suspendido === true;
+
 export const getClubesConCanchas = async () => {
   const snap = await getDocs(collection(db, "clubs"));
   const clubes = [];
-  for (const d of snap.docs) {
+  for (const d of snap.docs.filter((x) => !clubSuspendido(x.data()))) {
     const canchasSnap = await getDocs(collection(db, "clubs", d.id, "canchas"));
     if (canchasSnap.docs.length > 0) {
       clubes.push({
@@ -316,7 +319,7 @@ export const getClubesPublicos = async ({ recargar = false } = {}) => {
   if (clubesPublicosCache && !recargar) return clubesPublicosCache;
   const snap = await getDocs(collection(db, "clubs"));
   const clubes = await Promise.all(
-    snap.docs.map(async (d) => {
+    snap.docs.filter((d) => !clubSuspendido(d.data())).map(async (d) => {
       const data = d.data();
       let cantidadCanchas = 0;
       try {
