@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { getUserData } from "../services/authService";
 import { getClubByOwner, getClubConfig } from "../services/canchaService";
 import { getStaffDe } from "../services/staffService";
+import { esSuperAdminUid } from "../services/superadminService";
 import { ROLES, puedeCon } from "../utils/staff";
 
 // "club" | "organizador" | "jugador" a partir del array users.role
@@ -43,8 +44,14 @@ export const useAuthStore = create((set, get) => ({
   staffDe: [],
   clubActual: null,
   clubCargado: false, // true cuando ya se resolvió clubActual para el usuario actual (aunque sea null)
+  // Super-admin de la plataforma (superadmins/{uid}); false ante cualquier error
+  esSuperAdmin: false,
   setUser: (user) =>
-    set(user ? { user } : { user: null, perfil: null, rol: null, staffDe: [], clubActual: null, clubCargado: false }),
+    set(
+      user
+        ? { user }
+        : { user: null, perfil: null, rol: null, staffDe: [], clubActual: null, clubCargado: false, esSuperAdmin: false },
+    ),
   setPerfil: (perfil) => set({ perfil: perfil || null, rol: rolDesdePerfil(perfil) }),
   setLoading: (loading) => set({ loading }),
   // Vuelve a leer users/{uid} (después de editar el perfil, subir la foto, etc.)
@@ -69,6 +76,8 @@ export const useAuthStore = create((set, get) => ({
       return null;
     }
     let staffDe = [];
+    // Super-admin en paralelo con el equipo: no suma tiempo ni puede trabar el login
+    const superAdminP = esSuperAdminUid(uid).catch(() => false);
     try {
       staffDe = await getStaffDe(uid);
     } catch (err) {
@@ -80,7 +89,8 @@ export const useAuthStore = create((set, get) => ({
     } catch (err) {
       console.error("Error cargando el club del panel:", err);
     }
-    set({ staffDe, clubActual, clubCargado: true });
+    const esSuperAdmin = await superAdminP;
+    set({ staffDe, clubActual, clubCargado: true, esSuperAdmin });
     return clubActual;
   },
   // Vuelve a leer el documento del club (después de guardar la configuración), conservando rol y permisos

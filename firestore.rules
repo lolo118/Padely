@@ -57,12 +57,26 @@ service cloud.firestore {
     function changedOnly(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
-    // Dueño del club vinculado como sede de un torneo (tournaments/{tid}.club.id)
-    function clubOwnerOfTournament(tid) {
-      let t = get(/databases/$(database)/documents/tournaments/$(tid)).data;
-      return signedIn()
-        && t.get('club', null) != null
-        && get(/databases/$(database)/documents/clubs/$(t.club.id)).data.ownerUid == request.auth.uid;
+    // Super-admin de la plataforma: superadmins/{uid}, creado a mano en la consola (ningún cliente lo escribe)
+    function superAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/superadmins/$(request.auth.uid));
+    }
+    // Campos de la suspensión de un club o una entidad organizadora: los escribe solo el super-admin
+    function tocaSuspension() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['suspendido', 'suspendidoMotivo', 'suspendidoEn', 'suspendidoPor']);
+    }
+    function soloSuspension() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['suspendido', 'suspendidoMotivo', 'suspendidoEn', 'suspendidoPor']);
+    }
+    // Un club o entidad nace sin suspender
+    function naceActivo() {
+      return request.resource.data.get('suspendido', false) == false;
+    }
+    // El club acepta reservas de jugadores (sin el campo = activo)
+    function clubActivo(clubId) {
+      return get(/databases/$(database)/documents/clubs/$(clubId)).data.get('suspendido', false) == false;
     }
     // El vínculo con un club que escribe un organizador: sin club, pendiente, o aceptado solo si el club es suyo.
     // Así "aceptado" solo lo pone el dueño del club (acá o respondiendo el pedido) y la Function puede confiar en él.
@@ -99,20 +113,30 @@ service cloud.firestore {
 
     // Al entrar, cada persona busca los clubes donde es staff (la consulta lleva where("uid", "==", auth.uid))
     match /{path=**}/staff/{uid} {
-      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow read: if (signedIn() && resource.data.uid == request.auth.uid) || superAdmin();
+    }
+
+    // Quién es super-admin: lo lee solo la propia cuenta; nadie lo escribe desde un cliente
+    match /superadmins/{uid} {
+      allow read: if isSelf(uid);
+      allow write: if false;
     }
 
     // Perfil (email, teléfono, nacimiento...): lo lee solo el propio usuario. Parejas y reservas llevan el
     // nombre a mostrar; un ranking público se publicaría como proyección desde una Cloud Function.
     match /users/{userId} {
-      allow read: if isSelf(userId);
+      allow read: if isSelf(userId) || superAdmin();
       allow create: if isSelf(userId);
       allow delete: if isSelf(userId);
-      // Own profile: anything except role and ranking fields
-      allow update: if isSelf(userId)
+      // Own profile: anything except role and ranking fields. The super-admin only fixes the role (one of three).
+      allow update: if (isSelf(userId)
         && !request.resource.data.diff(resource.data).affectedKeys()
             .hasAny(['role', 'puntos', 'nivel', 'partidosGanados', 'partidosPerdidos', 'partidosJugados',
-                     'torneosJugados', 'torneosGanados', 'torneosGanadosEnCategoria', 'ascensos']);
+                     'torneosJugados', 'torneosGanados', 'torneosGanadosEnCategoria', 'ascensos']))
+        || (superAdmin()
+            && changedOnly(['role'])
+            && request.resource.data.role.size() == 1
+            && request.resource.data.role[0] in ['jugador', 'club', 'organizador']);
 
       match /notifications/{notifId} {
         allow read: if isSelf(userId);
@@ -125,19 +149,24 @@ service cloud.firestore {
     // Entidad organizadora (email, teléfono, equipo de trabajo): la lee solo su dueño. El contacto público
     // de un torneo lo elige el organizador en el torneo (whatsappOrganizador, instagramOrganizador, administradores).
     match /organizers/{orgId} {
-      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow read: if (signedIn() && resource.data.ownerUid == request.auth.uid) || superAdmin();
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid && naceActivo();
+      // El dueño edita su entidad sin tocar la suspensión; el super-admin solo suspende o reactiva
+      allow update: if (signedIn() && resource.data.ownerUid == request.auth.uid && !tocaSuspension())
+        || (superAdmin() && soloSuspension());
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
     match /clubs/{clubId} {
       allow read: if true;
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
-      // Configura el dueño o el staff con 'configurarClub' (que nunca cambia el dueño ni la fecha de alta);
-      // borrar el club sigue siendo solo del dueño
-      allow update: if clubOwner(clubId)
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid && naceActivo();
+      // Configura el dueño o el staff con 'configurarClub' (que nunca cambia el dueño ni la fecha de alta); ninguno
+      // de los dos toca la suspensión, que es del super-admin (y él solo toca esos campos). Borrar: solo el dueño.
+      allow update: if (clubOwner(clubId) && !tocaSuspension())
         || (signedIn() && staffCon(clubId, 'configurarClub')
-            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ownerUid', 'createdAt']));
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ownerUid', 'createdAt'])
+            && !tocaSuspension())
+        || (superAdmin() && soloSuspension());
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
 
       // Datos privados del club (CBU, alias, CUIT, razón social): quien configura; los teléfonos de los turnos
@@ -161,7 +190,7 @@ service cloud.firestore {
 
       // Equipo del club. El dueño no tiene documento acá (clubs/{clubId}.ownerUid puede todo).
       match /staff/{uid} {
-        allow read: if isSelf(uid) || esStaff(clubId, 'gestionarStaff');
+        allow read: if isSelf(uid) || esStaff(clubId, 'gestionarStaff') || superAdmin();
         // Acepta una invitación: el propio usuario crea su doc con los datos de la invitación pendiente, no vencida,
         // dirigida a su email (en el mismo batch marca la invitación como aceptada)
         allow create: if isSelf(uid)
@@ -208,6 +237,7 @@ service cloud.firestore {
           && (esStaff(clubId, 'gestionarReservas')
               || (signedIn()
                   && request.resource.data.jugadorUid == request.auth.uid
+                  && clubActivo(clubId)
                   && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
                       || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente'))));
         // The club manages; a player may cancel his own, or re-book a slot whose previous reservation was cancelled
@@ -218,6 +248,7 @@ service cloud.firestore {
               || (signedIn() && resource.data.status == 'cancelada'
                   && sinContacto(['email', 'telefono'])
                   && request.resource.data.jugadorUid == request.auth.uid
+                  && clubActivo(clubId)
                   && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
                       || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente'))));
         allow delete: if !reservaDeTorneo() && esStaff(clubId, 'gestionarReservas');

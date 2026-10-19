@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Outlet } from "react-router-dom";
-import { LogOut, Menu, Smartphone } from "lucide-react";
+import { LogOut, Menu, ShieldCheck, Smartphone } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import useThemeStore from "../../store/themeStore";
 import ThemeToggle from "../ThemeToggle";
@@ -24,7 +24,7 @@ async function cerrarSesion() {
 // En el panel del club el badge muestra el rol de la persona (Dueño / Encargado / Cajero / Barra) y los ítems se
 // filtran por sus permisos (`permisos` = alguno de esos ids alcanza; sin `permisos`, siempre). El staff (no dueño)
 // suma "App de jugador" para volver a su app.
-export default function PanelLayout({ rol, inicio, items }) {
+export default function PanelLayout({ rol, inicio, items, aviso = null }) {
   const [abierto, setAbierto] = useState(false);
   const { user } = useAuthStore();
   const clubActual = useAuthStore((s) => s.clubActual);
@@ -39,10 +39,14 @@ export default function PanelLayout({ rol, inicio, items }) {
   const etiquetaRol = esPanelClub ? rolLabel(rolStaff) : rol;
   const tonoRol = esPanelClub && rolStaff === "dueño" ? "court" : "neutral";
   const visibles = items.filter((item) => !item.permisos || item.permisos.some((p) => puede(p)));
-  const itemsNav =
+  const esSuperAdmin = useAuthStore((s) => s.esSuperAdmin);
+  const conApp =
     esPanelClub && rolCuenta !== "club"
       ? [...visibles, { to: "/inicio", label: "App de jugador", icon: Smartphone }]
       : visibles;
+  // El panel del super-admin ya lo trae en sus ítems; en los demás paneles se suma solo para el super-admin
+  const itemsNav =
+    esSuperAdmin && rol !== "Super-admin" ? [...conApp, { to: "/superadmin", label: "Super-admin", icon: ShieldCheck }] : conApp;
   // Si el club no se resolvió (por ejemplo un club recién registrado, o una lectura que falló al arrancar), se
   // reintenta una vez al entrar al panel en vez de dejar la sesión sin club
   const reintentado = useRef(false);
@@ -120,6 +124,7 @@ export default function PanelLayout({ rol, inicio, items }) {
       </div>
 
       <main className="flex-1 min-w-0 w-full max-w-[1200px] p-4 md:p-6">
+        {aviso && <div className="mb-4">{aviso}</div>}
         <Outlet />
       </main>
     </div>

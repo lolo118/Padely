@@ -9,6 +9,7 @@ import PlayerLayout from "./components/layouts/PlayerLayout";
 import ClubLayout from "./components/layouts/ClubLayout";
 import OrgLayout from "./components/layouts/OrgLayout";
 import PublicLayout from "./components/layouts/PublicLayout";
+import SuperAdminLayout from "./components/layouts/SuperAdminLayout";
 import { Toaster } from "./components/Toast";
 import { ConfirmHost } from "./components/ConfirmDialog";
 
@@ -42,6 +43,8 @@ const OrgTorneos = lazy(() => import("./pages/org/OrgTorneos"));
 const OrgEntidad = lazy(() => import("./pages/org/OrgEntidad"));
 const OrgEquipo = lazy(() => import("./pages/org/OrgEquipo"));
 const OrgEstadisticas = lazy(() => import("./pages/org/OrgEstadisticas"));
+
+// Super-admin (Sebastián)
 
 // Landing pública en /
 const Landing = lazy(() => import("./pages/Landing"));
@@ -95,6 +98,16 @@ function RoleRoute({ allowedRoles, children }) {
 
 // El inicio según el rol: cuenta de club → el panel; organizador → su panel; jugador (también el staff de un
 // club, que después del login cae en /admin pero puede volver a su app con "App de jugador") → Inicio
+// Solo el super-admin (superadmins/{uid}); para cualquier otro la ruta no existe (NoEncontrado, no un "sin permiso")
+function SuperAdminRoute({ children }) {
+  const { user, loading, rol, clubCargado, esSuperAdmin } = useAuthStore();
+  if (loading || (user && (!rol || !clubCargado))) {
+    return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
+  }
+  if (!user || !esSuperAdmin) return <NoEncontrado />;
+  return children;
+}
+
 function RedirigirPorRol() {
   const { user, rol, clubCargado } = useAuthStore();
 
@@ -244,6 +257,17 @@ export default function App() {
             <Route path="estadisticas" element={<OrgEstadisticas />} />
             <Route path="entidad" element={<OrgEntidad />} />
             <Route path="equipo" element={<OrgEquipo />} />
+          </Route>
+
+          {/* Super-admin de la plataforma */}
+          <Route
+            path="/superadmin"
+            element={
+              <SuperAdminRoute>
+                <SuperAdminLayout />
+              </SuperAdminRoute>
+            }
+          >
           </Route>
 
           <Route path="*" element={<NoEncontrado />} />

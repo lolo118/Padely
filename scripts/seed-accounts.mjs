@@ -1,4 +1,4 @@
-// scripts/seed-accounts.mjs — creates or completes the four test accounts. Run: npm run seed:accounts
+// scripts/seed-accounts.mjs — creates or completes the five test accounts. Run: npm run seed:accounts
 // Password comes from SEED_PASSWORD (default "Padely2026!"). Never commit a password.
 import { readFileSync } from "node:fs";
 import { initializeApp } from "firebase/app";
@@ -27,6 +27,8 @@ const cuentas = [
     entidad: { nombre: "Padely Torneos", telefono: "3853333333", whatsapp: "5493853333333", bio: "Organizador de torneos de prueba", ciudad: "Santiago del Estero", provincia: "Santiago del Estero" } },
   // Jugador que el club invita a su equipo (PROMPT 11): sin perfil de club, entra al panel por clubs/{c}/staff/{uid}
   { email: "encargado@test.com", tipo: "jugador", nombre: "Encargado Test" },
+  // Super-admin de prueba (PROMPT 12): cuenta de jugador; superadmins/{uid} se crea a mano en la consola
+  { email: "admin@test.com", tipo: "jugador", nombre: "Admin Test" },
 ];
 
 async function ensureUser(email) {
