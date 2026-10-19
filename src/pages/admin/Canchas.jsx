@@ -455,7 +455,8 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
                     <span className="body-sm text-ink-3">{tituloBloqueoTorneo(r)}</span>
                   )}
                   <div className="pd-btn-group ml-auto">
-                    {señaInfo && (
+                    {/* En una reserva cancelada la seña ya no se marca: queda solo el Badge */}
+                    {señaInfo && r.status !== "cancelada" && (
                       <Button
                         size="sm"
                         aria-pressed={!!r.señaPagada}

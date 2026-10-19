@@ -1,9 +1,12 @@
 import { useNavigate } from "react-router-dom";
 import { Lock } from "lucide-react";
 import Button from "./ui/Button";
+import { useAuthStore } from "../store/authStore";
 
 export default function PerfilIncompleto({ tipo, ruta }) {
   const navigate = useNavigate();
+  const puede = useAuthStore((s) => s.puede);
+  const clubActual = useAuthStore((s) => s.clubActual);
 
   const mensajes = {
     jugador: {
@@ -24,15 +27,21 @@ export default function PerfilIncompleto({ tipo, ruta }) {
   };
 
   const msg = mensajes[tipo] || mensajes.jugador;
+  // El staff del club que no puede configurarlo no tiene a dónde ir: se le pide al dueño
+  const sinConfigurar = tipo === "club" && !!clubActual && !puede("configurarClub");
 
   return (
     <div className="pd-card text-center max-w-md mx-auto mt-8">
       <Lock className="pd-icon-lg mx-auto mb-3 text-ink-3" size={24} aria-hidden="true" />
       <h2 className="heading-md mb-2">{msg.titulo}</h2>
-      <p className="body-sm text-ink-2 mb-5">{msg.desc}</p>
-      <Button variant="primary" onClick={() => navigate(ruta)}>
-        {msg.boton}
-      </Button>
+      <p className="body-sm text-ink-2 mb-5">
+        {sinConfigurar ? "Pedile al dueño del club que complete el perfil." : msg.desc}
+      </p>
+      {!sinConfigurar && (
+        <Button variant="primary" onClick={() => navigate(ruta)}>
+          {msg.boton}
+        </Button>
+      )}
     </div>
   );
 }
