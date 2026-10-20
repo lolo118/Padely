@@ -1,4 +1,4 @@
-import { BarChart3, LayoutDashboard, LayoutGrid, Settings, Trophy } from "lucide-react";
+import { BarChart3, LayoutDashboard, LayoutGrid, Package, Settings, Trophy } from "lucide-react";
 import PanelLayout from "./PanelLayout";
 import { useAuthStore } from "../../store/authStore";
 import Alert from "../ui/Alert";
@@ -10,6 +10,9 @@ const navItems = [
   { to: "/admin/canchas", label: "Canchas", icon: LayoutGrid, permisos: ["gestionarReservas", "tarifas"] },
   { to: "/admin/estadisticas", label: "Estadísticas", icon: BarChart3, permisos: ["verReportes"] },
   { to: "/admin/configuracion", label: "Configuración", icon: Settings, permisos: ["configurarClub", "gestionarStaff"] },
+  // Grupo Bar (el título se ve si alguno de sus ítems se ve)
+  { seccion: "Bar", permisos: ["editarProductos", "cargarStock", "importar"] },
+  { to: "/admin/bar/productos", label: "Productos", icon: Package, permisos: ["editarProductos", "cargarStock", "importar"] },
 ];
 
 export default function ClubLayout() {
