@@ -658,6 +658,41 @@ exports.onInvitacionStaffCreated = onDocumentCreated("clubs/{clubId}/invitacione
 });
 
 // ============================================================================
+// BAR — stock de productos: cada movimiento (clubs/{c}/movimientosStock) suma su cantidad al stock del producto
+// una sola vez (marca aplicado en la misma transacción). Los productos sin control de stock solo marcan el
+// movimiento. El stock puede quedar negativo (ventas sin conexión, más adelante): nunca se bloquea.
+// ============================================================================
+exports.onMovimientoStockCreated = onDocumentCreated("clubs/{clubId}/movimientosStock/{movId}", async (event) => {
+  const { clubId, movId } = event.params;
+  const movRef = db.collection("clubs").doc(clubId).collection("movimientosStock").doc(movId);
+  try {
+    const resultado = await db.runTransaction(async (tx) => {
+      const movSnap = await tx.get(movRef);
+      if (!movSnap.exists) return "sin movimiento";
+      const mov = movSnap.data() || {};
+      if (mov.aplicado === true) return "ya aplicado";
+      const cantidad = Number(mov.cantidad);
+      const prodRef = mov.productoId
+        ? db.collection("clubs").doc(clubId).collection("productos").doc(String(mov.productoId))
+        : null;
+      const prodSnap = prodRef ? await tx.get(prodRef) : null;
+      if (!prodSnap || !prodSnap.exists) {
+        tx.update(movRef, { aplicado: true, error: "producto inexistente", aplicadoEn: FieldValue.serverTimestamp() });
+        return "producto inexistente";
+      }
+      if (prodSnap.data().controlaStock !== false && Number.isFinite(cantidad) && cantidad !== 0) {
+        tx.update(prodRef, { stock: FieldValue.increment(cantidad), actualizadoEn: FieldValue.serverTimestamp() });
+      }
+      tx.update(movRef, { aplicado: true, aplicadoEn: FieldValue.serverTimestamp() });
+      return "aplicado";
+    });
+    logger.info(`onMovimientoStockCreated ${clubId}/${movId}: ${resultado}`);
+  } catch (err) {
+    logger.error(`onMovimientoStockCreated ${clubId}/${movId}`, err);
+  }
+});
+
+// ============================================================================
 // MANTENIMIENTO — reservas pendientes vencidas y limpieza de cuentas eliminadas
 // ============================================================================
 const { onSchedule } = require("firebase-functions/v2/scheduler");

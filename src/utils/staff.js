@@ -21,9 +21,9 @@ export const PERMISOS = [
   { id: "verCajasCerradas", label: "Ver cajas cerradas", descripcion: "Historial de cajas", grupo: "Bar", faseActual: false },
   { id: "anularVenta", label: "Anular ventas", descripcion: "Anular una venta ya cobrada", grupo: "Bar", faseActual: false },
   { id: "pedidos", label: "Pedidos", descripcion: "La pantalla de pedidos del bar", grupo: "Bar", faseActual: false },
-  { id: "editarProductos", label: "Editar productos", descripcion: "Alta y cambios de productos y precios del bar", grupo: "Bar", faseActual: false },
-  { id: "cargarStock", label: "Cargar stock", descripcion: "Ingresos de mercadería", grupo: "Bar", faseActual: false },
-  { id: "importar", label: "Importar", descripcion: "Importar productos y stock desde un archivo", grupo: "Bar", faseActual: false },
+  { id: "editarProductos", label: "Editar productos", descripcion: "Alta y cambios de productos y precios del bar", grupo: "Bar", faseActual: true },
+  { id: "cargarStock", label: "Cargar stock", descripcion: "Compras, ajustes y mermas de stock", grupo: "Bar", faseActual: true },
+  { id: "importar", label: "Importar", descripcion: "Importar productos y stock desde un archivo", grupo: "Bar", faseActual: true },
 ];
 
 export const PERMISOS_FASE_ACTUAL = PERMISOS.filter((p) => p.faseActual);

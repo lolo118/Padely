@@ -22,6 +22,11 @@ service cloud.firestore {
     function esStaff(clubId, permiso) {
       return signedIn() && (clubOwner(clubId) || staffCon(clubId, permiso));
     }
+    // Staff del bar: cualquiera de los permisos del bar (lee productos, categorías, proveedores y movimientos)
+    function esStaffBar(clubId) {
+      return esStaff(clubId, 'vender') || esStaff(clubId, 'editarProductos') || esStaff(clubId, 'cargarStock')
+        || esStaff(clubId, 'importar') || esStaff(clubId, 'pedidos');
+    }
     // Dueño o staff (con el permiso) del club vinculado como sede de un torneo
     function clubStaffOfTournament(tid, permiso) {
       let t = get(/databases/$(database)/documents/tournaments/$(tid)).data;
@@ -186,6 +191,44 @@ service cloud.firestore {
         allow read: if signedIn();
         allow create, update: if esStaff(clubId, 'gestionarReservas') && sinContacto(['telefono']);
         allow delete: if esStaff(clubId, 'gestionarReservas');
+      }
+
+      // ----- Bar: productos, categorías, proveedores y movimientos de stock -----
+      // El stock de un producto lo escribe solo la Cloud Function (onMovimientoStockCreated) a partir de los
+      // movimientos: se crea en 0 y ningún cliente lo cambia.
+      match /productos/{productoId} {
+        allow read: if esStaffBar(clubId) || superAdmin();
+        allow create: if esStaff(clubId, 'editarProductos') && request.resource.data.stock == 0;
+        allow update: if esStaff(clubId, 'editarProductos')
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['stock']);
+        allow delete: if esStaff(clubId, 'editarProductos');
+      }
+
+      match /categoriasProductos/{categoriaId} {
+        allow read: if esStaffBar(clubId) || superAdmin();
+        allow create, update, delete: if esStaff(clubId, 'editarProductos');
+      }
+
+      match /proveedores/{proveedorId} {
+        allow read: if esStaffBar(clubId) || superAdmin();
+        allow create, delete: if esStaff(clubId, 'editarProductos');
+        // Quien importa guarda el mapeo de columnas del proveedor (solo ese campo)
+        allow update: if esStaff(clubId, 'editarProductos')
+          || (esStaff(clubId, 'importar') && changedOnly(['mapeoImportacion']));
+      }
+
+      // Registro de movimientos: solo altas (una corrección es un movimiento nuevo); 'aplicado' lo pone la Function
+      match /movimientosStock/{movimientoId} {
+        allow read: if esStaffBar(clubId) || superAdmin();
+        allow create: if request.resource.data.creadoPor == request.auth.uid
+          && request.resource.data.aplicado == false
+          && request.resource.data.cantidad is number
+          && request.resource.data.cantidad != 0
+          && request.resource.data.tipo in ['compra', 'ajuste', 'merma', 'importacion']
+          && ((request.resource.data.tipo in ['compra', 'ajuste', 'merma'] && esStaff(clubId, 'cargarStock'))
+              || (request.resource.data.tipo == 'importacion'
+                  && (esStaff(clubId, 'importar') || esStaff(clubId, 'cargarStock'))));
+        allow update, delete: if false;
       }
 
       // Equipo del club. El dueño no tiene documento acá (clubs/{clubId}.ownerUid puede todo).

@@ -88,6 +88,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "movimientosStock",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "productoId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "creadoEn",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
