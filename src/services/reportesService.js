@@ -28,6 +28,13 @@ export const recalcularReporte = async (clubId, fecha) => {
   return res.data;
 };
 
+// Reconstruye el catálogo público y las alertas de stock de todos los productos (dueño o editarProductos)
+export const reconstruirCatalogo = async (clubId) => {
+  const fn = httpsCallable(functions, "reconstruirCatalogo");
+  const res = await fn({ clubId });
+  return res.data;
+};
+
 // Ventas de un rango de fechas locales (para la exportación), con tope
 export const getVentasEntre = async (clubId, desde, hasta, { max = 5000 } = {}) => {
   const [y1, m1, d1] = desde.split("-").map(Number);

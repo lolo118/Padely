@@ -32,7 +32,7 @@ import { margenPorcentaje, tonoStock, stockBajo, normalizarNombre, ETIQUETA_UNID
 import { formatPrecio } from "../../../utils/format";
 import { formatDiaCorto, aDate } from "../../../utils/formatDate";
 import { descargarPlantilla } from "../../../utils/plantillaProductos";
-import { escucharAlertasStock } from "../../../services/reportesService";
+import { escucharAlertasStock, reconstruirCatalogo } from "../../../services/reportesService";
 
 // El asistente de importación (y SheetJS, que carga él) se bajan recién al abrirlo
 const ImportarProductos = lazy(() => import("./ImportarProductos"));
@@ -1185,6 +1185,21 @@ export default function Productos() {
   const estadoCats = { lista: categorias, error: cats.para === clubId && cats.error, cargando: cats.para !== clubId };
   const estadoProvs = { lista: proveedores, error: provs.para === clubId && provs.error, cargando: provs.para !== clubId };
 
+  // El catálogo público (lo que ven los jugadores al pedir) se mantiene solo; esto lo publica entero una vez
+  const [publicando, setPublicando] = useState(false);
+  const publicarCatalogo = async () => {
+    setPublicando(true);
+    try {
+      const r = await reconstruirCatalogo(clubId);
+      toast.success(`Catálogo publicado: ${r.productos} productos, ${r.categorias} categorías`);
+    } catch (e) {
+      console.error("Error publicando el catálogo:", e);
+      toast.error(e?.code === "functions/permission-denied" ? "Solo quien edita productos puede publicar el catálogo." : "No se pudo publicar el catálogo.");
+    } finally {
+      setPublicando(false);
+    }
+  };
+
   const bajarPlantilla = async () => {
     try {
       await descargarPlantilla();
@@ -1406,6 +1421,11 @@ export default function Productos() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h1 className="heading-lg m-0">Productos</h1>
         <div className="pd-btn-group">
+          {puedeEditar && (
+            <Button variant="ghost" icon={icono(RefreshCw)} onClick={publicarCatalogo} cargando={publicando ? "Publicando…" : ""} title="Vuelve a armar lo que ven los jugadores al pedir (nombres, precios, categorías, sin stock)">
+              Publicar catálogo
+            </Button>
+          )}
           {puedeImportar && (
             <>
               <Button variant="ghost" icon={icono(Download)} onClick={bajarPlantilla}>

@@ -1836,3 +1836,64 @@ exports.avisosStockDiario = onSchedule({ schedule: "every day 08:30", timeZone: 
 
 // P3-6 deploy: cambio de fuente para que todas las funciones se vuelvan a publicar (el primer deploy dejó el hash
 // actualizado sin una revisión sana en Cloud Run).
+
+// ----- Reconstrucción del catálogo público y las alertas de stock (callable "reconstruirCatalogo") -----
+// onProductoWritten solo escribe catalogo/{id} cuando un producto cambia: los productos que ya existían antes de
+// P3-6 necesitan una pasada completa. La corre el dueño o quien edita productos desde Productos → "Publicar catálogo".
+exports.reconstruirCatalogo = onCall({ region: "us-central1" }, async (request) => {
+  if (!request.auth || !request.auth.uid) throw new HttpsError("unauthenticated", "Iniciá sesión");
+  const uid = request.auth.uid;
+  const clubId = String((request.data && request.data.clubId) || "");
+  if (!clubId) throw new HttpsError("invalid-argument", "clubId");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const [clubSnap, staffSnap] = await Promise.all([clubRef.get(), clubRef.collection("staff").doc(uid).get()]);
+  if (!clubSnap.exists) throw new HttpsError("not-found", "El club no existe");
+  const staff = staffSnap.exists ? staffSnap.data() : null;
+  const puede = clubSnap.data().ownerUid === uid || (staff && staff.activo === true && Array.isArray(staff.permisos) && staff.permisos.includes("editarProductos"));
+  if (!puede) throw new HttpsError("permission-denied", "Solo quien edita productos puede publicar el catálogo");
+
+  const [productos, categorias, catalogoViejo, alertasViejas] = await Promise.all([
+    clubRef.collection("productos").get(),
+    clubRef.collection("categoriasProductos").get(),
+    clubRef.collection("catalogo").get(),
+    clubRef.collection("alertasStock").get(),
+  ]);
+  const nombres = Object.fromEntries(categorias.docs.map((d) => [d.id, d.data().nombre || null]));
+  const ops = [];
+  const vivos = new Set();
+  productos.docs.forEach((d) => {
+    const p = d.data();
+    vivos.add(d.id);
+    ops.push((b) => b.set(clubRef.collection("catalogo").doc(d.id), entradaCatalogo(p, p.categoriaId ? nombres[p.categoriaId] || null : null)));
+    const alertaRef = clubRef.collection("alertasStock").doc(d.id);
+    if (bajoMinimo(p)) {
+      const prev = alertasViejas.docs.find((a) => a.id === d.id);
+      ops.push((b) =>
+        b.set(
+          alertaRef,
+          {
+            nombre: p.nombre || "",
+            stock: Number(p.stock) || 0,
+            stockMinimo: Number(p.stockMinimo) || 0,
+            desde: prev && prev.data().desde ? prev.data().desde : FieldValue.serverTimestamp(),
+            avisado: prev ? prev.data().avisado || null : null,
+            actualizadoEn: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        ),
+      );
+    } else ops.push((b) => b.delete(alertaRef));
+  });
+  // Entradas del catálogo (y alertas) de productos que ya no existen
+  catalogoViejo.docs.forEach((d) => {
+    if (d.id !== "_categorias" && !vivos.has(d.id)) ops.push((b) => b.delete(d.ref));
+  });
+  alertasViejas.docs.forEach((d) => {
+    if (!vivos.has(d.id)) ops.push((b) => b.delete(d.ref));
+  });
+  const lista = categorias.docs.map((d) => ({ id: d.id, nombre: d.data().nombre || "", orden: Number(d.data().orden) || 0 })).sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre, "es"));
+  ops.push((b) => b.set(clubRef.collection("catalogo").doc("_categorias"), { lista, actualizadoEn: FieldValue.serverTimestamp() }));
+  await escribirEnLotes(ops);
+  logger.info(`reconstruirCatalogo ${clubId} por ${uid}: ${productos.size} productos, ${lista.length} categorías`);
+  return { ok: true, productos: productos.size, categorias: lista.length };
+});
