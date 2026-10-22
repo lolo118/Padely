@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ChevronDown, ChevronUp, Download, Pencil, Plus, RefreshCw, Star, Trash2, Upload, X } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import SinPermiso from "../../../components/SinPermiso";
@@ -29,7 +30,9 @@ import {
 } from "../../../services/productosService";
 import { margenPorcentaje, tonoStock, stockBajo, normalizarNombre, ETIQUETA_UNIDAD } from "../../../utils/productos";
 import { formatPrecio } from "../../../utils/format";
+import { formatDiaCorto, aDate } from "../../../utils/formatDate";
 import { descargarPlantilla } from "../../../utils/plantillaProductos";
+import { escucharAlertasStock } from "../../../services/reportesService";
 
 // El asistente de importación (y SheetJS, que carga él) se bajan recién al abrirlo
 const ImportarProductos = lazy(() => import("./ImportarProductos"));
@@ -979,7 +982,11 @@ export default function Productos() {
 
   const [busqueda, setBusqueda] = useState("");
   const [filtroCat, setFiltroCat] = useState("todas");
-  const [soloBajo, setSoloBajo] = useState(false);
+  // ?filtro=bajo (desde el aviso diario de stock y la tarjeta de Hoy) abre la lista ya filtrada
+  const [searchParams] = useSearchParams();
+  const [soloBajo, setSoloBajo] = useState(() => searchParams.get("filtro") === "bajo");
+  // Alertas de stock que mantiene la Function (clubs/{c}/alertasStock): cuenta del filtro y "bajo desde"
+  const [alertas, setAlertas] = useState(null);
   const [dialogoProducto, setDialogoProducto] = useState(null); // { producto } (null = nuevo)
   const [dialogoStock, setDialogoStock] = useState(null); // producto
   const [filtroMov, setFiltroMov] = useState(null); // { id, nombre }
@@ -988,6 +995,12 @@ export default function Productos() {
   // Productos con un movimiento recién registrado: id → stock que tenían; se borra a los 20 s
   const [recientes, setRecientes] = useState({});
   const timers = useRef({});
+
+  useEffect(() => {
+    if (!clubId || !puedeEntrar) return undefined;
+    const unsub = escucharAlertasStock(clubId, setAlertas, (err) => console.error("Error escuchando las alertas de stock:", err));
+    return () => unsub();
+  }, [clubId, puedeEntrar]);
 
   // Productos en tiempo real
   useEffect(() => {
@@ -1081,7 +1094,8 @@ export default function Productos() {
     return items;
   }, [productos, categorias, nombreCategoria]);
   const catActiva = itemsCategorias.some((i) => i.value === filtroCat) ? filtroCat : "todas";
-  const cantidadBajo = useMemo(() => productos.filter((p) => stockBajo(p)).length, [productos]);
+  const alertasPorId = useMemo(() => Object.fromEntries((alertas || []).map((a) => [a.id, a])), [alertas]);
+  const cantidadBajo = useMemo(() => (alertas ? alertas.length : productos.filter((p) => stockBajo(p)).length), [alertas, productos]);
 
   const filtrados = useMemo(() => {
     const q = normalizarNombre(busqueda);
@@ -1209,6 +1223,7 @@ export default function Productos() {
       <span className="inline-flex flex-col items-end gap-1">
         {tono ? <Badge tone={tono}>{textoStock(p)}</Badge> : <span className="pd-tnum whitespace-nowrap">{textoStock(p)}</span>}
         {reciente && <span className="pd-help whitespace-nowrap">Se actualiza en unos segundos</span>}
+        {alertasPorId[p.id]?.desde && aDate(alertasPorId[p.id].desde) && <span className="pd-help whitespace-nowrap">Bajo desde {formatDiaCorto(`${aDate(alertasPorId[p.id].desde).getFullYear()}-${String(aDate(alertasPorId[p.id].desde).getMonth() + 1).padStart(2, "0")}-${String(aDate(alertasPorId[p.id].desde).getDate()).padStart(2, "0")}`)}</span>}
       </span>
     );
   };

@@ -11,10 +11,11 @@ import {
   actualizarReservaGrupo,
 } from "../../services/canchaService";
 import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
-import { addDaysLocal, formatDesde, formatFecha } from "../../utils/formatDate";
+import { addDaysLocal, formatDesde, formatFecha, getTodayLocal } from "../../utils/formatDate";
 import { formatPrecio } from "../../utils/format";
 import { escucharCajasAbiertas } from "../../services/cajaService";
 import { escucharCuentasAbiertas } from "../../services/cuentasService";
+import { escucharAlertasStock, escucharReporteDelDia } from "../../services/reportesService";
 import { efectivoEsperado } from "../../utils/caja";
 import { agruparReservas, estadoSeña, rangoHoras } from "../../utils/reservas";
 import { canchasDelTorneo } from "../../utils/torneo";
@@ -49,6 +50,21 @@ export default function Dashboard() {
   const [cajasAbiertas, setCajasAbiertas] = useState(null);
   const [cuentasAbiertas, setCuentasAbiertas] = useState([]);
   const puedeCaja = puede("abrirCaja") || puede("cerrarCaja") || puede("cerrarCajaAjena") || puede("verCajasCerradas") || puede("vender") || puede("cobrarTurnos");
+  // Reporte de hoy (rollup) y alertas de stock, para una línea cada uno en la tarjeta de Caja
+  const [reporteHoy, setReporteHoy] = useState(null);
+  const [alertasStock, setAlertasStock] = useState([]);
+  const puedeReportesBar = puede("verReportes");
+  const puedeStockBar = puede("editarProductos") || puede("cargarStock");
+  useEffect(() => {
+    if (!clubId || !puedeReportesBar) return undefined;
+    const unsub = escucharReporteDelDia(clubId, getTodayLocal(), setReporteHoy, (err) => console.error("Error leyendo el reporte de hoy:", err));
+    return () => unsub();
+  }, [clubId, puedeReportesBar]);
+  useEffect(() => {
+    if (!clubId || !puedeStockBar) return undefined;
+    const unsub = escucharAlertasStock(clubId, setAlertasStock, (err) => console.error("Error leyendo las alertas de stock:", err));
+    return () => unsub();
+  }, [clubId, puedeStockBar]);
 
   useEffect(() => {
     if (!clubId || !puedeCaja) return undefined;
@@ -358,13 +374,13 @@ export default function Dashboard() {
       )}
 
       {/* Caja del bar: una línea con la caja abierta (o su ausencia) para quien maneja la caja */}
-      {puedeCaja && cajasAbiertas !== null && (
+      {(puedeCaja || puedeStockBar) && (cajasAbiertas !== null || puedeStockBar) && (
         <Card variant="hover" as="div" className="mb-4 flex items-start gap-3" {...linkProps("/admin/bar/caja")}>
           <Wallet className="pd-icon text-ink-3 mt-0.5" size={20} aria-hidden="true" />
           <div>
             <p className="heading-sm m-0">Caja</p>
             <p className="body-sm text-ink-2 m-0">
-              {cajasAbiertas.length === 0
+              {cajasAbiertas === null || cajasAbiertas.length === 0
                 ? "Sin caja abierta"
                 : cajasAbiertas.length === 1
                   ? `${cajasAbiertas[0].dispositivo} abierta desde ${formatDesde(cajasAbiertas[0].abiertaEn)} · efectivo esperado ${formatPrecio(efectivoEsperado(cajasAbiertas[0]))}`
@@ -381,6 +397,16 @@ export default function Dashboard() {
                   </Link>
                 )}
               </span>
+            )}
+            {puedeReportesBar && reporteHoy && (Number(reporteHoy.ventas?.cantidad) || 0) > 0 && (
+              <Link to="/admin/bar/reportes" className="body-sm text-ink underline mt-1 block pd-tnum" onClick={(e) => e.stopPropagation()}>
+                Hoy: {(Number(reporteHoy.ventas.cantidad) || 0) - (Number(reporteHoy.ventas.anuladas) || 0)} ventas · {formatPrecio(reporteHoy.ventas.total)}
+              </Link>
+            )}
+            {puedeStockBar && alertasStock.length > 0 && (
+              <Link to="/admin/bar/productos?filtro=bajo" className="body-sm text-warning underline mt-1 block pd-tnum" onClick={(e) => e.stopPropagation()}>
+                Stock bajo: {alertasStock.length} {alertasStock.length === 1 ? "producto" : "productos"}
+              </Link>
             )}
           </div>
         </Card>

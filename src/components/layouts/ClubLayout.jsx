@@ -1,4 +1,4 @@
-import { BarChart3, ChefHat, LayoutDashboard, LayoutGrid, Package, ReceiptText, Settings, ShoppingCart, Trophy, Wallet } from "lucide-react";
+import { BarChart3, ChefHat, LayoutDashboard, LayoutGrid, Package, ReceiptText, Settings, ShoppingCart, TrendingUp, Trophy, Wallet } from "lucide-react";
 import PanelLayout from "./PanelLayout";
 import { useAuthStore } from "../../store/authStore";
 import Alert from "../ui/Alert";
@@ -11,12 +11,13 @@ const navItems = [
   { to: "/admin/estadisticas", label: "Estadísticas", icon: BarChart3, permisos: ["verReportes"] },
   { to: "/admin/configuracion", label: "Configuración", icon: Settings, permisos: ["configurarClub", "gestionarStaff"] },
   // Grupo Bar (el título se ve si alguno de sus ítems se ve)
-  { seccion: "Bar", permisos: ["vender", "cobrarTurnos", "pedidos", "abrirCaja", "cerrarCaja", "cerrarCajaAjena", "verCajasCerradas", "editarProductos", "cargarStock", "importar"] },
+  { seccion: "Bar", permisos: ["vender", "cobrarTurnos", "pedidos", "abrirCaja", "cerrarCaja", "cerrarCajaAjena", "verCajasCerradas", "editarProductos", "cargarStock", "importar", "verReportes"] },
   { to: "/admin/bar/vender", label: "Vender", icon: ShoppingCart, permisos: ["vender"] },
   { to: "/admin/bar/cuentas", label: "Cuentas", icon: ReceiptText, permisos: ["cobrarTurnos", "vender"] },
   { to: "/admin/bar/barra", label: "Barra", icon: ChefHat, permisos: ["pedidos"] },
   { to: "/admin/bar/caja", label: "Caja", icon: Wallet, permisos: ["abrirCaja", "cerrarCaja", "cerrarCajaAjena", "verCajasCerradas"] },
   { to: "/admin/bar/productos", label: "Productos", icon: Package, permisos: ["editarProductos", "cargarStock", "importar"] },
+  { to: "/admin/bar/reportes", label: "Reportes", icon: TrendingUp, permisos: ["verReportes"] },
 ];
 
 export default function ClubLayout() {

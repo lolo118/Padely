@@ -46,6 +46,7 @@ const BarCuentas = lazy(() => import("./pages/admin/bar/Cuentas"));
 const BarCuentaDetalle = lazy(() => import("./pages/admin/bar/CuentaDetalle"));
 const BarBarra = lazy(() => import("./pages/admin/bar/Barra"));
 const BarQr = lazy(() => import("./pages/admin/bar/QrCanchas"));
+const BarReportes = lazy(() => import("./pages/admin/bar/Reportes"));
 const QrCancha = lazy(() => import("./pages/QrCancha"));
 
 // Org pages
@@ -270,6 +271,7 @@ export default function App() {
             <Route path="bar/cuentas/:id" element={<BarCuentaDetalle />} />
             <Route path="bar/barra" element={<BarBarra />} />
             <Route path="bar/qr" element={<BarQr />} />
+            <Route path="bar/reportes" element={<BarReportes />} />
             <Route path="bar/caja" element={<BarCaja />} />
             <Route path="bar/productos" element={<BarProductos />} />
           </Route>
