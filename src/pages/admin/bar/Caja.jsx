@@ -26,6 +26,8 @@ import {
 import { ANCHOS_TICKET, anchoTicketGuardado, guardarAnchoTicket } from "../../../print/imprimir";
 import { htmlCierreCaja } from "../../../print/cierreCaja";
 import { efectivoEsperado, montoConSigno, tonoDiferencia } from "../../../utils/caja";
+import { pendientesDeSync } from "../../../utils/conexion";
+import { db } from "../../../lib/firebase";
 import { formatPrecio } from "../../../utils/format";
 import { formatDiaHora, formatFechaHora, formatHora } from "../../../utils/formatDate";
 
@@ -114,6 +116,15 @@ function MovimientoDialog({ tipo, caja, clubId, uid, nombre, onCerrar }) {
 
 function CerrarCajaDialog({ caja, pendientes, clubId, uid, nombre, onCerrar, onCerrada }) {
   const [contado, setContado] = useState("");
+  // Ventas u otras escrituras de este navegador que el servidor todavía no recibió (sin internet): se avisa, no se bloquea
+  const [sinSync, setSinSync] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    pendientesDeSync(db).then((hay) => vivo && setSinSync(hay));
+    return () => {
+      vivo = false;
+    };
+  }, []);
   const [observaciones, setObservaciones] = useState("");
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -194,6 +205,11 @@ function CerrarCajaDialog({ caja, pendientes, clubId, uid, nombre, onCerrar, onC
           </div>
         </dl>
         {pendientes && <Alert tone="warning">Hay movimientos que todavía no se aplicaron a los totales. Esperá unos segundos antes de cerrar.</Alert>}
+        {sinSync && (
+          <Alert tone="warning">
+            <strong>Hay ventas sin sincronizar.</strong> Los totales de abajo no las incluyen: cerrá cuando vuelva la conexión, o anotá la diferencia en las observaciones.
+          </Alert>
+        )}
         <Field label="Efectivo contado" help="Lo que hay en la caja ahora, con el fondo inicial." error={error}>
           <Input type="number" min="0" step="any" inputMode="decimal" value={contado} onChange={(e) => setContado(e.target.value)} placeholder="0" data-autofocus />
         </Field>
@@ -628,7 +644,11 @@ export default function Caja() {
                 abrir();
               }}
             >
-              <Field label="Dispositivo" help="Cómo se llama esta caja en el club. Se recuerda en este navegador." error={errAbrir.dispositivo}>
+              <Field
+                label="Dispositivo"
+                help="Un dispositivo = una PC o tablet. Si abrís Padely en otra pestaña de este mismo navegador, es la misma caja."
+                error={errAbrir.dispositivo}
+              >
                 <Input value={formAbrir.dispositivo} onChange={(e) => setFormAbrir({ ...formAbrir, dispositivo: e.target.value })} maxLength={40} placeholder={DISPOSITIVO_POR_DEFECTO} />
               </Field>
               <Field label="Fondo inicial" help="El efectivo con el que arranca el turno (para dar cambio)." error={errAbrir.fondo}>
