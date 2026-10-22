@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Pencil, Plus, RefreshCw, Star, Trash2, X } from "lucide-react";
+import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, Download, Pencil, Plus, RefreshCw, Star, Trash2, Upload, X } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import SinPermiso from "../../../components/SinPermiso";
 import { toast } from "../../../components/Toast";
@@ -28,6 +28,10 @@ import {
 } from "../../../services/productosService";
 import { margenPorcentaje, tonoStock, stockBajo, normalizarNombre, ETIQUETA_UNIDAD } from "../../../utils/productos";
 import { formatPrecio } from "../../../utils/format";
+import { descargarPlantilla } from "../../../utils/plantillaProductos";
+
+// El asistente de importación (y SheetJS, que carga él) se bajan recién al abrirlo
+const ImportarProductos = lazy(() => import("./ImportarProductos"));
 
 // ----- Helpers de formato -----
 
@@ -1042,6 +1046,7 @@ export default function Productos() {
   const [dialogoProducto, setDialogoProducto] = useState(null); // { producto } (null = nuevo)
   const [dialogoStock, setDialogoStock] = useState(null); // producto
   const [filtroMov, setFiltroMov] = useState(null); // { id, nombre }
+  const [importando, setImportando] = useState(false);
 
   // Productos con un movimiento recién registrado: id → stock que tenían; se borra a los 20 s
   const [recientes, setRecientes] = useState({});
@@ -1228,6 +1233,15 @@ export default function Productos() {
   const cargandoProductos = prods.para !== clubId;
   const estadoCats = { lista: categorias, error: cats.para === clubId && cats.error, cargando: cats.para !== clubId };
   const estadoProvs = { lista: proveedores, error: provs.para === clubId && provs.error, cargando: provs.para !== clubId };
+
+  const bajarPlantilla = async () => {
+    try {
+      await descargarPlantilla();
+    } catch (e) {
+      console.error("Error generando la plantilla:", e);
+      toast.error("No se pudo descargar la plantilla");
+    }
+  };
 
   // ----- Partes de la lista de productos (funciones, no componentes) -----
 
@@ -1440,7 +1454,16 @@ export default function Productos() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h1 className="heading-lg m-0">Productos</h1>
         <div className="pd-btn-group">
-          {/* IMPORTAR: botones Importar y Descargar plantilla (paso 3) */}
+          {puedeImportar && (
+            <>
+              <Button variant="ghost" icon={icono(Download)} onClick={bajarPlantilla}>
+                Descargar plantilla
+              </Button>
+              <Button icon={icono(Upload)} onClick={() => setImportando(true)}>
+                Importar
+              </Button>
+            </>
+          )}
           {tab === "productos" && puedeEditar && (
             <Button variant="primary" icon={icono(Plus)} onClick={() => setDialogoProducto({ producto: null })}>
               Nuevo producto
@@ -1506,6 +1529,19 @@ export default function Productos() {
           onCerrar={() => setDialogoStock(null)}
           onMovido={marcarMovido}
         />
+      )}
+      {importando && (
+        <Suspense fallback={null}>
+          <ImportarProductos
+            abierto
+            clubId={clubId}
+            productos={productos}
+            categorias={categorias}
+            proveedores={proveedores}
+            onCerrar={() => setImportando(false)}
+            onTerminado={cargarProveedores}
+          />
+        </Suspense>
       )}
     </div>
   );
