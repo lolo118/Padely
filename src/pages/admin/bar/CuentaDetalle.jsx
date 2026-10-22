@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Plus, X } from "lucide-react";
+import { ArrowLeft, Plus, Printer, X } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import SinPermiso from "../../../components/SinPermiso";
 import Dialogo from "../../../components/Dialogo";
@@ -9,11 +9,15 @@ import { confirmar } from "../../../components/ConfirmDialog";
 import { Alert, Badge, Button, Card, Field, Input } from "../../../components/ui";
 import CobrarDialog from "../../../components/pos/CobrarDialog";
 import PostVentaDialog from "../../../components/pos/PostVentaDialog";
+import DividirDialog from "../../../components/pos/DividirDialog";
+import TicketPreview from "../../../components/TicketPreview";
 import useNumeracion from "../../../components/pos/useNumeracion";
+import { htmlTicketCuenta } from "../../../print/ticketCuenta";
+import { anchoTicketGuardado } from "../../../print/imprimir";
 import { dispositivoGuardado, escucharCajaAbierta } from "../../../services/cajaService";
-import { CuentaNoEditableError, anularCuenta, cobrarTodo, escucharCuenta, quitarItemDeCuenta, setCobrarCancha } from "../../../services/cuentasService";
+import { CuentaNoEditableError, anularCuenta, cobrarParte, cobrarTodo, escucharCuenta, guardarDivision, quitarItemDeCuenta, setCobrarCancha } from "../../../services/cuentasService";
 import { useOnline } from "../../../utils/conexion";
-import { calcularTotalesCuenta, cuentaEditable, partesPagadas, textoTurno } from "../../../utils/cuentas";
+import { calcularTotalesCuenta, cuentaEditable, partePagada, partesPagadas, textoTurno } from "../../../utils/cuentas";
 import { formatPrecio } from "../../../utils/format";
 import { formatDiaCorto, formatFechaHora, formatHora } from "../../../utils/formatDate";
 
@@ -76,7 +80,7 @@ function AnularCuentaDialog({ cuenta, clubId, uid, nombre, onCerrar, onAnulada }
   );
 }
 
-export default function CuentaDetalle({ renderDividir = null }) {
+export default function CuentaDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
   const clubActual = useAuthStore((s) => s.clubActual);
@@ -94,9 +98,11 @@ export default function CuentaDetalle({ renderDividir = null }) {
   const [dispositivo] = useState(dispositivoGuardado);
   const [cajaEstado, setCajaEstado] = useState({ para: null, caja: null });
   const [estado, setEstado] = useState({ para: null, cuenta: null, error: false });
-  const [dialogo, setDialogo] = useState(null); // "cobrarTodo" | "anular" | "dividir"
-  const [ultimaVenta, setUltimaVenta] = useState(null);
+  const [dialogo, setDialogo] = useState(null); // "cobrarTodo" | "anular" | "dividir" | { parteId }
+  const [ultimaVenta, setUltimaVenta] = useState(null); // { venta, cerroCuenta }
+  const [ticketCuenta, setTicketCuenta] = useState(null); // html de la cuenta a previsualizar
   const [ocupado, setOcupado] = useState(false);
+  const [ancho] = useState(anchoTicketGuardado);
 
   useEffect(() => {
     if (!clubId || !puedeEntrar) return undefined;
@@ -176,11 +182,32 @@ export default function CuentaDetalle({ renderDividir = null }) {
       const { venta } = await cobrarTodo(clubId, cuenta, calculo, { ...ctx(), numero });
       toast.success(`Cuenta cobrada · ${venta.numero} · ${formatPrecio(venta.total)}`);
       setDialogo(null);
-      setUltimaVenta({ ...venta, creadoEn: new Date(), estado: "ok" });
+      setUltimaVenta({ venta: { ...venta, creadoEn: new Date(), estado: "ok" }, cerroCuenta: true });
     } finally {
       setOcupado(false);
     }
   };
+  const confirmarCobrarParte = async (parteId, calculo) => {
+    if (!caja) throw new Error("Abrí la caja para cobrar");
+    setOcupado(true);
+    try {
+      const numero = await tomar();
+      const { venta, cerrada } = await cobrarParte(clubId, cuenta, parteId, calculo, { ...ctx(), numero });
+      toast.success(`${cerrada ? "Cuenta cerrada" : "Parte cobrada"} · ${venta.numero} · ${formatPrecio(venta.total)}`);
+      setDialogo(null);
+      setUltimaVenta({ venta: { ...venta, creadoEn: new Date(), estado: "ok" }, cerroCuenta: cerrada });
+    } finally {
+      setOcupado(false);
+    }
+  };
+  const guardarLaDivision = async (division) => {
+    await guardarDivision(clubId, cuenta.id, division);
+    toast.success("División guardada");
+    setDialogo(null);
+  };
+  // El ticket de la cuenta se arma con la cuenta tal como está (pre-cuenta mientras sigue abierta)
+  const verTicketCuenta = (c = cuenta) => setTicketCuenta(htmlTicketCuenta({ club: clubActual, cuenta: c }));
+  const parteCobrando = dialogo && typeof dialogo === "object" && dialogo.parteId ? (cuenta.division?.partes || []).find((p) => p.parteId === dialogo.parteId) : null;
 
   const puedeCobrar = abierta && !!caja && totales.total >= 0 && (cuenta.items?.length > 0 || totales.cancha > 0);
 
@@ -325,7 +352,53 @@ export default function CuentaDetalle({ renderDividir = null }) {
             )}
           </Card>
 
-          {renderDividir && renderDividir({ cuenta, totales, editable, caja, tomar, sinNumeros, ctx, setUltimaVenta })}
+          {/* División: una fila por parte, cada una se cobra por separado */}
+          {cuenta.division?.partes?.length > 0 && (
+            <Card className="p-0!">
+              <div className="pd-table-head">
+                <h3>
+                  División{cuenta.division.modo === "total" ? " en partes iguales" : " · cada uno lo suyo"}
+                  <span className="pd-count">
+                    {pagadas}/{cuenta.division.partes.length} pagadas
+                  </span>
+                </h3>
+                {abierta && editable && (
+                  <Button size="sm" variant="ghost" onClick={() => setDialogo("dividir")}>
+                    Cambiar
+                  </Button>
+                )}
+              </div>
+              <ul className="m-0 p-0 list-none divide-y divide-line">
+                {cuenta.division.partes.map((p) => (
+                  <li key={p.parteId} className="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold m-0 break-words">{p.nombre}</p>
+                      <p className="body-sm text-ink-2 m-0 pd-tnum">
+                        Consumos {formatPrecio(p.consumos)}
+                        {p.cancha ? ` · cancha ${formatPrecio(p.cancha)}` : ""}
+                        {p.items?.length ? ` · ${p.items.length} propios` : ""}
+                        {p.compartidos?.length ? ` · ${p.compartidos.length} compartidos` : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-semibold pd-tnum">{formatPrecio(p.total)}</span>
+                      {partePagada(p) ? (
+                        <Badge tone="success" className="pd-tnum">
+                          Pagado · {p.ventaNumero}
+                        </Badge>
+                      ) : abierta ? (
+                        <Button size="sm" variant="primary" disabled={!caja || sinNumeros || ocupado} onClick={() => setDialogo({ parteId: p.parteId })}>
+                          Cobrar
+                        </Button>
+                      ) : (
+                        <Badge tone="warning">Pendiente</Badge>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
         </div>
 
         {/* Totales y acciones */}
@@ -357,9 +430,9 @@ export default function CuentaDetalle({ renderDividir = null }) {
                   Cobrar todo
                 </Button>
               )}
-              {renderDividir && editable && (
-                <Button className="w-full" disabled={!puedeCobrar} onClick={() => setDialogo("dividir")}>
-                  {cuenta.division?.partes?.length ? "Cambiar la división" : "Dividir entre jugadores"}
+              {editable && !cuenta.division?.partes?.length && (
+                <Button className="w-full" disabled={totales.total <= 0} onClick={() => setDialogo("dividir")}>
+                  Dividir entre jugadores
                 </Button>
               )}
               {puedeAnular && pagadas === 0 && (
@@ -370,6 +443,9 @@ export default function CuentaDetalle({ renderDividir = null }) {
               {sinNumeros && <p className="pd-error m-0">Sin números de ticket: conectate a internet un momento.</p>}
             </div>
           )}
+          <Button variant="ghost" className="w-full" icon={<Printer className="pd-icon" size={20} aria-hidden="true" />} onClick={() => verTicketCuenta()}>
+            {abierta ? "Imprimir pre-cuenta" : "Reimprimir cuenta"}
+          </Button>
         </aside>
       </div>
 
@@ -387,10 +463,33 @@ export default function CuentaDetalle({ renderDividir = null }) {
           }}
         />
       )}
-      {dialogo === "dividir" && renderDividir && renderDividir({ cuenta, totales, editable, caja, tomar, sinNumeros, ctx, setUltimaVenta, dialogo: true, onCerrar: () => setDialogo(null) })}
-      {ultimaVenta && (
-        <PostVentaDialog venta={ultimaVenta} club={clubActual} clubId={clubId} ancho={80} imprimirDirecto={false} onCerrar={() => setUltimaVenta(null)} />
+      {dialogo === "dividir" && <DividirDialog cuenta={cuenta} onCerrar={() => setDialogo(null)} onGuardar={guardarLaDivision} />}
+      {parteCobrando && (
+        <CobrarDialog total={parteCobrando.total} sinNumeros={sinNumeros} onCerrar={() => setDialogo(null)} onConfirmar={(calculo) => confirmarCobrarParte(parteCobrando.parteId, calculo)} />
       )}
+      {ultimaVenta && (
+        <PostVentaDialog
+          venta={ultimaVenta.venta}
+          club={clubActual}
+          clubId={clubId}
+          ancho={ancho}
+          imprimirDirecto={false}
+          accionesExtra={
+            ultimaVenta.cerroCuenta ? (
+              <Button
+                onClick={() => {
+                  setUltimaVenta(null);
+                  verTicketCuenta({ ...cuenta, estado: "cerrada", ventas: [...new Set([...(cuenta.ventas || []), ultimaVenta.venta.numero])] });
+                }}
+              >
+                Imprimir cuenta completa
+              </Button>
+            ) : null
+          }
+          onCerrar={() => setUltimaVenta(null)}
+        />
+      )}
+      {ticketCuenta && <TicketPreview titulo="Cuenta del turno" descripcion={textoTurno(cuenta)} html={ticketCuenta} ancho={ancho} onCerrar={() => setTicketCuenta(null)} />}
     </div>
   );
 }

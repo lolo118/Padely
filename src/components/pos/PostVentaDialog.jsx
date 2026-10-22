@@ -10,7 +10,7 @@ import { telefonoWhatsApp, textoTicketWhatsApp } from "../../utils/ventas";
 
 // Después de cobrar: número, vuelto grande, "Imprimir" (directo o con vista previa), "Enviar por WhatsApp" (si se
 // cargó un teléfono) y "Sin ticket". La venta ya está guardada: cerrar no deshace nada.
-export default function PostVentaDialog({ venta, club, clubId, ancho = 80, imprimirDirecto = false, onCerrar }) {
+export default function PostVentaDialog({ venta, club, clubId, ancho = 80, imprimirDirecto = false, accionesExtra = null, onCerrar }) {
   const [preview, setPreview] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
   const html = htmlTicketVenta({ club, venta, clubId });
@@ -42,6 +42,7 @@ export default function PostVentaDialog({ venta, club, clubId, ancho = 80, impri
         onSubmit={onCerrar}
         acciones={
           <>
+            {accionesExtra}
             {telefono && (
               <Button icon={<MessageCircle className="pd-icon" size={20} aria-hidden="true" />} onClick={whatsapp}>
                 Enviar por WhatsApp
