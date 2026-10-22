@@ -36,6 +36,7 @@ const enlaceCard =
   "block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 
 export default function OrgTorneos() {
+  const entidadSuspendida = useAuthStore((s) => s.entidadSuspendida);
   const { user } = useAuthStore();
   const [torneos, setTorneos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -51,14 +52,17 @@ export default function OrgTorneos() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="heading-lg m-0">Mis torneos</h1>
-        <Button
-          as="link"
-          to="/org/torneos/nuevo"
-          variant="primary"
-          icon={<Plus className="pd-icon" size={20} aria-hidden="true" />}
-        >
-          Crear torneo
-        </Button>
+        {/* Con la entidad suspendida no se crean torneos (el aviso del panel explica por qué) */}
+        {!entidadSuspendida && (
+          <Button
+            as="link"
+            to="/org/torneos/nuevo"
+            variant="primary"
+            icon={<Plus className="pd-icon" size={20} aria-hidden="true" />}
+          >
+            Crear torneo
+          </Button>
+        )}
       </div>
 
       {loading && (
@@ -77,7 +81,9 @@ export default function OrgTorneos() {
         <Card className="text-center py-12!">
           <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
           <p className="heading-sm m-0">Todavía no creaste ningún torneo.</p>
-          <p className="body-sm text-ink-2 mt-1 mb-0">Creá el primero con "Crear torneo".</p>
+          <p className="body-sm text-ink-2 mt-1 mb-0">
+            {entidadSuspendida ? "Con la entidad suspendida no se pueden crear torneos." : 'Creá el primero con "Crear torneo".'}
+          </p>
         </Card>
       )}
 

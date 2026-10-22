@@ -20,6 +20,7 @@ const enlaceCard =
   "block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 
 export default function OrgDashboard() {
+  const entidadSuspendida = useAuthStore((s) => s.entidadSuspendida);
   const { user } = useAuthStore();
   const [torneos, setTorneos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,14 +74,17 @@ export default function OrgDashboard() {
           <h1 className="heading-lg m-0">Dashboard</h1>
           <p className="body-sm text-ink-2 mt-1 mb-0">Resumen de tu actividad como organizador</p>
         </div>
-        <Button
-          as="link"
-          to="/org/torneos/nuevo"
-          variant="primary"
-          icon={<Plus className="pd-icon" size={20} aria-hidden="true" />}
-        >
-          Crear nuevo torneo
-        </Button>
+        {/* Con la entidad suspendida no se crean torneos (el aviso del panel explica por qué) */}
+        {!entidadSuspendida && (
+          <Button
+            as="link"
+            to="/org/torneos/nuevo"
+            variant="primary"
+            icon={<Plus className="pd-icon" size={20} aria-hidden="true" />}
+          >
+            Crear nuevo torneo
+          </Button>
+        )}
       </div>
 
       {/* Recordatorio completar perfil de entidad */}

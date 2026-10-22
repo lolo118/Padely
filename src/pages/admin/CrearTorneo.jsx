@@ -11,7 +11,7 @@ import PerfilIncompleto from "../../components/PerfilIncompleto";
 import SinPermiso from "../../components/SinPermiso";
 import { CATEGORIAS_TORNEO } from "../../utils/categorias";
 import { canchasDesdeTexto } from "../../utils/torneo";
-import { Alert, Button, Card, Field, Input, MarcaCategoria, Pills, SearchInput, Select, Textarea } from "../../components/ui";
+import { Button, Card, Field, Input, MarcaCategoria, Pills, SearchInput, Select, Textarea } from "../../components/ui";
 
 const provinciasArgentina = [
   "Buenos Aires",
@@ -529,10 +529,14 @@ export default function CrearTorneo() {
     return <PerfilIncompleto tipo={tipoUsuario} ruta={tipoUsuario === "organizador" ? "/org/entidad" : "/admin/configuracion"} />;
   }
   if (entidadSuspendida) {
+    // El aviso de la suspensión lo muestra el panel del organizador arriba de esta página: no se repite
     return (
-      <Alert tone="danger">
-        <strong>Tu entidad está suspendida.</strong> No podés crear torneos nuevos. Escribinos para reactivarla.
-      </Alert>
+      <div className="flex flex-col gap-4">
+        <h1 className="heading-lg m-0">Crear torneo</h1>
+        <Button as="link" to="/org/torneos" className="self-start">
+          Volver a mis torneos
+        </Button>
+      </div>
     );
   }
 

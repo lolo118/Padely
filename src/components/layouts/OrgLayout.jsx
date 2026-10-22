@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { BarChart3, Building2, LayoutDashboard, Trophy, Users } from "lucide-react";
 import { db } from "../../lib/firebase";
@@ -16,7 +16,8 @@ const navItems = [
 
 export default function OrgLayout() {
   const uid = useAuthStore((s) => s.user?.uid);
-  const [suspendido, setSuspendido] = useState(false);
+  const suspendido = useAuthStore((s) => s.entidadSuspendida);
+  const setSuspendido = useAuthStore((s) => s.setEntidadSuspendida);
 
   // La entidad del organizador (organizers, por ownerUid): si el super-admin la suspendió, se avisa en todo el panel
   useEffect(() => {
@@ -30,7 +31,7 @@ export default function OrgLayout() {
     return () => {
       vigente = false;
     };
-  }, [uid]);
+  }, [uid, setSuspendido]);
 
   const aviso = suspendido ? (
     <Alert tone="danger">

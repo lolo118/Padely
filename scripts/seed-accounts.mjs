@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { initializeApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { getFirestore, doc, setDoc, getDocs, addDoc, collection, query, where, serverTimestamp } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, getDocs, addDoc, collection, query, where, serverTimestamp } from "firebase/firestore";
 
 const env = Object.fromEntries(
   readFileSync(".env", "utf8").split("\n")
@@ -41,7 +41,10 @@ async function ensureUser(email) {
 
 for (const c of cuentas) {
   const user = await ensureUser(c.email);
-  await setDoc(doc(db, "users", user.uid), { uid: user.uid, nombre: c.nombre, email: c.email, role: [c.tipo], createdAt: new Date(), ...(c.perfil || {}) }, { merge: true });
+  // La fecha de alta se pone solo la primera vez (volver a correr el seed no la pisa)
+  const userRef = doc(db, "users", user.uid);
+  const existe = (await getDoc(userRef)).exists();
+  await setDoc(userRef, { uid: user.uid, nombre: c.nombre, email: c.email, role: [c.tipo], ...(existe ? {} : { createdAt: new Date() }), ...(c.perfil || {}) }, { merge: true });
   if (c.tipo === "club") {
     const snap = await getDocs(query(collection(db, "clubs"), where("ownerUid", "==", user.uid)));
     if (snap.empty) await addDoc(collection(db, "clubs"), { ownerUid: user.uid, logo: "", createdAt: serverTimestamp(), ...c.entidad });

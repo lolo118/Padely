@@ -46,11 +46,14 @@ export const useAuthStore = create((set, get) => ({
   clubCargado: false, // true cuando ya se resolvió clubActual para el usuario actual (aunque sea null)
   // Super-admin de la plataforma (superadmins/{uid}); false ante cualquier error
   esSuperAdmin: false,
+  // Entidad organizadora suspendida por el super-admin (la carga OrgLayout)
+  entidadSuspendida: false,
+  setEntidadSuspendida: (v) => set({ entidadSuspendida: !!v }),
   setUser: (user) =>
     set(
       user
         ? { user }
-        : { user: null, perfil: null, rol: null, staffDe: [], clubActual: null, clubCargado: false, esSuperAdmin: false },
+        : { user: null, perfil: null, rol: null, staffDe: [], clubActual: null, clubCargado: false, esSuperAdmin: false, entidadSuspendida: false },
     ),
   setPerfil: (perfil) => set({ perfil: perfil || null, rol: rolDesdePerfil(perfil) }),
   setLoading: (loading) => set({ loading }),
