@@ -1067,3 +1067,162 @@ exports.onVentaUpdated = onDocumentUpdated("clubs/{clubId}/ventas/{numero}", asy
     logger.error(`onVentaUpdated ${clubId}/${numero}`, err);
   }
 });
+
+// ============================================================================
+// BAR — CUENTA DEL TURNO: hasta que se cierra, una cuenta (clubs/{c}/cuentas/{grupoId}) no mueve nada. Al pasar a
+// "cerrada" esta Function hace, UNA sola vez (marca cuentaAplicada en la misma transacción):
+//   1. los movimientos de stock de sus consumos (ids cuenta_{id}_{lineaId}, tipo "venta") — las ventas que cerraron
+//      la cuenta llevan todas sus líneas con controlaStock false, así onVentaCreated no las mueve: no hay doble baja;
+//   2. en los turnos de la reserva (reservas where grupoId == id): cuentaCerrada, cuentaTotal, cuentaCerradaEn y
+//      señaPagada: true cuando la seña se cobró en la cuenta (cancha.cobrar y la seña estaba pendiente);
+// y avisa al jugador que reservó. Al pasar a "anulada" solo avisa (nada se movió).
+// La caja NO se toca acá: la mueven las ventas (sus pagos) vía onVentaCreated → onMovimientoCajaCreated.
+// ============================================================================
+exports.onCuentaUpdated = onDocumentUpdated("clubs/{clubId}/cuentas/{cuentaId}", async (event) => {
+  const { clubId, cuentaId } = event.params;
+  const antes = event.data && event.data.before ? event.data.before.data() : null;
+  const despues = event.data && event.data.after ? event.data.after.data() : null;
+  if (!antes || !despues || antes.estado !== "abierta" || despues.estado === "abierta") return;
+  const clubRef = db.collection("clubs").doc(clubId);
+  const cuentaRef = clubRef.collection("cuentas").doc(cuentaId);
+  const textoTurno = `${despues.canchaNombre || "Cancha"} ${despues.fecha || ""} ${despues.horaInicio || ""}${despues.horaFin ? `–${despues.horaFin}` : ""}`.trim();
+  const total = Number(despues.totales && despues.totales.total) || 0;
+
+  if (despues.estado === "anulada") {
+    if (despues.jugadorUid && despues.cierreAutomatico !== true) {
+      try {
+        await nuevaNotificacionRef(despues.jugadorUid).set({
+          tipo: "cuenta_anulada",
+          titulo: "Cuenta del turno anulada",
+          mensaje: `La cuenta de ${textoTurno} fue anulada por el club.`,
+          link: "/mis-reservas",
+          icono: "🧾",
+          leida: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      } catch (err) {
+        logger.error(`onCuentaUpdated ${clubId}/${cuentaId}: no se pudo avisar la anulación`, err);
+      }
+    }
+    logger.info(`onCuentaUpdated ${clubId}/${cuentaId}: anulada`);
+    return;
+  }
+
+  if (despues.estado !== "cerrada") return;
+  try {
+    const resultado = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(cuentaRef);
+      if (!snap.exists) return "sin cuenta";
+      const cuenta = snap.data() || {};
+      if (cuenta.cuentaAplicada === true) return "ya aplicada";
+      const ventaId = Array.isArray(cuenta.ventas) && cuenta.ventas.length ? String(cuenta.ventas[0]) : null;
+
+      // 1. Stock de los consumos (una vez por línea; ids deterministas)
+      const items = Array.isArray(cuenta.items) ? cuenta.items : [];
+      const pendientes = [];
+      items.forEach((it, i) => {
+        const cantidad = Number(it && it.cantidad);
+        if (!it || it.controlaStock === false || !it.productoId || !Number.isFinite(cantidad) || cantidad <= 0) return;
+        pendientes.push({
+          ref: clubRef.collection("movimientosStock").doc(`cuenta_${cuentaId}_${it.lineaId || i}`),
+          data: {
+            productoId: String(it.productoId),
+            tipo: "venta",
+            cantidad: -cantidad,
+            costoUnitario: null,
+            proveedorId: null,
+            ventaId,
+            cuentaId,
+            nota: `Cuenta ${textoTurno}`,
+            creadoPor: cuenta.cerradaPor || null,
+            creadoEn: FieldValue.serverTimestamp(),
+            aplicado: false,
+          },
+        });
+      });
+      // 2. Los turnos de la reserva
+      const reservasSnap = await tx.get(clubRef.collection("reservas").where("grupoId", "==", cuentaId));
+      const existentes = pendientes.length ? await tx.getAll(...pendientes.map((p) => p.ref)) : [];
+      let escritos = 0;
+      pendientes.forEach((p, k) => {
+        if (existentes[k].exists) return;
+        tx.set(p.ref, p.data);
+        escritos += 1;
+      });
+      const cancha = cuenta.cancha || {};
+      const señaCobradaAca = cancha.cobrar !== false && cancha.señaPagada !== true && Number(cancha.seña) > 0;
+      const cambiosReserva = { cuentaCerrada: true, cuentaTotal: Number(cuenta.totales && cuenta.totales.total) || 0, cuentaCerradaEn: FieldValue.serverTimestamp() };
+      if (señaCobradaAca) cambiosReserva.señaPagada = true;
+      reservasSnap.docs.forEach((d) => tx.update(d.ref, cambiosReserva));
+      tx.update(cuentaRef, { cuentaAplicada: true, cuentaAplicadaEn: FieldValue.serverTimestamp() });
+      return `cerrada: ${escritos} movimientos de stock, ${reservasSnap.size} turnos${señaCobradaAca ? ", seña cobrada" : ""}`;
+    });
+    logger.info(`onCuentaUpdated ${clubId}/${cuentaId}: ${resultado}`);
+    if (resultado === "ya aplicada" || resultado === "sin cuenta") return;
+    if (despues.jugadorUid) {
+      await nuevaNotificacionRef(despues.jugadorUid).set({
+        tipo: "cuenta_cerrada",
+        titulo: "Cuenta del turno cerrada",
+        mensaje: `${textoTurno} · total $ ${Math.round(total).toLocaleString("es-AR")}`,
+        link: "/mis-reservas",
+        icono: "🧾",
+        leida: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+  } catch (err) {
+    logger.error(`onCuentaUpdated ${clubId}/${cuentaId}`, err);
+  }
+});
+
+// Todos los días a las 4: las cuentas abiertas de días anteriores. Sin consumos → se anulan solas ("sin consumos,
+// vencida"); con consumos → se avisa al dueño del club una vez (avisoVencidaEnviado) y la cuenta queda abierta
+// para que la cierre alguien (cobrándola o anulándola).
+exports.cerrarCuentasVencidas = onSchedule({ schedule: "every day 04:00", timeZone: ZONA_HORARIA }, async () => {
+  const hoy = fechaLocalArgentina();
+  const snap = await db.collectionGroup("cuentas").where("estado", "==", "abierta").where("fecha", "<", hoy).get();
+  if (snap.empty) {
+    logger.info("cerrarCuentasVencidas: sin cuentas vencidas");
+    return;
+  }
+  let anuladas = 0;
+  let avisos = 0;
+  for (const cuentaDoc of snap.docs) {
+    try {
+      const cuenta = cuentaDoc.data() || {};
+      const items = Array.isArray(cuenta.items) ? cuenta.items : [];
+      const clubRef = cuentaDoc.ref.parent.parent;
+      if (!items.length) {
+        await cuentaDoc.ref.update({
+          estado: "anulada",
+          cerradaPor: "sistema",
+          cerradaEn: FieldValue.serverTimestamp(),
+          cierreAutomatico: true,
+          anulacion: { por: "sistema", porNombre: "Padely", motivo: "sin consumos, vencida" },
+          actualizadoEn: FieldValue.serverTimestamp(),
+        });
+        anuladas += 1;
+        continue;
+      }
+      if (cuenta.avisoVencidaEnviado === true || !clubRef) continue;
+      const clubSnap = await clubRef.get();
+      const ownerUid = clubSnap.exists ? clubSnap.data().ownerUid : null;
+      if (ownerUid) {
+        await nuevaNotificacionRef(ownerUid).set({
+          tipo: "cuenta_vencida",
+          titulo: "Cuenta del turno sin cerrar",
+          mensaje: `La cuenta de ${cuenta.canchaNombre || "una cancha"} del ${cuenta.fecha || ""} (${cuenta.nombreJugador || "sin nombre"}) sigue abierta con consumos. Cobrala o anulala desde Bar → Cuentas.`,
+          link: "/admin/bar/cuentas",
+          icono: "🧾",
+          leida: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        avisos += 1;
+      }
+      await cuentaDoc.ref.update({ avisoVencidaEnviado: true });
+    } catch (err) {
+      logger.error(`cerrarCuentasVencidas: ${cuentaDoc.ref.path}`, err);
+    }
+  }
+  logger.info(`cerrarCuentasVencidas: ${anuladas} anuladas, ${avisos} avisos (${snap.size} vencidas)`);
+});

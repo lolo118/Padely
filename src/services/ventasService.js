@@ -159,7 +159,17 @@ export const estadoNumeracion = (clubId) => {
 // Crea la venta con el número como id. NO espera la confirmación del servidor: con la persistencia local la
 // escritura queda en cola y Firestore la sube cuando puede. Devuelve el número; la promesa del ack se registra
 // como pendiente de sincronizar (pill "Sin conexión · N por sincronizar").
-export const crearVenta = (clubId, venta) => {
+export const crearVenta = (clubId, venta) => escribirVenta(clubId, venta).numero;
+
+// Igual que crearVenta pero ESPERA la confirmación del servidor (la usan las cuentas del turno: la regla de la venta
+// mira que la cuenta siga abierta, así que la venta tiene que llegar antes de cerrarla). Necesita conexión.
+export const crearVentaEsperando = async (clubId, venta) => {
+  const { numero, ack } = escribirVenta(clubId, venta);
+  await ack;
+  return numero;
+};
+
+const escribirVenta = (clubId, venta) => {
   const numero = venta.numero;
   const datos = {
     ...venta,
@@ -180,7 +190,7 @@ export const crearVenta = (clubId, venta) => {
       (err) => console.error("No se pudo actualizar el contador del dispositivo:", err),
     );
   }
-  return numero;
+  return { numero, ack };
 };
 
 export const escucharVentasDeCaja = (clubId, cajaId, onDatos, onError) =>

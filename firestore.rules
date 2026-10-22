@@ -133,6 +133,11 @@ service cloud.firestore {
       allow read: if signedIn();
     }
 
+    // "Mi cuenta": el jugador lee sus cuentas del turno en cualquier club (la consulta lleva where("jugadorUid", "==", auth.uid))
+    match /{path=**}/cuentas/{cuentaId} {
+      allow read: if signedIn() && resource.data.jugadorUid == request.auth.uid;
+    }
+
     // Al entrar, cada persona busca los clubes donde es staff (la consulta lleva where("uid", "==", auth.uid))
     match /{path=**}/staff/{uid} {
       allow read: if (signedIn() && resource.data.uid == request.auth.uid) || superAdmin();
@@ -321,7 +326,11 @@ service cloud.firestore {
           && request.resource.data.items is list
           && request.resource.data.items.size() > 0
           && request.resource.data.anulacion == null
-          && request.resource.data.cuentaId == null
+          // Sin cuenta: venta de mostrador. Con cuenta: la cuenta del turno existe y sigue abierta (sus líneas de
+          // cancha y seña no tienen producto y la seña va en negativo: por eso solo se admiten con cuentaId).
+          && (request.resource.data.cuentaId == null
+              || (request.resource.data.cuentaId is string
+                  && get(/databases/$(database)/documents/clubs/$(clubId)/cuentas/$(request.resource.data.cuentaId)).data.estado == 'abierta'))
           && request.resource.data.fiscal == null
           && request.resource.data.cajaId is string
           && cajaAbierta(clubId, request.resource.data.cajaId)
@@ -341,6 +350,35 @@ service cloud.firestore {
       // bloques de 100 números de cada dispositivo. Las transacciones las corre el cliente que vende.
       match /contadoresDispositivos/{codigo} {
         allow read, write: if esStaff(clubId, 'vender');
+      }
+
+      // ----- Bar: cuenta del turno (id = grupoId de la reserva; una reserva, a lo sumo una cuenta) -----
+      // La crea el POS al cargar el primer consumo; la cierra el staff cobrándola (sus ventas llevan cuentaId).
+      // Hasta el cierre nada se mueve: el stock lo mueve la Function onCuentaUpdated una sola vez; la caja, las
+      // ventas. El jugador que reservó la lee (y nada más). Campos que escribe SOLO la Function: cuentaAplicada,
+      // avisoVencidaEnviado, cierreAutomatico; en reservas: cuentaCerrada, cuentaTotal, cuentaCerradaEn.
+      match /cuentas/{cuentaId} {
+        allow read: if esStaffCaja(clubId) || esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender')
+          || (signedIn() && resource.data.jugadorUid == request.auth.uid)
+          || superAdmin();
+        allow create: if (esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender'))
+          && request.resource.data.estado == 'abierta'
+          && request.resource.data.abiertaPor == request.auth.uid
+          && request.resource.data.reservaGrupoId == cuentaId
+          && get(/databases/$(database)/documents/clubs/$(clubId)/reservas/$(cuentaId)).data.status == 'confirmada'
+          && request.resource.data.ventas.size() == 0
+          && request.resource.data.cerradaEn == null;
+        // Mientras está abierta: editar consumos / cancha / división (y anotar las ventas de las partes cobradas),
+        // o cerrarla (cerrada: quien cobra; anulada: quien puede anular ventas)
+        allow update: if (esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender'))
+          && resource.data.estado == 'abierta'
+          && ((changedOnly(['items', 'totales', 'division', 'cancha', 'ventas', 'actualizadoEn', 'nombreJugador'])
+               && request.resource.data.estado == 'abierta')
+              || (changedOnly(['estado', 'cerradaPor', 'cerradaEn', 'ventas', 'division', 'totales', 'anulacion', 'actualizadoEn'])
+                  && request.resource.data.estado in ['cerrada', 'anulada']
+                  && request.resource.data.cerradaPor == request.auth.uid
+                  && (request.resource.data.estado == 'cerrada' || esStaff(clubId, 'anularVenta'))));
+        allow delete: if false;
       }
 
       // Equipo del club. El dueño no tiene documento acá (clubs/{clubId}.ownerUid puede todo).
@@ -385,6 +423,8 @@ service cloud.firestore {
 
       match /reservas/{reservaId} {
         allow read: if signedIn();
+        // Campos de la Function (onCuentaUpdated, Admin SDK): cuentaCerrada, cuentaTotal, cuentaCerradaEn. Ningún
+        // cliente los escribe (los formularios del club y del jugador no los tocan).
         // The club books manually or blocks a slot; a player books for himself with the status the club's config dictates.
         // Email y teléfono de quien reserva van en contactosReservas/{reservaId}, nunca acá.
         allow create: if sinContacto(['email', 'telefono'])

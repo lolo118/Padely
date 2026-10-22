@@ -14,7 +14,7 @@ export const PERMISOS = [
   { id: "gestionarStaff", label: "Equipo: invitar y cambiar roles", descripcion: "Invitar gente, cambiar roles y permisos", grupo: "Club", faseActual: true },
   // Fase 3: bar y caja (faseActual: true cuando ya hay pantalla)
   { id: "vender", label: "Vender", descripcion: "Cobrar en el bar", grupo: "Bar", faseActual: true },
-  { id: "cobrarTurnos", label: "Cobrar turnos", descripcion: "Cobrar la cuenta del turno", grupo: "Bar", faseActual: false },
+  { id: "cobrarTurnos", label: "Cobrar turnos", descripcion: "Cobrar la cuenta del turno", grupo: "Bar", faseActual: true },
   { id: "abrirCaja", label: "Abrir caja", descripcion: "Abrir su propia caja", grupo: "Bar", faseActual: true },
   { id: "cerrarCaja", label: "Cerrar caja", descripcion: "Cerrar su propia caja", grupo: "Bar", faseActual: true },
   { id: "cerrarCajaAjena", label: "Cerrar la caja de otro", descripcion: "Cerrar una caja abierta por otra persona", grupo: "Bar", faseActual: true },
