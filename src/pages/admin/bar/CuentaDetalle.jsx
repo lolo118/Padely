@@ -206,7 +206,7 @@ export default function CuentaDetalle() {
     setDialogo(null);
   };
   // El ticket de la cuenta se arma con la cuenta tal como está (pre-cuenta mientras sigue abierta)
-  const verTicketCuenta = (c = cuenta) => setTicketCuenta(htmlTicketCuenta({ club: clubActual, cuenta: c }));
+  const verTicketCuenta = (c = cuenta) => setTicketCuenta(htmlTicketCuenta({ club: clubActual, cuenta: c, clubId }));
   const parteCobrando = dialogo && typeof dialogo === "object" && dialogo.parteId ? (cuenta.division?.partes || []).find((p) => p.parteId === dialogo.parteId) : null;
 
   const puedeCobrar = abierta && !!caja && totales.total >= 0 && (cuenta.items?.length > 0 || totales.cancha > 0);

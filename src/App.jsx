@@ -48,6 +48,7 @@ const BarBarra = lazy(() => import("./pages/admin/bar/Barra"));
 const BarQr = lazy(() => import("./pages/admin/bar/QrCanchas"));
 const BarReportes = lazy(() => import("./pages/admin/bar/Reportes"));
 const QrCancha = lazy(() => import("./pages/QrCancha"));
+const TicketPublico = lazy(() => import("./pages/TicketPublico"));
 
 // Org pages
 const OrgDashboard = lazy(() => import("./pages/org/OrgDashboard"));
@@ -226,6 +227,8 @@ export default function App() {
             <Route path="/club/:id" element={<ClubPublico />} />
             {/* QR de la cancha: pedir a la barra sin cuenta (sesión anónima) o con la propia */}
             <Route path="/c/:clubId/:canchaId" element={<QrCancha />} />
+            {/* Ticket digital: el QR del ticket térmico */}
+            <Route path="/t/v/:clubId/:numero" element={<TicketPublico />} />
             <Route path="/terminos" element={<Terminos />} />
             <Route path="/privacidad" element={<Privacidad />} />
           </Route>

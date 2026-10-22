@@ -1,10 +1,24 @@
 // Ticket de venta (HTML plano, sin React): lo arma Vender al cobrar y al reimprimir desde "Ventas".
-// Comprobante de consumo, no fiscal. La página pública del ticket digital (/t/v/…) y su QR llegan en P3-6:
-// por ahora la ruta va impresa como texto.
+// Comprobante de consumo, no fiscal. Al pie va el QR del ticket digital público (/t/v/{clubId}/{numero}).
 import { escapar } from "./imprimir";
 import { formatPrecio } from "../utils/format";
 import { formatFechaHora } from "../utils/formatDate";
 import { ETIQUETA_MEDIO } from "../utils/caja";
+import { svgQr } from "../utils/qr";
+
+// QR del ticket digital (25 mm en el papel) con la URL corta debajo; sin ventana → se omite el QR
+export function bloqueQrTicket(clubId, numero) {
+  if (!clubId || !numero) return "";
+  const origen = typeof window !== "undefined" && window.location?.origin ? window.location.origin : "https://padely.netlify.app";
+  const url = `${origen}/t/v/${clubId}/${numero}`;
+  let qr = "";
+  try {
+    qr = svgQr(url, { margen: 2, ancho: null, titulo: "Ticket digital" }).replace("<svg ", '<svg style="width:25mm;height:25mm;display:block;margin:2mm auto 1mm" ');
+  } catch (err) {
+    console.error("No se pudo generar el QR del ticket:", err);
+  }
+  return `${qr}<p class="ticket-line ticket-center ticket-muted">Ticket digital: /t/v/${escapar(clubId)}/${escapar(numero)}</p>`;
+}
 
 const cant = (n) => (Number(n) || 0).toLocaleString("es-AR", { maximumFractionDigits: 3 });
 const fila = (label, valor, clase = "") => `<p class="ticket-row${clase ? ` ${clase}` : ""}"><span>${escapar(label)}</span><span>${escapar(valor)}</span></p>`;
@@ -68,6 +82,6 @@ export function htmlTicketVenta({ club = {}, venta = {}, clubId = "" }) {
   partes.push(sep());
   partes.push(linea(t.pie || "Gracias por venir", "ticket-center ticket-strong"));
   partes.push(linea("Comprobante no válido como factura", "ticket-center ticket-muted"));
-  if (venta.numero) partes.push(linea(`Ticket digital: /t/v/${clubId}/${venta.numero}`, "ticket-center ticket-muted"));
+  if (venta.numero) partes.push(bloqueQrTicket(clubId, venta.numero));
   return partes.join("");
 }

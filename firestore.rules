@@ -222,10 +222,9 @@ service cloud.firestore {
       // ----- Bar: productos, categorías, proveedores y movimientos de stock -----
       // El stock de un producto lo escribe solo la Cloud Function (onMovimientoStockCreated) a partir de los
       // movimientos: se crea en 0 y ningún cliente lo cambia.
-      // El catálogo lo lee cualquiera con sesión (los jugadores piden desde el celular y el QR de la cancha);
-      // los escribe solo el bar.
+      // Los jugadores y el QR leen la proyección pública `catalogo` (sin costo ni stock), nunca esto.
       match /productos/{productoId} {
-        allow read: if signedIn() || superAdmin();
+        allow read: if esStaffBar(clubId) || superAdmin();
         allow create: if esStaff(clubId, 'editarProductos') && request.resource.data.stock == 0;
         allow update: if esStaff(clubId, 'editarProductos')
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['stock']);
@@ -233,7 +232,7 @@ service cloud.firestore {
       }
 
       match /categoriasProductos/{categoriaId} {
-        allow read: if signedIn() || superAdmin();
+        allow read: if esStaffBar(clubId) || superAdmin();
         allow create, update, delete: if esStaff(clubId, 'editarProductos');
       }
 

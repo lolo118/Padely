@@ -4,6 +4,7 @@ import { escapar } from "./imprimir";
 import { formatPrecio } from "../utils/format";
 import { formatDiaCorto, formatFechaHora } from "../utils/formatDate";
 import { calcularTotalesCuenta, lineasDeVentaParaParte } from "../utils/cuentas";
+import { bloqueQrTicket } from "./ticketVenta";
 
 const cant = (n) => (Number(n) || 0).toLocaleString("es-AR", { maximumFractionDigits: 3 });
 const fila = (label, valor, clase = "") => `<p class="ticket-row${clase ? ` ${clase}` : ""}"><span>${escapar(label)}</span><span>${escapar(valor)}</span></p>`;
@@ -11,7 +12,7 @@ const linea = (texto, clase = "") => `<p class="ticket-line${clase ? ` ${clase}`
 const sep = () => `<hr class="ticket-sep">`;
 const ESTADO = { abierta: "PRE-CUENTA (abierta)", cerrada: "CUENTA CERRADA", anulada: "CUENTA ANULADA" };
 
-export function htmlTicketCuenta({ club = {}, cuenta = {} }) {
+export function htmlTicketCuenta({ club = {}, cuenta = {}, clubId = "" }) {
   const t = club.ticket || {};
   const direccion = [club.direccion, club.ciudad].filter(Boolean).join(" · ");
   const totales = calcularTotalesCuenta(cuenta);
@@ -57,6 +58,8 @@ export function htmlTicketCuenta({ club = {}, cuenta = {} }) {
   partes_.push(sep());
   partes_.push(linea(t.pie || "Gracias por venir", "ticket-center ticket-strong"));
   partes_.push(linea("Comprobante no válido como factura", "ticket-center ticket-muted"));
+  // El ticket digital de la cuenta es el de su primera venta (o la de "Cobrar todo")
+  if (clubId && (cuenta.ventas || []).length) partes_.push(bloqueQrTicket(clubId, cuenta.ventas[0]));
   partes_.push(linea(`Impreso ${formatFechaHora(new Date())}`, "ticket-center ticket-muted"));
   return partes_.join("");
 }

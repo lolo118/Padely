@@ -3,7 +3,7 @@ import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { toast } from "../Toast";
 import { confirmar } from "../ConfirmDialog";
 import { Alert, Badge, Button, Card, Field, Pills, Textarea } from "../ui";
-import { escucharProductos, getCategorias } from "../../services/productosService";
+import { escucharCatalogo } from "../../services/reportesService";
 import { cancelarPedido, crearPedido, escucharMisPedidosDeCuenta } from "../../services/pedidosService";
 import { MAX_ITEMS, MAX_PENDIENTES, etiquetaEstado, haceCuanto, pedidoDesdeCarrito, resumenItems, subtotalPedido, tonoEstado } from "../../utils/pedidos";
 import { formatPrecio } from "../../utils/format";
@@ -27,24 +27,21 @@ export default function PedirUI({ clubId, club, reserva, uid, nombre, origen = "
   const [enviando, setEnviando] = useState(false);
   const [ahora, setAhora] = useState(() => new Date());
 
+  // El catálogo público (clubs/{c}/catalogo): nombre, precio, categoría, favorito, activo, agotado — sin costos ni stock
   useEffect(() => {
     if (!clubId) return undefined;
-    let vivo = true;
-    const unsub = escucharProductos(
+    const unsub = escucharCatalogo(
       clubId,
-      (lista) => setProds({ lista, cargado: true, error: false }),
+      ({ productos, categorias: cats }) => {
+        setProds({ lista: productos, cargado: true, error: false });
+        setCategorias(cats);
+      },
       (err) => {
         console.error("Error cargando el catálogo:", err);
         setProds({ lista: [], cargado: true, error: true });
       },
     );
-    getCategorias(clubId)
-      .then((lista) => vivo && setCategorias(lista))
-      .catch((err) => console.error("Error cargando categorías:", err));
-    return () => {
-      vivo = false;
-      unsub();
-    };
+    return () => unsub();
   }, [clubId]);
 
   useEffect(() => {
@@ -77,7 +74,7 @@ export default function PedirUI({ clubId, club, reserva, uid, nombre, origen = "
     return [...lista].sort((a, b) => (a.favorito ? 0 : 1) - (b.favorito ? 0 : 1) || (Number(a.orden) || 0) - (Number(b.orden) || 0) || String(a.nombre).localeCompare(String(b.nombre), "es"));
   }, [activos, filtroEfectivo]);
 
-  const sinStock = (p) => p.controlaStock !== false && (Number(p.stock) || 0) <= 0;
+  const sinStock = (p) => p.agotado === true;
   const cantidadEn = (id) => carrito.find((l) => l.productoId === id)?.cantidad || 0;
   const agregar = (p, delta = 1) =>
     setCarrito((c) => {
