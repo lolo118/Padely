@@ -31,6 +31,11 @@ export default defineConfig({
         navigateFallback: "/index.html",
         globPatterns: ["**/*.{js,css,html,png,svg}"],
         runtimeCaching: [],
+        // Una versión nueva reemplaza a la vieja apenas se instala y toma las pestañas abiertas (los kioscos del bar
+        // quedan abiertos días): así una ruta nueva no cae en el 404 del index.html viejo.
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
       },
     }),
   ],

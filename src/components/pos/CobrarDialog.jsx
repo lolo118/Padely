@@ -104,6 +104,7 @@ export default function CobrarDialog({ total, sinNumeros = false, onConfirmar, o
             Agregar medio
           </Button>
         </div>
+        <p className="pd-help m-0 -mt-2">La fila nueva arranca con lo que falta; cambiá el medio si hace falta.</p>
 
         <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
           <span className="heading-sm">

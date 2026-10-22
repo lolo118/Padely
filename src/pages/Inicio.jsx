@@ -8,6 +8,8 @@ import { formatDiaCorto } from "../utils/formatDate";
 import { formatPrecio } from "../utils/format";
 import { estadoSeña, rangoHoras } from "../utils/reservas";
 import { Badge, Button, Card, RankMark, StatTile } from "../components/ui";
+import CuentaTurnoResumen from "../components/CuentaTurnoResumen";
+import { escucharMisCuentasAbiertas } from "../services/cuentasService";
 
 // Accesos directos del inicio (mismas rutas de siempre), cada uno con su ícono Lucide
 const ACCESOS = [
@@ -48,6 +50,12 @@ export default function Inicio() {
   const { user, perfil } = useAuthStore();
   const [inscripciones, setInscripciones] = useState([]);
   const [proximaReserva, setProximaReserva] = useState(null);
+  const [cuentasAbiertas, setCuentasAbiertas] = useState([]);
+  useEffect(() => {
+    if (!user) return undefined;
+    const unsub = escucharMisCuentasAbiertas(user.uid, setCuentasAbiertas, (err) => console.error("Error escuchando mis cuentas:", err));
+    return () => unsub();
+  }, [user]);
   const [loading, setLoading] = useState(true);
 
   // Nombre real del perfil (users/{uid}); si no hay, el prefijo del email
@@ -139,6 +147,11 @@ export default function Inicio() {
               {rangoHoras(proximaReserva.horaInicio || proximaReserva.hora, proximaReserva.horaFin)}
               {proximaReserva.precioTotal > 0 && ` · ${formatPrecio(proximaReserva.precioTotal)}`}
             </p>
+            <CuentaTurnoResumen
+              reserva={proximaReserva}
+              cuenta={cuentasAbiertas.find((c) => c.id === (proximaReserva.grupoId || proximaReserva.id) && c.clubId === proximaReserva.clubId) || null}
+              compacto
+            />
           </div>
         ) : (
           <Card.Meta>Todavía no tenés reservas. Reservá una cancha y la vas a ver acá.</Card.Meta>

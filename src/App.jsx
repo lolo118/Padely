@@ -21,6 +21,7 @@ const Register = lazy(() => import("./pages/auth/Register"));
 const Inicio = lazy(() => import("./pages/Inicio"));
 const Hub = lazy(() => import("./pages/Hub"));
 const MisReservas = lazy(() => import("./pages/MisReservas"));
+const MiCuenta = lazy(() => import("./pages/MiCuenta"));
 const ClubPublico = lazy(() => import("./pages/ClubPublico"));
 const Torneos = lazy(() => import("./pages/Torneos"));
 const DetalleTorneoPublico = lazy(() => import("./pages/DetalleTorneoPublico"));
@@ -228,6 +229,7 @@ export default function App() {
           >
             <Route path="/inicio" element={<RedirigirPorRol />} />
             <Route path="/mis-reservas" element={<MisReservas />} />
+            <Route path="/mi-cuenta/:clubId/:grupoId" element={<MiCuenta />} />
             <Route path="/noticias" element={<Noticias />} />
             <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/perfil" element={<Perfil />} />

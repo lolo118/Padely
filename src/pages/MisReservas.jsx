@@ -11,6 +11,8 @@ import { agruparReservas, estadoSeña, rangoHoras } from "../utils/reservas";
 import { toast } from "../components/Toast";
 import { confirmar } from "../components/ConfirmDialog";
 import { Badge, Button, Card } from "../components/ui";
+import CuentaTurnoResumen from "../components/CuentaTurnoResumen";
+import { escucharMisCuentasAbiertas } from "../services/cuentasService";
 
 // Estado de la reserva → tono del badge y su palabra. Llevan punto: son estados que cambian con el tiempo.
 function estadoReserva(status) {
@@ -43,6 +45,14 @@ export default function MisReservas() {
   const [loading, setLoading] = useState(true);
 
   const [hoyStr] = useState(() => getTodayLocal());
+  // Cuentas del turno abiertas a nombre del jugador (cualquier club), por grupoId de la reserva
+  const [cuentas, setCuentas] = useState([]);
+  useEffect(() => {
+    if (!user) return undefined;
+    const unsub = escucharMisCuentasAbiertas(user.uid, setCuentas, (err) => console.error("Error escuchando mis cuentas:", err));
+    return () => unsub();
+  }, [user]);
+  const cuentaDe = (r) => cuentas.find((c) => c.id === (r.grupoId || r.id) && c.clubId === r.clubId) || null;
 
   useEffect(() => {
     if (!user) return;
@@ -190,6 +200,7 @@ export default function MisReservas() {
           {r.canchaName || r.cancha || "Cancha"} · {rangoHoras(r.horaInicio, r.horaFin)}
         </p>
         {r.precioTotal > 0 && <p className="body-sm text-ink-2 pd-tnum">{formatPrecio(r.precioTotal)}</p>}
+        {r.status !== "cancelada" && <CuentaTurnoResumen reserva={r} cuenta={cuentaDe(r)} />}
         {!pasada && r.status !== "cancelada" && (
           <Card.Foot>
             <Button size="sm" onClick={() => cancelarReserva(r)}>
