@@ -38,3 +38,43 @@ export function formatDiaCorto(fechaStr) {
   const date = new Date(y, m - 1, d);
   return `${DIAS_CORTOS[date.getDay()]} ${d} ${MESES_CORTOS[m - 1]}`;
 }
+
+// ----- Timestamps (Firestore Timestamp, Date o número) -----
+
+// Timestamp de Firestore, Date, número o string → Date válida, o null
+export function aDate(valor) {
+  if (!valor) return null;
+  const d = typeof valor.toDate === "function" ? valor.toDate() : valor instanceof Date ? valor : new Date(valor);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+const dos = (x) => String(x).padStart(2, "0");
+
+// → "HH:MM" ("—" sin fecha)
+export function formatHora(valor) {
+  const d = aDate(valor);
+  return d ? `${dos(d.getHours())}:${dos(d.getMinutes())}` : "—";
+}
+
+// → "DD/MM/YY HH:MM" ("—" sin fecha)
+export function formatFechaHora(valor) {
+  const d = aDate(valor);
+  if (!d) return "—";
+  return `${dos(d.getDate())}/${dos(d.getMonth() + 1)}/${dos(d.getFullYear() % 100)} ${dos(d.getHours())}:${dos(d.getMinutes())}`;
+}
+
+// → "mié 21 oct 18:30" ("—" sin fecha)
+export function formatDiaHora(valor) {
+  const d = aDate(valor);
+  if (!d) return "—";
+  return `${DIAS_CORTOS[d.getDay()]} ${d.getDate()} ${MESES_CORTOS[d.getMonth()]} ${dos(d.getHours())}:${dos(d.getMinutes())}`;
+}
+
+// → "HH:MM" si es de hoy, si no "mié 21 oct HH:MM"
+export function formatDesde(valor) {
+  const d = aDate(valor);
+  if (!d) return "—";
+  const hoy = new Date();
+  const mismoDia = d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth() && d.getDate() === hoy.getDate();
+  return mismoDia ? formatHora(d) : formatDiaHora(d);
+}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, Bell, Calendar, Check, Hourglass, Info, LayoutGrid, Lock, Pencil, Plus } from "lucide-react";
+import { AlertTriangle, Bell, Calendar, Check, Hourglass, Info, LayoutGrid, Lock, Pencil, Plus, Wallet } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { getTorneosByOrganizer, getTorneosDeClub } from "../../services/torneoService";
 import {
@@ -11,8 +11,10 @@ import {
   actualizarReservaGrupo,
 } from "../../services/canchaService";
 import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
-import { addDaysLocal, formatFecha } from "../../utils/formatDate";
+import { addDaysLocal, formatDesde, formatFecha } from "../../utils/formatDate";
 import { formatPrecio } from "../../utils/format";
+import { escucharCajasAbiertas } from "../../services/cajaService";
+import { efectivoEsperado } from "../../utils/caja";
 import { agruparReservas, estadoSeña, rangoHoras } from "../../utils/reservas";
 import { canchasDelTorneo } from "../../utils/torneo";
 import { toast } from "../../components/Toast";
@@ -42,6 +44,22 @@ export default function Dashboard() {
   const [torneosClub, setTorneosClub] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mostrarAyuda, setMostrarAyuda] = useState(true);
+  // Cajas abiertas del bar (null = cargando); solo para quien tiene algún permiso de caja
+  const [cajasAbiertas, setCajasAbiertas] = useState(null);
+  const puedeCaja = puede("abrirCaja") || puede("cerrarCaja") || puede("cerrarCajaAjena") || puede("verCajasCerradas") || puede("vender");
+
+  useEffect(() => {
+    if (!clubId || !puedeCaja) return undefined;
+    const unsub = escucharCajasAbiertas(
+      clubId,
+      (lista) => setCajasAbiertas(lista),
+      (err) => {
+        console.error("Error escuchando las cajas abiertas:", err);
+        setCajasAbiertas([]);
+      },
+    );
+    return () => unsub();
+  }, [clubId, puedeCaja]);
 
   const hoy = new Date();
   const hoyStr = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
@@ -326,6 +344,23 @@ export default function Dashboard() {
             <p className="heading-sm m-0">Completá los datos de tu club</p>
             <p className="body-sm text-ink-2 m-0">
               Agregá teléfono, dirección y redes sociales para que los jugadores te encuentren
+            </p>
+          </div>
+        </Card>
+      )}
+
+      {/* Caja del bar: una línea con la caja abierta (o su ausencia) para quien maneja la caja */}
+      {puedeCaja && cajasAbiertas !== null && (
+        <Card variant="hover" as="div" className="mb-4 flex items-start gap-3" {...linkProps("/admin/bar/caja")}>
+          <Wallet className="pd-icon text-ink-3 mt-0.5" size={20} aria-hidden="true" />
+          <div>
+            <p className="heading-sm m-0">Caja</p>
+            <p className="body-sm text-ink-2 m-0">
+              {cajasAbiertas.length === 0
+                ? "Sin caja abierta"
+                : cajasAbiertas.length === 1
+                  ? `${cajasAbiertas[0].dispositivo} abierta desde ${formatDesde(cajasAbiertas[0].abiertaEn)} · efectivo esperado ${formatPrecio(efectivoEsperado(cajasAbiertas[0]))}`
+                  : `${cajasAbiertas.length} cajas abiertas: ${cajasAbiertas.map((c) => `${c.dispositivo} (${formatPrecio(efectivoEsperado(c))})`).join(", ")}`}
             </p>
           </div>
         </Card>
