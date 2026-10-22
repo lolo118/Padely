@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import { getAnalytics, logEvent } from 'firebase/analytics';
@@ -18,7 +18,19 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-export const db = getFirestore(app);
+// Firestore con persistencia local (IndexedDB) compartida entre pestañas: el bar sigue vendiendo sin internet y
+// las escrituras se suben solas al volver. Si el navegador no lo permite (modo privado, IndexedDB bloqueado) el SDK
+// avisa por consola y sigue en memoria; si la propia inicialización falla, se usa la instancia por defecto.
+let firestore;
+try {
+  firestore = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  });
+} catch (err) {
+  console.error('No se pudo activar la persistencia local de Firestore; se sigue solo en línea:', err);
+  firestore = getFirestore(app);
+}
+export const db = firestore;
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 

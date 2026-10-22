@@ -951,3 +951,119 @@ exports.cajasAbiertasRecordatorio = onSchedule({ schedule: "every day 09:00", ti
   }
   logger.info(`cajasAbiertasRecordatorio: ${enviados} avisos de ${pendientes.length} cajas`);
 });
+
+// ============================================================================
+// BAR — VENTAS: una venta (clubs/{c}/ventas/{numero}) baja el stock y entra a la caja a través de movimientos
+// "venta" (y los repone con "anulacion" al anularse). Los movimientos llevan ids deterministas
+// ({numero}_venta_{i} / {numero}_anul_{i}) y se crean en la misma transacción que marca la venta como aplicada:
+// un reintento nunca duplica nada. Los aplican onMovimientoStockCreated y onMovimientoCajaCreated. El vuelto no
+// es un movimiento: el pago en efectivo ya viene neto (monto = entregado − vuelto).
+// Una venta hecha sin internet llega tarde: si para entonces la caja está cerrada, onMovimientoCajaCreated marca
+// el movimiento con error "caja inexistente o cerrada" y los totales de esa caja no cambian (queda en el log).
+// ============================================================================
+const refsDeVenta = (clubId, numero) => {
+  const clubRef = db.collection("clubs").doc(clubId);
+  return {
+    venta: clubRef.collection("ventas").doc(numero),
+    stock: (sufijo) => clubRef.collection("movimientosStock").doc(`${numero}_${sufijo}`),
+    caja: (sufijo) => clubRef.collection("movimientosCaja").doc(`${numero}_${sufijo}`),
+  };
+};
+
+// Escribe los movimientos de una venta (signo +1 = venta, −1 = anulación) salvo los que ya existan
+async function escribirMovimientosDeVenta(tx, clubId, numero, venta, { etiqueta, signo }) {
+  const refs = refsDeVenta(clubId, numero);
+  const items = Array.isArray(venta.items) ? venta.items : [];
+  const pagos = Array.isArray(venta.pagos) ? venta.pagos : [];
+  const tipo = signo > 0 ? "venta" : "anulacion";
+  const pendientes = [];
+  items.forEach((it, i) => {
+    const cantidad = Number(it && it.cantidad);
+    if (!it || it.controlaStock === false || !it.productoId || !Number.isFinite(cantidad) || cantidad <= 0) return;
+    pendientes.push({
+      ref: refs.stock(`${etiqueta}_${i}`),
+      data: {
+        productoId: String(it.productoId),
+        tipo,
+        cantidad: -signo * cantidad,
+        costoUnitario: null,
+        proveedorId: null,
+        ventaId: numero,
+        nota: numero,
+        creadoPor: venta.creadoPor || null,
+        creadoEn: FieldValue.serverTimestamp(),
+        aplicado: false,
+      },
+    });
+  });
+  pagos.forEach((p, j) => {
+    const monto = Number(p && p.monto);
+    if (!p || !MEDIOS_CAJA.includes(p.medio) || !Number.isFinite(monto) || monto <= 0) return;
+    pendientes.push({
+      ref: refs.caja(`${etiqueta}_${j}`),
+      data: {
+        cajaId: venta.cajaId || null,
+        tipo,
+        medio: p.medio,
+        monto,
+        ref: { ventaId: numero },
+        nota: numero,
+        creadoPor: venta.creadoPor || null,
+        creadoPorNombre: venta.creadoPorNombre || null,
+        creadoEn: FieldValue.serverTimestamp(),
+        aplicado: false,
+      },
+    });
+  });
+  if (!pendientes.length) return 0;
+  const existentes = await tx.getAll(...pendientes.map((p) => p.ref));
+  let escritos = 0;
+  pendientes.forEach((p, k) => {
+    if (existentes[k].exists) return;
+    tx.set(p.ref, p.data);
+    escritos += 1;
+  });
+  return escritos;
+}
+
+exports.onVentaCreated = onDocumentCreated("clubs/{clubId}/ventas/{numero}", async (event) => {
+  const { clubId, numero } = event.params;
+  const refs = refsDeVenta(clubId, numero);
+  try {
+    const resultado = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(refs.venta);
+      if (!snap.exists) return "sin venta";
+      const venta = snap.data() || {};
+      if (venta.aplicado === true) return "ya aplicada";
+      const n = await escribirMovimientosDeVenta(tx, clubId, numero, venta, { etiqueta: "venta", signo: 1 });
+      tx.update(refs.venta, { aplicado: true, aplicadoEn: FieldValue.serverTimestamp() });
+      return `aplicada (${n} movimientos)`;
+    });
+    logger.info(`onVentaCreated ${clubId}/${numero}: ${resultado}`);
+  } catch (err) {
+    logger.error(`onVentaCreated ${clubId}/${numero}`, err);
+  }
+});
+
+exports.onVentaUpdated = onDocumentUpdated("clubs/{clubId}/ventas/{numero}", async (event) => {
+  const { clubId, numero } = event.params;
+  const antes = event.data && event.data.before ? event.data.before.data() : null;
+  const despues = event.data && event.data.after ? event.data.after.data() : null;
+  if (!antes || !despues || antes.estado === "anulada" || despues.estado !== "anulada") return;
+  const refs = refsDeVenta(clubId, numero);
+  try {
+    const resultado = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(refs.venta);
+      if (!snap.exists) return "sin venta";
+      const venta = snap.data() || {};
+      if (venta.estado !== "anulada") return "no anulada";
+      if (venta.anulacionAplicada === true) return "anulación ya aplicada";
+      const n = await escribirMovimientosDeVenta(tx, clubId, numero, venta, { etiqueta: "anul", signo: -1 });
+      tx.update(refs.venta, { anulacionAplicada: true, anulacionAplicadaEn: FieldValue.serverTimestamp() });
+      return `anulación aplicada (${n} movimientos)`;
+    });
+    logger.info(`onVentaUpdated ${clubId}/${numero}: ${resultado}`);
+  } catch (err) {
+    logger.error(`onVentaUpdated ${clubId}/${numero}`, err);
+  }
+});

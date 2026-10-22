@@ -32,6 +32,18 @@ service cloud.firestore {
       return esStaff(clubId, 'abrirCaja') || esStaff(clubId, 'cerrarCaja') || esStaff(clubId, 'cerrarCajaAjena')
         || esStaff(clubId, 'verCajasCerradas') || esStaff(clubId, 'vender');
     }
+    // Tope de descuento de una venta: el dueño no tiene tope; el staff, descuentoMax (%) de su documento, sobre el
+    // subtotal. descuentoTotal = descuentos de línea + descuento general (el cliente lo guarda como campo propio).
+    function descuentoPermitido(clubId) {
+      return clubOwner(clubId)
+        || request.resource.data.descuentoTotal == 0
+        || request.resource.data.descuentoTotal * 100
+           <= request.resource.data.subtotal
+              * get(/databases/$(database)/documents/clubs/$(clubId)/staff/$(request.auth.uid)).data.descuentoMax;
+    }
+    function cajaAbierta(clubId, cajaId) {
+      return get(/databases/$(database)/documents/clubs/$(clubId)/cajas/$(cajaId)).data.estado == 'abierta';
+    }
     // Dueño o staff (con el permiso) del club vinculado como sede de un torneo
     function clubStaffOfTournament(tid, permiso) {
       let t = get(/databases/$(database)/documents/tournaments/$(tid)).data;
@@ -286,6 +298,49 @@ service cloud.firestore {
           && request.resource.data.cajaId is string
           && get(/databases/$(database)/documents/clubs/$(clubId)/cajas/$(request.resource.data.cajaId)).data.estado == 'abierta';
         allow update, delete: if false;
+      }
+
+      // ----- Bar: ventas (inmutables; el id ES el número de ticket) y contadores de numeración por dispositivo -----
+      // El stock y la caja los mueven las Functions (movimientos "venta"/"anulacion", que los clientes no pueden
+      // crear). El cliente nunca escribe `aplicado`. Una venta solo cambia para anularse, con motivo, mientras la
+      // caja sigue abierta.
+      match /ventas/{ventaId} {
+        allow read: if esStaffCaja(clubId) || esStaff(clubId, 'vender') || superAdmin();
+        allow create: if esStaff(clubId, 'vender')
+          && request.resource.data.numero == ventaId
+          && request.resource.data.estado == 'ok'
+          && request.resource.data.aplicado == false
+          && request.resource.data.creadoPor == request.auth.uid
+          && request.resource.data.subtotal is number
+          && request.resource.data.descuentoTotal is number
+          && request.resource.data.descuentoTotal >= 0
+          && request.resource.data.total is number
+          && request.resource.data.total >= 0
+          && request.resource.data.pagado is number
+          && request.resource.data.pagado >= request.resource.data.total
+          && request.resource.data.items is list
+          && request.resource.data.items.size() > 0
+          && request.resource.data.anulacion == null
+          && request.resource.data.cuentaId == null
+          && request.resource.data.fiscal == null
+          && request.resource.data.cajaId is string
+          && cajaAbierta(clubId, request.resource.data.cajaId)
+          && descuentoPermitido(clubId);
+        allow update: if esStaff(clubId, 'anularVenta')
+          && changedOnly(['estado', 'anulacion', 'actualizadoEn'])
+          && resource.data.estado == 'ok'
+          && request.resource.data.estado == 'anulada'
+          && request.resource.data.anulacion.por == request.auth.uid
+          && request.resource.data.anulacion.motivo is string
+          && request.resource.data.anulacion.motivo.size() > 0
+          && cajaAbierta(clubId, resource.data.cajaId);
+        allow delete: if false;
+      }
+
+      // Numeración: _asignacion = { ultimo } reparte códigos "D1", "D2"…; {codigo} = { desde, hasta, usado } lleva los
+      // bloques de 100 números de cada dispositivo. Las transacciones las corre el cliente que vende.
+      match /contadoresDispositivos/{codigo} {
+        allow read, write: if esStaff(clubId, 'vender');
       }
 
       // Equipo del club. El dueño no tiene documento acá (clubs/{clubId}.ownerUid puede todo).
