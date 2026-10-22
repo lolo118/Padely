@@ -991,6 +991,7 @@ export default function Productos() {
   const [dialogoStock, setDialogoStock] = useState(null); // producto
   const [filtroMov, setFiltroMov] = useState(null); // { id, nombre }
   const [importando, setImportando] = useState(false);
+  const [publicando, setPublicando] = useState(false); // "Publicar catálogo" en curso
 
   // Productos con un movimiento recién registrado: id → stock que tenían; se borra a los 20 s
   const [recientes, setRecientes] = useState({});
@@ -1186,7 +1187,6 @@ export default function Productos() {
   const estadoProvs = { lista: proveedores, error: provs.para === clubId && provs.error, cargando: provs.para !== clubId };
 
   // El catálogo público (lo que ven los jugadores al pedir) se mantiene solo; esto lo publica entero una vez
-  const [publicando, setPublicando] = useState(false);
   const publicarCatalogo = async () => {
     setPublicando(true);
     try {
