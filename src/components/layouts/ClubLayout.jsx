@@ -1,4 +1,4 @@
-import { BarChart3, LayoutDashboard, LayoutGrid, Package, Settings, Trophy, Wallet } from "lucide-react";
+import { BarChart3, LayoutDashboard, LayoutGrid, Package, Settings, ShoppingCart, Trophy, Wallet } from "lucide-react";
 import PanelLayout from "./PanelLayout";
 import { useAuthStore } from "../../store/authStore";
 import Alert from "../ui/Alert";
@@ -11,7 +11,8 @@ const navItems = [
   { to: "/admin/estadisticas", label: "Estadísticas", icon: BarChart3, permisos: ["verReportes"] },
   { to: "/admin/configuracion", label: "Configuración", icon: Settings, permisos: ["configurarClub", "gestionarStaff"] },
   // Grupo Bar (el título se ve si alguno de sus ítems se ve)
-  { seccion: "Bar", permisos: ["abrirCaja", "cerrarCaja", "cerrarCajaAjena", "verCajasCerradas", "editarProductos", "cargarStock", "importar"] },
+  { seccion: "Bar", permisos: ["vender", "abrirCaja", "cerrarCaja", "cerrarCajaAjena", "verCajasCerradas", "editarProductos", "cargarStock", "importar"] },
+  { to: "/admin/bar/vender", label: "Vender", icon: ShoppingCart, permisos: ["vender"] },
   { to: "/admin/bar/caja", label: "Caja", icon: Wallet, permisos: ["abrirCaja", "cerrarCaja", "cerrarCajaAjena", "verCajasCerradas"] },
   { to: "/admin/bar/productos", label: "Productos", icon: Package, permisos: ["editarProductos", "cargarStock", "importar"] },
 ];

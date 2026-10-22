@@ -2,7 +2,7 @@ import { useEffect, useId, useRef } from "react";
 
 // Diálogo de formulario del panel: pd-backdrop > form.pd-dialog (lo usan Productos, Caja y la vista previa de tickets).
 // Escape y el fondo cierran; el foco entra al primer [data-autofocus] (o al diálogo) y vuelve al disparador.
-// ancho: false (440 px) | true (640 px) | "xl" (960 px)
+// ancho: false (440 px) | true (640 px) | "lg" (720 px) | "xl" (960 px)
 export default function Dialogo({ titulo, descripcion, onCerrar, onSubmit, acciones, ancho = false, children }) {
   const caja = useRef(null);
   const cerrarRef = useRef(onCerrar);
@@ -44,7 +44,7 @@ export default function Dialogo({ titulo, descripcion, onCerrar, onSubmit, accio
         noValidate
         className={[
           "pd-dialog outline-none max-h-[calc(100dvh-32px)] overflow-y-auto",
-          ancho === "xl" ? "max-w-[960px]!" : ancho && "max-w-[640px]!",
+          ancho === "xl" ? "max-w-[960px]!" : ancho === "lg" ? "max-w-[720px]!" : ancho && "max-w-[640px]!",
         ]
           .filter(Boolean)
           .join(" ")}
