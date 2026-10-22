@@ -47,6 +47,21 @@ export function documentoTicket(html, { ancho = ANCHO_POR_DEFECTO, titulo = "Tic
 
 // Imprime el HTML de un ticket. Resuelve cuando se cerró el diálogo de impresión (o a los 60 s si el navegador no avisa).
 export function imprimirHtml(html, { ancho = ANCHO_POR_DEFECTO, titulo = "Ticket" } = {}) {
+  return imprimirDocumento(documentoTicket(html, { ancho, titulo }));
+}
+
+// Documento HTML completo de una hoja común (A5 vertical por defecto): lo usa el QR de las canchas
+export function documentoHoja(html, { titulo = "Padely", tamano = "A5", css = "" } = {}) {
+  return (
+    `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escapar(titulo)}</title>` +
+    `<style>@page { size: ${tamano}; margin: 12mm; } html, body { margin: 0; background: #fff; color: #000; } ` +
+    `body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; text-align: center; } ${css}</style></head>` +
+    `<body>${html}</body></html>`
+  );
+}
+
+// Imprime un documento HTML completo en un iframe oculto; resuelve al cerrarse el diálogo (o a los 60 s)
+export function imprimirDocumento(documento) {
   return new Promise((resolve) => {
     const iframe = document.createElement("iframe");
     iframe.setAttribute("aria-hidden", "true");
@@ -73,6 +88,6 @@ export function imprimirHtml(html, { ancho = ANCHO_POR_DEFECTO, titulo = "Ticket
       setTimeout(limpiar, 60000);
     };
     document.body.appendChild(iframe);
-    iframe.srcdoc = documentoTicket(html, { ancho, titulo });
+    iframe.srcdoc = documento;
   });
 }

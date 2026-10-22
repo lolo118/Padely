@@ -45,6 +45,8 @@ const BarKiosk = lazy(() => import("./pages/admin/bar/Kiosk"));
 const BarCuentas = lazy(() => import("./pages/admin/bar/Cuentas"));
 const BarCuentaDetalle = lazy(() => import("./pages/admin/bar/CuentaDetalle"));
 const BarBarra = lazy(() => import("./pages/admin/bar/Barra"));
+const BarQr = lazy(() => import("./pages/admin/bar/QrCanchas"));
+const QrCancha = lazy(() => import("./pages/QrCancha"));
 
 // Org pages
 const OrgDashboard = lazy(() => import("./pages/org/OrgDashboard"));
@@ -221,6 +223,8 @@ export default function App() {
             <Route path="/torneos" element={<Torneos />} />
             <Route path="/torneos/:id" element={<DetalleTorneoPublico />} />
             <Route path="/club/:id" element={<ClubPublico />} />
+            {/* QR de la cancha: pedir a la barra sin cuenta (sesión anónima) o con la propia */}
+            <Route path="/c/:clubId/:canchaId" element={<QrCancha />} />
             <Route path="/terminos" element={<Terminos />} />
             <Route path="/privacidad" element={<Privacidad />} />
           </Route>
@@ -265,6 +269,7 @@ export default function App() {
             <Route path="bar/cuentas" element={<BarCuentas />} />
             <Route path="bar/cuentas/:id" element={<BarCuentaDetalle />} />
             <Route path="bar/barra" element={<BarBarra />} />
+            <Route path="bar/qr" element={<BarQr />} />
             <Route path="bar/caja" element={<BarCaja />} />
             <Route path="bar/productos" element={<BarProductos />} />
           </Route>
