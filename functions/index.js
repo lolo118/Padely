@@ -899,6 +899,16 @@ exports.onMovimientoCajaCreated = onDocumentCreated("clubs/{clubId}/movimientosC
 // Todos los días a las 9: una caja que sigue abierta desde hace más de 20 h le avisa al dueño del club (una vez).
 const RECORDATORIO_CAJA_HORAS = 20;
 
+// "2026-10-22" → "jue 22 oct" (como formatDiaCorto en el cliente)
+const DIAS_CORTOS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+function fechaCortaArgentina(fechaStr) {
+  const [y, m, d] = String(fechaStr || "").split("-").map(Number);
+  if (!y || !m || !d) return String(fechaStr || "");
+  const date = new Date(y, m - 1, d);
+  return `${DIAS_CORTOS[date.getDay()]} ${d} ${MESES_CORTOS[m - 1]}`;
+}
+
 function fechaHoraArgentina(ts) {
   const date = ts && typeof ts.toDate === "function" ? ts.toDate() : ts instanceof Date ? ts : null;
   if (!date) return "";
@@ -1085,8 +1095,15 @@ exports.onCuentaUpdated = onDocumentUpdated("clubs/{clubId}/cuentas/{cuentaId}",
   if (!antes || !despues || antes.estado !== "abierta" || despues.estado === "abierta") return;
   const clubRef = db.collection("clubs").doc(clubId);
   const cuentaRef = clubRef.collection("cuentas").doc(cuentaId);
-  const textoTurno = `${despues.canchaNombre || "Cancha"} ${despues.fecha || ""} ${despues.horaInicio || ""}${despues.horaFin ? `–${despues.horaFin}` : ""}`.trim();
+  const textoTurno = `${despues.canchaNombre || "Cancha"} ${fechaCortaArgentina(despues.fecha)} ${despues.horaInicio || ""}${despues.horaFin ? `–${despues.horaFin}` : ""}`.trim();
   const total = Number(despues.totales && despues.totales.total) || 0;
+  // Pedidos que quedaron en curso: con la cuenta cerrada o anulada ya no se pueden servir ni cobrar
+  try {
+    const n = await cancelarPedidosDeCuenta(clubRef, cuentaId, despues.estado === "anulada" ? "La cuenta fue anulada" : "La cuenta se cerró");
+    if (n) logger.info(`onCuentaUpdated ${clubId}/${cuentaId}: ${n} pedidos cancelados`);
+  } catch (err) {
+    logger.error(`onCuentaUpdated ${clubId}/${cuentaId}: no se pudieron cancelar los pedidos`, err);
+  }
 
   if (despues.estado === "anulada") {
     if (despues.jugadorUid && despues.cierreAutomatico !== true) {
@@ -1225,4 +1242,174 @@ exports.cerrarCuentasVencidas = onSchedule({ schedule: "every day 04:00", timeZo
     }
   }
   logger.info(`cerrarCuentasVencidas: ${anuladas} anuladas, ${avisos} avisos (${snap.size} vencidas)`);
+});
+
+// ============================================================================
+// BAR — PEDIDOS A LA BARRA: un pedido (clubs/{c}/pedidos) lo crea el jugador o un anónimo en la cancha; la barra
+// lo acepta desde el cliente (los items pasan a la cuenta del turno). Acá: lo que las reglas no pueden mirar
+// (horario del turno, máximo 3 en espera, cuenta cerrada → rechazo automático), el borrado del qrToken, el contador
+// pedidosPendientes de la cuenta y las notificaciones (a la barra al crearse; al jugador en cada cambio de estado).
+// ============================================================================
+const PEDIDO_MARGEN_MIN = 15;
+const PEDIDO_MAX_PENDIENTES = 3;
+const MENSAJE_ESTADO_PEDIDO = {
+  aceptado: (p) => ({ titulo: "Tu pedido fue aceptado", mensaje: `${resumenPedido(p)} · ya lo están preparando.` }),
+  listo: (p) => ({ titulo: "Tu pedido está listo", mensaje: `${resumenPedido(p)} · retiralo en la barra.` }),
+  entregado: (p) => ({ titulo: "Pedido entregado", mensaje: `${resumenPedido(p)} · va a la cuenta del turno.` }),
+  rechazado: (p) => ({ titulo: "Pedido rechazado", mensaje: `${resumenPedido(p)} · ${(p.rechazo && p.rechazo.motivo) || "sin motivo"}.` }),
+  cancelado: (p) => ({ titulo: "Pedido cancelado", mensaje: `${resumenPedido(p)} · ${(p.rechazo && p.rechazo.motivo) || "cancelado"}.` }),
+};
+function resumenPedido(p) {
+  const items = Array.isArray(p.items) ? p.items : [];
+  return items.map((it) => `${Number(it.cantidad) || 0} ${it.nombre}`).join(", ") || "Pedido";
+}
+function minutosDe(hora) {
+  const [h, m] = String(hora || "00:00").split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+// Minutos del día, ahora, en Argentina
+function minutosAhoraArgentina(date = new Date()) {
+  const partes = new Intl.DateTimeFormat("en-GB", { timeZone: ZONA_HORARIA, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(date);
+  const h = Number((partes.find((p) => p.type === "hour") || {}).value) || 0;
+  const m = Number((partes.find((p) => p.type === "minute") || {}).value) || 0;
+  return (h % 24) * 60 + m;
+}
+
+// pedidosPendientes de la cuenta = pedidos en espera de ese turno (se recalcula, nunca se suma a ciegas)
+async function recalcularPedidosPendientes(clubRef, cuentaId) {
+  if (!cuentaId) return null;
+  const cuentaRef = clubRef.collection("cuentas").doc(cuentaId);
+  const [cuentaSnap, pendientes] = await Promise.all([
+    cuentaRef.get(),
+    clubRef.collection("pedidos").where("cuentaId", "==", cuentaId).where("estado", "==", "pendiente").get(),
+  ]);
+  if (!cuentaSnap.exists) return pendientes.size;
+  if ((Number(cuentaSnap.data().pedidosPendientes) || 0) !== pendientes.size) await cuentaRef.update({ pedidosPendientes: pendientes.size });
+  return pendientes.size;
+}
+
+// Los pedidos en curso de una cuenta pasan a cancelado (con motivo) — al cerrar o anular la cuenta
+async function cancelarPedidosDeCuenta(clubRef, cuentaId, motivo) {
+  const snap = await clubRef.collection("pedidos").where("cuentaId", "==", cuentaId).where("estado", "in", ["pendiente", "aceptado", "listo"]).get();
+  if (snap.empty) return 0;
+  const batch = db.batch();
+  snap.docs.forEach((d) =>
+    batch.update(d.ref, {
+      estado: "cancelado",
+      rechazo: { motivo, por: "sistema", porNombre: "Padely" },
+      "tiempos.cancelado": FieldValue.serverTimestamp(),
+      actualizadoEn: FieldValue.serverTimestamp(),
+    }),
+  );
+  await batch.commit();
+  return snap.size;
+}
+
+exports.onPedidoCreated = onDocumentCreated("clubs/{clubId}/pedidos/{pedidoId}", async (event) => {
+  const { clubId, pedidoId } = event.params;
+  const clubRef = db.collection("clubs").doc(clubId);
+  const pedidoRef = clubRef.collection("pedidos").doc(pedidoId);
+  try {
+    const snap = await pedidoRef.get();
+    if (!snap.exists) return;
+    const pedido = snap.data() || {};
+    if (pedido.validado === true) return;
+
+    // 1. Validaciones que las reglas no pueden hacer
+    let motivo = null;
+    const reservaSnap = await clubRef.collection("reservas").doc(String(pedido.reservaGrupoId || "")).get();
+    const reserva = reservaSnap.exists ? reservaSnap.data() : null;
+    if (!reserva || reserva.status !== "confirmada") motivo = "El turno no está confirmado";
+    else {
+      const hoy = fechaLocalArgentina();
+      const ahora = minutosAhoraArgentina();
+      const inicio = minutosDe(reserva.horaInicio || reserva.hora);
+      const fin = reserva.horaFin ? minutosDe(reserva.horaFin) : inicio + 60 * (Number(reserva.turnos) || 1);
+      if (reserva.fecha !== hoy || ahora < inicio - PEDIDO_MARGEN_MIN || ahora > fin + PEDIDO_MARGEN_MIN) motivo = "Fuera del horario del turno";
+    }
+    if (!motivo && pedido.cuentaId) {
+      const cuentaSnap = await clubRef.collection("cuentas").doc(String(pedido.cuentaId)).get();
+      if (cuentaSnap.exists && cuentaSnap.data().estado === "cerrada") motivo = "La cuenta está cerrada";
+    }
+    if (!motivo && pedido.cuentaId) {
+      const enEspera = await clubRef.collection("pedidos").where("cuentaId", "==", pedido.cuentaId).where("estado", "==", "pendiente").get();
+      const otros = enEspera.docs.filter((d) => d.id !== pedidoId && (d.data().validado === true || d.createTime.toMillis() < snap.createTime.toMillis()));
+      if (otros.length >= PEDIDO_MAX_PENDIENTES) motivo = `Máximo ${PEDIDO_MAX_PENDIENTES} pedidos en espera`;
+    }
+
+    if (motivo) {
+      await pedidoRef.update({
+        estado: "rechazado",
+        rechazo: { motivo, por: "sistema", porNombre: "Padely" },
+        "tiempos.rechazado": FieldValue.serverTimestamp(),
+        validado: true,
+        qrToken: FieldValue.delete(),
+        actualizadoEn: FieldValue.serverTimestamp(),
+      });
+      logger.info(`onPedidoCreated ${clubId}/${pedidoId}: rechazado (${motivo})`);
+      return;
+    }
+    await pedidoRef.update({ validado: true, qrToken: FieldValue.delete() });
+    await recalcularPedidosPendientes(clubRef, pedido.cuentaId);
+
+    // 2. Aviso a la barra: el dueño y el staff activo con 'pedidos' (una vez por pedido)
+    if (pedido.notificado && pedido.notificado.staff === true) return;
+    const [clubSnap, staffSnap] = await Promise.all([clubRef.get(), clubRef.collection("staff").where("activo", "==", true).get()]);
+    const destinatarios = new Set();
+    if (clubSnap.exists && clubSnap.data().ownerUid) destinatarios.add(clubSnap.data().ownerUid);
+    staffSnap.docs.forEach((d) => {
+      const s = d.data();
+      if (Array.isArray(s.permisos) && s.permisos.includes("pedidos") && s.uid) destinatarios.add(s.uid);
+    });
+    const batch = db.batch();
+    destinatarios.forEach((uid) =>
+      batch.set(nuevaNotificacionRef(uid), {
+        tipo: "pedido_nuevo",
+        titulo: `Nuevo pedido · ${pedido.canchaNombre || "Cancha"}`,
+        mensaje: `${pedido.nombre || "Alguien"}: ${resumenPedido(pedido)}${pedido.nota ? ` · "${pedido.nota}"` : ""}`,
+        link: "/admin/bar/barra",
+        icono: "🧾",
+        leida: false,
+        createdAt: FieldValue.serverTimestamp(),
+      }),
+    );
+    batch.update(pedidoRef, { "notificado.staff": true });
+    await batch.commit();
+    logger.info(`onPedidoCreated ${clubId}/${pedidoId}: validado, ${destinatarios.size} avisos`);
+  } catch (err) {
+    logger.error(`onPedidoCreated ${clubId}/${pedidoId}`, err);
+  }
+});
+
+exports.onPedidoUpdated = onDocumentUpdated("clubs/{clubId}/pedidos/{pedidoId}", async (event) => {
+  const { clubId, pedidoId } = event.params;
+  const antes = event.data && event.data.before ? event.data.before.data() : null;
+  const despues = event.data && event.data.after ? event.data.after.data() : null;
+  if (!antes || !despues || antes.estado === despues.estado) return;
+  const clubRef = db.collection("clubs").doc(clubId);
+  const pedidoRef = clubRef.collection("pedidos").doc(pedidoId);
+  try {
+    if (antes.estado === "pendiente" || despues.estado === "pendiente") await recalcularPedidosPendientes(clubRef, despues.cuentaId);
+    const armar = MENSAJE_ESTADO_PEDIDO[despues.estado];
+    // Al jugador (no a los anónimos: ellos ven el estado en la página del pedido). Una cancelación propia no se avisa.
+    const cancelacionPropia = despues.estado === "cancelado" && !(despues.rechazo && despues.rechazo.motivo);
+    if (!armar || despues.anonimo === true || !despues.jugadorUid || cancelacionPropia) return;
+    if (despues.notificado && despues.notificado[despues.estado] === true) return;
+    const { titulo, mensaje } = armar(despues);
+    const batch = db.batch();
+    batch.set(nuevaNotificacionRef(despues.jugadorUid), {
+      tipo: `pedido_${despues.estado}`,
+      titulo,
+      mensaje,
+      link: "/mis-reservas",
+      icono: "🧾",
+      leida: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    batch.update(pedidoRef, { [`notificado.${despues.estado}`]: true });
+    await batch.commit();
+    logger.info(`onPedidoUpdated ${clubId}/${pedidoId}: ${antes.estado} → ${despues.estado}, avisado`);
+  } catch (err) {
+    logger.error(`onPedidoUpdated ${clubId}/${pedidoId}`, err);
+  }
 });

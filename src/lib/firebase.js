@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import { getAnalytics, logEvent } from 'firebase/analytics';
 
@@ -32,6 +32,14 @@ try {
 }
 export const db = firestore;
 export const auth = getAuth(app);
+
+// Sesión anónima para pedir desde el QR de la cancha sin cuenta de Padely (Authentication → Sign-in method →
+// Anonymous tiene que estar habilitado en la consola). Si ya hay una sesión (real o anónima) se reutiliza.
+export const entrarAnonimo = async () => {
+  if (auth.currentUser) return auth.currentUser;
+  const { user } = await signInAnonymously(auth);
+  return user;
+};
 export const storage = getStorage(app);
 
 // Analytics es opcional: solo si VITE_FIREBASE_MEASUREMENT_ID está definida (y el navegador lo soporta)

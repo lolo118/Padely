@@ -640,6 +640,7 @@ export default function Configuracion() {
                   </div>
                 </div>
 
+                {PERMISOS_BAR.length > 0 && (
                 <div>
                   <p className="pd-eyebrow mb-2!">Bar · próximamente</p>
                   <div className="grid gap-2 md:grid-cols-2">
@@ -652,6 +653,7 @@ export default function Configuracion() {
                   </div>
                   <p className="pd-help mt-2 m-0">Vienen con el rol; se van a poder ajustar cuando esté el bar.</p>
                 </div>
+                )}
 
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <Field label="Descuento máximo %" help="Cuánto puede descontar al cobrar" className="w-44">

@@ -137,6 +137,10 @@ service cloud.firestore {
     match /{path=**}/cuentas/{cuentaId} {
       allow read: if signedIn() && resource.data.jugadorUid == request.auth.uid;
     }
+    // Mis pedidos a la barra, en cualquier club (misma consulta por jugadorUid; también para sesiones anónimas)
+    match /{path=**}/pedidos/{pedidoId} {
+      allow read: if signedIn() && resource.data.jugadorUid == request.auth.uid;
+    }
 
     // Al entrar, cada persona busca los clubes donde es staff (la consulta lleva where("uid", "==", auth.uid))
     match /{path=**}/staff/{uid} {
@@ -361,7 +365,7 @@ service cloud.firestore {
         allow read: if esStaffCaja(clubId) || esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender')
           || (signedIn() && resource.data.jugadorUid == request.auth.uid)
           || superAdmin();
-        allow create: if (esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender'))
+        allow create: if (esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender') || esStaff(clubId, 'pedidos'))
           && request.resource.data.estado == 'abierta'
           && request.resource.data.abiertaPor == request.auth.uid
           && request.resource.data.reservaGrupoId == cuentaId
@@ -369,15 +373,85 @@ service cloud.firestore {
           && request.resource.data.ventas.size() == 0
           && request.resource.data.cerradaEn == null;
         // Mientras está abierta: editar consumos / cancha / división (y anotar las ventas de las partes cobradas),
-        // o cerrarla (cerrada: quien cobra; anulada: quien puede anular ventas)
-        allow update: if (esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender'))
-          && resource.data.estado == 'abierta'
-          && ((changedOnly(['items', 'totales', 'division', 'cancha', 'ventas', 'actualizadoEn', 'nombreJugador'])
-               && request.resource.data.estado == 'abierta')
-              || (changedOnly(['estado', 'cerradaPor', 'cerradaEn', 'ventas', 'division', 'totales', 'anulacion', 'actualizadoEn'])
-                  && request.resource.data.estado in ['cerrada', 'anulada']
-                  && request.resource.data.cerradaPor == request.auth.uid
-                  && (request.resource.data.estado == 'cerrada' || esStaff(clubId, 'anularVenta'))));
+        // o cerrarla (cerrada: quien cobra; anulada: quien puede anular ventas). Quien atiende la barra ('pedidos')
+        // solo suma consumos (al aceptar un pedido). Una cuenta anulada se puede reabrir (vuelve vacía, con lo
+        // anterior en historial) por quien cobra o atiende la barra. Campos de la Function: cuentaAplicada,
+        // avisoVencidaEnviado, cierreAutomatico, pedidosPendientes.
+        allow update: if (resource.data.estado == 'abierta'
+            && (((esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender'))
+                 && changedOnly(['items', 'totales', 'division', 'cancha', 'ventas', 'actualizadoEn', 'nombreJugador'])
+                 && request.resource.data.estado == 'abierta')
+                || (esStaff(clubId, 'pedidos')
+                    && changedOnly(['items', 'totales', 'division', 'actualizadoEn'])
+                    && request.resource.data.estado == 'abierta')
+                || ((esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender'))
+                    && changedOnly(['estado', 'cerradaPor', 'cerradaEn', 'ventas', 'division', 'totales', 'anulacion', 'actualizadoEn'])
+                    && request.resource.data.estado in ['cerrada', 'anulada']
+                    && request.resource.data.cerradaPor == request.auth.uid
+                    && (request.resource.data.estado == 'cerrada' || esStaff(clubId, 'anularVenta')))))
+          || (resource.data.estado == 'anulada'
+              && (esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender') || esStaff(clubId, 'pedidos'))
+              && request.resource.data.estado == 'abierta'
+              && request.resource.data.abiertaPor == request.auth.uid
+              && request.resource.data.ventas.size() == 0
+              && request.resource.data.cerradaEn == null
+              && changedOnly(['estado', 'items', 'totales', 'division', 'ventas', 'cerradaPor', 'cerradaEn', 'anulacion',
+                              'historial', 'abiertaPor', 'abiertaPorNombre', 'abiertaEn', 'actualizadoEn']));
+        allow delete: if false;
+      }
+
+      // ----- Bar: pedidos a la barra (desde el celular del jugador o el QR de la cancha) -----
+      // Los crea un usuario con sesión (real o anónima) a su propio nombre (jugadorUid). "celular": el jugador que
+      // reservó; "qr": cualquiera en la cancha, con el token impreso en el QR (los anónimos solo por acá). El jugador
+      // cancela mientras está en espera; la barra ('pedidos') lo acepta / rechaza / marca listo y entregado.
+      // Campos de la Function: notificado, validado, pedidosPendientes (en la cuenta); el qrToken lo borra ella.
+      function reservaDelPedido(clubId) {
+        return get(/databases/$(database)/documents/clubs/$(clubId)/reservas/$(request.resource.data.reservaGrupoId)).data;
+      }
+      function esAnonimo() {
+        return request.auth.token.get('firebase', {}).get('sign_in_provider', '') == 'anonymous';
+      }
+      match /pedidos/{pedidoId} {
+        allow read: if esStaff(clubId, 'pedidos') || esStaffCaja(clubId) || esStaff(clubId, 'vender')
+          || (signedIn() && resource.data.jugadorUid == request.auth.uid)
+          || superAdmin();
+        allow create: if signedIn()
+          && request.resource.data.jugadorUid == request.auth.uid
+          && request.resource.data.estado == 'pendiente'
+          && request.resource.data.items is list
+          && request.resource.data.items.size() > 0
+          && request.resource.data.items.size() <= 20
+          && request.resource.data.subtotal is number
+          && request.resource.data.nombre is string
+          && request.resource.data.nombre.size() > 0
+          && request.resource.data.lineaIds.size() == 0
+          && request.resource.data.atendidoPor == null
+          && request.resource.data.reservaGrupoId == request.resource.data.cuentaId
+          && reservaDelPedido(clubId).status == 'confirmada'
+          && request.resource.data.canchaId == reservaDelPedido(clubId).canchaId
+          && ((request.resource.data.origen == 'celular'
+               && request.resource.data.anonimo == false
+               && !esAnonimo()
+               && reservaDelPedido(clubId).jugadorUid == request.auth.uid)
+              || (request.resource.data.origen == 'qr'
+                  && request.resource.data.anonimo == esAnonimo()
+                  && request.resource.data.qrToken is string
+                  && request.resource.data.qrToken.size() > 0
+                  && request.resource.data.qrToken
+                     == get(/databases/$(database)/documents/clubs/$(clubId)/canchas/$(request.resource.data.canchaId)).data.get('qrToken', null)));
+        allow update: if (signedIn()
+            && resource.data.jugadorUid == request.auth.uid
+            && resource.data.estado == 'pendiente'
+            && changedOnly(['estado', 'tiempos', 'actualizadoEn'])
+            && request.resource.data.estado == 'cancelado')
+          || (esStaff(clubId, 'pedidos')
+            && changedOnly(['estado', 'rechazo', 'tiempos', 'atendidoPor', 'atendidoPorNombre', 'lineaIds', 'actualizadoEn'])
+            && request.resource.data.atendidoPor == request.auth.uid
+            && ((resource.data.estado == 'pendiente' && request.resource.data.estado in ['aceptado', 'rechazado'])
+                || (resource.data.estado == 'aceptado' && request.resource.data.estado == 'listo')
+                || (resource.data.estado == 'listo' && request.resource.data.estado == 'entregado'))
+            && (request.resource.data.estado != 'rechazado'
+                || (request.resource.data.rechazo.motivo is string && request.resource.data.rechazo.motivo.size() > 0)));
         allow delete: if false;
       }
 

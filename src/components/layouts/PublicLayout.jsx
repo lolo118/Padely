@@ -22,7 +22,8 @@ export default function PublicLayout() {
     return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando…</div>;
   }
 
-  if (user) return <PlayerLayout />;
+  // Una sesión anónima (QR de la cancha) ve la barra pública con "Ingresar", no la app del jugador
+  if (user && !user.isAnonymous) return <PlayerLayout />;
 
   const next = encodeURIComponent(location.pathname + location.search);
 

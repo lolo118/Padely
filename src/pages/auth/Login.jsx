@@ -60,7 +60,7 @@ export default function Login() {
   // Ya logueado (por ejemplo al volver del redirect de Google): salimos del login según el rol (el staff de un
   // club, al panel)
   useEffect(() => {
-    if (!usuarioActual || !rolActual || !clubCargado) return;
+    if (!usuarioActual || usuarioActual.isAnonymous || !rolActual || !clubCargado) return;
     // ?next= explícito manda sobre un redirect de vinculación guardado de una visita anterior
     if (next) {
       localStorage.removeItem("padely-vincular-redirect");

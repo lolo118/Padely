@@ -18,7 +18,7 @@ import TicketPreview from "../../../components/TicketPreview";
 import { htmlTicketVenta } from "../../../print/ticketVenta";
 import { imprimirHtml } from "../../../print/imprimir";
 import { dispositivoGuardado, escucharCajaAbierta } from "../../../services/cajaService";
-import { CuentaNoEditableError, agregarItemsACuenta, escucharCuentasAbiertas } from "../../../services/cuentasService";
+import { CuentaCerradaError, CuentaNoEditableError, agregarItemsACuenta, escucharCuentasAbiertas } from "../../../services/cuentasService";
 import { textoTurno } from "../../../utils/cuentas";
 import { escucharProductos, getCategorias } from "../../../services/productosService";
 import { SinNumerosError, crearVenta, estadoNumeracion, prepararNumeracion, tomarNumero } from "../../../services/ventasService";
@@ -183,7 +183,8 @@ export default function Vender() {
       limpiar();
     } catch (e) {
       console.error("Error agregando a la cuenta:", e);
-      toast.error(e instanceof CuentaNoEditableError ? e.message : "No pudimos agregar a la cuenta. Revisá la conexión e intentá de nuevo.");
+      const motivo = e instanceof CuentaNoEditableError || e instanceof CuentaCerradaError ? e.message : e?.code === "permission-denied" ? "sin permiso" : e?.code === "unavailable" ? "sin conexión" : e?.message || "error desconocido";
+      toast.error(`No se pudo cargar a la cuenta: ${motivo}`);
     }
     enfocar();
   };

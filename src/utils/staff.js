@@ -2,7 +2,7 @@
 // clubs/{c}/staff/{uid} = { uid, nombre, email, rol, permisos (lista EFECTIVA: preset del rol ± ajustes), descuentoMax,
 // activo, invitacionId, invitadoPor, creadoEn, actualizadoEn }. El dueño (clubs/{c}.ownerUid) no tiene documento:
 // tiene todos los permisos, siempre.
-// Los permisos de la fase 3 (bar, caja) existen desde ahora; los que todavía no tienen pantalla van con faseActual: false.
+// Todos los permisos tienen pantalla; faseActual queda para la próxima fase (PERMISOS_BAR vacío = sección oculta en Equipo).
 
 export const PERMISOS = [
   // Fase 2: tienen pantalla hoy
@@ -20,7 +20,7 @@ export const PERMISOS = [
   { id: "cerrarCajaAjena", label: "Cerrar la caja de otro", descripcion: "Cerrar una caja abierta por otra persona", grupo: "Bar", faseActual: true },
   { id: "verCajasCerradas", label: "Ver cajas cerradas", descripcion: "Historial de cajas", grupo: "Bar", faseActual: true },
   { id: "anularVenta", label: "Anular ventas", descripcion: "Anular una venta ya cobrada", grupo: "Bar", faseActual: true },
-  { id: "pedidos", label: "Pedidos", descripcion: "La pantalla de pedidos del bar", grupo: "Bar", faseActual: false },
+  { id: "pedidos", label: "Pedidos", descripcion: "La pantalla de pedidos del bar", grupo: "Bar", faseActual: true },
   { id: "editarProductos", label: "Editar productos", descripcion: "Alta y cambios de productos y precios del bar", grupo: "Bar", faseActual: true },
   { id: "cargarStock", label: "Cargar stock", descripcion: "Compras, ajustes y mermas de stock", grupo: "Bar", faseActual: true },
   { id: "importar", label: "Importar", descripcion: "Importar productos y stock desde un archivo", grupo: "Bar", faseActual: true },
@@ -52,7 +52,7 @@ export const ROLES = {
   },
   barra: {
     label: "Barra",
-    descripcion: "Solo la pantalla de pedidos del bar (próximamente)",
+    descripcion: "Solo la pantalla Barra: los pedidos que llegan del celular y del QR de la cancha",
     permisos: ["pedidos"],
     descuentoMax: 0,
   },

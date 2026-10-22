@@ -77,6 +77,7 @@ function LoadingFallback() {
   );
 }
 
+// Una sesión anónima (QR de la cancha) no es un usuario de la app: se la trata como sin sesión
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuthStore();
   if (loading)
@@ -85,7 +86,7 @@ function ProtectedRoute({ children }) {
         Cargando...
       </div>
     );
-  if (!user) return <Navigate to="/login" />;
+  if (!user || user.isAnonymous) return <Navigate to="/login" />;
   return children;
 }
 
@@ -96,7 +97,7 @@ function RoleRoute({ allowedRoles, children }) {
   const esStaff = staffDe.length > 0;
 
   if (loading) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
-  if (!user) return <Navigate to="/login" />;
+  if (!user || user.isAnonymous) return <Navigate to="/login" />;
   if (!rol || !clubCargado) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
   const permitido = allowedRoles.includes(rol) || (allowedRoles.includes("club") && esStaff);
   if (!permitido) {
@@ -122,6 +123,7 @@ function SuperAdminRoute({ children }) {
 function RedirigirPorRol() {
   const { user, rol, clubCargado } = useAuthStore();
 
+  if (user?.isAnonymous) return <Navigate to="/login" />;
   if (user && (!rol || !clubCargado)) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
   if (rol === "club") return <Navigate to="/admin" />;
   if (rol === "organizador") return <Navigate to="/org" />;
@@ -137,7 +139,7 @@ function RedirigirTorneo() {
   if (loading || (user && (!rol || !clubCargado))) {
     return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
   }
-  if (!user) {
+  if (!user || user.isAnonymous) {
     // Después del login volvemos a este mismo link
     localStorage.setItem("padely-vincular-redirect", location.pathname);
     return <Navigate to="/login" />;
@@ -165,7 +167,11 @@ export default function App() {
 
     const unsub = onAuthChange(async (user) => {
       setUser(user);
-      if (user) {
+      if (user && user.isAnonymous) {
+        // Sesión anónima (QR de la cancha): sin perfil, sin rol, sin club. Nunca se crea users/{uid}.
+        setPerfil(null);
+        await recargarStaff();
+      } else if (user) {
         // El perfil (users/{uid}) y el rol quedan en el store antes de dar por terminada la carga
         try {
           setPerfil(await getUserData(user.uid));

@@ -35,6 +35,9 @@ async function resolverClubActual(uid, perfil, staffDe) {
   };
 }
 
+// Un usuario anónimo (QR de la cancha) no tiene perfil ni rol: nunca entra a la app del jugador ni a los paneles
+const rolDe = (user, perfil) => (user?.isAnonymous ? "anonimo" : rolDesdePerfil(perfil));
+
 export const useAuthStore = create((set, get) => ({
   user: null,
   perfil: null, // documento users/{uid}
@@ -52,10 +55,10 @@ export const useAuthStore = create((set, get) => ({
   setUser: (user) =>
     set(
       user
-        ? { user }
+        ? { user, ...(user.isAnonymous ? { perfil: null, rol: "anonimo" } : {}) }
         : { user: null, perfil: null, rol: null, staffDe: [], clubActual: null, clubCargado: false, esSuperAdmin: false, entidadSuspendida: false },
     ),
-  setPerfil: (perfil) => set({ perfil: perfil || null, rol: rolDesdePerfil(perfil) }),
+  setPerfil: (perfil) => set({ perfil: perfil || null, rol: rolDe(get().user, perfil) }),
   setLoading: (loading) => set({ loading }),
   // Vuelve a leer users/{uid} (después de editar el perfil, subir la foto, etc.)
   refreshPerfil: async (uid) => {
@@ -63,19 +66,19 @@ export const useAuthStore = create((set, get) => ({
     if (!id) return null;
     try {
       const perfil = await getUserData(id);
-      set({ perfil: perfil || null, rol: rolDesdePerfil(perfil) });
+      set({ perfil: perfil || null, rol: rolDe(get().user, perfil) });
       return perfil;
     } catch (err) {
       console.error("Error cargando el perfil:", err);
-      set({ perfil: null, rol: rolDesdePerfil(null) });
+      set({ perfil: null, rol: rolDe(get().user, null) });
       return null;
     }
   },
   // Carga las membresías de staff y resuelve clubActual (se llama después de cargar el perfil, y al aceptar una invitación)
   recargarStaff: async () => {
     const uid = get().user?.uid;
-    if (!uid) {
-      set({ staffDe: [], clubActual: null, clubCargado: true });
+    if (!uid || get().user?.isAnonymous) {
+      set({ staffDe: [], clubActual: null, clubCargado: true, esSuperAdmin: false });
       return null;
     }
     let staffDe = [];
@@ -123,3 +126,4 @@ export const useAuthStore = create((set, get) => ({
 // Selectores derivados (no cambian la API del store): staff (no dueño) y acceso al panel del club
 export const esStaffDeAlgunClub = (s) => s.staffDe.length > 0;
 export const accesoPanelClub = (s) => s.rol === "club" || s.staffDe.length > 0;
+export const esAnonimo = (s) => s.user?.isAnonymous === true;
