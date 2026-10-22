@@ -92,9 +92,12 @@ export default function Cuentas() {
             {c.canchaNombre} · {c.horaInicio}
             {c.horaFin ? `–${c.horaFin}` : ""}
           </Card.Eyebrow>
-          <Badge tone="success" dot>
-            Abierta
-          </Badge>
+          <span className="flex flex-wrap justify-end gap-1">
+            {Number(c.pedidosPendientes) > 0 && <Badge tone="warning">{c.pedidosPendientes === 1 ? "1 pedido" : `${c.pedidosPendientes} pedidos`}</Badge>}
+            <Badge tone="success" dot>
+              Abierta
+            </Badge>
+          </span>
         </Card.Row>
         <Card.Title className="mt-2!">{c.nombreJugador || "Sin nombre"}</Card.Title>
         <Card.Meta className="mt-1!">

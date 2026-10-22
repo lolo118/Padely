@@ -371,9 +371,16 @@ export default function Dashboard() {
                   : `${cajasAbiertas.length} cajas abiertas: ${cajasAbiertas.map((c) => `${c.dispositivo} (${formatPrecio(efectivoEsperado(c))})`).join(", ")}`}
             </p>
             {cuentasAbiertas.length > 0 && (
-              <Link to="/admin/bar/cuentas" className="body-sm text-ink underline mt-1 inline-block pd-tnum" onClick={(e) => e.stopPropagation()}>
-                {cuentasAbiertas.length} {cuentasAbiertas.length === 1 ? "cuenta abierta" : "cuentas abiertas"} · {formatPrecio(cuentasAbiertas.reduce((s, c) => s + (Number(c.totales?.total) || 0), 0))}
-              </Link>
+              <span className="body-sm mt-1 inline-flex flex-wrap gap-x-1 pd-tnum">
+                <Link to="/admin/bar/cuentas" className="text-ink underline" onClick={(e) => e.stopPropagation()}>
+                  {cuentasAbiertas.length} {cuentasAbiertas.length === 1 ? "cuenta abierta" : "cuentas abiertas"} · {formatPrecio(cuentasAbiertas.reduce((s, c) => s + (Number(c.totales?.total) || 0), 0))}
+                </Link>
+                {cuentasAbiertas.reduce((s, c) => s + (Number(c.pedidosPendientes) || 0), 0) > 0 && (
+                  <Link to="/admin/bar/barra" className="text-warning underline" onClick={(e) => e.stopPropagation()}>
+                    · {cuentasAbiertas.reduce((s, c) => s + (Number(c.pedidosPendientes) || 0), 0)} pedidos pendientes
+                  </Link>
+                )}
+              </span>
             )}
           </div>
         </Card>

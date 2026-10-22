@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Plus, Printer, X } from "lucide-react";
+import { ArrowLeft, MessageSquare, Plus, Printer, X } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import SinPermiso from "../../../components/SinPermiso";
 import Dialogo from "../../../components/Dialogo";
@@ -230,6 +230,11 @@ export default function CuentaDetalle() {
               {ETIQUETA_ESTADO[cuenta.estado] || cuenta.estado}
             </Badge>
             {cuenta.division?.partes?.length ? <Badge>{`${pagadas}/${cuenta.division.partes.length} partes pagadas`}</Badge> : null}
+            {Number(cuenta.pedidosPendientes) > 0 && (
+              <Link to="/admin/bar/barra" className="pd-badge pd-badge-warning">
+                {cuenta.pedidosPendientes === 1 ? "1 pedido en espera" : `${cuenta.pedidosPendientes} pedidos en espera`}
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -335,6 +340,12 @@ export default function CuentaDetalle() {
                           <span className="block body-sm text-ink-3 pd-tnum">
                             {formatPrecio(it.precio)} c/u{it.descuento > 0 ? ` · desc. −${formatPrecio(it.descuento)}` : ""}
                           </span>
+                          {it.pedidoId && (
+                            <span className="inline-flex items-center gap-1 body-sm text-ink-3">
+                              <MessageSquare className="pd-icon" size={14} aria-hidden="true" />
+                              pedido de {it.pedidoPor || "—"}
+                            </span>
+                          )}
                         </td>
                         <td className="num">{fmtCant(it.cantidad)}</td>
                         <td className="num pd-tnum font-semibold">{formatPrecio(it.subtotal)}</td>

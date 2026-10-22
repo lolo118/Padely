@@ -69,14 +69,18 @@ export default function TurnosStrip({ clubId, seleccionId = null, onSeleccionar,
             const id = r.grupoId || r.id;
             const cuenta = cuentaDe(r);
             const activo = id === seleccionId;
+            // Un turno cuya cuenta ya se cerró (la reserva lleva cuentaCerrada) se ve apagado: no se le carga más
+            const cerrado = !cuenta && r.cuentaCerrada === true;
+            const pendientes = Number(cuenta?.pedidosPendientes) || 0;
             return (
               <button
                 key={id}
                 type="button"
                 role="option"
                 aria-selected={activo}
-                className="pd-pill h-11! shrink-0"
-                disabled={deshabilitado}
+                className={["pd-pill h-11! shrink-0", cerrado && "text-ink-3! opacity-60"].filter(Boolean).join(" ")}
+                disabled={deshabilitado || cerrado}
+                title={cerrado ? "La cuenta de este turno ya se cerró" : undefined}
                 onClick={() => onSeleccionar?.(activo ? null : r)}
               >
                 {textoTurno({ canchaNombre: r.canchaName, horaInicio: r.horaInicio, horaFin: r.horaFin, nombreJugador: r.nombreJugador })}
@@ -85,6 +89,7 @@ export default function TurnosStrip({ clubId, seleccionId = null, onSeleccionar,
                     {formatPrecio(cuenta.totales?.total)} abierta
                   </Badge>
                 )}
+                {pendientes > 0 && <Badge tone="warning">{pendientes === 1 ? "1 pedido" : `${pendientes} pedidos`}</Badge>}
               </button>
             );
           })}
