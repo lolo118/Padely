@@ -1833,3 +1833,6 @@ exports.avisosStockDiario = onSchedule({ schedule: "every day 08:30", timeZone: 
   }
   logger.info(`avisosStockDiario: ${avisos} avisos en ${porClub.size} clubes`);
 });
+
+// P3-6 deploy: cambio de fuente para que todas las funciones se vuelvan a publicar (el primer deploy dejó el hash
+// actualizado sin una revisión sana en Cloud Run).
