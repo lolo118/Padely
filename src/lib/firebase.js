@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
+import { getFunctions } from 'firebase/functions';
 import { getAnalytics, logEvent } from 'firebase/analytics';
 
 const measurementId = import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '';
@@ -41,6 +42,8 @@ export const entrarAnonimo = async () => {
   return user;
 };
 export const storage = getStorage(app);
+// Callables (us-central1): recalcularReporte
+export const functions = getFunctions(app, 'us-central1');
 
 // Analytics es opcional: solo si VITE_FIREBASE_MEASUREMENT_ID está definida (y el navegador lo soporta)
 let analytics = null;

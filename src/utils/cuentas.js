@@ -65,6 +65,8 @@ export function nuevaLinea(item, { uid = null, nombre = null, ahora = new Date()
     descuento,
     subtotal: redondear(bruto - descuento),
     controlaStock: item.controlaStock !== false,
+    costo: item.costo === null || item.costo === undefined || item.costo === "" ? null : num(item.costo),
+    categoriaId: item.categoriaId || null,
     pedidoId: null,
     pedidoPor: null,
     agregadoPor: uid,
@@ -167,7 +169,8 @@ export function parteDelJugador(cuenta, uid, nombre) {
 // ----- Líneas de las ventas que cierran la cuenta (TODAS con controlaStock false: el stock lo mueve una sola vez
 // la Function onCuentaUpdated al cerrar la cuenta) -----
 
-const lineaVenta = ({ productoId = null, nombre, precio, cantidad = 1, descuento = 0, subtotal }) => ({
+// tipoLinea: "consumo" (producto) | "cancha" | "seña" — lo usan los reportes para separar consumos de cancha
+const lineaVenta = ({ productoId = null, nombre, precio, cantidad = 1, descuento = 0, subtotal, tipoLinea = "consumo", costo = null, categoriaId = null }) => ({
   productoId,
   nombre,
   precio: redondear(precio),
@@ -175,16 +178,21 @@ const lineaVenta = ({ productoId = null, nombre, precio, cantidad = 1, descuento
   descuento: redondear(descuento),
   subtotal: redondear(subtotal),
   controlaStock: false,
+  tipoLinea,
+  costo: costo === null || costo === undefined ? null : redondear(costo),
+  categoriaId: categoriaId || null,
 });
 const nombreCancha = (cuenta) => `${cuenta?.canchaNombre || cuenta?.canchaName || "Cancha"} · ${cuenta?.horaInicio || ""}${cuenta?.horaFin ? `–${cuenta.horaFin}` : ""}`.trim();
 
 export function lineasDeVentaParaTodo(cuenta) {
-  const lineas = (cuenta?.items || []).map((it) => lineaVenta({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, cantidad: it.cantidad, descuento: it.descuento, subtotal: it.subtotal }));
+  const lineas = (cuenta?.items || []).map((it) =>
+    lineaVenta({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, cantidad: it.cantidad, descuento: it.descuento, subtotal: it.subtotal, costo: it.costo, categoriaId: it.categoriaId }),
+  );
   if (cobraCancha(cuenta)) {
     const bruta = redondear(num(cuenta.cancha?.precioTotal));
-    if (bruta > 0) lineas.push(lineaVenta({ nombre: nombreCancha(cuenta), precio: bruta, subtotal: bruta }));
+    if (bruta > 0) lineas.push(lineaVenta({ nombre: nombreCancha(cuenta), precio: bruta, subtotal: bruta, tipoLinea: "cancha" }));
     const seña = señaDescontada(cuenta);
-    if (seña > 0) lineas.push(lineaVenta({ nombre: "Seña pagada", precio: -seña, subtotal: -seña }));
+    if (seña > 0) lineas.push(lineaVenta({ nombre: "Seña pagada", precio: -seña, subtotal: -seña, tipoLinea: "seña" }));
   }
   return lineas;
 }
@@ -194,14 +202,17 @@ export function lineasDeVentaParaParte(cuenta, parte) {
   const lineas = [];
   for (const id of parte?.items || []) {
     const it = porId.get(id);
-    if (it) lineas.push(lineaVenta({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, cantidad: it.cantidad, descuento: it.descuento, subtotal: it.subtotal }));
+    if (it) lineas.push(lineaVenta({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, cantidad: it.cantidad, descuento: it.descuento, subtotal: it.subtotal, costo: it.costo, categoriaId: it.categoriaId }));
   }
   for (const c of parte?.compartidos || []) {
-    if (num(c.monto) !== 0) lineas.push(lineaVenta({ nombre: `${c.nombre} (${c.fraccion})`, precio: c.monto, subtotal: c.monto }));
+    // Una parte de una línea compartida: el costo proporcional del producto (si lo tenía) y su categoría
+    const it = porId.get(c.lineaId);
+    const costoParte = it && it.costo !== null && it.costo !== undefined && num(it.subtotal) !== 0 ? (num(it.costo) * num(it.cantidad) * num(c.monto)) / num(it.subtotal) : null;
+    if (num(c.monto) !== 0) lineas.push(lineaVenta({ productoId: it?.productoId || null, nombre: `${c.nombre} (${c.fraccion})`, precio: c.monto, subtotal: c.monto, costo: costoParte, categoriaId: it?.categoriaId || null }));
   }
   const fraccion = cuenta?.division?.n > 1 && cuenta.division.canchaPagaParte === null ? ` (1/${cuenta.division.n})` : "";
-  if (num(parte?.canchaBruta) > 0) lineas.push(lineaVenta({ nombre: `${nombreCancha(cuenta)}${fraccion}`, precio: parte.canchaBruta, subtotal: parte.canchaBruta }));
-  if (num(parte?.seña) > 0) lineas.push(lineaVenta({ nombre: `Seña pagada${fraccion}`, precio: -parte.seña, subtotal: -parte.seña }));
+  if (num(parte?.canchaBruta) > 0) lineas.push(lineaVenta({ nombre: `${nombreCancha(cuenta)}${fraccion}`, precio: parte.canchaBruta, subtotal: parte.canchaBruta, tipoLinea: "cancha" }));
+  if (num(parte?.seña) > 0) lineas.push(lineaVenta({ nombre: `Seña pagada${fraccion}`, precio: -parte.seña, subtotal: -parte.seña, tipoLinea: "seña" }));
   return lineas;
 }
 

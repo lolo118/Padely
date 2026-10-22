@@ -311,6 +311,30 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // ----- Bar: reportes diarios, catálogo público, alertas de stock y tickets públicos (los escriben SOLO las Functions) -----
+      // reportesDiarios/{YYYY-MM-DD}: lo que ve Reportes (quien tiene verReportes).
+      match /reportesDiarios/{fecha} {
+        allow read: if esStaff(clubId, 'verReportes') || superAdmin();
+        allow write: if false;
+      }
+      // catalogo/{productoId} y catalogo/_categorias: nombre, precio, categoría, favorito, activo, agotado (bool) —
+      // sin costo ni cantidades. Lo leen jugadores y sesiones anónimas (QR de la cancha) para pedir.
+      match /catalogo/{docId} {
+        allow read: if signedIn();
+        allow write: if false;
+      }
+      // alertasStock/{productoId}: productos en o bajo el mínimo (los ve el bar)
+      match /alertasStock/{productoId} {
+        allow read: if esStaffBar(clubId) || superAdmin();
+        allow write: if false;
+      }
+      // ticketsPublicos/{numero}: el ticket digital (/t/v/{clubId}/{numero}). Público: nombre del club, ítems,
+      // totales, medios y montos. Nunca creadoPor, cajaId ni referencias de pago.
+      match /ticketsPublicos/{numero} {
+        allow read: if true;
+        allow write: if false;
+      }
+
       // ----- Bar: ventas (inmutables; el id ES el número de ticket) y contadores de numeración por dispositivo -----
       // El stock y la caja los mueven las Functions (movimientos "venta"/"anulacion", que los clientes no pueden
       // crear). El cliente nunca escribe `aplicado`. Una venta solo cambia para anularse, con motivo, mientras la

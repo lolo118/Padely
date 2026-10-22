@@ -140,7 +140,21 @@ export default function Vender() {
     setItems((lista) => {
       const i = lista.findIndex((l) => l.productoId === p.id);
       if (i >= 0) return lista.map((l, k) => (k === i ? { ...l, cantidad: l.cantidad + cantidad } : l));
-      return [...lista, { key: p.id, productoId: p.id, nombre: p.nombre, precio: Number(p.precio) || 0, cantidad, descuento: 0, controlaStock: p.controlaStock !== false }];
+      return [
+        ...lista,
+        {
+          key: p.id,
+          productoId: p.id,
+          nombre: p.nombre,
+          precio: Number(p.precio) || 0,
+          cantidad,
+          descuento: 0,
+          controlaStock: p.controlaStock !== false,
+          // Para los reportes: costo y categoría al momento de la venta
+          costo: p.costo === null || p.costo === undefined || p.costo === "" ? null : Number(p.costo),
+          categoriaId: p.categoriaId || null,
+        },
+      ];
     });
     enfocar();
   };
@@ -215,6 +229,9 @@ export default function Vender() {
         descuento: l.descuento,
         subtotal: l.subtotal,
         controlaStock: l.controlaStock !== false,
+        costo: l.costo ?? null,
+        categoriaId: l.categoriaId ?? null,
+        tipoLinea: "consumo",
       })),
       subtotal: totales.subtotal,
       descuento: totales.descuento,

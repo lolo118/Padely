@@ -1045,8 +1045,18 @@ exports.onVentaCreated = onDocumentCreated("clubs/{clubId}/ventas/{numero}", asy
       if (!snap.exists) return "sin venta";
       const venta = snap.data() || {};
       if (venta.aplicado === true) return "ya aplicada";
+      // Lecturas del reporte y del ticket público ANTES de cualquier escritura de la transacción
+      const clubRef = db.collection("clubs").doc(clubId);
+      const [clubSnap, categorias, cuentaSnap] = await Promise.all([
+        tx.get(clubRef),
+        categoriasDeVenta(clubRef, venta, tx),
+        venta.cuentaId ? tx.get(clubRef.collection("cuentas").doc(String(venta.cuentaId))) : Promise.resolve(null),
+      ]);
       const n = await escribirMovimientosDeVenta(tx, clubId, numero, venta, { etiqueta: "venta", signo: 1 });
-      tx.update(refs.venta, { aplicado: true, aplicadoEn: FieldValue.serverTimestamp() });
+      const cuenta = cuentaSnap && cuentaSnap.exists ? cuentaSnap.data() : null;
+      sumarAlReporte(tx, clubRef, fechaDe(venta.creadoEn), aporteDeVenta(venta, { categorias, cuenta, signo: 1 }));
+      tx.set(clubRef.collection("ticketsPublicos").doc(numero), ticketPublicoDe(venta, clubSnap.exists ? clubSnap.data() : {}, clubId, numero));
+      tx.update(refs.venta, { aplicado: true, aplicadoEn: FieldValue.serverTimestamp(), rollupAplicado: true });
       return `aplicada (${n} movimientos)`;
     });
     logger.info(`onVentaCreated ${clubId}/${numero}: ${resultado}`);
@@ -1068,8 +1078,19 @@ exports.onVentaUpdated = onDocumentUpdated("clubs/{clubId}/ventas/{numero}", asy
       const venta = snap.data() || {};
       if (venta.estado !== "anulada") return "no anulada";
       if (venta.anulacionAplicada === true) return "anulación ya aplicada";
+      const clubRef = db.collection("clubs").doc(clubId);
+      const [categorias, cuentaSnap] = await Promise.all([
+        categoriasDeVenta(clubRef, venta, tx),
+        venta.cuentaId ? tx.get(clubRef.collection("cuentas").doc(String(venta.cuentaId))) : Promise.resolve(null),
+      ]);
       const n = await escribirMovimientosDeVenta(tx, clubId, numero, venta, { etiqueta: "anul", signo: -1 });
-      tx.update(refs.venta, { anulacionAplicada: true, anulacionAplicadaEn: FieldValue.serverTimestamp() });
+      // El reporte resta la venta (solo si la había sumado: las anteriores a P3-6 se recalculan con recalcularReporte)
+      if (venta.rollupAplicado === true) {
+        const cuenta = cuentaSnap && cuentaSnap.exists ? cuentaSnap.data() : null;
+        sumarAlReporte(tx, clubRef, fechaDe(venta.creadoEn), aporteDeVenta(venta, { categorias, cuenta, signo: -1 }));
+      }
+      tx.set(clubRef.collection("ticketsPublicos").doc(numero), { estado: "anulada", anulacion: { motivo: (venta.anulacion && venta.anulacion.motivo) || null }, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
+      tx.update(refs.venta, { anulacionAplicada: true, anulacionAplicadaEn: FieldValue.serverTimestamp(), rollupAnulacionAplicado: venta.rollupAplicado === true });
       return `anulación aplicada (${n} movimientos)`;
     });
     logger.info(`onVentaUpdated ${clubId}/${numero}: ${resultado}`);
@@ -1171,6 +1192,14 @@ exports.onCuentaUpdated = onDocumentUpdated("clubs/{clubId}/cuentas/{cuentaId}",
       const cambiosReserva = { cuentaCerrada: true, cuentaTotal: Number(cuenta.totales && cuenta.totales.total) || 0, cuentaCerradaEn: FieldValue.serverTimestamp() };
       if (señaCobradaAca) cambiosReserva.señaPagada = true;
       reservasSnap.docs.forEach((d) => tx.update(d.ref, cambiosReserva));
+      if (cuenta.canchaId) {
+        const k = limpiarClave(cuenta.canchaId);
+        tx.set(
+          clubRef.collection("reportesDiarios").doc(fechaDe(cuenta.cerradaEn)),
+          { fecha: fechaDe(cuenta.cerradaEn), porCancha: { [k]: { nombre: cuenta.canchaNombre || null, cuentas: FieldValue.increment(1) } }, actualizadoEn: FieldValue.serverTimestamp() },
+          { merge: true },
+        );
+      }
       tx.update(cuentaRef, { cuentaAplicada: true, cuentaAplicadaEn: FieldValue.serverTimestamp() });
       return `cerrada: ${escritos} movimientos de stock, ${reservasSnap.size} turnos${señaCobradaAca ? ", seña cobrada" : ""}`;
     });
@@ -1412,4 +1441,395 @@ exports.onPedidoUpdated = onDocumentUpdated("clubs/{clubId}/pedidos/{pedidoId}",
   } catch (err) {
     logger.error(`onPedidoUpdated ${clubId}/${pedidoId}`, err);
   }
+});
+
+// ============================================================================
+// BAR — REPORTES DIARIOS, CATÁLOGO PÚBLICO, ALERTAS DE STOCK Y TICKETS PÚBLICOS
+// Los reportes se leen de clubs/{c}/reportesDiarios/{YYYY-MM-DD} (fecha local de Argentina), que mantienen las
+// Functions con FieldValue.increment: una venta suma, su anulación resta (ventas.anuladas y totalAnulado suman).
+// Nunca se recorre `ventas` al abrir Reportes. `recalcularReporte` (callable) reconstruye un día desde cero.
+// catalogo/{productoId} es la proyección pública (sin costo ni stock) que leen jugadores y sesiones anónimas.
+// alertasStock/{productoId} vive mientras el stock esté en o bajo el mínimo; avisosStockDiario avisa a las 8:30.
+// ticketsPublicos/{numero} es lo que muestra /t/v/{clubId}/{numero}: sin creadoPor, cajaId, descuentos por línea
+// ni referencias de pago.
+// ============================================================================
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+
+const CLAVES_MEDIO = ["efectivo", "transferencia", "tarjeta", "qr"];
+const TOP_PRODUCTOS = 200;
+const fechaDe = (ts) => (ts && typeof ts.toDate === "function" ? fechaLocalArgentina(ts.toDate()) : fechaLocalArgentina());
+const horaDe = (ts) => {
+  const date = ts && typeof ts.toDate === "function" ? ts.toDate() : new Date();
+  const partes = new Intl.DateTimeFormat("en-GB", { timeZone: ZONA_HORARIA, hour: "2-digit", hour12: false }).formatToParts(date);
+  const h = Number((partes.find((p) => p.type === "hour") || {}).value) || 0;
+  return String(h % 24).padStart(2, "0");
+};
+// Rango [inicio, fin) en UTC de un día local argentino (UTC−3 fijo, sin horario de verano)
+const rangoDelDia = (fecha) => ({ inicio: new Date(`${fecha}T00:00:00-03:00`), fin: new Date(`${fecha}T24:00:00-03:00`) });
+const limpiarClave = (s) => String(s || "sin").replace(/[.~*/[\]]/g, "_") || "sin";
+
+// Tipo de una línea de venta: lo trae desde P3-6; las viejas se infieren
+function tipoLineaDe(it) {
+  if (it && it.tipoLinea) return it.tipoLinea;
+  if (it && it.productoId) return "consumo";
+  return Number(it && it.subtotal) < 0 ? "seña" : "cancha";
+}
+
+// Lo que una venta aporta al reporte de su día, como objeto anidado de números (signo +1 venta, −1 anulación).
+// categorias: { productoId: categoriaId } ya leído; cuenta: doc de la cuenta (para porCancha) o null.
+function aporteDeVenta(venta, { categorias = {}, cuenta = null, signo = 1 }) {
+  const items = Array.isArray(venta.items) ? venta.items : [];
+  const pagos = Array.isArray(venta.pagos) ? venta.pagos : [];
+  const total = Number(venta.total) || 0;
+  const a = { ventas: {}, porMedio: {}, porCategoria: {}, porProducto: {}, porHora: {}, porCancha: {} };
+  if (signo > 0) {
+    a.ventas.cantidad = 1;
+    a.ventas.total = total;
+  } else {
+    a.ventas.anuladas = 1;
+    a.ventas.totalAnulado = total;
+    a.ventas.total = -total;
+  }
+  for (const p of pagos) if (CLAVES_MEDIO.includes(p && p.medio)) a.porMedio[p.medio] = (a.porMedio[p.medio] || 0) + signo * (Number(p.monto) || 0);
+  const hora = horaDe(venta.creadoEn);
+  a.porHora[hora] = { cantidad: signo, total: signo * total };
+  let costoIncompleto = 0;
+  let consumos = 0;
+  let cancha = 0;
+  for (const it of items) {
+    const tipo = tipoLineaDe(it);
+    const subtotal = Number(it.subtotal) || 0;
+    if (tipo !== "consumo") {
+      cancha += subtotal;
+      continue;
+    }
+    consumos += subtotal;
+    const cantidad = Number(it.cantidad) || 0;
+    const costo = it.costo === null || it.costo === undefined ? null : (Number(it.costo) || 0) * cantidad;
+    if (costo === null) costoIncompleto += 1;
+    const pid = it.productoId ? limpiarClave(it.productoId) : null;
+    const cat = limpiarClave((it.categoriaId !== undefined && it.categoriaId !== null ? it.categoriaId : pid ? categorias[it.productoId] : null) || "sin");
+    const c = (a.porCategoria[cat] = a.porCategoria[cat] || { cantidad: 0, total: 0, costo: 0 });
+    c.cantidad += signo * cantidad;
+    c.total += signo * subtotal;
+    c.costo += signo * (costo || 0);
+    if (pid) {
+      const p = (a.porProducto[pid] = a.porProducto[pid] || { cantidad: 0, total: 0, costo: 0 });
+      p.cantidad += signo * cantidad;
+      p.total += signo * subtotal;
+      p.costo += signo * (costo || 0);
+      p.nombre = it.nombre || null;
+    }
+  }
+  if (costoIncompleto) a.ventas.lineasSinCosto = signo * costoIncompleto;
+  if (venta.cuentaId && cuenta && cuenta.canchaId) {
+    const k = limpiarClave(cuenta.canchaId);
+    a.porCancha[k] = { nombre: cuenta.canchaNombre || null, total: signo * cancha, consumos: signo * consumos, cobros: signo };
+  }
+  return a;
+}
+
+// Convierte el aporte en un objeto con FieldValue.increment por hoja (nombres quedan como texto)
+function comoIncrementos(aporte) {
+  const inc = (obj) => {
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (v === null || v === undefined) continue;
+      if (typeof v === "number") out[k] = FieldValue.increment(v);
+      else if (typeof v === "string") out[k] = v;
+      else if (typeof v === "object") out[k] = inc(v);
+    }
+    return out;
+  };
+  return inc(aporte);
+}
+
+// Lee las categorías de los productos de una venta (dentro de la transacción si viene tx)
+async function categoriasDeVenta(clubRef, venta, tx = null) {
+  const ids = [...new Set((venta.items || []).filter((it) => it && it.productoId && (it.categoriaId === undefined || it.categoriaId === null)).map((it) => String(it.productoId)))];
+  if (!ids.length) return {};
+  const refs = ids.map((id) => clubRef.collection("productos").doc(id));
+  const snaps = tx ? await tx.getAll(...refs) : await db.getAll(...refs);
+  const out = {};
+  snaps.forEach((s, i) => {
+    out[ids[i]] = s.exists ? s.data().categoriaId || "sin" : "sin";
+  });
+  return out;
+}
+
+// Proyección pública de una venta (lo que muestra /t/v/{clubId}/{numero}): sin creadoPor, cajaId, ref de pagos
+function ticketPublicoDe(venta, club, clubId, numero) {
+  const t = (club && club.ticket) || {};
+  return {
+    numero,
+    clubId,
+    fecha: fechaDe(venta.creadoEn),
+    hora: `${horaDe(venta.creadoEn)}:${String(venta.creadoEn && typeof venta.creadoEn.toDate === "function" ? new Intl.DateTimeFormat("en-GB", { timeZone: ZONA_HORARIA, minute: "2-digit" }).format(venta.creadoEn.toDate()) : "00").padStart(2, "0")}`,
+    club: {
+      nombre: (club && club.nombre) || "",
+      direccion: (club && club.direccion) || "",
+      ciudad: (club && club.ciudad) || "",
+      ticket: { encabezado: t.encabezado || null, alias: t.alias || null, pie: t.pie || null },
+    },
+    items: (venta.items || []).map((it) => ({
+      nombre: it.nombre || "",
+      cantidad: Number(it.cantidad) || 0,
+      precio: Number(it.precio) || 0,
+      descuento: Number(it.descuento) || 0,
+      subtotal: Number(it.subtotal) || 0,
+      tipoLinea: tipoLineaDe(it),
+    })),
+    subtotal: Number(venta.subtotal) || 0,
+    descuentoTotal: Number(venta.descuentoTotal) || 0,
+    descuento: venta.descuento ? { tipo: venta.descuento.tipo || null, valor: Number(venta.descuento.valor) || 0, monto: Number(venta.descuento.monto) || 0 } : null,
+    total: Number(venta.total) || 0,
+    pagos: (venta.pagos || []).map((p) => ({ medio: p.medio || null, monto: Number(p.monto) || 0, entregado: p.entregado !== undefined ? Number(p.entregado) || 0 : null })),
+    vuelto: Number(venta.vuelto) || 0,
+    estado: venta.estado || "ok",
+    anulacion: venta.anulacion ? { motivo: venta.anulacion.motivo || null } : null,
+    cuentaNombre: venta.cuentaId && venta.cliente && venta.cliente.nombre ? venta.cliente.nombre : null,
+    dispositivo: venta.dispositivo || null,
+    creadoEn: venta.creadoEn || FieldValue.serverTimestamp(),
+    actualizadoEn: FieldValue.serverTimestamp(),
+  };
+}
+
+// Reporte del día de la venta ± su aporte, dentro de la transacción (set+merge crea el día si no existe)
+function sumarAlReporte(tx, clubRef, fecha, aporte) {
+  const ref = clubRef.collection("reportesDiarios").doc(fecha);
+  tx.set(ref, { fecha, ...comoIncrementos(aporte), actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
+}
+
+// ----- Reconstrucción completa de un día (callable "recalcularReporte") -----
+async function reconstruirReporteDiario(clubId, fecha) {
+  const clubRef = db.collection("clubs").doc(clubId);
+  const { inicio, fin } = rangoDelDia(fecha);
+  const [ventasSnap, cajasSnap] = await Promise.all([
+    clubRef.collection("ventas").where("creadoEn", ">=", inicio).where("creadoEn", "<", fin).get(),
+    clubRef.collection("cajas").where("cerradaEn", ">=", inicio).where("cerradaEn", "<", fin).get(),
+  ]);
+  const acumulado = { ventas: {}, porMedio: {}, porCategoria: {}, porProducto: {}, porHora: {}, porCancha: {} };
+  const sumar = (destino, aporte) => {
+    for (const [k, v] of Object.entries(aporte)) {
+      if (typeof v === "number") destino[k] = (destino[k] || 0) + v;
+      else if (typeof v === "string") destino[k] = v;
+      else if (v && typeof v === "object") sumar((destino[k] = destino[k] || {}), v);
+    }
+  };
+  const cuentas = new Map();
+  for (const d of ventasSnap.docs) {
+    const venta = d.data();
+    const categorias = await categoriasDeVenta(clubRef, venta);
+    let cuenta = null;
+    if (venta.cuentaId) {
+      if (!cuentas.has(venta.cuentaId)) {
+        const cs = await clubRef.collection("cuentas").doc(String(venta.cuentaId)).get();
+        cuentas.set(venta.cuentaId, cs.exists ? cs.data() : null);
+      }
+      cuenta = cuentas.get(venta.cuentaId);
+    }
+    sumar(acumulado, aporteDeVenta(venta, { categorias, cuenta, signo: 1 }));
+    if (venta.estado === "anulada") sumar(acumulado, aporteDeVenta(venta, { categorias, cuenta, signo: -1 }));
+  }
+  // Cuentas cerradas ese día por cancha
+  const cuentasSnap = await clubRef.collection("cuentas").where("cerradaEn", ">=", inicio).where("cerradaEn", "<", fin).get();
+  cuentasSnap.docs.forEach((d) => {
+    const c = d.data();
+    if (c.estado !== "cerrada" || !c.canchaId) return;
+    const k = limpiarClave(c.canchaId);
+    acumulado.porCancha[k] = acumulado.porCancha[k] || { nombre: c.canchaNombre || null, total: 0, consumos: 0, cobros: 0 };
+    acumulado.porCancha[k].cuentas = (acumulado.porCancha[k].cuentas || 0) + 1;
+    acumulado.porCancha[k].nombre = acumulado.porCancha[k].nombre || c.canchaNombre || null;
+  });
+  const cierres = cajasSnap.docs
+    .map((d) => cierreDeCaja(d.id, d.data()))
+    .filter(Boolean)
+    .sort((a, b) => (a.cerradaEn && a.cerradaEn.toMillis ? a.cerradaEn.toMillis() : 0) - (b.cerradaEn && b.cerradaEn.toMillis ? b.cerradaEn.toMillis() : 0));
+  await clubRef.collection("reportesDiarios").doc(fecha).set({ fecha, ...acumulado, cajas: { cierres }, recalculadoEn: FieldValue.serverTimestamp(), actualizadoEn: FieldValue.serverTimestamp() });
+  return { ventas: ventasSnap.size, cierres: cierres.length };
+}
+
+function cierreDeCaja(cajaId, caja) {
+  if (!caja || caja.estado !== "cerrada") return null;
+  return {
+    cajaId,
+    dispositivo: caja.dispositivo || null,
+    abiertaEn: caja.abiertaEn || null,
+    cerradaEn: caja.cerradaEn || null,
+    esperadoEfectivo: Number(caja.esperadoEfectivo) || 0,
+    efectivoContado: Number(caja.arqueo && caja.arqueo.efectivoContado) || 0,
+    diferencia: Number(caja.diferencia) || 0,
+    ventas: Number(caja.totales && caja.totales.ventas) || 0,
+  };
+}
+
+exports.recalcularReporte = onCall({ region: "us-central1" }, async (request) => {
+  if (!request.auth || !request.auth.uid) throw new HttpsError("unauthenticated", "Iniciá sesión");
+  const uid = request.auth.uid;
+  const clubId = String((request.data && request.data.clubId) || "");
+  const fecha = String((request.data && request.data.fecha) || "");
+  if (!clubId || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new HttpsError("invalid-argument", "clubId y fecha (YYYY-MM-DD)");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const [clubSnap, staffSnap] = await Promise.all([clubRef.get(), clubRef.collection("staff").doc(uid).get()]);
+  if (!clubSnap.exists) throw new HttpsError("not-found", "El club no existe");
+  const esDueño = clubSnap.data().ownerUid === uid;
+  const staff = staffSnap.exists ? staffSnap.data() : null;
+  const puede = esDueño || (staff && staff.activo === true && Array.isArray(staff.permisos) && staff.permisos.includes("verReportes"));
+  if (!puede) throw new HttpsError("permission-denied", "Solo quien ve los reportes puede recalcularlos");
+  const resultado = await reconstruirReporteDiario(clubId, fecha);
+  logger.info(`recalcularReporte ${clubId}/${fecha} por ${uid}: ${resultado.ventas} ventas, ${resultado.cierres} cierres`);
+  return { ok: true, fecha, ...resultado };
+});
+
+// ----- Cierre de caja → reporte del día -----
+exports.onCajaUpdated = onDocumentUpdated("clubs/{clubId}/cajas/{cajaId}", async (event) => {
+  const { clubId, cajaId } = event.params;
+  const antes = event.data && event.data.before ? event.data.before.data() : null;
+  const despues = event.data && event.data.after ? event.data.after.data() : null;
+  if (!antes || !despues || antes.estado === "cerrada" || despues.estado !== "cerrada") return;
+  const clubRef = db.collection("clubs").doc(clubId);
+  const cajaRef = clubRef.collection("cajas").doc(cajaId);
+  try {
+    const resultado = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(cajaRef);
+      if (!snap.exists) return "sin caja";
+      const caja = snap.data();
+      if (caja.rollupAplicado === true) return "ya en el reporte";
+      const cierre = cierreDeCaja(cajaId, caja);
+      if (!cierre) return "no cerrada";
+      const fecha = fechaDe(caja.cerradaEn);
+      tx.set(clubRef.collection("reportesDiarios").doc(fecha), { fecha, cajas: { cierres: FieldValue.arrayUnion(cierre) }, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
+      tx.update(cajaRef, { rollupAplicado: true });
+      return `cierre en ${fecha}`;
+    });
+    logger.info(`onCajaUpdated ${clubId}/${cajaId}: ${resultado}`);
+  } catch (err) {
+    logger.error(`onCajaUpdated ${clubId}/${cajaId}`, err);
+  }
+});
+
+// ----- Catálogo público y alertas de stock -----
+function entradaCatalogo(p, categoriaNombre) {
+  return {
+    nombre: p.nombre || "",
+    categoriaId: p.categoriaId || null,
+    categoriaNombre: categoriaNombre || null,
+    precio: Number(p.precio) || 0,
+    favorito: p.favorito === true,
+    orden: Number(p.orden) || 0,
+    activo: p.activo !== false,
+    controlaStock: p.controlaStock !== false,
+    agotado: p.controlaStock !== false && (Number(p.stock) || 0) <= 0,
+    unidad: p.unidad || "u",
+    actualizadoEn: FieldValue.serverTimestamp(),
+  };
+}
+const bajoMinimo = (p) => p && p.controlaStock !== false && p.stockMinimo !== null && p.stockMinimo !== undefined && (Number(p.stock) || 0) <= Number(p.stockMinimo);
+
+exports.onProductoWritten = onDocumentWritten("clubs/{clubId}/productos/{productoId}", async (event) => {
+  const { clubId, productoId } = event.params;
+  const clubRef = db.collection("clubs").doc(clubId);
+  const catRef = clubRef.collection("catalogo").doc(productoId);
+  const alertaRef = clubRef.collection("alertasStock").doc(productoId);
+  try {
+    const despues = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+    if (!despues) {
+      await Promise.all([catRef.delete(), alertaRef.delete()]);
+      logger.info(`onProductoWritten ${clubId}/${productoId}: borrado del catálogo`);
+      return;
+    }
+    let categoriaNombre = null;
+    if (despues.categoriaId) {
+      const cs = await clubRef.collection("categoriasProductos").doc(String(despues.categoriaId)).get();
+      categoriaNombre = cs.exists ? cs.data().nombre || null : null;
+    }
+    const batch = db.batch();
+    batch.set(catRef, entradaCatalogo(despues, categoriaNombre));
+    if (bajoMinimo(despues)) {
+      const prev = await alertaRef.get();
+      batch.set(
+        alertaRef,
+        {
+          nombre: despues.nombre || "",
+          stock: Number(despues.stock) || 0,
+          stockMinimo: Number(despues.stockMinimo) || 0,
+          desde: prev.exists && prev.data().desde ? prev.data().desde : FieldValue.serverTimestamp(),
+          avisado: prev.exists ? prev.data().avisado || null : null,
+          actualizadoEn: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    } else {
+      batch.delete(alertaRef);
+    }
+    await batch.commit();
+  } catch (err) {
+    logger.error(`onProductoWritten ${clubId}/${productoId}`, err);
+  }
+});
+
+exports.onCategoriaWritten = onDocumentWritten("clubs/{clubId}/categoriasProductos/{categoriaId}", async (event) => {
+  const { clubId, categoriaId } = event.params;
+  const clubRef = db.collection("clubs").doc(clubId);
+  try {
+    const snap = await clubRef.collection("categoriasProductos").get();
+    const lista = snap.docs.map((d) => ({ id: d.id, nombre: d.data().nombre || "", orden: Number(d.data().orden) || 0 })).sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre, "es"));
+    const despues = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+    const nombre = despues ? despues.nombre || null : null;
+    const productos = await clubRef.collection("catalogo").where("categoriaId", "==", categoriaId).get();
+    const batch = db.batch();
+    batch.set(clubRef.collection("catalogo").doc("_categorias"), { lista, actualizadoEn: FieldValue.serverTimestamp() });
+    productos.docs.forEach((d) => batch.update(d.ref, despues ? { categoriaNombre: nombre } : { categoriaId: null, categoriaNombre: null }));
+    await batch.commit();
+    logger.info(`onCategoriaWritten ${clubId}/${categoriaId}: ${lista.length} categorías, ${productos.size} productos`);
+  } catch (err) {
+    logger.error(`onCategoriaWritten ${clubId}/${categoriaId}`, err);
+  }
+});
+
+// Todos los días a las 8:30: un aviso por club con alertas de stock sin avisar hoy, al dueño y al staff que carga stock
+exports.avisosStockDiario = onSchedule({ schedule: "every day 08:30", timeZone: ZONA_HORARIA }, async () => {
+  const hoy = fechaLocalArgentina();
+  const snap = await db.collectionGroup("alertasStock").get();
+  const porClub = new Map();
+  snap.docs.forEach((d) => {
+    const clubRef = d.ref.parent.parent;
+    if (!clubRef) return;
+    if (!porClub.has(clubRef.id)) porClub.set(clubRef.id, { clubRef, alertas: [] });
+    porClub.get(clubRef.id).alertas.push(d);
+  });
+  let avisos = 0;
+  for (const { clubRef, alertas } of porClub.values()) {
+    const pendientes = alertas.filter((d) => d.data().avisado !== hoy);
+    if (!pendientes.length) continue;
+    try {
+      const [clubSnap, staffSnap] = await Promise.all([clubRef.get(), clubRef.collection("staff").where("activo", "==", true).get()]);
+      const destinatarios = new Set();
+      if (clubSnap.exists && clubSnap.data().ownerUid) destinatarios.add(clubSnap.data().ownerUid);
+      staffSnap.docs.forEach((d) => {
+        const s = d.data();
+        if (s.uid && Array.isArray(s.permisos) && (s.permisos.includes("editarProductos") || s.permisos.includes("cargarStock"))) destinatarios.add(s.uid);
+      });
+      const nombres = alertas.map((d) => d.data().nombre).filter(Boolean);
+      const mensaje = `${nombres.slice(0, 5).join(", ")}${nombres.length > 5 ? ` y ${nombres.length - 5} más` : ""} · en o bajo el mínimo. Revisá Productos → Stock bajo.`;
+      const batch = db.batch();
+      destinatarios.forEach((uid) =>
+        batch.set(nuevaNotificacionRef(uid), {
+          tipo: "stock_bajo",
+          titulo: `Stock bajo: ${alertas.length} ${alertas.length === 1 ? "producto" : "productos"}`,
+          mensaje,
+          link: "/admin/bar/productos?filtro=bajo",
+          icono: "📦",
+          leida: false,
+          createdAt: FieldValue.serverTimestamp(),
+        }),
+      );
+      alertas.forEach((d) => batch.update(d.ref, { avisado: hoy }));
+      await batch.commit();
+      avisos += destinatarios.size;
+    } catch (err) {
+      logger.error(`avisosStockDiario ${clubRef.id}`, err);
+    }
+  }
+  logger.info(`avisosStockDiario: ${avisos} avisos en ${porClub.size} clubes`);
 });

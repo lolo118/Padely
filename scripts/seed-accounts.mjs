@@ -1,4 +1,4 @@
-// scripts/seed-accounts.mjs — creates or completes the six test accounts. Run: npm run seed:accounts
+// scripts/seed-accounts.mjs — creates or completes the seven test accounts. Run: npm run seed:accounts
 // Password comes from SEED_PASSWORD (default "Padely2026!"). Never commit a password.
 import { readFileSync } from "node:fs";
 import { initializeApp } from "firebase/app";
@@ -34,6 +34,8 @@ const cuentas = [
   { email: "admin@test.com", tipo: "jugador", nombre: "Admin Test" },
   // Cajero del bar (P3-3): jugador que entra al club como staff "cajero" (ver más abajo: invitación + aceptación)
   { email: "cajero@test.com", tipo: "jugador", nombre: "Cajero Test", staffDe: { club: "club@test.com", rol: "cajero" } },
+  // Barra (P3-6): solo la pantalla Barra (pedidos)
+  { email: "barra@test.com", tipo: "jugador", nombre: "Barra Test", staffDe: { club: "club@test.com", rol: "barra" } },
 ];
 
 async function ensureUser(email) {
