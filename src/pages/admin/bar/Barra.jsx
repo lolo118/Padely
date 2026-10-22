@@ -11,7 +11,8 @@ import { avanzarPedido, escucharPedidosActivos, rechazarPedido } from "../../../
 import { useOnline } from "../../../utils/conexion";
 import { haceCuanto, resumenItems } from "../../../utils/pedidos";
 import { formatPrecio } from "../../../utils/format";
-import { audioListo, desbloquearAudio, guardarSonido, sonarNuevoPedido, sonidoGuardado } from "../../../components/pos/sonido";
+import { EVENTO_AUDIO_LISTO, audioListo, desbloquearAudio, guardarSonido, sonarNuevoPedido, sonidoGuardado } from "../../../components/pos/sonido";
+import useMediaQuery from "../../../utils/useMediaQuery";
 
 // Barra: el tablero de pedidos en tiempo real, en Noche para leerse desde lejos. Pendientes → En preparación →
 // Listos. Aceptar suma los items a la cuenta del turno (cuentasService.aceptarPedido); rechazar lleva motivo.
@@ -90,6 +91,14 @@ export default function Barra() {
   const [sonido, setSonido] = useState(sonidoGuardado);
   const [audioOk, setAudioOk] = useState(audioListo);
   const vistos = useRef(null); // ids de pendientes ya vistos (para sonar solo con los nuevos)
+  const escritorio = useMediaQuery("(min-width: 768px)");
+
+  // Si el audio se armó con un gesto en otra parte del panel, el botón "Activar sonido" ya no hace falta
+  useEffect(() => {
+    const onListo = () => setAudioOk(true);
+    window.addEventListener(EVENTO_AUDIO_LISTO, onListo);
+    return () => window.removeEventListener(EVENTO_AUDIO_LISTO, onListo);
+  }, []);
 
   useEffect(() => {
     if (!clubId || !puedeEntrar) return undefined;
@@ -294,11 +303,14 @@ export default function Barra() {
           </div>
         </div>
       ) : (
-        <>
-          <Pills className="md:hidden" items={COLUMNAS.map((c) => ({ ...c, count: porColumna[c.value].length }))} value={columna} onChange={setColumna} ariaLabel="Columna" />
-          <div className="md:hidden">{columnaUi(COLUMNAS.find((c) => c.value === columna) || COLUMNAS[0])}</div>
-          <div className="hidden md:grid gap-4 md:grid-cols-3 items-start">{COLUMNAS.map(columnaUi)}</div>
-        </>
+        escritorio ? (
+          <div className="grid gap-4 md:grid-cols-3 items-start">{COLUMNAS.map(columnaUi)}</div>
+        ) : (
+          <>
+            <Pills items={COLUMNAS.map((c) => ({ ...c, count: porColumna[c.value].length }))} value={columna} onChange={setColumna} ariaLabel="Columna" />
+            {columnaUi(COLUMNAS.find((c) => c.value === columna) || COLUMNAS[0])}
+          </>
+        )
       )}
 
       {dialogo?.tipo === "rechazar" && <RechazarDialog pedido={dialogo.pedido} onCerrar={() => setDialogo(null)} onRechazar={(motivo) => rechazar(dialogo.pedido, motivo)} />}

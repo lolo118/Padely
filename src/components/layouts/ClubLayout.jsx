@@ -1,7 +1,9 @@
 import { BarChart3, ChefHat, LayoutDashboard, LayoutGrid, Package, ReceiptText, Settings, ShoppingCart, TrendingUp, Trophy, Wallet } from "lucide-react";
 import PanelLayout from "./PanelLayout";
+import { useEffect } from "react";
 import { useAuthStore } from "../../store/authStore";
 import Alert from "../ui/Alert";
+import { armarAudioConGesto } from "../pos/sonido";
 
 // Cada ítem lleva los permisos que lo habilitan (alguno alcanza); "Hoy" es para todo el que entra al panel
 const navItems = [
@@ -22,6 +24,10 @@ const navItems = [
 
 export default function ClubLayout() {
   const suspendido = useAuthStore((s) => s.clubActual?.suspendido === true);
+  // El aviso sonoro de la Barra necesita un gesto del usuario: el primer clic en el panel lo arma
+  useEffect(() => {
+    armarAudioConGesto();
+  }, []);
   const aviso = suspendido ? (
     <Alert tone="danger">
       <strong>Tu club está suspendido.</strong> Escribinos para reactivarlo. Mientras tanto no aparece en la lista de

@@ -5,7 +5,8 @@ import { signOut } from "firebase/auth";
 import { auth, entrarAnonimo } from "../lib/firebase";
 import { useAuthStore } from "../store/authStore";
 import { getClubConfig } from "../services/canchaService";
-import { getCancha, getReservaEnJuego, guardarNombreAnonimo, nombreAnonimoGuardado } from "../services/pedidosService";
+import { getCancha, getReservasEnJuego, guardarNombreAnonimo, nombreAnonimoGuardado } from "../services/pedidosService";
+import { textoTurno } from "../utils/cuentas";
 import { toast } from "../components/Toast";
 import { Alert, Button, Card, Field, Input } from "../components/ui";
 import PedirUI from "../components/pedidos/PedirUI";
@@ -21,7 +22,9 @@ export default function QrCancha() {
   const perfil = useAuthStore((s) => s.perfil);
   const loading = useAuthStore((s) => s.loading);
   const [base, setBase] = useState({ club: null, cancha: null, cargado: false, error: false });
-  const [reserva, setReserva] = useState({ valor: null, cargado: false });
+  const [reserva, setReserva] = useState({ valor: null, candidatas: [], cargado: false });
+  const [elegidaId, setElegidaId] = useState(null); // "¿No es tu turno?": el grupoId elegido a mano
+  const [eligiendo, setEligiendo] = useState(false);
   const [nombre, setNombre] = useState(nombreAnonimoGuardado);
   const [nombreListo, setNombreListo] = useState(() => !!nombreAnonimoGuardado());
   const [entrando, setEntrando] = useState(false);
@@ -46,17 +49,15 @@ export default function QrCancha() {
   useEffect(() => {
     if (!clubId || !canchaId || !user) return undefined;
     let vivo = true;
-    getReservaEnJuego(clubId, canchaId)
-      .then((r) => vivo && setReserva({ valor: r, cargado: true }))
-      .catch((err) => {
-        console.error("Error buscando el turno en juego:", err);
-        if (vivo) setReserva({ valor: null, cargado: true });
-      });
-    const t = setInterval(() => {
-      getReservaEnJuego(clubId, canchaId)
-        .then((r) => vivo && setReserva({ valor: r, cargado: true }))
-        .catch(() => {});
-    }, 60000);
+    const cargar = () =>
+      getReservasEnJuego(clubId, canchaId)
+        .then((lista) => vivo && setReserva({ valor: lista[0] || null, candidatas: lista, cargado: true }))
+        .catch((err) => {
+          console.error("Error buscando el turno en juego:", err);
+          if (vivo) setReserva({ valor: null, candidatas: [], cargado: true });
+        });
+    cargar();
+    const t = setInterval(cargar, 60000);
     return () => {
       vivo = false;
       clearInterval(t);
@@ -180,6 +181,7 @@ export default function QrCancha() {
       </div>
     );
   }
+  const reservaElegida = reserva.candidatas.find((c) => (c.grupoId || c.id) === elegidaId) || reserva.valor;
   if (anonimo && !nombreListo) {
     return (
       <div className="max-w-2xl mx-auto flex flex-col gap-4">
@@ -207,7 +209,32 @@ export default function QrCancha() {
 
   return (
     <div className="max-w-2xl mx-auto flex flex-col gap-4">
-      <PedirUI clubId={clubId} club={club} reserva={reserva.valor} uid={user.uid} nombre={nombreJugador} origen="qr" anonimo={anonimo} qrToken={token} />
+      <Card as="div" className="flex flex-wrap items-center justify-between gap-2 py-3!">
+        <p className="body-sm m-0">
+          <span className="text-ink-2">Pedís para: </span>
+          <strong>{textoTurno({ canchaNombre: reservaElegida.canchaName, horaInicio: reservaElegida.horaInicio, horaFin: reservaElegida.horaFin, nombreJugador: reservaElegida.nombreJugador })}</strong>
+        </p>
+        {reserva.candidatas.length > 1 && (
+          <Button variant="ghost" size="sm" onClick={() => setEligiendo((v) => !v)}>
+            {eligiendo ? "Listo" : "¿No es tu turno? Elegir otro"}
+          </Button>
+        )}
+        {eligiendo && (
+          <div className="w-full flex flex-wrap gap-2">
+            {reserva.candidatas.map((c) => {
+              const id = c.grupoId || c.id;
+              const activa = id === (reservaElegida.grupoId || reservaElegida.id);
+              return (
+                <button key={id} type="button" className="pd-pill" aria-pressed={activa} onClick={() => { setElegidaId(id); setEligiendo(false); }}>
+                  {c.horaInicio}
+                  {c.horaFin ? `–${c.horaFin}` : ""} · {c.nombreJugador || "sin nombre"}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+      <PedirUI key={reservaElegida.grupoId || reservaElegida.id} clubId={clubId} club={club} reserva={reservaElegida} uid={user.uid} nombre={nombreJugador} origen="qr" anonimo={anonimo} qrToken={token} />
       <div className="flex flex-wrap items-center gap-3 pb-40">
         {anonimo ? (
           <>

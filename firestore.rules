@@ -8,6 +8,11 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
+    // Sesión con cuenta real (no anónima). Las sesiones anónimas (QR de la cancha) solo crean pedidos "qr" y
+    // leen lo público; todo lo demás que crea un usuario por sí mismo exige una cuenta.
+    function noAnonimo() {
+      return signedIn() && request.auth.token.get('firebase', {}).get('sign_in_provider', '') != 'anonymous';
+    }
     function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
     function clubOwner(clubId) {
       return signedIn()
@@ -157,7 +162,7 @@ service cloud.firestore {
     // nombre a mostrar; un ranking público se publicaría como proyección desde una Cloud Function.
     match /users/{userId} {
       allow read: if isSelf(userId) || superAdmin();
-      allow create: if isSelf(userId);
+      allow create: if isSelf(userId) && noAnonimo();
       allow delete: if isSelf(userId);
       // Own profile: anything except role and ranking fields. The super-admin only fixes the role (one of three).
       allow update: if (isSelf(userId)
@@ -171,7 +176,7 @@ service cloud.firestore {
 
       match /notifications/{notifId} {
         allow read: if isSelf(userId);
-        allow create: if signedIn();
+        allow create: if noAnonimo();
         allow update: if isSelf(userId) && changedOnly(['leida']);
         allow delete: if isSelf(userId);
       }
@@ -181,7 +186,7 @@ service cloud.firestore {
     // de un torneo lo elige el organizador en el torneo (whatsappOrganizador, instagramOrganizador, administradores).
     match /organizers/{orgId} {
       allow read: if (signedIn() && resource.data.ownerUid == request.auth.uid) || superAdmin();
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid && naceActivo();
+      allow create: if noAnonimo() && request.resource.data.ownerUid == request.auth.uid && naceActivo();
       // El dueño edita su entidad sin tocar la suspensión; el super-admin solo suspende o reactiva
       allow update: if (signedIn() && resource.data.ownerUid == request.auth.uid && !tocaSuspension())
         || (superAdmin() && soloSuspension());
@@ -190,7 +195,7 @@ service cloud.firestore {
 
     match /clubs/{clubId} {
       allow read: if true;
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid && naceActivo();
+      allow create: if noAnonimo() && request.resource.data.ownerUid == request.auth.uid && naceActivo();
       // Configura el dueño o el staff con 'configurarClub' (que nunca cambia el dueño ni la fecha de alta); ninguno
       // de los dos toca la suspensión, que es del super-admin (y él solo toca esos campos). Borrar: solo el dueño.
       allow update: if (clubOwner(clubId) && !tocaSuspension())
@@ -485,7 +490,7 @@ service cloud.firestore {
         allow read: if isSelf(uid) || esStaff(clubId, 'gestionarStaff') || superAdmin();
         // Acepta una invitación: el propio usuario crea su doc con los datos de la invitación pendiente, no vencida,
         // dirigida a su email (en el mismo batch marca la invitación como aceptada)
-        allow create: if isSelf(uid)
+        allow create: if isSelf(uid) && noAnonimo()
           && request.resource.data.uid == uid
           && request.resource.data.activo == true
           && get(/databases/$(database)/documents/clubs/$(clubId)).data.ownerUid != request.auth.uid
@@ -529,7 +534,7 @@ service cloud.firestore {
         allow create: if sinContacto(['email', 'telefono'])
           && !nuevaReservaDeTorneo()
           && (esStaff(clubId, 'gestionarReservas')
-              || (signedIn()
+              || (noAnonimo()
                   && request.resource.data.jugadorUid == request.auth.uid
                   && clubActivo(clubId)
                   && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
@@ -537,9 +542,9 @@ service cloud.firestore {
         // The club manages; a player may cancel his own, or re-book a slot whose previous reservation was cancelled
         allow update: if !reservaDeTorneo() && !nuevaReservaDeTorneo()
           && (esStaff(clubId, 'gestionarReservas')
-              || (signedIn() && resource.data.get('jugadorUid', null) == request.auth.uid
+              || (noAnonimo() && resource.data.get('jugadorUid', null) == request.auth.uid
                   && changedOnly(['status']) && request.resource.data.status == 'cancelada')
-              || (signedIn() && resource.data.status == 'cancelada'
+              || (noAnonimo() && resource.data.status == 'cancelada'
                   && sinContacto(['email', 'telefono'])
                   && request.resource.data.jugadorUid == request.auth.uid
                   && clubActivo(clubId)
@@ -553,7 +558,7 @@ service cloud.firestore {
       match /contactosReservas/{reservaId} {
         allow read, delete: if esStaff(clubId, 'gestionarReservas');
         allow create, update: if esStaff(clubId, 'gestionarReservas')
-          || (signedIn()
+          || (noAnonimo()
               && request.resource.data.jugadorUid == request.auth.uid
               && getAfter(/databases/$(database)/documents/clubs/$(clubId)/reservas/$(reservaId)).data.jugadorUid
                  == request.auth.uid);
@@ -561,14 +566,14 @@ service cloud.firestore {
 
       match /reviews/{reviewId} {
         allow read: if true;
-        allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+        allow create: if noAnonimo() && request.resource.data.uid == request.auth.uid;
         allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
       }
     }
 
     match /tournaments/{tid} {
       allow read: if true;
-      allow create: if signedIn() && request.resource.data.organizerId == request.auth.uid && clubVinculoValido();
+      allow create: if noAnonimo() && request.resource.data.organizerId == request.auth.uid && clubVinculoValido();
       // El organizador edita todo salvo poner "aceptado" en un club ajeno; el club sede (dueño o staff con
       // 'gestionarTorneos') solo responde el pedido (club.estado) sin cambiar el club
       allow update: if (signedIn() && resource.data.organizerId == request.auth.uid
@@ -587,10 +592,10 @@ service cloud.firestore {
         allow create, delete: if tournamentOrganizer(tid);
         // The organizer edits; a player links his own account into an empty slot (vinculación)
         allow update: if tournamentOrganizer(tid)
-          || (signedIn() && changedOnly(['jugador1Uid'])
+          || (noAnonimo() && changedOnly(['jugador1Uid'])
               && resource.data.get('jugador1Uid', null) == null
               && request.resource.data.jugador1Uid == request.auth.uid)
-          || (signedIn() && changedOnly(['jugador2Uid'])
+          || (noAnonimo() && changedOnly(['jugador2Uid'])
               && resource.data.get('jugador2Uid', null) == null
               && request.resource.data.jugador2Uid == request.auth.uid);
       }
@@ -620,11 +625,11 @@ service cloud.firestore {
       match /inscripciones/{inscId} {
         allow read: if signedIn();
         // Email y WhatsApp de los jugadores van en contactosInscripciones/{inscId}, nunca acá
-        allow create: if signedIn() && request.resource.data.jugador1Uid == request.auth.uid
+        allow create: if noAnonimo() && request.resource.data.jugador1Uid == request.auth.uid
           && sinContacto(['email1', 'email2', 'whatsapp1', 'whatsapp2']);
         // The organizer confirms/rejects; the invited partner accepts (must be logged in)
         allow update: if tournamentOrganizer(tid)
-          || (signedIn()
+          || (noAnonimo()
               && resource.data.status == 'esperando_companero'
               && changedOnly(['status', 'jugador2Uid', 'jugador2Confirmado'])
               && request.resource.data.jugador2Uid == request.auth.uid
@@ -637,7 +642,7 @@ service cloud.firestore {
       match /contactosInscripciones/{inscId} {
         allow read, update, delete: if tournamentOrganizer(tid);
         allow create: if tournamentOrganizer(tid)
-          || (signedIn()
+          || (noAnonimo()
               && request.resource.data.jugador1Uid == request.auth.uid
               && getAfter(/databases/$(database)/documents/tournaments/$(tid)/inscripciones/$(inscId)).data.jugador1Uid
                  == request.auth.uid);
@@ -646,11 +651,11 @@ service cloud.firestore {
       match /reclamos/{reclamoId} {
         allow read: if signedIn();
         // Only a player linked to the denouncing pair can open a reclamo
-        allow create: if signedIn() && pairMember(tid, request.resource.data.parejaDenunciante.id);
+        allow create: if noAnonimo() && pairMember(tid, request.resource.data.parejaDenunciante.id);
         // The organizer resolves; any linked player may adhere or leave a descargo
         allow update: if tournamentOrganizer(tid)
-          || (signedIn() && changedOnly(['adheridos']))
-          || (signedIn() && changedOnly(['descargo']));
+          || (noAnonimo() && changedOnly(['adheridos']))
+          || (noAnonimo() && changedOnly(['descargo']));
         allow delete: if tournamentOrganizer(tid);
       }
     }

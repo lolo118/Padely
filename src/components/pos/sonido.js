@@ -20,6 +20,24 @@ export const guardarSonido = (activo) => {
 };
 
 export const audioListo = () => !!ctx && ctx.state === "running";
+export const EVENTO_AUDIO_LISTO = "padely-audio-listo";
+
+// Arma el audio con el primer gesto en cualquier parte del panel (pointerdown / keydown), una sola vez; avisa con
+// un evento para que el tablero deje de pedir "Activar sonido". Solo si la preferencia de sonido está activa.
+let armado = false;
+export function armarAudioConGesto() {
+  if (armado || typeof window === "undefined" || !sonidoGuardado()) return;
+  armado = true;
+  const intentar = async () => {
+    window.removeEventListener("pointerdown", intentar, true);
+    window.removeEventListener("keydown", intentar, true);
+    const ok = await desbloquearAudio();
+    if (ok) window.dispatchEvent(new Event(EVENTO_AUDIO_LISTO));
+    else armado = false;
+  };
+  window.addEventListener("pointerdown", intentar, true);
+  window.addEventListener("keydown", intentar, true);
+}
 
 // Crea (o reanuda) el AudioContext; devuelve true si quedó corriendo
 export async function desbloquearAudio() {

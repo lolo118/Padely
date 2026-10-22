@@ -3,6 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   MAX_ITEMS,
+  candidatasEnJuego,
   generarToken,
   haceCuanto,
   pedidoDesdeCarrito,
@@ -48,6 +49,27 @@ test("reserva en juego en la cancha: ventana ±15 y preferencia por la que ya em
   assert.equal(reservaEnJuego(lista, "k1", new Date(2026, 9, 22, 20, 30)), null);
   assert.equal(reservaEnJuego(lista, "k2", new Date(2026, 9, 22, 20, 30)).canchaId, "k2");
   assert.equal(reservaEnJuego(lista, "k1", new Date(2026, 9, 22, 21, 30)), null); // la cancelada no cuenta
+});
+
+test("B-P3-5-1: solapamiento 11:45–12:15 entre un turno que termina (A 11–12) y uno que entra (B 12–13)", () => {
+  const A = r("11:00", "12:00", { nombreJugador: "Gómez" });
+  const B = r("12:00", "13:00", { nombreJugador: "Rossi" });
+  const en = (h, m) => new Date(2026, 9, 22, h, m);
+  // prev cerrada: A nunca cuenta → B desde 11:45
+  assert.equal(reservaEnJuego([{ ...A, cuentaCerrada: true }, B], "k1", en(11, 50)).nombreJugador, "Rossi");
+  assert.equal(candidatasEnJuego([{ ...A, cuentaCerrada: true }, B], "k1", en(11, 50)).length, 1);
+  assert.equal(reservaEnJuego([{ ...A, cuenta: { estado: "anulada" } }, B], "k1", en(11, 50)).nombreJugador, "Rossi");
+  // prev abierta: antes de las 12 sigue jugando A (empezó y no terminó); pasadas las 12 gana B (A ya terminó)
+  assert.equal(reservaEnJuego([A, B], "k1", en(11, 50)).nombreJugador, "Gómez");
+  assert.deepEqual(candidatasEnJuego([A, B], "k1", en(11, 50)).map((x) => x.nombreJugador), ["Gómez", "Rossi"]);
+  assert.equal(reservaEnJuego([A, B], "k1", en(12, 5)).nombreJugador, "Rossi");
+  assert.deepEqual(candidatasEnJuego([A, B], "k1", en(12, 5)).map((x) => x.nombreJugador), ["Rossi", "Gómez"]);
+  // ambas abiertas a las 12:14: B (no terminó); A todavía es alternativa; a las 12:16 A sale de la ventana
+  assert.equal(candidatasEnJuego([A, B], "k1", en(12, 14)).length, 2);
+  assert.equal(candidatasEnJuego([A, B], "k1", en(12, 16)).length, 1);
+  // ninguna
+  assert.equal(reservaEnJuego([A, B], "k1", en(14, 0)), null);
+  assert.equal(reservaEnJuego([], "k1", en(12, 0)), null);
 });
 
 test("subtotal, resumen y pedido desde el carrito", () => {

@@ -42,6 +42,7 @@ export const useAuthStore = create((set, get) => ({
   user: null,
   perfil: null, // documento users/{uid}
   rol: null, // null mientras no se cargó el perfil
+  perfilCargado: false, // true cuando users/{uid} ya se leyó (o no hace falta: anónimo / sin sesión)
   loading: true,
   // Equipo: clubes donde la persona es staff activo ([{ clubId, rol, permisos, descuentoMax }]) y el club del panel
   staffDe: [],
@@ -55,10 +56,11 @@ export const useAuthStore = create((set, get) => ({
   setUser: (user) =>
     set(
       user
-        ? { user, ...(user.isAnonymous ? { perfil: null, rol: "anonimo" } : {}) }
-        : { user: null, perfil: null, rol: null, staffDe: [], clubActual: null, clubCargado: false, esSuperAdmin: false, entidadSuspendida: false },
+        ? { user, perfilCargado: !!user.isAnonymous, ...(user.isAnonymous ? { perfil: null, rol: "anonimo" } : {}) }
+        : {
+            perfilCargado: true, user: null, perfil: null, rol: null, staffDe: [], clubActual: null, clubCargado: false, esSuperAdmin: false, entidadSuspendida: false },
     ),
-  setPerfil: (perfil) => set({ perfil: perfil || null, rol: rolDe(get().user, perfil) }),
+  setPerfil: (perfil) => set({ perfil: perfil || null, rol: rolDe(get().user, perfil), perfilCargado: true }),
   setLoading: (loading) => set({ loading }),
   // Vuelve a leer users/{uid} (después de editar el perfil, subir la foto, etc.)
   refreshPerfil: async (uid) => {

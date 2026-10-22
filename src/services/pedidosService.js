@@ -15,7 +15,7 @@ import {
 import { db } from "../lib/firebase";
 import { normalizarReserva, agruparReservas } from "../utils/reservas";
 import { getTodayLocal } from "../utils/formatDate";
-import { ESTADOS_ACTIVOS, generarToken, reservaEnJuego, transicionValida } from "../utils/pedidos";
+import { ESTADOS_ACTIVOS, candidatasEnJuego, generarToken, transicionValida } from "../utils/pedidos";
 
 // Pedidos a la barra (clubs/{c}/pedidos): los crea el jugador (o un anónimo en la cancha, vía QR); la barra los
 // acepta (cuentasService.aceptarPedido suma los items a la cuenta del turno), rechaza con motivo, marca listo y
@@ -121,12 +121,13 @@ export const avanzarPedido = async (clubId, pedido, nuevoEstado, { uid, nombre }
 
 // ----- QR de la cancha -----
 
-// La reserva en juego en una cancha ahora (confirmada, de hoy, ±15 min), o null
-export const getReservaEnJuego = async (clubId, canchaId, ahora = new Date()) => {
+// Las reservas en juego en una cancha ahora (confirmadas, de hoy, ±15 min, sin cuenta cerrada), la preferida primero
+export const getReservasEnJuego = async (clubId, canchaId, ahora = new Date()) => {
   const snap = await getDocs(query(col(clubId, "reservas"), where("canchaId", "==", canchaId), where("fecha", "==", getTodayLocal()), where("status", "==", "confirmada")));
   const grupos = agruparReservas(snap.docs.map((d) => normalizarReserva({ id: d.id, clubId, ...d.data() })));
-  return reservaEnJuego(grupos, canchaId, ahora);
+  return candidatasEnJuego(grupos, canchaId, ahora);
 };
+export const getReservaEnJuego = async (clubId, canchaId, ahora = new Date()) => (await getReservasEnJuego(clubId, canchaId, ahora))[0] || null;
 
 export const getCancha = async (clubId, canchaId) => {
   const snap = await getDoc(doc(db, "clubs", clubId, "canchas", canchaId));

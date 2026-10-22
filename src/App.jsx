@@ -99,12 +99,13 @@ function ProtectedRoute({ children }) {
 // El rol vive en el store (se carga junto con el perfil en onAuthChange); rol === null significa "todavía cargando".
 // El panel del club (/admin) también lo abre el staff de un club (staffDe, cargado antes de terminar loading).
 function RoleRoute({ allowedRoles, children }) {
-  const { user, loading, rol, staffDe, clubCargado } = useAuthStore();
+  const { user, loading, rol, staffDe, clubCargado, perfilCargado } = useAuthStore();
   const esStaff = staffDe.length > 0;
 
   if (loading) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
   if (!user || user.isAnonymous) return <Navigate to="/login" />;
-  if (!rol || !clubCargado) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
+  // Nunca se redirige por rol hasta tener el perfil (rol) y el club del panel resueltos
+  if (!perfilCargado || !rol || !clubCargado) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
   const permitido = allowedRoles.includes(rol) || (allowedRoles.includes("club") && esStaff);
   if (!permitido) {
     if (rol === "club") return <Navigate to="/admin" />;
@@ -127,10 +128,10 @@ function SuperAdminRoute({ children }) {
 }
 
 function RedirigirPorRol() {
-  const { user, rol, clubCargado } = useAuthStore();
+  const { user, rol, clubCargado, perfilCargado } = useAuthStore();
 
   if (user?.isAnonymous) return <Navigate to="/login" />;
-  if (user && (!rol || !clubCargado)) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
+  if (user && (!perfilCargado || !rol || !clubCargado)) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
   if (rol === "club") return <Navigate to="/admin" />;
   if (rol === "organizador") return <Navigate to="/org" />;
   return <Inicio />;

@@ -47,17 +47,30 @@ export function puedePedir(reserva, ahora = new Date(), { antesMin = 15, despues
   return t >= inicio - antesMin && t <= fin + despuesMin;
 }
 
-// La reserva en juego en una cancha ahora (ventana 15 min antes / 15 min después), o null
-export function reservaEnJuego(reservas = [], canchaId, ahora = new Date(), { antesMin = 15, despuesMin = 15 } = {}) {
+// Las reservas en juego en una cancha ahora (ventana 15 min antes / 15 min después), ordenadas por preferencia:
+// nunca una cuya cuenta ya se cerró (cuentaCerrada en la reserva, o la cuenta leída cerrada/anulada); primero las
+// que todavía no terminaron, después las que ya empezaron, después la que empieza antes. Así, en el margen entre dos
+// turnos seguidos (11:45–12:15), el que entra gana sobre el que ya terminó (B-P3-5-1).
+export function candidatasEnJuego(reservas = [], canchaId, ahora = new Date(), { antesMin = 15, despuesMin = 15 } = {}) {
   const t = ahora.getHours() * 60 + ahora.getMinutes();
   const hoy = fechaLocalDe(ahora);
-  const candidatas = reservas.filter((r) => r && r.canchaId === canchaId && r.status === "confirmada" && r.fecha === hoy);
-  const enJuego = candidatas.filter((r) => t >= minutosDe(r.horaInicio || r.hora) - antesMin && t <= finDe(r) + despuesMin);
-  if (!enJuego.length) return null;
-  // Si dos se solapan en el margen (uno termina, otro empieza), gana el que ya empezó o empieza antes
-  enJuego.sort((a, b) => minutosDe(a.horaInicio || a.hora) - minutosDe(b.horaInicio || b.hora));
-  const empezadas = enJuego.filter((r) => t >= minutosDe(r.horaInicio || r.hora));
-  return empezadas.length ? empezadas[empezadas.length - 1] : enJuego[0];
+  const inicio = (r) => minutosDe(r.horaInicio || r.hora);
+  const cerrada = (r) => r.cuentaCerrada === true || (r.cuenta && (r.cuenta.estado === "cerrada" || r.cuenta.estado === "anulada"));
+  return reservas
+    .filter((r) => r && r.canchaId === canchaId && r.status === "confirmada" && r.fecha === hoy && !cerrada(r))
+    .filter((r) => t >= inicio(r) - antesMin && t <= finDe(r) + despuesMin)
+    .sort((a, b) => {
+      const terminoA = t > finDe(a) ? 1 : 0;
+      const terminoB = t > finDe(b) ? 1 : 0;
+      if (terminoA !== terminoB) return terminoA - terminoB;
+      const empezoA = t >= inicio(a) ? 0 : 1;
+      const empezoB = t >= inicio(b) ? 0 : 1;
+      if (empezoA !== empezoB) return empezoA - empezoB;
+      return inicio(a) - inicio(b);
+    });
+}
+export function reservaEnJuego(reservas = [], canchaId, ahora = new Date(), opciones = {}) {
+  return candidatasEnJuego(reservas, canchaId, ahora, opciones)[0] || null;
 }
 
 // "recién" / "hace 3 min" / "hace 1 h 05"
