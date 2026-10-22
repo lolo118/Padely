@@ -6,7 +6,7 @@ import { documentoTicket, imprimirHtml } from "../print/imprimir";
 
 // Vista previa de un ticket (HTML plano de src/print/*) con "Imprimir" y cerrar. La usan el cierre de caja y el
 // historial; P3-3/P3-4 la reutilizan para ventas y cuentas.
-export default function TicketPreview({ titulo = "Ticket", html, ancho = 80, descripcion, textoCerrar = "Cerrar", onCerrar }) {
+export default function TicketPreview({ titulo = "Ticket", html, ancho = 80, descripcion, textoCerrar = "Cerrar", onCerrar, onImprimido }) {
   const [imprimiendo, setImprimiendo] = useState(false);
   const documento = useMemo(() => documentoTicket(html, { ancho, titulo }), [html, ancho, titulo]);
 
@@ -14,6 +14,7 @@ export default function TicketPreview({ titulo = "Ticket", html, ancho = 80, des
     setImprimiendo(true);
     try {
       await imprimirHtml(html, { ancho, titulo });
+      onImprimido?.();
     } finally {
       setImprimiendo(false);
     }

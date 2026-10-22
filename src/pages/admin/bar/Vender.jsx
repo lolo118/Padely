@@ -12,6 +12,10 @@ import CantidadDialog from "../../../components/pos/CantidadDialog";
 import DescuentoDialog from "../../../components/pos/DescuentoDialog";
 import CobrarDialog from "../../../components/pos/CobrarDialog";
 import VentasDeHoy from "../../../components/pos/VentasDeHoy";
+import PostVentaDialog from "../../../components/pos/PostVentaDialog";
+import TicketPreview from "../../../components/TicketPreview";
+import { htmlTicketVenta } from "../../../print/ticketVenta";
+import { imprimirHtml } from "../../../print/imprimir";
 import { dispositivoGuardado, escucharCajaAbierta } from "../../../services/cajaService";
 import { escucharProductos, getCategorias } from "../../../services/productosService";
 import { SinNumerosError, crearVenta, estadoNumeracion, prepararNumeracion, tomarNumero } from "../../../services/ventasService";
@@ -50,7 +54,9 @@ export default function Vender() {
   const [numeracion, setNumeracion] = useState(() => (clubId ? estadoNumeracion(clubId) : { proximo: null, agotado: true, bloque: null }));
   const [items, setItems] = useState([]);
   const [descuentoGeneral, setDescuentoGeneral] = useState(null);
-  const [cliente, setCliente] = useState("");
+  const [cliente, setCliente] = useState({ nombre: "", telefono: "" });
+  const [ultimaVenta, setUltimaVenta] = useState(null); // panel post-venta
+  const [reimpresion, setReimpresion] = useState(null); // venta a reimprimir desde "Ventas"
   const [dialogo, setDialogo] = useState(null);
   const [ancho, setAncho] = useState(anchoTicketGuardado);
   const [imprimirDirecto, setImprimirDirecto] = useState(imprimirDirectoGuardado);
@@ -134,7 +140,7 @@ export default function Vender() {
   const limpiar = () => {
     setItems([]);
     setDescuentoGeneral(null);
-    setCliente("");
+    setCliente({ nombre: "", telefono: "" });
   };
   const vaciar = async () => {
     if (items.length === 0) return;
@@ -181,7 +187,7 @@ export default function Vender() {
       pagado: calculo.pagado,
       vuelto: calculo.vuelto,
       cuentaId: null,
-      cliente: cliente.trim() ? { nombre: cliente.trim() } : null,
+      cliente: cliente.nombre.trim() || cliente.telefono.trim() ? { nombre: cliente.nombre.trim() || null, telefono: cliente.telefono.trim() || null } : null,
       creadoPor: uid,
       creadoPorNombre: nombre || null,
     };
@@ -189,11 +195,21 @@ export default function Vender() {
     toast.success(`Venta ${numero} · ${formatPrecio(venta.total)}`);
     limpiar();
     setDialogo(null);
+    setUltimaVenta({ ...venta, creadoEn: new Date(), estado: "ok" });
     setNumeracion(estadoNumeracion(clubId));
     if (online && bloqueNecesitaReserva(estadoNumeracion(clubId).bloque)) {
       prepararNumeracion(clubId, { dispositivo, uid, online: true }).then(() => setNumeracion(estadoNumeracion(clubId)));
     }
     enfocar();
+  };
+
+  // Reimpresión desde "Ventas": directa (ajuste) o con vista previa
+  const reimprimir = async (venta) => {
+    if (imprimirDirecto) {
+      await imprimirHtml(htmlTicketVenta({ club: clubActual, venta, clubId }), { ancho, titulo: `Ticket ${venta.numero}` });
+      return;
+    }
+    setReimpresion(venta);
   };
 
   const cambiarAncho = (valor) => {
@@ -329,6 +345,9 @@ export default function Vender() {
           <Printer className="pd-icon" size={20} aria-hidden="true" />
           Imprimir sin vista previa
         </label>
+        <Button as="link" to="/admin/bar/kiosk" variant="ghost" size="sm" className="ml-auto">
+          Configurar PC de barra
+        </Button>
       </div>
 
       {dialogo?.tipo === "cantidad" && (
@@ -379,7 +398,31 @@ export default function Vender() {
         />
       )}
       {dialogo?.tipo === "cobrar" && <CobrarDialog total={totales.total} sinNumeros={sinNumeros} onCerrar={cerrarDialogo} onConfirmar={confirmarVenta} />}
-      {dialogo?.tipo === "ventas" && caja && <VentasDeHoy clubId={clubId} caja={caja} uid={uid} nombre={nombre} puedeAnular={puedeAnular} onCerrar={cerrarDialogo} />}
+      {dialogo?.tipo === "ventas" && caja && (
+        <VentasDeHoy clubId={clubId} caja={caja} uid={uid} nombre={nombre} puedeAnular={puedeAnular} onReimprimir={reimprimir} onCerrar={cerrarDialogo} />
+      )}
+      {ultimaVenta && (
+        <PostVentaDialog
+          venta={ultimaVenta}
+          club={clubActual}
+          clubId={clubId}
+          ancho={ancho}
+          imprimirDirecto={imprimirDirecto}
+          onCerrar={() => {
+            setUltimaVenta(null);
+            enfocar();
+          }}
+        />
+      )}
+      {reimpresion && (
+        <TicketPreview
+          titulo={`Ticket ${reimpresion.numero}`}
+          html={htmlTicketVenta({ club: clubActual, venta: reimpresion, clubId })}
+          ancho={ancho}
+          onCerrar={() => setReimpresion(null)}
+          onImprimido={() => setReimpresion(null)}
+        />
+      )}
     </div>
   );
 }

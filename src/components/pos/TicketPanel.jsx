@@ -66,9 +66,14 @@ export default function TicketPanel({
       </ul>
 
       <div className="border-t border-line px-4 py-3 flex flex-col gap-2">
-        <Field label="Cliente (opcional)" className="mb-1">
-          <Input value={cliente} onChange={(e) => onCliente(e.target.value)} placeholder="Nombre para el ticket" maxLength={60} autoComplete="off" />
-        </Field>
+        <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2 mb-1">
+          <Field label="Cliente (opcional)">
+            <Input value={cliente.nombre} onChange={(e) => onCliente({ ...cliente, nombre: e.target.value })} placeholder="Nombre para el ticket" maxLength={60} autoComplete="off" />
+          </Field>
+          <Field label="WhatsApp">
+            <Input type="tel" inputMode="tel" value={cliente.telefono} onChange={(e) => onCliente({ ...cliente, telefono: e.target.value })} placeholder="385…" maxLength={20} autoComplete="off" />
+          </Field>
+        </div>
         <div className="flex items-center justify-between body-sm text-ink-2">
           <span>Subtotal</span>
           <span className="pd-tnum">{formatPrecio(subtotal)}</span>

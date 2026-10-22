@@ -163,6 +163,10 @@ export default function Configuracion() {
     titularCuenta: "",
     cuit: "",
     razonSocial: "",
+    // Tickets del bar (clubs/{c}.ticket): encabezado, línea de transferencias y pie
+    ticketEncabezado: "",
+    ticketAlias: "",
+    ticketPie: "",
     // Reservas: seña (tipo + valor, el valor como texto del input) y turnos seguidos por reserva
     señaTipo: "ninguna",
     señaValor: "",
@@ -231,6 +235,9 @@ export default function Configuracion() {
         titularCuenta: privado.titularCuenta || clubData.titularCuenta || "",
         cuit: privado.cuit || clubData.cuit || "",
         razonSocial: privado.razonSocial || clubData.razonSocial || "",
+        ticketEncabezado: clubData.ticket?.encabezado || "",
+        ticketAlias: clubData.ticket?.alias || "",
+        ticketPie: clubData.ticket?.pie || "",
         señaTipo: tipoSeñaDelClub(clubData),
         señaValor: Number(clubData.seña?.valor) > 0 ? String(Number(clubData.seña.valor)) : "",
         maxTurnosPorReserva: maxTurnosDelClub(clubData),
@@ -286,9 +293,15 @@ export default function Configuracion() {
     setMensaje("");
     try {
       // Lo público va al documento del club; CBU, alias, CUIT y razón social, al subdocumento privado
-      const { cbu, alias, titularCuenta, cuit, razonSocial, señaTipo, señaValor, maxTurnosPorReserva, ...resto } = form;
+      const { cbu, alias, titularCuenta, cuit, razonSocial, señaTipo, señaValor, maxTurnosPorReserva, ticketEncabezado, ticketAlias, ticketPie, ...resto } = form;
       const publicos = {
         ...resto,
+        // Lo que se imprime en los tickets del bar (el alias de acá es el que el club ELIGE mostrar a sus clientes)
+        ticket: {
+          encabezado: ticketEncabezado.trim() || null,
+          alias: ticketAlias.trim() || null,
+          pie: ticketPie.trim() || null,
+        },
         seña: { tipo: señaTipo, valor: señaTipo === "ninguna" ? 0 : Number(señaValor) },
         maxTurnosPorReserva: Number(maxTurnosPorReserva),
         // La grilla sigue siendo horaria; se guarda para la próxima etapa
@@ -1000,6 +1013,23 @@ export default function Configuracion() {
               Estos datos se usan para generar comprobantes y recibir pagos
               de inscripciones y reservas. Mantenelos actualizados.
             </Alert>
+          </div>
+        </Card>
+      )}
+      {tabActiva === "facturacion" && (
+        <Card className="mt-4">
+          <Card.Title className="mb-1!">Tickets del bar</Card.Title>
+          <p className="body-sm text-ink-2 mt-0 mb-4">Lo que se imprime arriba y abajo de cada ticket de venta y cierre de caja. Son comprobantes de consumo, no facturas.</p>
+          <div className="grid gap-4">
+            <Field label="Encabezado" help={`Si queda vacío se imprime el nombre del club${form.nombre ? ` (${form.nombre})` : ""}.`}>
+              <Input type="text" value={form.ticketEncabezado} onChange={(e) => setForm({ ...form, ticketEncabezado: e.target.value })} maxLength={60} placeholder={form.nombre || "Nombre del club"} />
+            </Field>
+            <Field label="Alias para transferencias" help="Se imprime como “Transferencias: …” en cada ticket. Dejalo vacío si no querés mostrarlo.">
+              <Input type="text" value={form.ticketAlias} onChange={(e) => setForm({ ...form, ticketAlias: e.target.value })} maxLength={60} placeholder={form.alias || "Ej: CLUB.PADEL.SANTIAGO"} />
+            </Field>
+            <Field label="Pie" help="La última línea del ticket.">
+              <Input type="text" value={form.ticketPie} onChange={(e) => setForm({ ...form, ticketPie: e.target.value })} maxLength={80} placeholder="Gracias por venir" />
+            </Field>
           </div>
         </Card>
       )}

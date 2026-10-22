@@ -39,6 +39,7 @@ const AdminConfiguracion = lazy(() => import("./pages/admin/Configuracion"));
 const BarProductos = lazy(() => import("./pages/admin/bar/Productos"));
 const BarCaja = lazy(() => import("./pages/admin/bar/Caja"));
 const BarVender = lazy(() => import("./pages/admin/bar/Vender"));
+const BarKiosk = lazy(() => import("./pages/admin/bar/Kiosk"));
 
 // Org pages
 const OrgDashboard = lazy(() => import("./pages/org/OrgDashboard"));
@@ -247,6 +248,7 @@ export default function App() {
             <Route path="estadisticas" element={<AdminEstadisticas />} />
             <Route path="configuracion" element={<AdminConfiguracion />} />
             <Route path="bar/vender" element={<BarVender />} />
+            <Route path="bar/kiosk" element={<BarKiosk />} />
             <Route path="bar/caja" element={<BarCaja />} />
             <Route path="bar/productos" element={<BarProductos />} />
           </Route>
