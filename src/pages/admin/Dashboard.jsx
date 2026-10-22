@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { AlertTriangle, Bell, Calendar, Check, Hourglass, Info, LayoutGrid, Lock, Pencil, Plus, Wallet } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { getTorneosByOrganizer, getTorneosDeClub } from "../../services/torneoService";
@@ -14,6 +14,7 @@ import { notificarReservaConfirmada, notificarReservaRechazada } from "../../ser
 import { addDaysLocal, formatDesde, formatFecha } from "../../utils/formatDate";
 import { formatPrecio } from "../../utils/format";
 import { escucharCajasAbiertas } from "../../services/cajaService";
+import { escucharCuentasAbiertas } from "../../services/cuentasService";
 import { efectivoEsperado } from "../../utils/caja";
 import { agruparReservas, estadoSeña, rangoHoras } from "../../utils/reservas";
 import { canchasDelTorneo } from "../../utils/torneo";
@@ -46,7 +47,8 @@ export default function Dashboard() {
   const [mostrarAyuda, setMostrarAyuda] = useState(true);
   // Cajas abiertas del bar (null = cargando); solo para quien tiene algún permiso de caja
   const [cajasAbiertas, setCajasAbiertas] = useState(null);
-  const puedeCaja = puede("abrirCaja") || puede("cerrarCaja") || puede("cerrarCajaAjena") || puede("verCajasCerradas") || puede("vender");
+  const [cuentasAbiertas, setCuentasAbiertas] = useState([]);
+  const puedeCaja = puede("abrirCaja") || puede("cerrarCaja") || puede("cerrarCajaAjena") || puede("verCajasCerradas") || puede("vender") || puede("cobrarTurnos");
 
   useEffect(() => {
     if (!clubId || !puedeCaja) return undefined;
@@ -58,6 +60,12 @@ export default function Dashboard() {
         setCajasAbiertas([]);
       },
     );
+    return () => unsub();
+  }, [clubId, puedeCaja]);
+
+  useEffect(() => {
+    if (!clubId || !puedeCaja) return undefined;
+    const unsub = escucharCuentasAbiertas(clubId, setCuentasAbiertas, (err) => console.error("Error escuchando las cuentas abiertas:", err));
     return () => unsub();
   }, [clubId, puedeCaja]);
 
@@ -362,6 +370,11 @@ export default function Dashboard() {
                   ? `${cajasAbiertas[0].dispositivo} abierta desde ${formatDesde(cajasAbiertas[0].abiertaEn)} · efectivo esperado ${formatPrecio(efectivoEsperado(cajasAbiertas[0]))}`
                   : `${cajasAbiertas.length} cajas abiertas: ${cajasAbiertas.map((c) => `${c.dispositivo} (${formatPrecio(efectivoEsperado(c))})`).join(", ")}`}
             </p>
+            {cuentasAbiertas.length > 0 && (
+              <Link to="/admin/bar/cuentas" className="body-sm text-ink underline mt-1 inline-block pd-tnum" onClick={(e) => e.stopPropagation()}>
+                {cuentasAbiertas.length} {cuentasAbiertas.length === 1 ? "cuenta abierta" : "cuentas abiertas"} · {formatPrecio(cuentasAbiertas.reduce((s, c) => s + (Number(c.totales?.total) || 0), 0))}
+              </Link>
+            )}
           </div>
         </Card>
       )}

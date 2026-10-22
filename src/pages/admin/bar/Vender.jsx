@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { History, Printer, Wifi, WifiOff } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import SinPermiso from "../../../components/SinPermiso";
@@ -17,6 +18,8 @@ import TicketPreview from "../../../components/TicketPreview";
 import { htmlTicketVenta } from "../../../print/ticketVenta";
 import { imprimirHtml } from "../../../print/imprimir";
 import { dispositivoGuardado, escucharCajaAbierta } from "../../../services/cajaService";
+import { CuentaNoEditableError, agregarItemsACuenta, escucharCuentasAbiertas } from "../../../services/cuentasService";
+import { textoTurno } from "../../../utils/cuentas";
 import { escucharProductos, getCategorias } from "../../../services/productosService";
 import { SinNumerosError, crearVenta, estadoNumeracion, prepararNumeracion, tomarNumero } from "../../../services/ventasService";
 import { useOnline, usePendientes } from "../../../utils/conexion";
@@ -58,6 +61,11 @@ export default function Vender() {
   const [ultimaVenta, setUltimaVenta] = useState(null); // panel post-venta
   const [reimpresion, setReimpresion] = useState(null); // venta a reimprimir desde "Ventas"
   const [dialogo, setDialogo] = useState(null);
+  // Cuenta del turno: la reserva elegida en la franja (el ticket pasa a "cargar a la cuenta") y las cuentas abiertas
+  const [cuentaSel, setCuentaSel] = useState(null);
+  const [cuentasAbiertas, setCuentasAbiertas] = useState([]);
+  const [searchParams] = useSearchParams();
+  const preseleccionId = searchParams.get("cuenta");
   const [ancho, setAncho] = useState(anchoTicketGuardado);
   const [imprimirDirecto, setImprimirDirecto] = useState(imprimirDirectoGuardado);
   const inputRef = useRef(null);
@@ -101,6 +109,13 @@ export default function Vender() {
       vivo = false;
       unsub();
     };
+  }, [clubId, puedeVender]);
+
+  // Cuentas abiertas (para la franja de turnos)
+  useEffect(() => {
+    if (!clubId || !puedeVender) return undefined;
+    const unsub = escucharCuentasAbiertas(clubId, setCuentasAbiertas, (err) => console.error("Error escuchando las cuentas abiertas:", err));
+    return () => unsub();
   }, [clubId, puedeVender]);
 
   // Numeración lista de antemano: código del dispositivo y bloque con números (pide más cuando quedan pocos)
@@ -152,6 +167,27 @@ export default function Vender() {
     setDialogo(null);
     enfocar();
   };
+
+  // ----- Cuenta del turno -----
+  const seleccionarCuenta = useCallback((reserva) => {
+    setCuentaSel(reserva || null);
+    if (reserva) setDescuentoGeneral(null); // el descuento general se decide al cerrar la cuenta
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, []);
+  const agregarACuenta = async () => {
+    if (!cuentaSel || totales.lineas.length === 0) return;
+    const grupoId = cuentaSel.grupoId || cuentaSel.id;
+    try {
+      await agregarItemsACuenta(clubId, grupoId, totales.lineas, { uid, nombre, reserva: cuentaSel });
+      toast.success(`Agregado a la cuenta de ${cuentaSel.nombreJugador || cuentaSel.canchaName || "el turno"} · ${formatPrecio(totales.subtotal)}`);
+      limpiar();
+    } catch (e) {
+      console.error("Error agregando a la cuenta:", e);
+      toast.error(e instanceof CuentaNoEditableError ? e.message : "No pudimos agregar a la cuenta. Revisá la conexión e intentá de nuevo.");
+    }
+    enfocar();
+  };
+  const textoCuenta = cuentaSel ? textoTurno({ canchaNombre: cuentaSel.canchaName, horaInicio: cuentaSel.horaInicio, horaFin: cuentaSel.horaFin, nombreJugador: cuentaSel.nombreJugador }) : "";
 
   // ----- Venta -----
   const confirmarVenta = async (calculo) => {
@@ -302,7 +338,15 @@ export default function Vender() {
       )}
       {prods.error && <Alert tone="danger">No pudimos cargar los productos.</Alert>}
 
-      <TurnosStrip clubId={clubId} />
+      {caja && (
+        <TurnosStrip
+          clubId={clubId}
+          seleccionId={cuentaSel ? cuentaSel.grupoId || cuentaSel.id : null}
+          onSeleccionar={seleccionarCuenta}
+          cuentasAbiertas={cuentasAbiertas}
+          preseleccionId={preseleccionId}
+        />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
         <GrillaProductos
@@ -326,6 +370,9 @@ export default function Vender() {
           onCobrar={() => setDialogo({ tipo: "cobrar" })}
           onVaciar={vaciar}
           bloqueo={bloqueo}
+          cuenta={cuentaSel ? { texto: textoCuenta } : null}
+          onSalirCuenta={() => seleccionarCuenta(null)}
+          onAgregarACuenta={agregarACuenta}
         />
       </div>
 

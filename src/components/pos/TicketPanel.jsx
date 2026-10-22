@@ -21,21 +21,37 @@ export default function TicketPanel({
   onVaciar,
   bloqueo = "",
   className = "",
+  // Modo "cargar a la cuenta": { texto } del turno elegido; el botón primario agrega a la cuenta en vez de cobrar
+  cuenta = null,
+  onSalirCuenta,
+  onAgregarACuenta,
 }) {
   const { lineas, subtotal, descuento, descuentoTotal, total, excedido } = totales;
   const vacio = lineas.length === 0;
   return (
     <aside className={["pd-card p-0! flex flex-col min-h-0", className].filter(Boolean).join(" ")} aria-label="Ticket">
-      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-line">
-        <h2 className="heading-sm m-0">
-          Ticket
-          {!vacio && <span className="pd-count">{lineas.length}</span>}
+      <div className={["flex items-center justify-between gap-2 px-4 py-3 border-b border-line", cuenta && "bg-court-soft"].filter(Boolean).join(" ")}>
+        <h2 className="heading-sm m-0 min-w-0">
+          {cuenta ? (
+            <>
+              <span className="pd-eyebrow block">Cargando a la cuenta</span>
+              <span className="block truncate">{cuenta.texto}</span>
+            </>
+          ) : (
+            <>
+              Ticket
+              {!vacio && <span className="pd-count">{lineas.length}</span>}
+            </>
+          )}
         </h2>
-        {!vacio && (
-          <Button variant="ghost" size="sm" icon={icono(Trash2)} onClick={onVaciar}>
-            Vaciar
-          </Button>
-        )}
+        <div className="flex items-center gap-1 flex-none">
+          {!vacio && (
+            <Button variant="ghost" size="sm" icon={icono(Trash2)} onClick={onVaciar}>
+              Vaciar
+            </Button>
+          )}
+          {cuenta && <Button variant="ghost" size="sm" iconOnly aria-label="Salir de la cuenta" icon={icono(X)} onClick={onSalirCuenta} />}
+        </div>
       </div>
 
       <ul className="m-0 p-0 list-none flex-1 min-h-[120px] overflow-y-auto divide-y divide-line" aria-label="Líneas del ticket">
@@ -66,6 +82,7 @@ export default function TicketPanel({
       </ul>
 
       <div className="border-t border-line px-4 py-3 flex flex-col gap-2">
+        {!cuenta && (
         <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2 mb-1">
           <Field label="Cliente (opcional)">
             <Input value={cliente.nombre} onChange={(e) => onCliente({ ...cliente, nombre: e.target.value })} placeholder="Nombre para el ticket" maxLength={60} autoComplete="off" />
@@ -74,15 +91,16 @@ export default function TicketPanel({
             <Input type="tel" inputMode="tel" value={cliente.telefono} onChange={(e) => onCliente({ ...cliente, telefono: e.target.value })} placeholder="385…" maxLength={20} autoComplete="off" />
           </Field>
         </div>
+        )}
         <div className="flex items-center justify-between body-sm text-ink-2">
           <span>Subtotal</span>
           <span className="pd-tnum">{formatPrecio(subtotal)}</span>
         </div>
         <div className="flex items-center justify-between gap-2 body-sm">
-          <Button variant="ghost" size="sm" icon={icono(Tag)} onClick={onDescuentoGeneral} disabled={vacio}>
+          <Button variant="ghost" size="sm" icon={icono(Tag)} onClick={onDescuentoGeneral} disabled={vacio || !!cuenta} title={cuenta ? "El descuento general se hace al cerrar la cuenta" : undefined}>
             {descuento ? `Descuento ${descuento.tipo === "porcentaje" ? `${descuento.valor} %` : ""}` : "Descuento"}
           </Button>
-          <span className="pd-tnum text-ink-2">{descuento ? `−${formatPrecio(descuento.monto)}` : "—"}</span>
+          <span className="pd-tnum text-ink-2">{cuenta ? "al cerrar" : descuento ? `−${formatPrecio(descuento.monto)}` : "—"}</span>
         </div>
         {excedido && (
           <p className="pd-error m-0">
@@ -100,9 +118,15 @@ export default function TicketPanel({
             {bloqueo}
           </Badge>
         )}
-        <Button variant="primary" className="w-full h-14! text-[18px]!" onClick={onCobrar} disabled={vacio || excedido || !!bloqueo}>
-          Cobrar {vacio ? "" : formatPrecio(total)}
-        </Button>
+        {cuenta ? (
+          <Button variant="primary" className="w-full h-14! text-[18px]!" onClick={onAgregarACuenta} disabled={vacio || excedido || !!bloqueo}>
+            Agregar a la cuenta {vacio ? "" : formatPrecio(total)}
+          </Button>
+        ) : (
+          <Button variant="primary" className="w-full h-14! text-[18px]!" onClick={onCobrar} disabled={vacio || excedido || !!bloqueo}>
+            Cobrar {vacio ? "" : formatPrecio(total)}
+          </Button>
+        )}
       </div>
     </aside>
   );

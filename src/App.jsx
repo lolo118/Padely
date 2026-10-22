@@ -40,6 +40,8 @@ const BarProductos = lazy(() => import("./pages/admin/bar/Productos"));
 const BarCaja = lazy(() => import("./pages/admin/bar/Caja"));
 const BarVender = lazy(() => import("./pages/admin/bar/Vender"));
 const BarKiosk = lazy(() => import("./pages/admin/bar/Kiosk"));
+const BarCuentas = lazy(() => import("./pages/admin/bar/Cuentas"));
+const BarCuentaDetalle = lazy(() => import("./pages/admin/bar/CuentaDetalle"));
 
 // Org pages
 const OrgDashboard = lazy(() => import("./pages/org/OrgDashboard"));
@@ -249,6 +251,8 @@ export default function App() {
             <Route path="configuracion" element={<AdminConfiguracion />} />
             <Route path="bar/vender" element={<BarVender />} />
             <Route path="bar/kiosk" element={<BarKiosk />} />
+            <Route path="bar/cuentas" element={<BarCuentas />} />
+            <Route path="bar/cuentas/:id" element={<BarCuentaDetalle />} />
             <Route path="bar/caja" element={<BarCaja />} />
             <Route path="bar/productos" element={<BarProductos />} />
           </Route>
