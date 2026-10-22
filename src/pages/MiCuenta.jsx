@@ -130,7 +130,10 @@ export default function MiCuenta() {
                   <span className="block body-sm font-semibold">
                     {fmtCant(it.cantidad)} × {it.nombre}
                   </span>
-                  <span className="block body-sm text-ink-3 pd-tnum">{formatHora(it.agregadoEn)}</span>
+                  <span className="block body-sm text-ink-3 pd-tnum">
+                    {formatHora(it.agregadoEn)}
+                    {it.pedidoId ? ` · pedido de ${it.pedidoPor || "—"}` : ""}
+                  </span>
                 </span>
                 <span className="pd-tnum font-semibold">{formatPrecio(it.subtotal)}</span>
               </li>

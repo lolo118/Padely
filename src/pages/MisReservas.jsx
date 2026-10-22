@@ -13,6 +13,7 @@ import { confirmar } from "../components/ConfirmDialog";
 import { Badge, Button, Card } from "../components/ui";
 import CuentaTurnoResumen from "../components/CuentaTurnoResumen";
 import { escucharMisCuentasAbiertas } from "../services/cuentasService";
+import { escucharMisPedidos } from "../services/pedidosService";
 
 // Estado de la reserva → tono del badge y su palabra. Llevan punto: son estados que cambian con el tiempo.
 function estadoReserva(status) {
@@ -53,6 +54,14 @@ export default function MisReservas() {
     return () => unsub();
   }, [user]);
   const cuentaDe = (r) => cuentas.find((c) => c.id === (r.grupoId || r.id) && c.clubId === r.clubId) || null;
+  // Mis pedidos a la barra (cualquier club), por reserva
+  const [pedidos, setPedidos] = useState([]);
+  useEffect(() => {
+    if (!user) return undefined;
+    const unsub = escucharMisPedidos(user.uid, setPedidos, (err) => console.error("Error escuchando mis pedidos:", err));
+    return () => unsub();
+  }, [user]);
+  const pedidosDe = (r) => pedidos.filter((p) => p.cuentaId === (r.grupoId || r.id) && p.clubId === r.clubId);
 
   useEffect(() => {
     if (!user) return;
@@ -200,7 +209,7 @@ export default function MisReservas() {
           {r.canchaName || r.cancha || "Cancha"} · {rangoHoras(r.horaInicio, r.horaFin)}
         </p>
         {r.precioTotal > 0 && <p className="body-sm text-ink-2 pd-tnum">{formatPrecio(r.precioTotal)}</p>}
-        {r.status !== "cancelada" && <CuentaTurnoResumen reserva={r} cuenta={cuentaDe(r)} />}
+        {r.status !== "cancelada" && <CuentaTurnoResumen reserva={r} cuenta={cuentaDe(r)} pedidos={pedidosDe(r)} />}
         {!pasada && r.status !== "cancelada" && (
           <Card.Foot>
             <Button size="sm" onClick={() => cancelarReserva(r)}>

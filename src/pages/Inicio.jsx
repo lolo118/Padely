@@ -10,6 +10,7 @@ import { estadoSeña, rangoHoras } from "../utils/reservas";
 import { Badge, Button, Card, RankMark, StatTile } from "../components/ui";
 import CuentaTurnoResumen from "../components/CuentaTurnoResumen";
 import { escucharMisCuentasAbiertas } from "../services/cuentasService";
+import { escucharMisPedidos } from "../services/pedidosService";
 
 // Accesos directos del inicio (mismas rutas de siempre), cada uno con su ícono Lucide
 const ACCESOS = [
@@ -51,10 +52,15 @@ export default function Inicio() {
   const [inscripciones, setInscripciones] = useState([]);
   const [proximaReserva, setProximaReserva] = useState(null);
   const [cuentasAbiertas, setCuentasAbiertas] = useState([]);
+  const [misPedidos, setMisPedidos] = useState([]);
   useEffect(() => {
     if (!user) return undefined;
     const unsub = escucharMisCuentasAbiertas(user.uid, setCuentasAbiertas, (err) => console.error("Error escuchando mis cuentas:", err));
-    return () => unsub();
+    const unsubPedidos = escucharMisPedidos(user.uid, setMisPedidos, (err) => console.error("Error escuchando mis pedidos:", err));
+    return () => {
+      unsub();
+      unsubPedidos();
+    };
   }, [user]);
   const [loading, setLoading] = useState(true);
 
@@ -150,6 +156,7 @@ export default function Inicio() {
             <CuentaTurnoResumen
               reserva={proximaReserva}
               cuenta={cuentasAbiertas.find((c) => c.id === (proximaReserva.grupoId || proximaReserva.id) && c.clubId === proximaReserva.clubId) || null}
+              pedidos={misPedidos.filter((p) => p.cuentaId === (proximaReserva.grupoId || proximaReserva.id) && p.clubId === proximaReserva.clubId)}
               compacto
             />
           </div>
