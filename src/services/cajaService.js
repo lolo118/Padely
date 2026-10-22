@@ -12,7 +12,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { MEDIOS_CAJA, TIPOS_MOVIMIENTO_CAJA as TIPOS, TOTALES_CERO } from "../utils/caja";
+import { ETIQUETA_MEDIO, ETIQUETA_TIPO, MEDIOS_CAJA, TIPOS_MOVIMIENTO_CAJA as TIPOS, TOTALES_CERO } from "../utils/caja";
 
 // Caja del bar: una caja es un turno de un dispositivo (clubs/{c}/cajas) y cada peso que entra o sale es un
 // movimiento (clubs/{c}/movimientosCaja). `cajas.totales` lo escribe SOLO la Cloud Function onMovimientoCajaCreated;
@@ -29,16 +29,7 @@ export const MEDIOS = [
   { id: "qr", label: "QR" },
 ];
 export const TIPOS_MOVIMIENTO_CAJA = TIPOS;
-export const ETIQUETA_MEDIO = Object.fromEntries(MEDIOS.map((m) => [m.id, m.label]));
-export const ETIQUETA_TIPO = {
-  retiro: "Retiro",
-  ingreso: "Ingreso",
-  gasto: "Gasto",
-  venta: "Venta",
-  anulacion: "Anulación",
-  cobroCuenta: "Cobro de cuenta",
-  "seña": "Seña",
-};
+export { ETIQUETA_MEDIO, ETIQUETA_TIPO };
 
 export const DISPOSITIVO_POR_DEFECTO = "Caja 1";
 const CLAVE_DISPOSITIVO = "padely-dispositivo";

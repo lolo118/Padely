@@ -10,6 +10,17 @@ export const MEDIOS_CAJA = ["efectivo", "transferencia", "tarjeta", "qr"];
 export const TIPOS_MOVIMIENTO_CAJA = ["retiro", "ingreso", "gasto"];
 export const TIPOS_RESERVADOS_CAJA = ["venta", "anulacion", "cobroCuenta", "seña"];
 
+export const ETIQUETA_MEDIO = { efectivo: "Efectivo", transferencia: "Transferencia", tarjeta: "Tarjeta", qr: "QR" };
+export const ETIQUETA_TIPO = {
+  retiro: "Retiro",
+  ingreso: "Ingreso",
+  gasto: "Gasto",
+  venta: "Venta",
+  anulacion: "Anulación",
+  cobroCuenta: "Cobro de cuenta",
+  "seña": "Seña",
+};
+
 // Totales con los que nace una caja (solo la Function los cambia después)
 export const TOTALES_CERO = Object.freeze({
   efectivo: 0,

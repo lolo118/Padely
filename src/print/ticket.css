@@ -1,0 +1,27 @@
+/* Tickets térmicos de Padely (cierre de caja; P3-3/P3-4 suman venta, comanda y cuenta).
+   Papel de 80 mm (área útil 72 mm) o 58 mm (48 mm). Tinta negra sobre papel: acá no hay tema ni tokens.
+   La regla @page { size } la agrega imprimir.js según el ancho elegido. */
+html, body { margin: 0; padding: 0; background: #fff; color: #000; }
+body {
+  width: 72mm;
+  padding: 3mm 0 6mm;
+  font-family: "Courier New", ui-monospace, "Cascadia Mono", "Roboto Mono", monospace;
+  font-size: 12px;
+  line-height: 16px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+body.ancho-58 { width: 48mm; font-size: 11px; line-height: 15px; }
+.ticket { width: 100%; }
+.ticket-h1 { margin: 0 0 1mm; font-size: 16px; line-height: 20px; font-weight: 700; text-align: center; text-transform: uppercase; letter-spacing: .04em; }
+.ticket-h2 { margin: 2mm 0 1mm; font-size: 13px; line-height: 17px; font-weight: 700; text-transform: uppercase; }
+.ticket-line { margin: 0; overflow-wrap: anywhere; }
+.ticket-center { text-align: center; }
+.ticket-row { display: flex; justify-content: space-between; gap: 2mm; margin: 0; }
+.ticket-row > span:first-child { overflow-wrap: anywhere; }
+.ticket-row > span:last-child { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ticket-row.indent { padding-left: 3mm; }
+.ticket-sep { border: 0; border-top: 1px dashed #000; margin: 2mm 0; }
+.ticket-muted { opacity: .7; font-size: 11px; line-height: 15px; }
+.ticket-strong { font-weight: 700; }
+.ticket-big { font-size: 14px; line-height: 18px; font-weight: 700; }

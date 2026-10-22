@@ -3,8 +3,9 @@ import { ArrowLeft, Lock, Minus, Pencil, Plus, Receipt } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import SinPermiso from "../../../components/SinPermiso";
 import Dialogo from "../../../components/Dialogo";
+import TicketPreview from "../../../components/TicketPreview";
 import { toast } from "../../../components/Toast";
-import { Alert, Badge, Button, Card, Field, Input, Pills, StatTile, Tabs, Textarea } from "../../../components/ui";
+import { Alert, Badge, Button, Card, Field, Input, Pills, Select, StatTile, Tabs, Textarea } from "../../../components/ui";
 import {
   CajaAbiertaError,
   DISPOSITIVO_POR_DEFECTO,
@@ -19,8 +20,11 @@ import {
   escucharCajasAbiertas,
   escucharMovimientosCaja,
   getCajasCerradas,
+  getMovimientosCaja,
   renombrarDispositivo,
 } from "../../../services/cajaService";
+import { ANCHOS_TICKET, anchoTicketGuardado, guardarAnchoTicket } from "../../../print/imprimir";
+import { htmlCierreCaja } from "../../../print/cierreCaja";
 import { efectivoEsperado, montoConSigno, tonoDiferencia } from "../../../utils/caja";
 import { formatPrecio } from "../../../utils/format";
 import { formatDiaHora, formatFechaHora, formatHora } from "../../../utils/formatDate";
@@ -258,7 +262,7 @@ function RenombrarDialog({ caja, clubId, onCerrar, onRenombrada }) {
 
 // ----- Historial -----
 
-function HistorialTab({ clubId, puedeVer, onVer }) {
+function HistorialTab({ clubId, puedeVer, onVer, cargandoId = null }) {
   const [estado, setEstado] = useState({ para: null, lista: [], error: false });
   useEffect(() => {
     if (!clubId || !puedeVer) return undefined;
@@ -332,7 +336,7 @@ function HistorialTab({ clubId, puedeVer, onVer }) {
             </dl>
             {onVer && (
               <div className="mt-3">
-                <Button size="sm" onClick={() => onVer(c)}>
+                <Button size="sm" onClick={() => onVer(c)} cargando={cargandoId === c.id ? "Armando…" : ""}>
                   Ver
                 </Button>
               </div>
@@ -379,7 +383,7 @@ function HistorialTab({ clubId, puedeVer, onVer }) {
                   </td>
                   {onVer && (
                     <td className="num">
-                      <Button size="sm" variant="ghost" onClick={() => onVer(c)}>
+                      <Button size="sm" variant="ghost" onClick={() => onVer(c)} cargando={cargandoId === c.id ? "Armando…" : ""}>
                         Ver
                       </Button>
                     </td>
@@ -425,6 +429,10 @@ export default function Caja() {
   const [formAbrir, setFormAbrir] = useState(() => ({ dispositivo: dispositivoGuardado(), fondo: "0" }));
   const [errAbrir, setErrAbrir] = useState({});
   const [abriendo, setAbriendo] = useState(false);
+  // Tickets: ancho de papel recordado en el navegador y la vista previa abierta ({ titulo, html, textoCerrar })
+  const [ancho, setAncho] = useState(anchoTicketGuardado);
+  const [ticket, setTicket] = useState(null);
+  const [cargandoTicket, setCargandoTicket] = useState(null); // id de la caja cuyo cierre se está armando
 
   // La caja abierta de este dispositivo
   useEffect(() => {
@@ -505,6 +513,34 @@ export default function Caja() {
       }
     } finally {
       setAbriendo(false);
+    }
+  };
+
+  const cambiarAncho = (valor) => {
+    const n = Number(valor);
+    guardarAnchoTicket(n);
+    setAncho(ANCHOS_TICKET.includes(n) ? n : 80);
+  };
+
+  // Ticket de cierre de una caja cerrada (al cerrar, con los movimientos ya en pantalla; desde el historial, leyéndolos)
+  const abrirTicketCierre = (cajaCerrada, movimientosDeLaCaja, textoCerrar = "Cerrar") => {
+    setTicket({
+      titulo: "Cierre de caja",
+      descripcion: `${cajaCerrada.dispositivo} · ${formatDiaHora(cajaCerrada.abiertaEn)} → ${formatHora(cajaCerrada.cerradaEn)}`,
+      html: htmlCierreCaja({ club: clubActual, caja: cajaCerrada, movimientos: movimientosDeLaCaja, ancho }),
+      textoCerrar,
+    });
+  };
+  const verCierre = async (cajaCerrada) => {
+    setCargandoTicket(cajaCerrada.id);
+    try {
+      const lista = await getMovimientosCaja(clubId, cajaCerrada.id);
+      abrirTicketCierre(cajaCerrada, lista);
+    } catch (e) {
+      console.error("Error cargando los movimientos de la caja:", e);
+      toast.error("No pudimos armar el cierre de esa caja.");
+    } finally {
+      setCargandoTicket(null);
     }
   };
 
@@ -799,7 +835,20 @@ export default function Caja() {
         />
       )}
 
-      {tab === "historial" ? <HistorialTab clubId={clubId} puedeVer={puedeHistorial} /> : caja ? vistaCaja : vistaSinCaja}
+      {tab === "historial" ? <HistorialTab clubId={clubId} puedeVer={puedeHistorial} onVer={verCierre} cargandoId={cargandoTicket} /> : caja ? vistaCaja : vistaSinCaja}
+
+      {/* Pie: ancho del papel para los tickets de este navegador */}
+      <div className="mt-10 pt-4 border-t border-line flex flex-wrap items-end justify-between gap-3">
+        <Field label="Ancho del ticket" help="El papel de la impresora térmica de este dispositivo." className="max-w-[220px]">
+          <Select value={String(ancho)} onChange={(e) => cambiarAncho(e.target.value)}>
+            {ANCHOS_TICKET.map((a) => (
+              <option key={a} value={a}>
+                {a} mm
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
 
       {dialogo?.tipo && caja && (
         <MovimientoDialog tipo={dialogo.tipo} caja={caja} clubId={clubId} uid={uid} nombre={nombre} onCerrar={() => setDialogo(null)} />
@@ -812,12 +861,14 @@ export default function Caja() {
           uid={uid}
           nombre={nombre}
           onCerrar={() => setDialogo(null)}
-          onCerrada={() => {
+          onCerrada={(cajaCerrada) => {
             setDialogo(null);
             setViendoId(null);
+            abrirTicketCierre(cajaCerrada, movimientos, "Listo");
           }}
         />
       )}
+      {ticket && <TicketPreview titulo={ticket.titulo} descripcion={ticket.descripcion} html={ticket.html} ancho={ancho} textoCerrar={ticket.textoCerrar} onCerrar={() => setTicket(null)} />}
       {dialogo === "renombrar" && caja && (
         <RenombrarDialog
           caja={caja}
