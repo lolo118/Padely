@@ -851,3 +851,103 @@ exports.onUserDeleted = functionsV1
         `${contactosSnap.size} contactos de reservas borrados, ${staffSnap.size} documentos de staff borrados`,
     );
   });
+
+// ============================================================================
+// BAR — CAJA: la caja es un registro. Cada movimiento (clubs/{c}/movimientosCaja) se suma a `cajas.totales` una
+// sola vez (marca aplicado en la misma transacción). La aritmética es LA MISMA que src/utils/caja.js
+// (aplicarMovimiento): el medio recibe el monto con el signo del tipo, el tipo acumula el monto en positivo.
+// P3-3 reutiliza esta función para "venta"/"anulacion" (ya contemplados acá): solo cambia quién crea el movimiento.
+// ============================================================================
+const SIGNO_MOVIMIENTO_CAJA = { ingreso: 1, venta: 1, cobroCuenta: 1, "seña": 1, retiro: -1, gasto: -1, anulacion: -1 };
+const CLAVE_TOTAL_CAJA = { retiro: "retiros", ingreso: "ingresos", gasto: "gastos", venta: "ventas", anulacion: "anulaciones" };
+const MEDIOS_CAJA = ["efectivo", "transferencia", "tarjeta", "qr"];
+
+exports.onMovimientoCajaCreated = onDocumentCreated("clubs/{clubId}/movimientosCaja/{movId}", async (event) => {
+  const { clubId, movId } = event.params;
+  const clubRef = db.collection("clubs").doc(clubId);
+  const movRef = clubRef.collection("movimientosCaja").doc(movId);
+  try {
+    const resultado = await db.runTransaction(async (tx) => {
+      const movSnap = await tx.get(movRef);
+      if (!movSnap.exists) return "sin movimiento";
+      const mov = movSnap.data() || {};
+      if (mov.aplicado === true) return "ya aplicado";
+      const cajaRef = mov.cajaId ? clubRef.collection("cajas").doc(String(mov.cajaId)) : null;
+      const cajaSnap = cajaRef ? await tx.get(cajaRef) : null;
+      if (!cajaSnap || !cajaSnap.exists || cajaSnap.data().estado !== "abierta") {
+        tx.update(movRef, { aplicado: true, error: "caja inexistente o cerrada", aplicadoEn: FieldValue.serverTimestamp() });
+        return "caja inexistente o cerrada";
+      }
+      const monto = Number(mov.monto);
+      const signo = SIGNO_MOVIMIENTO_CAJA[mov.tipo] || 0;
+      const cambios = { "totales.movimientos": FieldValue.increment(1), actualizadoEn: FieldValue.serverTimestamp() };
+      if (signo !== 0 && Number.isFinite(monto) && monto > 0) {
+        if (MEDIOS_CAJA.includes(mov.medio)) cambios[`totales.${mov.medio}`] = FieldValue.increment(signo * monto);
+        const clave = CLAVE_TOTAL_CAJA[mov.tipo];
+        if (clave) cambios[`totales.${clave}`] = FieldValue.increment(monto);
+      }
+      tx.update(cajaRef, cambios);
+      tx.update(movRef, { aplicado: true, aplicadoEn: FieldValue.serverTimestamp() });
+      return "aplicado";
+    });
+    logger.info(`onMovimientoCajaCreated ${clubId}/${movId}: ${resultado}`);
+  } catch (err) {
+    logger.error(`onMovimientoCajaCreated ${clubId}/${movId}`, err);
+  }
+});
+
+// Todos los días a las 9: una caja que sigue abierta desde hace más de 20 h le avisa al dueño del club (una vez).
+const RECORDATORIO_CAJA_HORAS = 20;
+
+function fechaHoraArgentina(ts) {
+  const date = ts && typeof ts.toDate === "function" ? ts.toDate() : ts instanceof Date ? ts : null;
+  if (!date) return "";
+  return new Intl.DateTimeFormat("es-AR", {
+    timeZone: ZONA_HORARIA,
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+exports.cajasAbiertasRecordatorio = onSchedule({ schedule: "every day 09:00", timeZone: ZONA_HORARIA }, async () => {
+  const limite = Timestamp.fromMillis(Date.now() - RECORDATORIO_CAJA_HORAS * 60 * 60 * 1000);
+  const snap = await db.collectionGroup("cajas").where("estado", "==", "abierta").where("abiertaEn", "<=", limite).get();
+  const pendientes = snap.docs.filter((d) => d.data().recordatorioEnviado !== true);
+  if (!pendientes.length) {
+    logger.info(`cajasAbiertasRecordatorio: sin cajas abiertas viejas (${snap.size} abiertas ya avisadas)`);
+    return;
+  }
+  let enviados = 0;
+  for (const cajaDoc of pendientes) {
+    try {
+      const clubRef = cajaDoc.ref.parent.parent;
+      if (!clubRef) continue;
+      const clubSnap = await clubRef.get();
+      const ownerUid = clubSnap.exists ? clubSnap.data().ownerUid : null;
+      await db.runTransaction(async (tx) => {
+        const fresh = await tx.get(cajaDoc.ref);
+        if (!fresh.exists) return;
+        const caja = fresh.data();
+        if (caja.estado !== "abierta" || caja.recordatorioEnviado === true) return;
+        if (ownerUid) {
+          tx.set(nuevaNotificacionRef(ownerUid), {
+            tipo: "caja_abierta",
+            titulo: "Caja abierta desde ayer",
+            mensaje: `La caja de ${caja.dispositivo || "un dispositivo"} sigue abierta desde ${fechaHoraArgentina(caja.abiertaEn)}. Cerrala desde Bar → Caja.`,
+            link: "/admin/bar/caja",
+            icono: "⚠️",
+            leida: false,
+            createdAt: FieldValue.serverTimestamp(),
+          });
+        }
+        tx.update(cajaDoc.ref, { recordatorioEnviado: true });
+        enviados += 1;
+      });
+    } catch (err) {
+      logger.error(`cajasAbiertasRecordatorio: no se pudo avisar por ${cajaDoc.ref.path}`, err);
+    }
+  }
+  logger.info(`cajasAbiertasRecordatorio: ${enviados} avisos de ${pendientes.length} cajas`);
+});

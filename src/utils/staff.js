@@ -2,7 +2,7 @@
 // clubs/{c}/staff/{uid} = { uid, nombre, email, rol, permisos (lista EFECTIVA: preset del rol ± ajustes), descuentoMax,
 // activo, invitacionId, invitadoPor, creadoEn, actualizadoEn }. El dueño (clubs/{c}.ownerUid) no tiene documento:
 // tiene todos los permisos, siempre.
-// Los permisos de la fase 3 (bar, caja) existen desde ahora pero ninguna pantalla los usa todavía (faseActual: false).
+// Los permisos de la fase 3 (bar, caja) existen desde ahora; los que todavía no tienen pantalla van con faseActual: false.
 
 export const PERMISOS = [
   // Fase 2: tienen pantalla hoy
@@ -12,13 +12,13 @@ export const PERMISOS = [
   { id: "verReportes", label: "Estadísticas", descripcion: "Ingresos, ocupación y reservas por período", grupo: "Club", faseActual: true },
   { id: "configurarClub", label: "Configuración del club", descripcion: "Datos, horarios, seña y facturación", grupo: "Club", faseActual: true },
   { id: "gestionarStaff", label: "Equipo: invitar y cambiar roles", descripcion: "Invitar gente, cambiar roles y permisos", grupo: "Club", faseActual: true },
-  // Fase 3: bar y caja (sin pantalla todavía)
+  // Fase 3: bar y caja (faseActual: true cuando ya hay pantalla)
   { id: "vender", label: "Vender", descripcion: "Cobrar en el bar", grupo: "Bar", faseActual: false },
   { id: "cobrarTurnos", label: "Cobrar turnos", descripcion: "Cobrar la cuenta del turno", grupo: "Bar", faseActual: false },
-  { id: "abrirCaja", label: "Abrir caja", descripcion: "Abrir su propia caja", grupo: "Bar", faseActual: false },
-  { id: "cerrarCaja", label: "Cerrar caja", descripcion: "Cerrar su propia caja", grupo: "Bar", faseActual: false },
-  { id: "cerrarCajaAjena", label: "Cerrar la caja de otro", descripcion: "Cerrar una caja abierta por otra persona", grupo: "Bar", faseActual: false },
-  { id: "verCajasCerradas", label: "Ver cajas cerradas", descripcion: "Historial de cajas", grupo: "Bar", faseActual: false },
+  { id: "abrirCaja", label: "Abrir caja", descripcion: "Abrir su propia caja", grupo: "Bar", faseActual: true },
+  { id: "cerrarCaja", label: "Cerrar caja", descripcion: "Cerrar su propia caja", grupo: "Bar", faseActual: true },
+  { id: "cerrarCajaAjena", label: "Cerrar la caja de otro", descripcion: "Cerrar una caja abierta por otra persona", grupo: "Bar", faseActual: true },
+  { id: "verCajasCerradas", label: "Ver cajas cerradas", descripcion: "Historial de cajas", grupo: "Bar", faseActual: true },
   { id: "anularVenta", label: "Anular ventas", descripcion: "Anular una venta ya cobrada", grupo: "Bar", faseActual: false },
   { id: "pedidos", label: "Pedidos", descripcion: "La pantalla de pedidos del bar", grupo: "Bar", faseActual: false },
   { id: "editarProductos", label: "Editar productos", descripcion: "Alta y cambios de productos y precios del bar", grupo: "Bar", faseActual: true },
@@ -46,7 +46,7 @@ export const ROLES = {
   },
   cajero: {
     label: "Cajero",
-    descripcion: "Reservas y, cuando esté el bar, ventas y caja",
+    descripcion: "Reservas, caja y, cuando esté el bar, ventas",
     permisos: ["gestionarReservas", "vender", "cobrarTurnos", "abrirCaja", "cerrarCaja", "anularVenta", "pedidos"],
     descuentoMax: 10,
   },

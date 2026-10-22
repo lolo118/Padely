@@ -27,6 +27,11 @@ service cloud.firestore {
       return esStaff(clubId, 'vender') || esStaff(clubId, 'editarProductos') || esStaff(clubId, 'cargarStock')
         || esStaff(clubId, 'importar') || esStaff(clubId, 'pedidos');
     }
+    // Staff de la caja: cualquiera de los permisos de caja o vender (lee cajas y movimientos de caja)
+    function esStaffCaja(clubId) {
+      return esStaff(clubId, 'abrirCaja') || esStaff(clubId, 'cerrarCaja') || esStaff(clubId, 'cerrarCajaAjena')
+        || esStaff(clubId, 'verCajasCerradas') || esStaff(clubId, 'vender');
+    }
     // Dueño o staff (con el permiso) del club vinculado como sede de un torneo
     function clubStaffOfTournament(tid, permiso) {
       let t = get(/databases/$(database)/documents/tournaments/$(tid)).data;
@@ -228,6 +233,58 @@ service cloud.firestore {
           && ((request.resource.data.tipo in ['compra', 'ajuste', 'merma'] && esStaff(clubId, 'cargarStock'))
               || (request.resource.data.tipo == 'importacion'
                   && (esStaff(clubId, 'importar') || esStaff(clubId, 'cargarStock'))));
+        allow update, delete: if false;
+      }
+
+      // ----- Bar: caja (un turno de un dispositivo) y sus movimientos -----
+      // La caja es un registro: `totales` lo escribe SOLO la Cloud Function (onMovimientoCajaCreated) a partir de
+      // movimientosCaja. Nace en cero y ningún cliente lo toca. Se cierra una sola vez, con el arqueo.
+      match /cajas/{cajaId} {
+        allow read: if esStaffCaja(clubId) || superAdmin();
+        allow create: if esStaff(clubId, 'abrirCaja')
+          && request.resource.data.estado == 'abierta'
+          && request.resource.data.abiertaPor == request.auth.uid
+          && request.resource.data.fondoInicial is number
+          && request.resource.data.fondoInicial >= 0
+          && request.resource.data.totales.efectivo == 0
+          && request.resource.data.totales.transferencia == 0
+          && request.resource.data.totales.tarjeta == 0
+          && request.resource.data.totales.qr == 0
+          && request.resource.data.totales.movimientos == 0
+          && request.resource.data.get('cerradaEn', null) == null
+          && request.resource.data.get('arqueo', null) == null
+          && request.resource.data.get('diferencia', null) == null;
+        // Cierre (una vez, de abierta a cerrada, por quien la abrió con 'cerrarCaja' o por quien cierra cajas ajenas),
+        // o renombrar el dispositivo mientras está abierta. Nunca totales, fondoInicial ni quién la abrió.
+        allow update: if resource.data.estado == 'abierta'
+          && ((changedOnly(['estado', 'cerradaPor', 'cerradaPorNombre', 'cerradaEn', 'arqueo', 'esperadoEfectivo',
+                            'diferencia', 'observaciones', 'actualizadoEn'])
+               && request.resource.data.estado == 'cerrada'
+               && request.resource.data.cerradaPor == request.auth.uid
+               && ((esStaff(clubId, 'cerrarCaja') && resource.data.abiertaPor == request.auth.uid)
+                   || esStaff(clubId, 'cerrarCajaAjena')))
+              || (changedOnly(['dispositivo', 'actualizadoEn'])
+                  && request.resource.data.dispositivo is string
+                  && request.resource.data.dispositivo.size() > 0
+                  && esStaff(clubId, 'abrirCaja')));
+        allow delete: if false;
+      }
+
+      // Movimientos de caja: solo altas, sobre una caja abierta; 'aplicado' lo pone la Function. Los tipos
+      // venta / anulacion / cobroCuenta / seña los escriben solo las Functions (P3-3, P3-4).
+      match /movimientosCaja/{movimientoId} {
+        allow read: if esStaffCaja(clubId) || superAdmin();
+        allow create: if (esStaff(clubId, 'abrirCaja') || esStaff(clubId, 'cerrarCaja') || esStaff(clubId, 'vender'))
+          && request.resource.data.tipo in ['retiro', 'ingreso', 'gasto']
+          && request.resource.data.medio in ['efectivo', 'transferencia', 'tarjeta', 'qr']
+          && request.resource.data.monto is number
+          && request.resource.data.monto > 0
+          && request.resource.data.creadoPor == request.auth.uid
+          && request.resource.data.aplicado == false
+          && (request.resource.data.tipo == 'ingreso'
+              || (request.resource.data.nota is string && request.resource.data.nota.size() > 0))
+          && request.resource.data.cajaId is string
+          && get(/databases/$(database)/documents/clubs/$(clubId)/cajas/$(request.resource.data.cajaId)).data.estado == 'abierta';
         allow update, delete: if false;
       }
 
