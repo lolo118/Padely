@@ -762,7 +762,7 @@ function ProveedoresTab({ clubId, estado, puedeEditar, puedeMapeo, onRecargar })
                 {mapeo && (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <span className="body-sm text-ink-2">
-                      Mapeo guardado: hoja {mapeo.hoja ?? "—"}, fila {mapeo.filaEncabezado ?? "—"}
+                      Mapeo guardado: hoja {mapeo.hoja ?? "—"}, fila {Number.isInteger(mapeo.filaEncabezado) ? mapeo.filaEncabezado + 1 : "—"}
                     </span>
                     {puedeMapeo && (
                       <Button size="sm" variant="ghost" onClick={() => olvidarMapeo(p)}>

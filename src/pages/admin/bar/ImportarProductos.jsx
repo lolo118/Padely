@@ -102,6 +102,7 @@ function Asistente({ onCerrar, clubId, productos = [], categorias = [], proveedo
   // Paso 4
   const [opciones, setOpciones] = useState({ crear: true, actualizarPrecios: true, sumarStock: true, usarMargen: true });
   const [multiplicadorTexto, setMultiplicadorTexto] = useState("1,6");
+  const [categoriaDefecto, setCategoriaDefecto] = useState(""); // categoría de los productos nuevos sin categoría en el archivo
   // Paso 5
   const [marcas, setMarcas] = useState({}); // clave → bool (lo que el usuario cambió)
   const [seccion, setSeccion] = useState("nuevos");
@@ -298,7 +299,7 @@ function Asistente({ onCerrar, clubId, productos = [], categorias = [], proveedo
             costo: n.costo,
             sku: n.sku,
             codigoBarras: n.codigoBarras,
-            categoriaId: n.categoriaId,
+            categoriaId: n.categoriaId || categoriaDefecto || null,
             stockMinimo: n.stockMinimo,
             unidad: n.unidad,
           }),
@@ -646,9 +647,25 @@ function Asistente({ onCerrar, clubId, productos = [], categorias = [], proveedo
             )}
           </div>
         </div>
+        {efectivas.crear && (
+          <Field
+            label="Categoría para los productos nuevos"
+            className="max-w-[320px]"
+            help={tieneColumna("categoria") ? "Se usa cuando la fila no trae categoría o trae una que no existe en el club." : "Todos los productos nuevos de este archivo quedan en esta categoría."}
+          >
+            <Select value={categoriaDefecto} onChange={(e) => setCategoriaDefecto(e.target.value)}>
+              <option value="">Sin categoría</option>
+              {categorias.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
         {tieneColumna("categoria") && (
           <Alert>
-            Las categorías se buscan por nombre entre las del club. Las que no existan quedan sin categoría: no se crean categorías nuevas.
+            Las categorías del archivo se buscan por nombre entre las del club; las que no existan no se crean (el producto queda en la categoría elegida arriba, o sin categoría).
           </Alert>
         )}
         {!algunaAccion && !sinPermisos && <p className="pd-error m-0">Elegí al menos una acción.</p>}
@@ -733,13 +750,14 @@ function Asistente({ onCerrar, clubId, productos = [], categorias = [], proveedo
 
   function renderNuevos() {
     const items = analisis.nuevos;
+    const nombreCategoriaDefecto = categorias.find((c) => c.id === categoriaDefecto)?.nombre || "";
     if (!items.length) return vacio("No hay productos nuevos en el archivo.");
     return (
       <>
         {analisis.categoriasDesconocidas.length > 0 && (
           <Alert tone="warning">
-            Estas categorías no existen en el club y sus productos quedan sin categoría: <strong>{analisis.categoriasDesconocidas.join(", ")}</strong>. Si las querés,
-            creálas antes en Categorías y volvé a importar.
+            Estas categorías no existen en el club: <strong>{analisis.categoriasDesconocidas.join(", ")}</strong>. Sus productos quedan{" "}
+            {nombreCategoriaDefecto ? `en "${nombreCategoriaDefecto}"` : "sin categoría"}. Si las querés, creálas antes en Categorías y volvé a importar.
           </Alert>
         )}
         <div className="pd-table-wrap">
@@ -772,7 +790,7 @@ function Asistente({ onCerrar, clubId, productos = [], categorias = [], proveedo
                       <span className="body-sm text-ink-3">
                         Fila {n.fila}
                         {n.sku ? ` · SKU ${n.sku}` : ""}
-                        {n.categoria ? ` · ${n.categoriaId ? n.categoria : `${n.categoria} (sin categoría)`}` : ""}
+                        {n.categoriaId ? ` · ${n.categoria}` : nombreCategoriaDefecto ? ` · ${nombreCategoriaDefecto}${n.categoria ? ` (en el archivo: ${n.categoria})` : ""}` : n.categoria ? ` · ${n.categoria} (sin categoría)` : ""}
                       </span>
                     </td>
                     <td className="num whitespace-nowrap">
