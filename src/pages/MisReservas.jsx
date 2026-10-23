@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { CircleDot } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
-import { query, where, getDocs, collectionGroup, getDoc } from "firebase/firestore";
+import { query, where, getDocs, collectionGroup, getDoc, doc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { cancelarReservaGrupo } from "../services/canchaService";
 import { notificarReservaCanceladaPorJugador } from "../services/notificationService";
@@ -12,8 +12,10 @@ import { toast } from "../components/Toast";
 import { confirmar } from "../components/ConfirmDialog";
 import { Badge, Button, Card } from "../components/ui";
 import CuentaTurnoResumen from "../components/CuentaTurnoResumen";
-import { escucharMisCuentasAbiertas } from "../services/cuentasService";
+import SumarJugadorDialog from "../components/cuenta/SumarJugadorDialog";
+import { escucharCuentasDondeParticipo, escucharMisCuentasAbiertas } from "../services/cuentasService";
 import { escucharMisPedidos } from "../services/pedidosService";
+import { participantePorUid, saldosDeCuenta } from "../utils/cuentas";
 
 // Estado de la reserva → tono del badge y su palabra. Llevan punto: son estados que cambian con el tiempo.
 function estadoReserva(status) {
@@ -54,6 +56,25 @@ export default function MisReservas() {
     return () => unsub();
   }, [user]);
   const cuentaDe = (r) => cuentas.find((c) => c.id === (r.grupoId || r.id) && c.clubId === r.clubId) || null;
+  // Cuentas abiertas de turnos a los que me sumaron (no soy quien reservó), con el nombre del club
+  const [participo, setParticipo] = useState([]);
+  const [nombresClub, setNombresClub] = useState({});
+  useEffect(() => {
+    if (!user) return undefined;
+    const unsub = escucharCuentasDondeParticipo(user.uid, (lista) => setParticipo(lista.filter((c) => c.jugadorUid !== user.uid)), (err) => console.error("Error escuchando los turnos donde participo:", err));
+    return () => unsub();
+  }, [user]);
+  useEffect(() => {
+    const faltan = [...new Set(participo.map((c) => c.clubId))].filter((id) => !(id in nombresClub));
+    if (!faltan.length) return undefined;
+    let vivo = true;
+    Promise.all(faltan.map((id) => getDoc(doc(db, "clubs", id)).then((s) => [id, s.exists() ? s.data().nombre || "" : ""]).catch(() => [id, ""]))).then((pares) => vivo && setNombresClub((prev) => ({ ...prev, ...Object.fromEntries(pares) })));
+    return () => {
+      vivo = false;
+    };
+  }, [participo, nombresClub]);
+  // "Invitar" desde la tarjeta del titular
+  const [invitando, setInvitando] = useState(null); // { reserva, cuenta }
   // Mis pedidos a la barra (cualquier club), por reserva
   const [pedidos, setPedidos] = useState([]);
   useEffect(() => {
@@ -189,6 +210,37 @@ export default function MisReservas() {
   const proximas = reservas.filter((r) => r.fecha >= hoyStr && r.status !== "cancelada");
   const anteriores = reservas.filter((r) => r.fecha < hoyStr || r.status === "cancelada");
 
+  // Un turno al que me sumaron: la cuenta compartida vista desde mi lado
+  function tarjetaParticipo(c) {
+    const yo = participantePorUid(c, user?.uid);
+    const s = saldosDeCuenta(c);
+    const mio = yo && !s.legacy ? s.participantes.find((p) => p.id === yo.id) : null;
+    return (
+      <Card key={`p/${c.clubId}/${c.id}`}>
+        <Card.Row>
+          <Card.Eyebrow>{formatDiaCorto(c.fecha)}</Card.Eyebrow>
+          <Badge tone="court">Te sumó {c.nombreJugador || "el titular"}</Badge>
+        </Card.Row>
+        <Card.Title className="mt-2!">{nombresClub[c.clubId] || "Club"}</Card.Title>
+        <p className="body-sm text-ink-2 mt-1 pd-tnum">
+          {c.canchaNombre || "Cancha"} · {rangoHoras(c.horaInicio, c.horaFin)}
+        </p>
+        {mio && (
+          <p className="body-sm m-0 pd-tnum">
+            <span className="text-ink-2">Mi parte: </span>
+            <strong>{formatPrecio(mio.total)}</strong>
+            <span className="text-ink-3"> · {mio.pagado > 0 ? `Pagaste ${formatPrecio(mio.pagado)}` : `Debés ${formatPrecio(mio.debe)}`}</span>
+          </p>
+        )}
+        <Card.Foot>
+          <Button as="link" to={`/mi-cuenta/${c.clubId}/${c.id}`} size="sm" variant="primary">
+            Ver cuenta
+          </Button>
+        </Card.Foot>
+      </Card>
+    );
+  }
+
   // Una reserva: fecha en el eyebrow, estado y seña en los badges, club como título, cancha, rango de horas y
   // total en body-sm. Cancelar es secondary en la tarjeta; el danger vive en el diálogo de confirmación.
   function tarjeta(r, pasada) {
@@ -209,7 +261,7 @@ export default function MisReservas() {
           {r.canchaName || r.cancha || "Cancha"} · {rangoHoras(r.horaInicio, r.horaFin)}
         </p>
         {r.precioTotal > 0 && <p className="body-sm text-ink-2 pd-tnum">{formatPrecio(r.precioTotal)}</p>}
-        {r.status !== "cancelada" && <CuentaTurnoResumen reserva={r} cuenta={cuentaDe(r)} pedidos={pedidosDe(r)} />}
+        {r.status !== "cancelada" && <CuentaTurnoResumen reserva={r} cuenta={cuentaDe(r)} pedidos={pedidosDe(r)} uid={user?.uid} onInvitar={(reserva, cuenta) => setInvitando({ reserva, cuenta })} />}
         {!pasada && r.status !== "cancelada" && (
           <Card.Foot>
             <Button size="sm" onClick={() => cancelarReserva(r)}>
@@ -225,7 +277,15 @@ export default function MisReservas() {
     <div className="max-w-2xl mx-auto">
       {encabezado}
 
-      {reservas.length === 0 ? (
+      {participo.length > 0 && (
+        <section aria-labelledby="turnos-participo" className="mb-8">
+          <h2 id="turnos-participo" className="heading-lg mb-3">
+            Turnos a los que te sumaron <span className="pd-count text-ink-3 font-semibold">{participo.length}</span>
+          </h2>
+          <div className="flex flex-col gap-4">{participo.map(tarjetaParticipo)}</div>
+        </section>
+      )}
+      {reservas.length === 0 && participo.length === 0 ? (
         <Card className="text-center">
           <CircleDot className="pd-icon-lg mx-auto mb-3 text-ink-3" size={24} aria-hidden="true" />
           <p className="heading-sm">No tenés reservas</p>
@@ -234,7 +294,7 @@ export default function MisReservas() {
             Ver canchas disponibles
           </Button>
         </Card>
-      ) : (
+      ) : reservas.length === 0 ? null : (
         <div className="flex flex-col gap-8">
           {/* Próximas */}
           {proximas.length > 0 && (
@@ -256,6 +316,18 @@ export default function MisReservas() {
             </section>
           )}
         </div>
+      )}
+      {invitando && (
+        <SumarJugadorDialog
+          clubId={invitando.reserva.clubId}
+          grupoId={invitando.reserva.grupoId || invitando.reserva.id}
+          clubNombre={invitando.reserva.clubNombre}
+          turno={{ fecha: invitando.reserva.fecha, horaInicio: invitando.reserva.horaInicio, horaFin: invitando.reserva.horaFin, canchaNombre: invitando.reserva.canchaName }}
+          participantes={invitando.cuenta?.participantes?.filter((p) => p.estado !== "quitado") || []}
+          companerosDe={user?.uid}
+          pestañaInicial="wa"
+          onCerrar={() => setInvitando(null)}
+        />
       )}
     </div>
   );

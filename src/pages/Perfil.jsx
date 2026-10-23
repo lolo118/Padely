@@ -754,6 +754,25 @@ export default function Perfil() {
       <Card className="mb-4">
         <Card.Title as="h2">Cuenta</Card.Title>
         <p className="body-sm text-ink-2 mt-1">{userData.email}</p>
+        <label className="pd-check mt-4">
+          <input
+            type="checkbox"
+            checked={userData.buscable !== false}
+            onChange={async (e) => {
+              const buscable = e.target.checked;
+              try {
+                await updateDoc(doc(db, "users", user.uid), { buscable });
+                setUserData({ ...userData, buscable });
+                toast.success(buscable ? "Te van a poder encontrar por tu nombre" : "Ya no aparecés en las búsquedas");
+              } catch (err) {
+                console.error("Error guardando la preferencia:", err);
+                toast.error("No pudimos guardar el cambio.");
+              }
+            }}
+          />
+          Aparecer cuando otros jugadores me buscan
+        </label>
+        <p className="pd-help mt-1 mb-0">Para que te sumen a la cuenta de un turno por tu nombre (se muestra tu nombre, tu foto y tu ciudad; nunca el email ni el teléfono).</p>
         <div className="pd-btn-group mt-4">
           <Button variant="ghost" icon={<LogOut className="pd-icon" size={20} aria-hidden="true" />} onClick={handleCerrarSesion}>
             Cerrar sesión

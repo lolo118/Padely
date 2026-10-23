@@ -49,6 +49,7 @@ const BarQr = lazy(() => import("./pages/admin/bar/QrCanchas"));
 const BarReportes = lazy(() => import("./pages/admin/bar/Reportes"));
 const QrCancha = lazy(() => import("./pages/QrCancha"));
 const TicketPublico = lazy(() => import("./pages/TicketPublico"));
+const UnirseTurno = lazy(() => import("./pages/UnirseTurno"));
 
 // Org pages
 const OrgDashboard = lazy(() => import("./pages/org/OrgDashboard"));
@@ -230,6 +231,9 @@ export default function App() {
             <Route path="/c/:clubId/:canchaId" element={<QrCancha />} />
             {/* Ticket digital: el QR del ticket térmico */}
             <Route path="/t/v/:clubId/:numero" element={<TicketPublico />} />
+            {/* Cuenta compartida: el link de invitación al turno y la vista del turno (también para anónimos) */}
+            <Route path="/t/unirse/:clubId/:token" element={<UnirseTurno />} />
+            <Route path="/turno/:clubId/:grupoId" element={<MiCuenta />} />
             <Route path="/terminos" element={<Terminos />} />
             <Route path="/privacidad" element={<Privacidad />} />
           </Route>

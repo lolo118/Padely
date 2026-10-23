@@ -5,29 +5,32 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuthStore } from "../store/authStore";
 import { getClubConfig } from "../services/canchaService";
+import { getCuenta } from "../services/cuentasService";
 import { normalizarReserva } from "../utils/reservas";
 import { puedePedir } from "../utils/pedidos";
 import { Button, Card } from "../components/ui";
 import PedirUI from "../components/pedidos/PedirUI";
 
-// /pedir/:clubId/:grupoId — el jugador que reservó pide a la barra durante su turno (desde 15 min antes hasta el final)
+// /pedir/:clubId/:grupoId — quien reservó, o cualquier participante de la cuenta del turno, pide a la barra durante
+// el turno (desde 15 min antes hasta el final)
 export default function Pedir() {
   const { clubId, grupoId } = useParams();
   const user = useAuthStore((s) => s.user);
   const perfil = useAuthStore((s) => s.perfil);
-  const [estado, setEstado] = useState({ reserva: null, club: null, cargado: false, error: false });
+  const [estado, setEstado] = useState({ reserva: null, club: null, participante: false, cargado: false, error: false });
 
   useEffect(() => {
     if (!clubId || !grupoId || !user) return undefined;
     let vivo = true;
-    Promise.all([getDoc(doc(db, "clubs", clubId, "reservas", grupoId)), getClubConfig(clubId)])
-      .then(([rs, club]) => {
+    Promise.all([getDoc(doc(db, "clubs", clubId, "reservas", grupoId)), getClubConfig(clubId), getCuenta(clubId, grupoId).catch(() => null)])
+      .then(([rs, club, cuenta]) => {
         if (!vivo) return;
-        setEstado({ reserva: rs.exists() ? normalizarReserva({ id: rs.id, clubId, ...rs.data() }) : null, club, cargado: true, error: false });
+        const participante = !!cuenta && Array.isArray(cuenta.participantesUids) && cuenta.participantesUids.includes(user.uid);
+        setEstado({ reserva: rs.exists() ? normalizarReserva({ id: rs.id, clubId, ...rs.data() }) : null, club, participante, cargado: true, error: false });
       })
       .catch((err) => {
         console.error("Error cargando la reserva:", err);
-        if (vivo) setEstado({ reserva: null, club: null, cargado: true, error: true });
+        if (vivo) setEstado({ reserva: null, club: null, participante: false, cargado: true, error: true });
       });
     return () => {
       vivo = false;
@@ -49,10 +52,10 @@ export default function Pedir() {
     );
   }
   const { reserva, club } = estado;
-  const propia = reserva && reserva.jugadorUid === user?.uid;
+  const propia = reserva && (reserva.jugadorUid === user?.uid || estado.participante);
   const enVentana = reserva && puedePedir(reserva);
   if (estado.error || !reserva || !propia || !enVentana) {
-    const titulo = estado.error ? "No pudimos abrir el turno" : !reserva ? "Esta reserva no existe" : !propia ? "Esta reserva no es tuya" : "Todavía no se puede pedir";
+    const titulo = estado.error ? "No pudimos abrir el turno" : !reserva ? "Esta reserva no existe" : !propia ? "No estás en este turno" : "Todavía no se puede pedir";
     const texto = !estado.error && reserva && propia && !enVentana ? `Se puede pedir desde 15 minutos antes de las ${reserva.horaInicio} hasta las ${reserva.horaFin || "el final del turno"}, el día del turno.` : "Si estás en la cancha, escaneá el QR que tiene cada una.";
     return (
       <div className="max-w-2xl mx-auto flex flex-col gap-4">
