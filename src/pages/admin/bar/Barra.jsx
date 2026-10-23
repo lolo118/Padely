@@ -152,8 +152,8 @@ export default function Barra() {
   const aceptar = async (p) => {
     setOcupado(p.id);
     try {
-      await aceptarPedido(clubId, p, { uid, nombre });
-      toast.success(`Aceptado: va a la cuenta de ${p.nombre || p.canchaNombre}`);
+      const cuenta = await aceptarPedido(clubId, p, { uid, nombre });
+      toast.success(`Aceptado: va a la cuenta de ${cuenta?.nombreJugador || p.canchaNombre}`);
     } catch (e) {
       console.error("Error aceptando el pedido:", e);
       const motivo = e instanceof CuentaCerradaError || e instanceof CuentaNoEditableError ? e.message : e?.code === "permission-denied" ? "sin permiso" : e?.message || "error";

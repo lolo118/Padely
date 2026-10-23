@@ -1,5 +1,5 @@
 import { Minus, Plus, Tag, Trash2, X } from "lucide-react";
-import { Badge, Button, Field, Input } from "../ui";
+import { Badge, Button, Field, Input, Select } from "../ui";
 import { formatPrecio } from "../../utils/format";
 
 // Columna derecha del POS: las líneas del ticket, descuentos, total y "Cobrar".
@@ -21,7 +21,8 @@ export default function TicketPanel({
   onVaciar,
   bloqueo = "",
   className = "",
-  // Modo "cargar a la cuenta": { texto } del turno elegido; el botón primario agrega a la cuenta en vez de cobrar
+  // Modo "cargar a la cuenta": { texto, participantes, paraId, onPara } del turno elegido; el botón primario agrega a
+  // la cuenta en vez de cobrar. "Para:" elige a quién se le cargan las líneas (sin elegir = sin asignar).
   cuenta = null,
   onSalirCuenta,
   onAgregarACuenta,
@@ -91,6 +92,18 @@ export default function TicketPanel({
             <Input type="tel" inputMode="tel" value={cliente.telefono} onChange={(e) => onCliente({ ...cliente, telefono: e.target.value })} placeholder="385…" maxLength={20} autoComplete="off" />
           </Field>
         </div>
+        )}
+        {cuenta && cuenta.participantes && cuenta.participantes.length > 1 && (
+          <Field label="Para" className="mb-1">
+            <Select value={cuenta.paraId || ""} onChange={(e) => cuenta.onPara?.(e.target.value)} aria-label="Para quién es lo que se carga">
+              <option value="">Sin asignar (entre todos)</option>
+              {cuenta.participantes.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </Select>
+          </Field>
         )}
         <div className="flex items-center justify-between body-sm text-ink-2">
           <span>Subtotal</span>

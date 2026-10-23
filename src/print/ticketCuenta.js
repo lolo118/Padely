@@ -3,7 +3,7 @@
 import { escapar } from "./imprimir";
 import { formatPrecio } from "../utils/format";
 import { formatDiaCorto, formatFechaHora } from "../utils/formatDate";
-import { calcularTotalesCuenta, lineasDeVentaParaParte } from "../utils/cuentas";
+import { calcularTotalesCuenta, esLegacyDividida, lineasDeVentaParaParte, participantesDe, saldosDeCuenta } from "../utils/cuentas";
 import { bloqueQrTicket } from "./ticketVenta";
 
 const cant = (n) => (Number(n) || 0).toLocaleString("es-AR", { maximumFractionDigits: 3 });
@@ -17,8 +17,11 @@ export function htmlTicketCuenta({ club = {}, cuenta = {}, clubId = "" }) {
   const direccion = [club.direccion, club.ciudad].filter(Boolean).join(" · ");
   const totales = calcularTotalesCuenta(cuenta);
   const items = cuenta.items || [];
-  const partes = cuenta.division?.partes || [];
+  const partes = esLegacyDividida(cuenta) ? cuenta.division?.partes || [] : [];
   const partes_ = [];
+  const participantes = participantesDe(cuenta);
+  const nombreDe = (id) => (participantes.find((p) => p.id === id) || {}).nombre || "—";
+  const saldos = partes.length ? null : saldosDeCuenta(cuenta);
 
   partes_.push(`<h1 class="ticket-h1">${escapar(t.encabezado || club.nombre || "Padely")}</h1>`);
   if (direccion) partes_.push(linea(direccion, "ticket-center ticket-muted"));
@@ -50,6 +53,27 @@ export function htmlTicketCuenta({ club = {}, cuenta = {}, clubId = "" }) {
   }
   partes_.push(sep());
   partes_.push(fila("TOTAL", formatPrecio(totales.total), "ticket-big"));
+  // Pagos por persona (cuenta compartida) y lo que falta
+  if (saldos && (cuenta.pagos || []).length) {
+    partes_.push(sep());
+    partes_.push(linea("Pagos", "ticket-strong"));
+    for (const pg of cuenta.pagos) {
+      const quien = (pg.participanteIds || []).map(nombreDe).join(", ") || "—";
+      const medios = (pg.medios || []).map((m) => m.medio).join(" + ") || "—";
+      partes_.push(fila(`${quien} · ${medios}`, formatPrecio(pg.total)));
+      const cubre = (pg.cubreA || []).filter((id) => !(pg.participanteIds || []).includes(id)).map(nombreDe);
+      if (cubre.length) partes_.push(linea(`  por ${cubre.join(", ")}`, "ticket-muted"));
+    }
+    partes_.push(fila("Pagado", formatPrecio(saldos.pagadoTotal), "ticket-strong"));
+    if (saldos.pendiente > 0) {
+      partes_.push(fila("Falta", formatPrecio(saldos.pendiente), "ticket-strong"));
+      for (const p of saldos.participantes.filter((x) => x.debe > 0)) partes_.push(fila(`  ${p.nombre}`, formatPrecio(p.debe), "ticket-muted"));
+    }
+  } else if (saldos && saldos.participantes.length > 1 && cuenta.estado === "abierta") {
+    partes_.push(sep());
+    partes_.push(linea(`Entre ${saldos.participantes.length}`, "ticket-strong"));
+    for (const p of saldos.participantes) partes_.push(fila(`  ${p.nombre}`, formatPrecio(p.debe), "ticket-muted"));
+  }
   if ((cuenta.ventas || []).length) partes_.push(fila("Tickets", cuenta.ventas.join(", "), "ticket-muted"));
   if (t.alias) {
     partes_.push(sep());

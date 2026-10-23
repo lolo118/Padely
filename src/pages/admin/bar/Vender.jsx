@@ -19,7 +19,7 @@ import { htmlTicketVenta } from "../../../print/ticketVenta";
 import { imprimirHtml } from "../../../print/imprimir";
 import { dispositivoGuardado, escucharCajaAbierta } from "../../../services/cajaService";
 import { CuentaCerradaError, CuentaNoEditableError, agregarItemsACuenta, escucharCuentasAbiertas } from "../../../services/cuentasService";
-import { textoTurno } from "../../../utils/cuentas";
+import { participantesActivos, textoTurno } from "../../../utils/cuentas";
 import { escucharProductos, getCategorias } from "../../../services/productosService";
 import { SinNumerosError, crearVenta, estadoNumeracion, prepararNumeracion, tomarNumero } from "../../../services/ventasService";
 import { useOnline, usePendientes } from "../../../utils/conexion";
@@ -64,6 +64,8 @@ export default function Vender() {
   // Cuenta del turno: la reserva elegida en la franja (el ticket pasa a "cargar a la cuenta") y las cuentas abiertas
   const [cuentaSel, setCuentaSel] = useState(null);
   const [cuentasAbiertas, setCuentasAbiertas] = useState([]);
+  // "Para:": a quién se le cargan las líneas (participante de la cuenta; "" = sin asignar)
+  const [paraId, setParaId] = useState("");
   const [searchParams] = useSearchParams();
   const preseleccionId = searchParams.get("cuenta");
   const [ancho, setAncho] = useState(anchoTicketGuardado);
@@ -185,15 +187,19 @@ export default function Vender() {
   // ----- Cuenta del turno -----
   const seleccionarCuenta = useCallback((reserva) => {
     setCuentaSel(reserva || null);
+    setParaId("");
     if (reserva) setDescuentoGeneral(null); // el descuento general se decide al cerrar la cuenta
     setTimeout(() => inputRef.current?.focus(), 0);
   }, []);
+  const cuentaAbiertaSel = cuentaSel ? cuentasAbiertas.find((c) => c.id === (cuentaSel.grupoId || cuentaSel.id)) || null : null;
+  const participantesSel = cuentaAbiertaSel ? participantesActivos(cuentaAbiertaSel) : [];
   const agregarACuenta = async () => {
     if (!cuentaSel || totales.lineas.length === 0) return;
     const grupoId = cuentaSel.grupoId || cuentaSel.id;
+    const para = participantesSel.find((p) => p.id === paraId) || null;
     try {
-      await agregarItemsACuenta(clubId, grupoId, totales.lineas, { uid, nombre, reserva: cuentaSel });
-      toast.success(`Agregado a la cuenta de ${cuentaSel.nombreJugador || cuentaSel.canchaName || "el turno"} · ${formatPrecio(totales.subtotal)}`);
+      await agregarItemsACuenta(clubId, grupoId, totales.lineas, { uid, nombre, reserva: cuentaSel, asignadoA: para ? [para.id] : [] });
+      toast.success(`Agregado a la cuenta de ${cuentaSel.nombreJugador || cuentaSel.canchaName || "el turno"}${para ? ` · para ${para.nombre}` : ""} · ${formatPrecio(totales.subtotal)}`);
       limpiar();
     } catch (e) {
       console.error("Error agregando a la cuenta:", e);
@@ -388,7 +394,7 @@ export default function Vender() {
           onCobrar={() => setDialogo({ tipo: "cobrar" })}
           onVaciar={vaciar}
           bloqueo={bloqueo}
-          cuenta={cuentaSel ? { texto: textoCuenta } : null}
+          cuenta={cuentaSel ? { texto: textoCuenta, participantes: participantesSel, paraId, onPara: setParaId } : null}
           onSalirCuenta={() => seleccionarCuenta(null)}
           onAgregarACuenta={agregarACuenta}
         />

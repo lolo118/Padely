@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../../../store/authStore";
 import SinPermiso from "../../../components/SinPermiso";
 import { Alert, Badge, Button, Card, Tabs } from "../../../components/ui";
-import { escucharCuentasAbiertas, getCuentasCerradas } from "../../../services/cuentasService";
-import { partesPagadas } from "../../../utils/cuentas";
+import { escucharCuentasAbiertas, getCuentasCerradas, getCuentasDeCancha } from "../../../services/cuentasService";
+import { esLegacyDividida, partesPagadas, participantesActivos, saldosDeCuenta } from "../../../utils/cuentas";
 import { formatPrecio } from "../../../utils/format";
 import { formatDiaCorto, formatFechaHora } from "../../../utils/formatDate";
 
@@ -30,7 +30,13 @@ export default function Cuentas() {
   const clubId = clubActual?.id || null;
   const puedeEntrar = !!clubActual && (puede("cobrarTurnos") || puede("vender"));
   const navigate = useNavigate();
-  const [tab, setTab] = useState("abiertas");
+  // Filtro desde Reportes → Consumo por cancha: ?cancha=<id>&fecha=YYYY-MM-DD (o &desde=&hasta=) abre Cerradas filtrado
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filtroCancha = searchParams.get("cancha") || "";
+  const filtroDesde = searchParams.get("desde") || searchParams.get("fecha") || "";
+  const filtroHasta = searchParams.get("hasta") || searchParams.get("fecha") || "";
+  const filtrando = !!filtroCancha && !!filtroDesde;
+  const [tab, setTab] = useState(filtrando ? "cerradas" : "abiertas");
   const [abiertas, setAbiertas] = useState({ para: null, lista: [], error: false });
   const [cerradas, setCerradas] = useState({ para: null, lista: [], error: false });
 
@@ -50,16 +56,18 @@ export default function Cuentas() {
   useEffect(() => {
     if (!clubId || !puedeEntrar || tab !== "cerradas") return undefined;
     let vivo = true;
-    getCuentasCerradas(clubId)
-      .then((lista) => vivo && setCerradas({ para: clubId, lista, error: false }))
+    const clave = `${clubId}|${filtroCancha}|${filtroDesde}|${filtroHasta}`;
+    (filtrando ? getCuentasDeCancha(clubId, filtroCancha, filtroDesde, filtroHasta || filtroDesde).then((lista) => lista.filter((c) => c.estado !== "abierta")) : getCuentasCerradas(clubId))
+      .then((lista) => vivo && setCerradas({ para: clave, lista, error: false }))
       .catch((e) => {
         console.error("Error cargando las cuentas cerradas:", e);
-        if (vivo) setCerradas({ para: clubId, lista: [], error: true });
+        if (vivo) setCerradas({ para: clave, lista: [], error: true });
       });
     return () => {
       vivo = false;
     };
-  }, [clubId, puedeEntrar, tab]);
+  }, [clubId, puedeEntrar, tab, filtrando, filtroCancha, filtroDesde, filtroHasta]);
+  const claveCerradas = `${clubId}|${filtroCancha}|${filtroDesde}|${filtroHasta}`;
 
   if (!clubCargado) return <div className="pd-skeleton h-40 rounded-lg" aria-busy="true" aria-label="Cargando" />;
   if (!clubActual) {
@@ -83,8 +91,12 @@ export default function Cuentas() {
   const totalAbierto = lista.reduce((s, c) => s + (Number(c.totales?.total) || 0), 0);
 
   const tarjeta = (c) => {
+    const legacy = esLegacyDividida(c);
     const pagadas = partesPagadas(c);
-    const partes = c.division?.partes?.length || 0;
+    const partes = legacy ? c.division?.partes?.length || 0 : 0;
+    const participantes = participantesActivos(c);
+    const s = legacy ? null : saldosDeCuenta(c);
+    const deben = s ? s.participantes.filter((p) => p.debe > 0).length : 0;
     return (
       <Card key={c.id} variant="hover" as="div" role="link" tabIndex={0} onClick={() => navigate(`/admin/bar/cuentas/${c.id}`)} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && navigate(`/admin/bar/cuentas/${c.id}`)}>
         <Card.Row className="items-start!">
@@ -104,7 +116,18 @@ export default function Cuentas() {
           {(c.items || []).length} {(c.items || []).length === 1 ? "consumo" : "consumos"} · abierta {haceTexto(c.abiertaEn)}
           {partes ? ` · ${pagadas}/${partes} partes pagadas` : ""}
         </Card.Meta>
-        <p className="numeral-md pd-tnum mt-3 mb-0">{formatPrecio(c.totales?.total)}</p>
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          {participantes.length > 1 && <Badge>{`${participantes.length} participantes`}</Badge>}
+          {s && s.pagadoTotal > 0 && <Badge tone={s.pendiente > 0 ? "neutral" : "success"} className="pd-tnum">{`Pagado ${formatPrecio(s.pagadoTotal)} de ${formatPrecio(s.totalCuenta)}`}</Badge>}
+          {s && s.pagadoTotal === 0 && participantes.length > 1 && <Badge>Sin cobrar</Badge>}
+          {s && s.pagadoTotal > 0 && deben > 0 && <Badge tone="warning">{`Faltan cobrar ${deben}`}</Badge>}
+        </div>
+        <Card.Row className="mt-3 items-end!">
+          <p className="numeral-md pd-tnum m-0">{formatPrecio(c.totales?.total)}</p>
+          <Link to={`/admin/canchas?fecha=${c.fecha}&turno=${c.id}`} className="body-sm text-ink-2 underline" onClick={(e) => e.stopPropagation()}>
+            Ver turno
+          </Link>
+        </Card.Row>
       </Card>
     );
   };
@@ -152,10 +175,23 @@ export default function Cuentas() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{lista.map(tarjeta)}</div>
         ))}
 
+      {tab === "cerradas" && filtrando && (
+        <Alert className="mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span>
+              Cuentas de <strong>{cerradas.lista[0]?.canchaNombre || "la cancha"}</strong> · {formatDiaCorto(filtroDesde)}
+              {filtroHasta && filtroHasta !== filtroDesde ? ` – ${formatDiaCorto(filtroHasta)}` : ""}
+            </span>
+            <Button size="sm" variant="ghost" onClick={() => setSearchParams({})}>
+              Quitar filtro
+            </Button>
+          </div>
+        </Alert>
+      )}
       {tab === "cerradas" &&
         (cerradas.error ? (
           <Alert tone="danger">No pudimos cargar las cuentas cerradas.</Alert>
-        ) : cerradas.para !== clubId ? (
+        ) : cerradas.para !== claveCerradas ? (
           <div className="flex flex-col gap-3" aria-busy="true" aria-label="Cargando">
             {[0, 1, 2].map((i) => (
               <div key={i} className="pd-skeleton h-14" />
@@ -168,7 +204,7 @@ export default function Cuentas() {
           </Card>
         ) : (
           <div className="flex flex-col gap-4">
-            <p className="body-sm text-ink-3 m-0">{cerradas.lista.length >= 50 ? "Las últimas 50 cuentas." : `${cerradas.lista.length} ${cerradas.lista.length === 1 ? "cuenta" : "cuentas"}.`}</p>
+            <p className="body-sm text-ink-3 m-0">{!filtrando && cerradas.lista.length >= 50 ? "Las últimas 50 cuentas." : `${cerradas.lista.length} ${cerradas.lista.length === 1 ? "cuenta" : "cuentas"}.`}</p>
             <div className="flex flex-col gap-4 md:hidden">
               {cerradas.lista.map((c) => (
                 <Card key={c.id}>
