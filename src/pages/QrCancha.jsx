@@ -21,6 +21,9 @@ export default function QrCancha() {
   const user = useAuthStore((s) => s.user);
   const perfil = useAuthStore((s) => s.perfil);
   const loading = useAuthStore((s) => s.loading);
+  const rol = useAuthStore((s) => s.rol);
+  const clubActual = useAuthStore((s) => s.clubActual);
+  const staffDe = useAuthStore((s) => s.staffDe);
   const [base, setBase] = useState({ club: null, cancha: null, cargado: false, error: false });
   const [reserva, setReserva] = useState({ valor: null, candidatas: [], cargado: false });
   const [elegidaId, setElegidaId] = useState(null); // "¿No es tu turno?": el grupoId elegido a mano
@@ -155,6 +158,16 @@ export default function QrCancha() {
 
   const anonimo = user.isAnonymous === true;
   const nombreJugador = anonimo ? nombre : perfil?.nombre || user.displayName || user.email || "";
+  // El dueño o el staff de ESTE club escaneando el QR: puede pedir igual, pero se le avisa que no es la pantalla del bar
+  const esDelClub = !anonimo && ((rol === "club" && clubActual?.id === clubId) || (staffDe || []).some((s) => s.clubId === clubId));
+  const avisoStaff = esDelClub ? (
+    <Alert tone="court">
+      <strong>Estás con la cuenta del club.</strong> Lo que pidas se carga al turno como cualquier jugador.{" "}
+      <Link to="/admin/bar/barra" className="font-semibold underline">
+        Ir a Barra
+      </Link>
+    </Alert>
+  ) : null;
 
   if (!reserva.cargado) {
     return (
@@ -168,6 +181,7 @@ export default function QrCancha() {
     return (
       <div className="max-w-2xl mx-auto flex flex-col gap-4">
         {encabezado}
+        {avisoStaff}
         <Card className="text-center">
           <CircleDot className="pd-icon-lg mx-auto mb-3 text-ink-3" size={24} aria-hidden="true" />
           <p className="heading-sm">No hay un turno en juego en esta cancha ahora.</p>
@@ -209,6 +223,7 @@ export default function QrCancha() {
 
   return (
     <div className="max-w-2xl mx-auto flex flex-col gap-4">
+      {avisoStaff}
       <Card as="div" className="flex flex-wrap items-center justify-between gap-2 py-3!">
         <p className="body-sm m-0">
           <span className="text-ink-2">Pedís para: </span>

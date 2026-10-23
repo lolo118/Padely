@@ -155,6 +155,9 @@ export default function CuentaDetalle() {
   const editable = cuentaEditable(cuenta);
   const pagadas = partesPagadas(cuenta);
   const c = cuenta.cancha || {};
+  // Cuenta cerrada que cobró la cancha con la seña pendiente: la seña se cobró acá y la Function dejó la reserva con
+  // señaPagada (cuenta.cancha.señaPagada es la foto de cuando se abrió la cuenta, por eso no se mira sola)
+  const señaCobradaEnCuenta = cuenta.estado === "cerrada" && c.cobrar !== false && c.señaPagada !== true && Number(c.seña) > 0;
   const ctx = () => ({ dispositivo, cajaId: caja?.id, uid, nombre });
 
   const quitar = async (linea) => {
@@ -287,7 +290,9 @@ export default function CuentaDetalle() {
                 <dt>Seña</dt>
                 <dd className="flex items-center gap-2">
                   <span className="pd-tnum">{Number(c.seña) > 0 ? formatPrecio(c.seña) : "Sin seña"}</span>
-                  {Number(c.seña) > 0 && <Badge tone={c.señaPagada ? "success" : "warning"}>{c.señaPagada ? "pagada" : "pendiente"}</Badge>}
+                  {Number(c.seña) > 0 && (
+                    <Badge tone={c.señaPagada || señaCobradaEnCuenta ? "success" : "warning"}>{señaCobradaEnCuenta ? "pagada con la cuenta" : c.señaPagada ? "pagada" : "pendiente"}</Badge>
+                  )}
                 </dd>
               </div>
             </dl>
@@ -296,7 +301,15 @@ export default function CuentaDetalle() {
               Cobrar la cancha en esta cuenta
             </label>
             <p className="pd-help mt-1 mb-0">
-              {c.cobrar === false ? "La cancha se cobró (o se cobra) por otro lado: la cuenta solo lleva los consumos." : c.señaPagada && Number(c.seña) > 0 ? "La seña ya pagada se descuenta de la cancha." : Number(c.seña) > 0 ? "La seña está pendiente: se cobra junto con la cancha y la reserva queda con la seña pagada." : "Se cobra el precio completo de la cancha."}
+              {c.cobrar === false
+                ? "La cancha se cobró (o se cobra) por otro lado: la cuenta solo lleva los consumos."
+                : señaCobradaEnCuenta
+                  ? "La seña se cobró con la cancha en esta cuenta: la reserva quedó con la seña pagada."
+                  : c.señaPagada && Number(c.seña) > 0
+                    ? "La seña ya pagada se descuenta de la cancha."
+                    : Number(c.seña) > 0
+                      ? "La seña está pendiente: se cobra junto con la cancha y la reserva queda con la seña pagada."
+                      : "Se cobra el precio completo de la cancha."}
             </p>
           </Card>
 
