@@ -389,10 +389,11 @@ service cloud.firestore {
       // ----- Bar: cuenta del turno (id = grupoId de la reserva; una reserva, a lo sumo una cuenta) -----
       // La crea el POS al cargar el primer consumo; la cierra el staff cobrándola (sus ventas llevan cuentaId).
       // Hasta el cierre nada se mueve: el stock lo mueve la Function onCuentaUpdated una sola vez; la caja, las
-      // ventas. El jugador que reservó la lee (y nada más). Campos que escribe SOLO la Function: cuentaAplicada,
-      // avisoVencidaEnviado, cierreAutomatico; en reservas: cuentaCerrada, cuentaTotal, cuentaCerradaEn.
+      // ventas. El jugador que reservó la lee (y nada más). Quien atiende la barra ('pedidos') la lee porque aceptar
+      // un pedido la abre o le suma consumos en una transacción (B-P3-6-1). Campos que escribe SOLO la Function:
+      // cuentaAplicada, avisoVencidaEnviado, cierreAutomatico; en reservas: cuentaCerrada, cuentaTotal, cuentaCerradaEn.
       match /cuentas/{cuentaId} {
-        allow read: if esStaffCaja(clubId) || esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender')
+        allow read: if esStaffCaja(clubId) || esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender') || esStaff(clubId, 'pedidos')
           || (signedIn() && resource.data.jugadorUid == request.auth.uid)
           || superAdmin();
         allow create: if (esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender') || esStaff(clubId, 'pedidos'))
@@ -434,7 +435,9 @@ service cloud.firestore {
       // Los crea un usuario con sesión (real o anónima) a su propio nombre (jugadorUid). "celular": el jugador que
       // reservó; "qr": cualquiera en la cancha, con el token impreso en el QR (los anónimos solo por acá). El jugador
       // cancela mientras está en espera; la barra ('pedidos') lo acepta / rechaza / marca listo y entregado.
-      // Campos de la Function: notificado, validado, pedidosPendientes (en la cuenta); el qrToken lo borra ella.
+      // creadoEn y actualizadoEn son del servidor (la pantalla Barra ordena por creadoEn: un pedido sin esa fecha
+      // no se vería). Campos de la Function: notificado, validado, pedidosPendientes (en la cuenta); el qrToken lo
+      // borra ella.
       function reservaDelPedido(clubId) {
         return get(/databases/$(database)/documents/clubs/$(clubId)/reservas/$(request.resource.data.reservaGrupoId)).data;
       }
@@ -456,6 +459,8 @@ service cloud.firestore {
           && request.resource.data.nombre.size() > 0
           && request.resource.data.lineaIds.size() == 0
           && request.resource.data.atendidoPor == null
+          && request.resource.data.creadoEn == request.time
+          && request.resource.data.actualizadoEn == request.time
           && request.resource.data.reservaGrupoId == request.resource.data.cuentaId
           && reservaDelPedido(clubId).status == 'confirmada'
           && request.resource.data.canchaId == reservaDelPedido(clubId).canchaId

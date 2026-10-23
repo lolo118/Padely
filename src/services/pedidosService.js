@@ -45,6 +45,7 @@ export const guardarNombreAnonimo = (nombre) => {
 
 // ----- Jugador -----
 
+// creadoEn y actualizadoEn van con serverTimestamp(): las reglas exigen que sean request.time (la Barra ordena por creadoEn)
 export const crearPedido = async (clubId, datos) => {
   const nuevo = await addDoc(col(clubId, "pedidos"), {
     ...datos,

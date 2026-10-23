@@ -1343,6 +1343,9 @@ exports.onPedidoCreated = onDocumentCreated("clubs/{clubId}/pedidos/{pedidoId}",
     if (!snap.exists) return;
     const pedido = snap.data() || {};
     if (pedido.validado === true) return;
+    // Las reglas exigen creadoEn del servidor desde P3-6b; si un pedido viejo llegara sin fecha, se le pone la de
+    // creación del documento en la misma escritura (la pantalla Barra ordena por creadoEn: sin fecha no se ve)
+    const sinCreadoEn = pedido.creadoEn ? {} : { creadoEn: snap.createTime, actualizadoEn: FieldValue.serverTimestamp() };
 
     // 1. Validaciones que las reglas no pueden hacer
     let motivo = null;
@@ -1368,6 +1371,7 @@ exports.onPedidoCreated = onDocumentCreated("clubs/{clubId}/pedidos/{pedidoId}",
 
     if (motivo) {
       await pedidoRef.update({
+        ...sinCreadoEn,
         estado: "rechazado",
         rechazo: { motivo, por: "sistema", porNombre: "Padely" },
         "tiempos.rechazado": FieldValue.serverTimestamp(),
@@ -1378,7 +1382,7 @@ exports.onPedidoCreated = onDocumentCreated("clubs/{clubId}/pedidos/{pedidoId}",
       logger.info(`onPedidoCreated ${clubId}/${pedidoId}: rechazado (${motivo})`);
       return;
     }
-    await pedidoRef.update({ validado: true, qrToken: FieldValue.delete() });
+    await pedidoRef.update({ ...sinCreadoEn, validado: true, qrToken: FieldValue.delete() });
     await recalcularPedidosPendientes(clubRef, pedido.cuentaId);
 
     // 2. Aviso a la barra: el dueño y el staff activo con 'pedidos' (una vez por pedido)
