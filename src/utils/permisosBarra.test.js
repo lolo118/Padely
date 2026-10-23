@@ -37,7 +37,7 @@ test("las reglas dejan a 'pedidos' leer, crear y sumar consumos a la cuenta del 
   assert.match(clausula(cuentas, "read"), /esStaff\(clubId, 'pedidos'\)/, "aceptar un pedido lee la cuenta (tx.get) antes de crearla o actualizarla");
   assert.match(clausula(cuentas, "create"), /esStaff\(clubId, 'pedidos'\)/);
   const update = clausula(cuentas, "update");
-  assert.match(update, /esStaff\(clubId, 'pedidos'\)\s*&&\s*changedOnly\(\['items', 'totales', 'division', 'actualizadoEn'\]\)/, "la barra solo suma consumos");
+  assert.match(update, /esStaff\(clubId, 'pedidos'\)\s*&&\s*changedOnly\(\['items', 'totales', 'division', 'participantes', 'participantesUids', 'actualizadoEn'\]\)/, "la barra solo suma consumos (y al autor de un pedido como participante)");
   assert.doesNotMatch(update, /esStaff\(clubId, 'pedidos'\)[^|]*'estado', 'cerradaPor'/, "la barra no cierra cuentas");
 });
 

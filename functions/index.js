@@ -1,7 +1,7 @@
 // functions/index.js — Cloud Functions de Padely.
 // Base de datos Firestore en nam5 (multi-región US) → funciones en us-central1.
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue, FieldPath, Timestamp } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const logger = require("firebase-functions/logger");
@@ -27,6 +27,7 @@ const db = getFirestore();
 // ============================================================================
 const { onDocumentWritten, onDocumentUpdated, onDocumentDeleted, onDocumentCreated } = require("firebase-functions/v2/firestore");
 const puntos = require("./puntos");
+const cc = require("./cuentaCompartida");
 
 const userRef = (uid) => db.collection("users").doc(uid);
 const markersCol = (tid) => db.collection("tournaments").doc(tid).collection("puntosOtorgados");
@@ -844,6 +845,8 @@ exports.onUserDeleted = functionsV1
     // Su lugar en el equipo de cada club (clubs/{c}/staff/{uid})
     const staffSnap = await db.collectionGroup("staff").where("uid", "==", uid).get();
     staffSnap.docs.forEach((d) => ops.push((b) => b.delete(d.ref)));
+    // Su perfil público (proyección de users para buscar jugadores)
+    ops.push((b) => b.delete(db.collection("perfilesPublicos").doc(uid)));
 
     await escribirEnLotes(ops);
     logger.info(
@@ -1109,6 +1112,20 @@ exports.onVentaUpdated = onDocumentUpdated("clubs/{clubId}/ventas/{numero}", asy
 // y avisa al jugador que reservó. Al pasar a "anulada" solo avisa (nada se movió).
 // La caja NO se toca acá: la mueven las ventas (sus pagos) vía onVentaCreated → onMovimientoCajaCreated.
 // ============================================================================
+// El link de invitación de una cuenta deja de servir cuando la cuenta se anula (al cerrar, dentro de la transacción)
+async function desactivarInvitacion(clubRef, cuentaRef, cuenta) {
+  const inv = cuenta && cuenta.invitacion;
+  if (!inv || !inv.token || inv.activa === false) return;
+  try {
+    const batch = db.batch();
+    batch.update(clubRef.collection("invitacionesTurno").doc(String(inv.token)), { activa: false, cerradaEn: FieldValue.serverTimestamp() });
+    batch.update(cuentaRef, { "invitacion.activa": false });
+    await batch.commit();
+  } catch (err) {
+    logger.error(`desactivarInvitacion ${cuentaRef.path}`, err);
+  }
+}
+
 exports.onCuentaUpdated = onDocumentUpdated("clubs/{clubId}/cuentas/{cuentaId}", async (event) => {
   const { clubId, cuentaId } = event.params;
   const antes = event.data && event.data.before ? event.data.before.data() : null;
@@ -1127,6 +1144,7 @@ exports.onCuentaUpdated = onDocumentUpdated("clubs/{clubId}/cuentas/{cuentaId}",
   }
 
   if (despues.estado === "anulada") {
+    await desactivarInvitacion(clubRef, cuentaRef, despues);
     if (despues.jugadorUid && despues.cierreAutomatico !== true) {
       try {
         await nuevaNotificacionRef(despues.jugadorUid).set({
@@ -1178,9 +1196,12 @@ exports.onCuentaUpdated = onDocumentUpdated("clubs/{clubId}/cuentas/{cuentaId}",
           },
         });
       });
-      // 2. Los turnos de la reserva
+      // 2. Los turnos de la reserva (y los perfiles de los participantes registrados, para "Jugaste con…")
       const reservasSnap = await tx.get(clubRef.collection("reservas").where("grupoId", "==", cuentaId));
       const existentes = pendientes.length ? await tx.getAll(...pendientes.map((p) => p.ref)) : [];
+      const registrados = cc.participantesActivos(cuenta).filter((p) => p.uid && p.anonimo !== true);
+      const perfiles = registrados.length > 1 ? await tx.getAll(...registrados.map((p) => db.collection("perfilesPublicos").doc(p.uid))) : [];
+      const fotoDe = new Map(perfiles.map((snap) => [snap.id, snap.exists ? snap.data().foto || null : null]));
       let escritos = 0;
       pendientes.forEach((p, k) => {
         if (existentes[k].exists) return;
@@ -1200,12 +1221,51 @@ exports.onCuentaUpdated = onDocumentUpdated("clubs/{clubId}/cuentas/{cuentaId}",
           { merge: true },
         );
       }
-      tx.update(cuentaRef, { cuentaAplicada: true, cuentaAplicadaEn: FieldValue.serverTimestamp() });
-      return `cerrada: ${escritos} movimientos de stock, ${reservasSnap.size} turnos${señaCobradaAca ? ", seña cobrada" : ""}`;
+      // 3. "Jugaste con…": cada par de participantes registrados, en los dos sentidos (una vez por cuenta)
+      let pares = 0;
+      if (cuenta.companerosAplicado !== true && registrados.length > 1) {
+        for (const a of registrados) {
+          for (const b of registrados) {
+            if (a.uid === b.uid) continue;
+            tx.set(userRef(a.uid).collection("companeros").doc(b.uid), { uid: b.uid, nombre: b.nombre || "", foto: fotoDe.get(b.uid) || null, veces: FieldValue.increment(1), ultimaVez: FieldValue.serverTimestamp(), ultimoClubId: clubId }, { merge: true });
+            pares += 1;
+          }
+        }
+      }
+      // 4. El link de invitación muere con la cuenta
+      const cambiosCuenta = { cuentaAplicada: true, cuentaAplicadaEn: FieldValue.serverTimestamp(), companerosAplicado: true };
+      if (cuenta.invitacion && cuenta.invitacion.token && cuenta.invitacion.activa !== false) {
+        tx.update(clubRef.collection("invitacionesTurno").doc(String(cuenta.invitacion.token)), { activa: false, cerradaEn: FieldValue.serverTimestamp() });
+        cambiosCuenta["invitacion.activa"] = false;
+      }
+      tx.update(cuentaRef, cambiosCuenta);
+      return `cerrada: ${escritos} movimientos de stock, ${reservasSnap.size} turnos${señaCobradaAca ? ", seña cobrada" : ""}${pares ? `, ${pares} compañeros` : ""}`;
     });
     logger.info(`onCuentaUpdated ${clubId}/${cuentaId}: ${resultado}`);
     if (resultado === "ya aplicada" || resultado === "sin cuenta") return;
-    if (despues.jugadorUid) {
+    // Avisos: con varios participantes, a cada registrado que pagó ("pagaste $ X"); si no, al titular como siempre
+    const activos = cc.participantesActivos(despues);
+    if (activos.length > 1) {
+      const { pagaron } = cc.pagadoPorParticipante(despues);
+      const batch = db.batch();
+      let avisos = 0;
+      for (const p of activos) {
+        if (!p.uid || p.anonimo === true) continue;
+        const pago = pagaron.get(p.id) || 0;
+        if (pago <= 0) continue;
+        batch.set(nuevaNotificacionRef(p.uid), {
+          tipo: "cuenta_cerrada",
+          titulo: "Cuenta del turno cerrada",
+          mensaje: `${textoTurno} · pagaste $ ${Math.round(pago).toLocaleString("es-AR")} de $ ${Math.round(total).toLocaleString("es-AR")}`,
+          link: `/mi-cuenta/${clubId}/${cuentaId}`,
+          icono: "🧾",
+          leida: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        avisos += 1;
+      }
+      if (avisos) await batch.commit();
+    } else if (despues.jugadorUid) {
       await nuevaNotificacionRef(despues.jugadorUid).set({
         tipo: "cuenta_cerrada",
         titulo: "Cuenta del turno cerrada",
@@ -1226,6 +1286,29 @@ exports.onCuentaUpdated = onDocumentUpdated("clubs/{clubId}/cuentas/{cuentaId}",
 // para que la cierre alguien (cobrándola o anulándola).
 exports.cerrarCuentasVencidas = onSchedule({ schedule: "every day 04:00", timeZone: ZONA_HORARIA }, async () => {
   const hoy = fechaLocalArgentina();
+  // Pedidos colgados: en curso (pendiente / aceptado / listo) en turnos que terminaron hace más de 2 h. Un aceptado
+  // o listo conserva sus líneas en la cuenta (se sirvió o se cobra): solo cambia el estado del tablero.
+  try {
+    const colgados = await db.collectionGroup("pedidos").where("estado", "in", ["pendiente", "aceptado", "listo"]).get();
+    let cancelados = 0;
+    const cuentasTocadas = new Map();
+    for (const d of colgados.docs) {
+      const p = d.data() || {};
+      if (!cc.terminoHace(p)) continue;
+      await d.ref.update({
+        estado: "cancelado",
+        rechazo: { motivo: "El turno terminó", por: "sistema", porNombre: "Padely" },
+        "tiempos.cancelado": FieldValue.serverTimestamp(),
+        actualizadoEn: FieldValue.serverTimestamp(),
+      });
+      cancelados += 1;
+      if (p.estado === "pendiente" && p.cuentaId && d.ref.parent.parent) cuentasTocadas.set(`${d.ref.parent.parent.path}/${p.cuentaId}`, { clubRef: d.ref.parent.parent, cuentaId: p.cuentaId });
+    }
+    for (const { clubRef, cuentaId } of cuentasTocadas.values()) await recalcularPedidosPendientes(clubRef, cuentaId);
+    logger.info(`cerrarCuentasVencidas: ${cancelados} pedidos colgados cancelados (${colgados.size} en curso)`);
+  } catch (err) {
+    logger.error("cerrarCuentasVencidas: barrido de pedidos colgados", err);
+  }
   const snap = await db.collectionGroup("cuentas").where("estado", "==", "abierta").where("fecha", "<", hoy).get();
   if (snap.empty) {
     logger.info("cerrarCuentasVencidas: sin cuentas vencidas");
@@ -1835,4 +1918,338 @@ exports.reconstruirCatalogo = onCall({ region: "us-central1" }, async (request) 
   await escribirEnLotes(ops);
   logger.info(`reconstruirCatalogo ${clubId} por ${uid}: ${productos.size} productos, ${lista.length} categorías`);
   return { ok: true, productos: productos.size, categorias: lista.length };
+});
+
+// ============================================================================
+// CUENTA COMPARTIDA (P3-7): participantes, invitación por link, perfiles públicos, "Jugaste con…".
+// Lo que escribe el cliente directo (staff): items, asignaciones, pagos, excluir/monto fijo. Lo que pasa por acá
+// porque también lo hace el titular o un participante desde el celular (y porque toca otras colecciones):
+//   crearInvitacionTurno · unirseATurno (anónimos incluidos) · sumarJugador · quitarParticipante · asignarLineas
+//   reconstruirPerfilesPublicos (super-admin) · onUserWritten → perfilesPublicos/{uid}
+// Al cerrarse una cuenta (onCuentaUpdated): companeros entre los registrados, la invitación muere.
+// Todas las callables verifican dueño/staff/permiso y titular en el servidor; nunca confían en el cliente.
+// ============================================================================
+
+const esAnonimoReq = (request) => !!(request.auth && request.auth.token && request.auth.token.firebase && request.auth.token.firebase.sign_in_provider === "anonymous");
+function exigirAuth(request, { anonimoOk = false } = {}) {
+  if (!request.auth || !request.auth.uid) throw new HttpsError("unauthenticated", "Iniciá sesión");
+  if (!anonimoOk && esAnonimoReq(request)) throw new HttpsError("permission-denied", "Entrá con tu cuenta de Padely");
+  return request.auth.uid;
+}
+const texto = (v, max = 200) => String(v === null || v === undefined ? "" : v).trim().slice(0, max);
+const PERMISOS_CUENTA = ["cobrarTurnos", "vender", "pedidos"];
+// Dueño / staff del club con alguno de estos permisos
+async function accesoClub(clubRef, uid, permisos = PERMISOS_CUENTA) {
+  const [clubSnap, staffSnap] = await Promise.all([clubRef.get(), clubRef.collection("staff").doc(uid).get()]);
+  if (!clubSnap.exists) throw new HttpsError("not-found", "El club no existe");
+  const club = clubSnap.data();
+  const staff = staffSnap.exists && staffSnap.data().activo === true ? staffSnap.data() : null;
+  const esDueño = club.ownerUid === uid;
+  const esStaff = esDueño || (!!staff && Array.isArray(staff.permisos) && permisos.some((p) => staff.permisos.includes(p)));
+  return { club, staff, esDueño, esStaff, nombre: esDueño ? club.nombre || "El club" : (staff && staff.nombre) || null };
+}
+async function nombreDeUsuario(uid, alternativa = "") {
+  if (!uid) return alternativa;
+  const snap = await userRef(uid).get();
+  return (snap.exists && (snap.data().nombre || snap.data().displayName)) || alternativa;
+}
+// La reserva cabeza del turno (clubs/{c}/reservas/{grupoId}), confirmada
+async function reservaDelTurno(clubRef, grupoId, tx = null) {
+  const ref = clubRef.collection("reservas").doc(grupoId);
+  const snap = tx ? await tx.get(ref) : await ref.get();
+  if (!snap.exists) throw new HttpsError("not-found", "El turno no existe");
+  const r = snap.data();
+  if (r.status !== "confirmada") throw new HttpsError("failed-precondition", "El turno no está confirmado");
+  return r;
+}
+// Dentro de una transacción: la cuenta abierta del turno (o la nueva, con el titular). guardar(cambios) escribe
+// una sola vez: set (nueva) o update (abierta). Las reglas no intervienen (Admin SDK): la verificación es nuestra.
+async function cuentaDelTurnoEnTx(tx, clubRef, grupoId, { uid, nombre }) {
+  const ref = clubRef.collection("cuentas").doc(grupoId);
+  const snap = await tx.get(ref);
+  if (snap.exists) {
+    const cuenta = snap.data();
+    if (cuenta.estado !== "abierta") throw new HttpsError("failed-precondition", cuenta.estado === "anulada" ? "La cuenta del turno fue anulada" : "La cuenta del turno ya está cerrada");
+    const extra = {};
+    if (!Array.isArray(cuenta.participantes) || !cuenta.participantes.length) {
+      extra.participantes = [cc.titularDe(cuenta, { agregadoPor: uid, ahora: Timestamp.now() })];
+      extra.participantesUids = cc.uidsDe(extra.participantes);
+    }
+    return { ref, cuenta: { ...cuenta, ...extra }, nueva: false, guardar: (cambios) => tx.update(ref, { ...extra, ...cambios, actualizadoEn: FieldValue.serverTimestamp() }) };
+  }
+  const reserva = await reservaDelTurno(clubRef, grupoId, tx);
+  const datos = { ...cc.cuentaDesdeReserva(grupoId, reserva, { agregadoPor: uid, ahora: Timestamp.now() }), abiertaPor: uid, abiertaPorNombre: nombre || null, abiertaEn: FieldValue.serverTimestamp(), cerradaPor: null, cerradaEn: null, actualizadoEn: FieldValue.serverTimestamp() };
+  return { ref, cuenta: datos, nueva: true, guardar: (cambios) => tx.set(ref, { ...datos, ...cambios }) };
+}
+const horaTurno = (t) => `${t.horaInicio || ""}${t.horaFin ? `–${t.horaFin}` : ""}`;
+const avisoA = (uid, datos) => nuevaNotificacionRef(uid).set({ ...datos, leida: false, createdAt: FieldValue.serverTimestamp() });
+
+// ----- Invitación por link (WhatsApp) -----
+exports.crearInvitacionTurno = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  const clubId = texto(request.data && request.data.clubId, 80);
+  const grupoId = texto(request.data && request.data.grupoId, 120);
+  if (!clubId || !grupoId) throw new HttpsError("invalid-argument", "clubId y grupoId");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const [acceso, reserva] = await Promise.all([accesoClub(clubRef, uid), reservaDelTurno(clubRef, grupoId)]);
+  const esTitular = !!reserva.jugadorUid && reserva.jugadorUid === uid;
+  if (!esTitular && !acceso.esStaff) throw new HttpsError("permission-denied", "Solo el titular del turno o el club pueden invitar");
+  if (cc.terminoHace(reserva)) throw new HttpsError("failed-precondition", "El turno ya terminó");
+  const nombre = acceso.esStaff ? acceso.nombre || (await nombreDeUsuario(uid)) : await nombreDeUsuario(uid, reserva.nombreJugador);
+  const token = await db.runTransaction(async (tx) => {
+    const { cuenta, guardar } = await cuentaDelTurnoEnTx(tx, clubRef, grupoId, { uid, nombre });
+    if (cuenta.invitacion && cuenta.invitacion.activa === true && cuenta.invitacion.token) {
+      guardar({});
+      return cuenta.invitacion.token;
+    }
+    const nuevo = cc.generarToken(16);
+    tx.set(clubRef.collection("invitacionesTurno").doc(nuevo), {
+      grupoId,
+      clubId,
+      clubNombre: acceso.club.nombre || "",
+      canchaNombre: cuenta.canchaNombre || "",
+      fecha: cuenta.fecha || reserva.fecha || "",
+      horaInicio: cuenta.horaInicio || "",
+      horaFin: cuenta.horaFin || "",
+      titularNombre: cuenta.nombreJugador || "",
+      activa: true,
+      creadaEn: FieldValue.serverTimestamp(),
+    });
+    guardar({ invitacion: { token: nuevo, activa: true, creadaEn: FieldValue.serverTimestamp(), creadaPor: uid } });
+    return nuevo;
+  });
+  logger.info(`crearInvitacionTurno ${clubId}/${grupoId} por ${uid}${esTitular ? " (titular)" : ""}`);
+  return { ok: true, grupoId, token };
+});
+
+exports.unirseATurno = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request, { anonimoOk: true });
+  const anonimo = esAnonimoReq(request);
+  const clubId = texto(request.data && request.data.clubId, 80);
+  const token = texto(request.data && request.data.token, 40);
+  const nombreDado = texto(request.data && request.data.nombre, 40);
+  if (!clubId || !token) throw new HttpsError("invalid-argument", "clubId y token");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const invSnap = await clubRef.collection("invitacionesTurno").doc(token).get();
+  if (!invSnap.exists || invSnap.data().activa !== true) throw new HttpsError("not-found", "Este turno ya cerró o el link no es válido");
+  const inv = invSnap.data();
+  if (!cc.ventanaUnirse(inv)) throw new HttpsError("failed-precondition", "Fuera del horario del turno");
+  const nombre = anonimo ? nombreDado : (await nombreDeUsuario(uid)) || nombreDado;
+  if (!nombre || nombre.length < 2) throw new HttpsError("invalid-argument", "Decinos cómo te llamás (2 a 40 letras)");
+  const resultado = await db.runTransaction(async (tx) => {
+    const ref = clubRef.collection("cuentas").doc(inv.grupoId);
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "La cuenta del turno no existe");
+    const cuenta = snap.data();
+    if (cuenta.estado !== "abierta") throw new HttpsError("failed-precondition", "Este turno ya cerró");
+    const participantes = cc.participantesDe(cuenta, { agregadoPor: uid, ahora: Timestamp.now() }).map((p) => ({ ...p }));
+    const yo = participantes.find((p) => p.uid === uid);
+    if (yo && yo.estado !== "quitado") return { participanteId: yo.id, nuevo: false, titularUid: cuenta.jugadorUid, cuenta };
+    if (yo) yo.estado = "activo";
+    else {
+      if (cc.participantesActivos({ participantes }).length >= cc.PARTICIPANTES_MAX) throw new HttpsError("resource-exhausted", `El turno ya tiene ${cc.PARTICIPANTES_MAX} personas`);
+      participantes.push(cc.nuevoParticipante({ uid, nombre, tipo: anonimo ? "invitado" : "jugador", anonimo, origen: "link", agregadoPor: uid, ahora: Timestamp.now() }));
+    }
+    tx.update(ref, { participantes, participantesUids: cc.uidsDe(participantes), actualizadoEn: FieldValue.serverTimestamp() });
+    const agregado = yo || participantes[participantes.length - 1];
+    return { participanteId: agregado.id, nuevo: true, titularUid: cuenta.jugadorUid, cuenta };
+  });
+  if (resultado.nuevo && resultado.titularUid && resultado.titularUid !== uid) {
+    try {
+      await avisoA(resultado.titularUid, {
+        tipo: "turno_se_sumo",
+        titulo: `${nombre} se sumó a tu turno`,
+        mensaje: `${nombre} se sumó a tu turno de las ${resultado.cuenta.horaInicio || ""} en ${inv.clubNombre || "el club"} (${inv.canchaNombre || "cancha"}).`,
+        link: `/mi-cuenta/${clubId}/${inv.grupoId}`,
+        icono: "🎾",
+      });
+    } catch (err) {
+      logger.error(`unirseATurno ${clubId}/${inv.grupoId}: no se pudo avisar al titular`, err);
+    }
+  }
+  logger.info(`unirseATurno ${clubId}/${inv.grupoId}: ${uid}${anonimo ? " (anónimo)" : ""} → ${resultado.participanteId}${resultado.nuevo ? "" : " (ya estaba)"}`);
+  return { ok: true, grupoId: inv.grupoId, participanteId: resultado.participanteId };
+});
+
+// ----- Sumar / quitar desde el panel o el titular -----
+exports.sumarJugador = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  const clubId = texto(request.data && request.data.clubId, 80);
+  const grupoId = texto(request.data && request.data.grupoId, 120);
+  const otroUid = texto(request.data && request.data.uid, 128);
+  const nombreDado = texto(request.data && request.data.nombre, 40);
+  if (!clubId || !grupoId || (!otroUid && nombreDado.length < 2)) throw new HttpsError("invalid-argument", "clubId, grupoId y un jugador (uid) o un nombre de 2 a 40 letras");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const [acceso, reserva] = await Promise.all([accesoClub(clubRef, uid), reservaDelTurno(clubRef, grupoId)]);
+  const esTitular = !!reserva.jugadorUid && reserva.jugadorUid === uid;
+  if (!esTitular && !acceso.esStaff) throw new HttpsError("permission-denied", "Solo el titular del turno o el club pueden sumar jugadores");
+  if (cc.terminoHace(reserva)) throw new HttpsError("failed-precondition", "El turno ya terminó");
+  let nombreOtro = nombreDado;
+  if (otroUid) {
+    const perfil = await userRef(otroUid).get();
+    if (!perfil.exists) throw new HttpsError("not-found", "Ese jugador no existe");
+    nombreOtro = perfil.data().nombre || nombreDado || "Jugador";
+  }
+  const quien = acceso.esStaff && !esTitular ? acceso.nombre || (await nombreDeUsuario(uid, "El club")) : await nombreDeUsuario(uid, reserva.nombreJugador || "El titular");
+  const resultado = await db.runTransaction(async (tx) => {
+    const { cuenta, guardar } = await cuentaDelTurnoEnTx(tx, clubRef, grupoId, { uid, nombre: quien });
+    const participantes = cc.participantesDe(cuenta).map((p) => ({ ...p }));
+    if (otroUid) {
+      const ya = participantes.find((p) => p.uid === otroUid);
+      if (ya && ya.estado !== "quitado") {
+        guardar({});
+        return { participanteId: ya.id, nuevo: false, cuenta };
+      }
+      if (ya) {
+        ya.estado = "activo";
+        guardar({ participantes, participantesUids: cc.uidsDe(participantes) });
+        return { participanteId: ya.id, nuevo: true, cuenta };
+      }
+    }
+    if (cc.participantesActivos({ participantes }).length >= cc.PARTICIPANTES_MAX) throw new HttpsError("resource-exhausted", `El turno ya tiene ${cc.PARTICIPANTES_MAX} personas`);
+    const nuevo = cc.nuevoParticipante({ uid: otroUid || null, nombre: nombreOtro, tipo: otroUid ? "jugador" : "invitado", anonimo: false, origen: otroUid ? "busqueda" : esTitular && !acceso.esStaff ? "titular" : "staff", agregadoPor: uid, ahora: Timestamp.now() });
+    participantes.push(nuevo);
+    guardar({ participantes, participantesUids: cc.uidsDe(participantes) });
+    return { participanteId: nuevo.id, nuevo: true, cuenta };
+  });
+  if (otroUid && resultado.nuevo && otroUid !== uid) {
+    try {
+      await avisoA(otroUid, {
+        tipo: "turno_sumado",
+        titulo: "Te sumaron a un turno",
+        mensaje: `${quien} te sumó al turno del ${fechaCortaArgentina(resultado.cuenta.fecha)} · ${resultado.cuenta.horaInicio || ""} en ${acceso.club.nombre || "el club"}.`,
+        link: `/mi-cuenta/${clubId}/${grupoId}`,
+        icono: "🎾",
+      });
+    } catch (err) {
+      logger.error(`sumarJugador ${clubId}/${grupoId}: no se pudo avisar a ${otroUid}`, err);
+    }
+  }
+  logger.info(`sumarJugador ${clubId}/${grupoId} por ${uid}: ${otroUid || `"${nombreOtro}"`} → ${resultado.participanteId}`);
+  return { ok: true, participanteId: resultado.participanteId, nuevo: resultado.nuevo };
+});
+
+exports.quitarParticipante = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  const clubId = texto(request.data && request.data.clubId, 80);
+  const grupoId = texto(request.data && request.data.grupoId, 120);
+  const participanteId = texto(request.data && request.data.participanteId, 80);
+  if (!clubId || !grupoId || !participanteId) throw new HttpsError("invalid-argument", "clubId, grupoId y participanteId");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const acceso = await accesoClub(clubRef, uid);
+  await db.runTransaction(async (tx) => {
+    const ref = clubRef.collection("cuentas").doc(grupoId);
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "La cuenta del turno no existe");
+    const cuenta = snap.data();
+    if (cuenta.estado !== "abierta") throw new HttpsError("failed-precondition", "La cuenta ya está cerrada");
+    const esTitular = !!cuenta.jugadorUid && cuenta.jugadorUid === uid;
+    if (!esTitular && !acceso.esStaff) throw new HttpsError("permission-denied", "Solo el titular del turno o el club pueden quitar participantes");
+    const participantes = cc.participantesDe(cuenta).map((p) => ({ ...p }));
+    const p = participantes.find((x) => x.id === participanteId && x.estado !== "quitado");
+    if (!p) throw new HttpsError("not-found", "Ese participante no está en el turno");
+    if (p.tipo === "titular") throw new HttpsError("failed-precondition", "El titular no se puede quitar");
+    if (cc.algoPagadoDe(cuenta, participanteId)) throw new HttpsError("failed-precondition", `${p.nombre} ya pagó algo: no se puede quitar`);
+    p.estado = "quitado";
+    // Sus líneas quedan sin asignar (o siguen con los demás asignados)
+    const items = (cuenta.items || []).map((it) => (Array.isArray(it.asignadoA) && it.asignadoA.includes(participanteId) ? { ...it, asignadoA: it.asignadoA.filter((id) => id !== participanteId) } : it));
+    tx.update(ref, { participantes, participantesUids: cc.uidsDe(participantes), items, actualizadoEn: FieldValue.serverTimestamp() });
+  });
+  logger.info(`quitarParticipante ${clubId}/${grupoId}: ${participanteId} por ${uid}`);
+  return { ok: true };
+});
+
+// ----- Asignación desde el celular (y el panel) -----
+exports.asignarLineas = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request, { anonimoOk: true });
+  const clubId = texto(request.data && request.data.clubId, 80);
+  const grupoId = texto(request.data && request.data.grupoId, 120);
+  const lineaIds = Array.isArray(request.data && request.data.lineaIds) ? request.data.lineaIds.map((x) => texto(x, 80)).filter(Boolean).slice(0, 100) : [];
+  const asignadoA = Array.isArray(request.data && request.data.asignadoA) ? [...new Set(request.data.asignadoA.map((x) => texto(x, 80)).filter(Boolean))].slice(0, cc.PARTICIPANTES_MAX) : [];
+  if (!clubId || !grupoId || !lineaIds.length) throw new HttpsError("invalid-argument", "clubId, grupoId y lineaIds");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const acceso = esAnonimoReq(request) ? { esStaff: false } : await accesoClub(clubRef, uid);
+  await db.runTransaction(async (tx) => {
+    const ref = clubRef.collection("cuentas").doc(grupoId);
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "La cuenta del turno no existe");
+    const cuenta = snap.data();
+    if (cuenta.estado !== "abierta") throw new HttpsError("failed-precondition", "La cuenta ya está cerrada");
+    const activos = cc.participantesActivos(cuenta);
+    const yo = activos.find((p) => p.uid === uid) || null;
+    const esTitular = (!!cuenta.jugadorUid && cuenta.jugadorUid === uid) || (yo && yo.tipo === "titular");
+    if (!acceso.esStaff && !esTitular && !yo) throw new HttpsError("permission-denied", "No estás en este turno");
+    if (asignadoA.some((id) => !activos.some((p) => p.id === id))) throw new HttpsError("invalid-argument", "Alguno de los participantes no está en el turno");
+    const ids = new Set(lineaIds);
+    const items = (cuenta.items || []).map((it) => {
+      if (!ids.has(it.lineaId)) return it;
+      if (cc.lineaPagada(cuenta, it.lineaId)) throw new HttpsError("failed-precondition", `${it.nombre} ya tiene pagos: no se reasigna`);
+      if (!acceso.esStaff && !esTitular) {
+        const propia = (it.asignadoA || []).includes(yo.id) || (!!it.pedidoUid && it.pedidoUid === uid);
+        if (!propia) throw new HttpsError("permission-denied", `${it.nombre} no es tuya: solo podés mover lo tuyo`);
+        if (asignadoA.length && !asignadoA.includes(yo.id)) throw new HttpsError("permission-denied", "Podés compartir o quedarte una línea, no pasársela a otro");
+      }
+      return { ...it, asignadoA };
+    });
+    tx.update(ref, { items, actualizadoEn: FieldValue.serverTimestamp() });
+  });
+  return { ok: true };
+});
+
+// ----- Perfiles públicos de jugadores (proyección de users: nombre, foto, ciudad; nunca email ni teléfono) -----
+function perfilPublicoDe(u) {
+  const roles = Array.isArray(u && u.role) ? u.role : u && u.role ? [u.role] : ["jugador"];
+  const nombre = texto(u && u.nombre, 80);
+  return {
+    nombre,
+    nombreBusqueda: cc.nombreBusqueda(nombre),
+    foto: (u && u.fotoUrl) || null,
+    ciudad: texto(u && u.ciudad, 60) || null,
+    visible: !!nombre && (u && u.buscable) !== false && roles.includes("jugador"),
+  };
+}
+const mismoPerfil = (a, b) => ["nombre", "nombreBusqueda", "foto", "ciudad", "visible"].every((k) => (a || {})[k] === (b || {})[k]);
+
+exports.onUserWritten = onDocumentWritten("users/{uid}", async (event) => {
+  const { uid } = event.params;
+  const perfilRef = db.collection("perfilesPublicos").doc(uid);
+  try {
+    const despues = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+    if (!despues) {
+      await perfilRef.delete();
+      return;
+    }
+    const antes = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
+    const nuevo = perfilPublicoDe(despues);
+    if (antes && mismoPerfil(perfilPublicoDe(antes), nuevo)) return;
+    await perfilRef.set({ ...nuevo, actualizadoEn: FieldValue.serverTimestamp() });
+  } catch (err) {
+    logger.error(`onUserWritten ${uid}`, err);
+  }
+});
+
+exports.reconstruirPerfilesPublicos = onCall({ region: REGION, timeoutSeconds: 540 }, async (request) => {
+  const uid = exigirAuth(request);
+  const admin = await db.collection("superadmins").doc(uid).get();
+  if (!admin.exists) throw new HttpsError("permission-denied", "Solo el super-admin");
+  let ultimo = null;
+  let usuarios = 0;
+  let visibles = 0;
+  for (;;) {
+    let q = db.collection("users").orderBy(FieldPath.documentId()).limit(300);
+    if (ultimo) q = q.startAfter(ultimo);
+    const snap = await q.get();
+    if (snap.empty) break;
+    const ops = snap.docs.map((d) => {
+      const perfil = perfilPublicoDe(d.data());
+      if (perfil.visible) visibles += 1;
+      return (b) => b.set(db.collection("perfilesPublicos").doc(d.id), { ...perfil, actualizadoEn: FieldValue.serverTimestamp() });
+    });
+    await escribirEnLotes(ops);
+    usuarios += snap.size;
+    ultimo = snap.docs[snap.docs.length - 1];
+    if (snap.size < 300) break;
+  }
+  logger.info(`reconstruirPerfilesPublicos por ${uid}: ${usuarios} usuarios, ${visibles} visibles`);
+  return { ok: true, usuarios, visibles };
 });

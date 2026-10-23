@@ -64,7 +64,7 @@ test("la cuenta nace con el titular; la vieja se normaliza en la próxima escrit
   const n = normalizarCuenta(vieja, { agregadoPor: "staff", ahora });
   assert.equal(n.participantes[0].nombre, "Acosta");
   assert.deepEqual(n.participantesUids, ["u-x"]);
-  assert.deepEqual(n.pagos, []);
+  assert.equal(n.pagos, undefined); // pagos ausente vale como vacío: no se inicializa (la barra no escribe pagos)
   assert.equal(n.division, null); // división sin partes cobradas: se deja caer
   assert.equal(titularDeCuenta(vieja).uid, "u-x");
   assert.equal(participantesActivos(vieja).length, 1);

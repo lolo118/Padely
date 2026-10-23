@@ -140,7 +140,7 @@ service cloud.firestore {
 
     // "Mi cuenta": el jugador lee sus cuentas del turno en cualquier club (la consulta lleva where("jugadorUid", "==", auth.uid))
     match /{path=**}/cuentas/{cuentaId} {
-      allow read: if signedIn() && resource.data.jugadorUid == request.auth.uid;
+      allow read: if signedIn() && (resource.data.jugadorUid == request.auth.uid || request.auth.uid in resource.data.get('participantesUids', []));
     }
     // Mis pedidos a la barra, en cualquier club (misma consulta por jugadorUid; también para sesiones anónimas)
     match /{path=**}/pedidos/{pedidoId} {
@@ -180,6 +180,19 @@ service cloud.firestore {
         allow update: if isSelf(userId) && changedOnly(['leida']);
         allow delete: if isSelf(userId);
       }
+      // "Jugaste con…": con quién compartió cuentas del turno (la escribe onCuentaUpdated al cerrar cada cuenta)
+      match /companeros/{otroUid} {
+        allow read: if isSelf(userId);
+        allow write: if false;
+      }
+    }
+
+    // Perfil público de jugadores (nombre, foto, ciudad): proyección de users que mantiene onUserWritten para sumar
+    // gente a un turno por búsqueda. Lo leen las cuentas reales (no las anónimas); nadie lo escribe desde un cliente.
+    // Nunca lleva email ni teléfono.
+    match /perfilesPublicos/{uid} {
+      allow read: if noAnonimo();
+      allow write: if false;
     }
 
     // Entidad organizadora (email, teléfono, equipo de trabajo): la lee solo su dueño. El contacto público
@@ -392,9 +405,13 @@ service cloud.firestore {
       // ventas. El jugador que reservó la lee (y nada más). Quien atiende la barra ('pedidos') la lee porque aceptar
       // un pedido la abre o le suma consumos en una transacción (B-P3-6-1). Campos que escribe SOLO la Function:
       // cuentaAplicada, avisoVencidaEnviado, cierreAutomatico; en reservas: cuentaCerrada, cuentaTotal, cuentaCerradaEn.
+      // P3-7: participantes / participantesUids / pagos (congelados) / invitacion. Los participantes leen la cuenta;
+      // los jugadores nunca la escriben directo (sumarse, asignar, invitar van por Functions). Los pagos solo los
+      // escribe quien cobra; la barra ('pedidos') suma participantes solo al aceptar un pedido (el autor).
       match /cuentas/{cuentaId} {
         allow read: if esStaffCaja(clubId) || esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender') || esStaff(clubId, 'pedidos')
           || (signedIn() && resource.data.jugadorUid == request.auth.uid)
+          || (signedIn() && request.auth.uid in resource.data.get('participantesUids', []))
           || superAdmin();
         allow create: if (esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender') || esStaff(clubId, 'pedidos'))
           && request.resource.data.estado == 'abierta'
@@ -410,13 +427,13 @@ service cloud.firestore {
         // avisoVencidaEnviado, cierreAutomatico, pedidosPendientes.
         allow update: if (resource.data.estado == 'abierta'
             && (((esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender'))
-                 && changedOnly(['items', 'totales', 'division', 'cancha', 'ventas', 'actualizadoEn', 'nombreJugador'])
+                 && changedOnly(['items', 'totales', 'division', 'cancha', 'ventas', 'pagos', 'participantes', 'participantesUids', 'actualizadoEn', 'nombreJugador'])
                  && request.resource.data.estado == 'abierta')
                 || (esStaff(clubId, 'pedidos')
-                    && changedOnly(['items', 'totales', 'division', 'actualizadoEn'])
+                    && changedOnly(['items', 'totales', 'division', 'participantes', 'participantesUids', 'actualizadoEn'])
                     && request.resource.data.estado == 'abierta')
                 || ((esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender'))
-                    && changedOnly(['estado', 'cerradaPor', 'cerradaEn', 'ventas', 'division', 'totales', 'anulacion', 'actualizadoEn'])
+                    && changedOnly(['estado', 'cerradaPor', 'cerradaEn', 'ventas', 'division', 'totales', 'pagos', 'participantes', 'participantesUids', 'anulacion', 'actualizadoEn'])
                     && request.resource.data.estado in ['cerrada', 'anulada']
                     && request.resource.data.cerradaPor == request.auth.uid
                     && (request.resource.data.estado == 'cerrada' || esStaff(clubId, 'anularVenta')))))
@@ -426,14 +443,24 @@ service cloud.firestore {
               && request.resource.data.abiertaPor == request.auth.uid
               && request.resource.data.ventas.size() == 0
               && request.resource.data.cerradaEn == null
-              && changedOnly(['estado', 'items', 'totales', 'division', 'ventas', 'cerradaPor', 'cerradaEn', 'anulacion',
+              && changedOnly(['estado', 'items', 'totales', 'division', 'ventas', 'pagos', 'participantes', 'participantesUids', 'cerradaPor', 'cerradaEn', 'anulacion',
                               'historial', 'abiertaPor', 'abiertaPorNombre', 'abiertaEn', 'actualizadoEn']));
         allow delete: if false;
       }
 
+      // Link de invitación a la cuenta del turno (/t/unirse/{clubId}/{token}): lo escribe la Function
+      // crearInvitacionTurno y lo apaga onCuentaUpdated. Lo lee por id cualquiera con sesión (anónima incluida) que
+      // tenga el token; nunca se lista ni se escribe desde un cliente.
+      match /invitacionesTurno/{token} {
+        allow get: if signedIn();
+        allow list: if false;
+        allow write: if false;
+      }
+
       // ----- Bar: pedidos a la barra (desde el celular del jugador o el QR de la cancha) -----
       // Los crea un usuario con sesión (real o anónima) a su propio nombre (jugadorUid). "celular": el jugador que
-      // reservó; "qr": cualquiera en la cancha, con el token impreso en el QR (los anónimos solo por acá). El jugador
+      // reservó o cualquier participante de la cuenta del turno (participantesUids; un anónimo llega ahí solo por el
+      // link de invitación); "qr": cualquiera en la cancha, con el token impreso en el QR. El jugador
       // cancela mientras está en espera; la barra ('pedidos') lo acepta / rechaza / marca listo y entregado.
       // creadoEn y actualizadoEn son del servidor (la pantalla Barra ordena por creadoEn: un pedido sin esa fecha
       // no se vería). Campos de la Function: notificado, validado, pedidosPendientes (en la cuenta); el qrToken lo
@@ -465,9 +492,10 @@ service cloud.firestore {
           && reservaDelPedido(clubId).status == 'confirmada'
           && request.resource.data.canchaId == reservaDelPedido(clubId).canchaId
           && ((request.resource.data.origen == 'celular'
-               && request.resource.data.anonimo == false
-               && !esAnonimo()
-               && reservaDelPedido(clubId).jugadorUid == request.auth.uid)
+               && request.resource.data.anonimo == esAnonimo()
+               && (reservaDelPedido(clubId).jugadorUid == request.auth.uid
+                   || (exists(/databases/$(database)/documents/clubs/$(clubId)/cuentas/$(request.resource.data.cuentaId))
+                       && request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)/cuentas/$(request.resource.data.cuentaId)).data.get('participantesUids', []))))
               || (request.resource.data.origen == 'qr'
                   && request.resource.data.anonimo == esAnonimo()
                   && request.resource.data.qrToken is string

@@ -333,7 +333,6 @@ export function normalizarCuenta(cuenta, { agregadoPor = null, ahora = new Date(
     out.participantes = [titularDe(cuenta, { agregadoPor, ahora })];
     out.participantesUids = uidsDe(out.participantes);
   }
-  if (!Array.isArray(cuenta?.pagos)) out.pagos = [];
   if (cuenta?.division && !esLegacyDividida(cuenta)) out.division = null;
   return out;
 }

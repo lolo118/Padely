@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Alert, Badge, Button, Card, StatTile } from "../../components/ui";
+import { toast } from "../../components/Toast";
 import { getResumenPlataforma, getUltimosUsuarios } from "../../services/superadminService";
+import { reconstruirPerfilesPublicos } from "../../services/participantesService";
 
 // createdAt (Timestamp de Firestore, Date, número o string ISO) -> "DD/MM/YY"; "—" sin fecha válida
 const fechaAlta = (valor) => {
@@ -45,6 +47,20 @@ export default function Resumen() {
   // Cada intento nuevo (Reintentar) vuelve a pedir los datos
   const [intentoResumen, setIntentoResumen] = useState(0);
   const [intentoUltimos, setIntentoUltimos] = useState(0);
+  // Mantenimiento: la proyección perfilesPublicos (buscar jugadores para un turno) se rehace desde users
+  const [reconstruyendo, setReconstruyendo] = useState(false);
+  const reconstruirPerfiles = async () => {
+    setReconstruyendo(true);
+    try {
+      const r = await reconstruirPerfilesPublicos({});
+      toast.success(`Perfiles públicos: ${r.usuarios} usuarios, ${r.visibles} visibles`);
+    } catch (err) {
+      console.error("Error reconstruyendo perfiles públicos:", err);
+      toast.error("No se pudieron reconstruir los perfiles.");
+    } finally {
+      setReconstruyendo(false);
+    }
+  };
 
   useEffect(() => {
     let vigente = true;
@@ -213,6 +229,18 @@ export default function Resumen() {
         )}
 
         <p className="pd-help px-5 py-3 border-t border-line">Las cuentas sin fecha de alta no aparecen en este orden.</p>
+      </Card>
+
+      <Card as="section" aria-labelledby="mantenimiento-titulo">
+        <Card.Title as="h2" id="mantenimiento-titulo">
+          Mantenimiento
+        </Card.Title>
+        <p className="body-sm text-ink-2 mt-1">Vuelve a armar perfilesPublicos (nombre, foto y ciudad de cada jugador que acepta aparecer en las búsquedas) desde users. Una vez después de publicar la cuenta compartida; después se mantiene solo.</p>
+        <div className="pd-btn-group mt-4">
+          <Button onClick={reconstruirPerfiles} cargando={reconstruyendo ? "Reconstruyendo…" : ""}>
+            Reconstruir perfiles públicos
+          </Button>
+        </div>
       </Card>
     </div>
   );
