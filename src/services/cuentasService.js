@@ -22,13 +22,28 @@ import { getTodayLocal } from "../utils/formatDate";
 import { crearVentaEsperando } from "./ventasService";
 import {
   calcularTotalesCuenta,
+  canchaPagadaEnParte,
+  cobroDe,
+  cobroDeLineas,
+  cobroRestoAlTitular,
+  cobroTodo,
+  conPago,
   cuentaDesdeReserva,
   cuentaEditable,
+  cuentaSaldada,
   divisionCompleta,
+  esLegacyDividida,
+  lineaPagada,
   lineasDeVentaParaParte,
-  lineasDeVentaParaTodo,
+  normalizarCuenta,
   nuevaLinea,
+  nuevoPago,
+  nuevoParticipante,
+  participantePorUid,
+  participantesDe,
+  titularDe,
   totalDeLineas,
+  uidsDe,
 } from "../utils/cuentas";
 
 // Cuenta del turno (clubs/{c}/cuentas/{grupoId}): la cancha, la seña y los consumos de una reserva. Se crea desde el
@@ -36,6 +51,9 @@ import {
 // convirtiéndose en ventas normales (una por parte). Hasta el cierre NO hay movimientos de stock ni de caja:
 // la caja la mueven las ventas por sus pagos y el stock lo mueve UNA vez la Function onCuentaUpdated.
 // Las escrituras de la cuenta son transacciones (dos tablets pueden cargar la misma cuenta): necesitan conexión.
+// P3-7: la cuenta sabe QUIÉN está en el turno (participantes, el titular nace con ella) y QUÉ debe cada uno
+// (items[].asignadoA, pagos congelados); se cobra por persona (cobrarSaldo) y se cierra sola cuando nadie debe.
+// Sumar / quitar participantes, invitar y asignar desde el celular van por Functions (participantesService).
 
 const col = (clubId, nombre) => collection(db, "clubs", clubId, nombre);
 const ref = (clubId, id) => doc(db, "clubs", clubId, "cuentas", id);
@@ -105,18 +123,25 @@ async function cuentaAbiertaEnTx(tx, clubId, grupoId, { uid, nombre, reserva = n
   if (snap.exists()) {
     const actual = conId(snap);
     if (actual.estado === "abierta") {
-      if (!cuentaEditable(actual)) throw new CuentaNoEditableError();
-      return { ref: r, cuenta: base(actual), nueva: false, reabierta: false };
+      // Legacy (dividida con partes cobradas): no se le suman consumos. Con pagos por persona sí: cada línea nueva
+      // es deuda nueva de quien la pidió.
+      if (esLegacyDividida(actual) && !cuentaEditable(actual)) throw new CuentaNoEditableError();
+      const extra = normalizarCuenta(actual, { agregadoPor: uid });
+      return { ref: r, cuenta: { ...base(actual), ...extra }, nueva: false, reabierta: false, extra };
     }
     if (actual.estado === "anulada") {
       const previo = { estado: "anulada", anulacion: actual.anulacion || null, items: actual.items || [], cerradaPor: actual.cerradaPor || null, cerradaEn: actual.cerradaEn || null, reabiertaPor: uid, reabiertaEn: Timestamp.now() };
-      const cuenta = { ...base(actual), estado: "abierta", items: [], division: null, ventas: [], cerradaPor: null, cerradaEn: null, anulacion: null };
+      const participantes = [titularDe(actual, { agregadoPor: uid })];
+      const cuenta = { ...base(actual), estado: "abierta", items: [], division: null, ventas: [], pagos: [], participantes, participantesUids: uidsDe(participantes), cerradaPor: null, cerradaEn: null, anulacion: null };
       cuenta.totales = calcularTotalesCuenta(cuenta);
       tx.update(r, {
         estado: "abierta",
         items: [],
         division: null,
         ventas: [],
+        pagos: [],
+        participantes,
+        participantesUids: cuenta.participantesUids,
         totales: cuenta.totales,
         cerradaPor: null,
         cerradaEn: null,
@@ -138,7 +163,7 @@ async function cuentaAbiertaEnTx(tx, clubId, grupoId, { uid, nombre, reserva = n
     datosReserva = normalizarReserva({ id: rs.id, ...rs.data() });
     if (datosReserva.status !== "confirmada") throw new Error("La reserva no está confirmada");
   }
-  const cuenta = { ...cuentaDesdeReserva({ ...datosReserva, grupoId }), items: [] };
+  const cuenta = { ...cuentaDesdeReserva({ ...datosReserva, grupoId }, { agregadoPor: uid }), items: [] };
   cuenta.totales = calcularTotalesCuenta(cuenta);
   tx.set(r, {
     ...cuenta,
@@ -152,24 +177,30 @@ async function cuentaAbiertaEnTx(tx, clubId, grupoId, { uid, nombre, reserva = n
   return { ref: r, cuenta: { id: grupoId, ...cuenta }, nueva: true, reabierta: false };
 }
 
-// Suma líneas a la cuenta (ya abierta por cuentaAbiertaEnTx) y recalcula totales; una división sin cobrar se descarta
-function sumarLineasEnTx(tx, r, cuenta, nuevas, { nueva }) {
+// Suma líneas a la cuenta (ya abierta por cuentaAbiertaEnTx) y recalcula totales; una división sin cobrar se
+// descarta. `extra`: lo que normalizarCuenta pide escribir (participantes del titular, pagos, división caída).
+function sumarLineasEnTx(tx, r, cuenta, nuevas, { nueva, extra = {} }) {
   const items = [...(cuenta.items || []), ...nuevas];
   const totales = calcularTotalesCuenta({ ...cuenta, items });
   if (nueva) tx.update(r, { items, totales, actualizadoEn: serverTimestamp() });
-  else tx.update(r, { items, division: null, totales, actualizadoEn: serverTimestamp() });
-  return { ...cuenta, items, division: null, totales };
+  else tx.update(r, { ...extra, items, ...(esLegacyDividida(cuenta) ? {} : { division: null }), totales, actualizadoEn: serverTimestamp() });
+  return { ...cuenta, items, division: esLegacyDividida(cuenta) ? cuenta.division : null, totales };
+}
+// Escribe campos de la cuenta abierta (participantes / asignaciones) sumando lo que normalizarCuenta pida
+function actualizarCuentaEnTx(tx, r, cuenta, cambios, { uid = null } = {}) {
+  tx.update(r, { ...normalizarCuenta(cuenta, { agregadoPor: uid }), ...cambios, actualizadoEn: serverTimestamp() });
 }
 
 // Agrega líneas del POS a la cuenta de una reserva; si la cuenta no existe la crea con los datos de la reserva.
 // Devuelve la cuenta resultante (sin timestamps del servidor resueltos).
-export const agregarItemsACuenta = async (clubId, grupoId, items, { uid, nombre, reserva }) => {
+// asignadoA: participante elegido en el selector "Para:" del POS ([] = sin asignar)
+export const agregarItemsACuenta = async (clubId, grupoId, items, { uid, nombre, reserva, asignadoA = [] }) => {
   const ahora = Timestamp.now();
-  const nuevas = (items || []).map((it) => nuevaLinea(it, { uid, nombre, ahora }));
+  const nuevas = (items || []).map((it) => nuevaLinea({ ...it, asignadoA }, { uid, nombre, ahora }));
   if (!nuevas.length) throw new Error("No hay líneas para agregar");
   return runTransaction(db, async (tx) => {
-    const { ref: r, cuenta, nueva } = await cuentaAbiertaEnTx(tx, clubId, grupoId, { uid, nombre, reserva });
-    return sumarLineasEnTx(tx, r, cuenta, nuevas, { nueva });
+    const { ref: r, cuenta, nueva, extra } = await cuentaAbiertaEnTx(tx, clubId, grupoId, { uid, nombre, reserva });
+    return sumarLineasEnTx(tx, r, cuenta, nuevas, { nueva, extra });
   });
 };
 
@@ -183,15 +214,27 @@ export const aceptarPedido = async (clubId, pedido, { uid, nombre }) =>
     const actual = ps.data();
     if (actual.estado !== "pendiente") throw new Error(`El pedido ya está ${actual.estado}`);
     const grupoId = actual.cuentaId || actual.reservaGrupoId;
-    const { ref: r, cuenta, nueva } = await cuentaAbiertaEnTx(tx, clubId, grupoId, { uid, nombre });
+    const { ref: r, cuenta, nueva, extra = {} } = await cuentaAbiertaEnTx(tx, clubId, grupoId, { uid, nombre });
     const ahora = Timestamp.now();
+    // Las líneas del pedido son de quien lo pidió: si todavía no está en la cuenta, se lo suma (origen "pedido")
+    let participantes = participantesDe({ ...cuenta, ...extra }, { agregadoPor: uid, ahora });
+    let autor = actual.jugadorUid ? participantePorUid({ participantes }, actual.jugadorUid) : null;
+    const cambiosParticipantes = {};
+    if (!autor && actual.jugadorUid) {
+      autor = nuevoParticipante({ uid: actual.jugadorUid, nombre: actual.nombre, tipo: actual.anonimo ? "invitado" : "jugador", anonimo: !!actual.anonimo, origen: "pedido", agregadoPor: uid, ahora });
+      participantes = [...participantes, autor];
+      cambiosParticipantes.participantes = participantes;
+      cambiosParticipantes.participantesUids = uidsDe(participantes);
+    }
     const nuevas = (actual.items || []).map((it) => ({
-      ...nuevaLinea({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, cantidad: it.cantidad, descuento: 0, controlaStock: it.controlaStock !== false }, { uid, nombre, ahora }),
+      ...nuevaLinea({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, cantidad: it.cantidad, descuento: 0, controlaStock: it.controlaStock !== false, asignadoA: autor ? [autor.id] : [] }, { uid, nombre, ahora }),
       pedidoId: pedido.id,
       pedidoPor: actual.nombre || null,
+      pedidoUid: actual.jugadorUid || null,
     }));
     if (!nuevas.length) throw new Error("El pedido no tiene items");
-    const resultado = sumarLineasEnTx(tx, r, cuenta, nuevas, { nueva });
+    const resultado = sumarLineasEnTx(tx, r, cuenta, nuevas, { nueva, extra: { ...extra, ...cambiosParticipantes } });
+    if (nueva && cambiosParticipantes.participantes) tx.update(r, cambiosParticipantes);
     tx.update(pr, {
       estado: "aceptado",
       "tiempos.aceptado": serverTimestamp(),
@@ -200,7 +243,7 @@ export const aceptarPedido = async (clubId, pedido, { uid, nombre }) =>
       lineaIds: nuevas.map((l) => l.lineaId),
       actualizadoEn: serverTimestamp(),
     });
-    return { ...resultado, subtotalPedido: subtotalPedido(actual.items || []) };
+    return { ...resultado, ...cambiosParticipantes, subtotalPedido: subtotalPedido(actual.items || []) };
   });
 
 export const quitarItemDeCuenta = (clubId, grupoId, lineaId) =>
@@ -209,10 +252,10 @@ export const quitarItemDeCuenta = (clubId, grupoId, lineaId) =>
     const snap = await tx.get(r);
     if (!snap.exists()) throw new Error("La cuenta no existe");
     const actual = conId(snap);
-    if (!cuentaEditable(actual)) throw new CuentaNoEditableError();
+    if (esLegacyDividida(actual) || lineaPagada(actual, lineaId)) throw new CuentaNoEditableError();
     const items = (actual.items || []).filter((it) => it.lineaId !== lineaId);
     const totales = calcularTotalesCuenta({ ...actual, items });
-    tx.update(r, { items, division: null, totales, actualizadoEn: serverTimestamp() });
+    actualizarCuentaEnTx(tx, r, actual, { items, division: null, totales });
   });
 
 export const setCobrarCancha = (clubId, grupoId, cobrar) =>
@@ -221,10 +264,10 @@ export const setCobrarCancha = (clubId, grupoId, cobrar) =>
     const snap = await tx.get(r);
     if (!snap.exists()) throw new Error("La cuenta no existe");
     const actual = conId(snap);
-    if (!cuentaEditable(actual)) throw new CuentaNoEditableError();
+    if (esLegacyDividida(actual) || canchaPagadaEnParte(actual)) throw new CuentaNoEditableError();
     const cancha = { ...(actual.cancha || {}), cobrar: !!cobrar };
     const totales = calcularTotalesCuenta({ ...actual, cancha });
-    tx.update(r, { cancha, division: null, totales, actualizadoEn: serverTimestamp() });
+    actualizarCuentaEnTx(tx, r, actual, { cancha, division: null, totales });
   });
 
 // Guarda la división (reemplaza la anterior; solo mientras ninguna parte esté cobrada)
@@ -254,6 +297,7 @@ const ventaDeCuenta = ({ cuenta, lineas, calculo, cliente, ctx }) => ({
   pagado: calculo.pagado,
   vuelto: calculo.vuelto,
   cuentaId: cuenta.id,
+  participanteIds: [...new Set((lineas || []).map((l) => l.participanteId).filter(Boolean))],
   cliente: { nombre: cliente || cuenta.nombreJugador || null },
   creadoPor: ctx.uid,
   creadoPorNombre: ctx.nombre || null,
@@ -287,28 +331,85 @@ export const cobrarParte = async (clubId, cuenta, parteId, calculo, ctx) => {
   return { venta, cerrada };
 };
 
-// Cobra toda la cuenta en una venta y la cierra
+// Cobra toda la cuenta (lo que resta) en una venta y la cierra. Sin pagos previos el ticket es el de siempre.
 export const cobrarTodo = async (clubId, cuenta, calculo, ctx) => {
-  const lineas = lineasDeVentaParaTodo(cuenta);
-  const venta = ventaDeCuenta({ cuenta, lineas, calculo, cliente: cuenta.nombreJugador, ctx });
+  if (esLegacyDividida(cuenta)) throw new Error("Esta cuenta está dividida: cobrá las partes que faltan");
+  return cobrarSaldo(clubId, cuenta, cobroTodo(cuenta), calculo, { ...ctx, pagadorId: null, cliente: cuenta.nombreJugador });
+};
+
+// Cobra un cobro (cobroDe / cobroDeLineas / cobroRestoAlTitular / cobroTodo) en una venta: escribe la venta
+// (y ESPERA el ack: la regla exige la cuenta abierta), congela las piezas en cuenta.pagos y, si ya nadie debe,
+// cierra la cuenta en la misma transacción. ctx: { numero, dispositivo, cajaId, uid, nombre, pagadorId, cliente }.
+// Devuelve { venta, cerrada }.
+export const cobrarSaldo = async (clubId, cuenta, cobro, calculo, ctx) => {
+  if (!cobro || !cobro.lineas.length) throw new Error("No hay nada para cobrar");
+  const pagador = ctx.pagadorId ? participantesDe(cuenta).find((p) => p.id === ctx.pagadorId) : null;
+  const venta = ventaDeCuenta({ cuenta, lineas: cobro.lineas, calculo, cliente: ctx.cliente || pagador?.nombre || cuenta.nombreJugador, ctx });
   await crearVentaEsperando(clubId, venta);
-  await runTransaction(db, async (tx) => {
+  const cerrada = await runTransaction(db, async (tx) => {
     const r = ref(clubId, cuenta.id);
     const snap = await tx.get(r);
     if (!snap.exists()) throw new Error("La cuenta no existe");
     const actual = conId(snap);
-    if (actual.estado !== "abierta") return;
-    tx.update(r, {
-      estado: "cerrada",
-      cerradaPor: ctx.uid,
-      cerradaEn: serverTimestamp(),
-      ventas: arrayUnion(venta.numero),
-      totales: calcularTotalesCuenta(actual),
-      actualizadoEn: serverTimestamp(),
-    });
+    const pago = nuevoPago({ ventaNumero: venta.numero, participanteIds: pagador ? [pagador.id] : cobro.cubreA, piezas: cobro.piezas, medios: calculo.pagos, por: ctx.uid, porNombre: ctx.nombre, ahora: Timestamp.now() });
+    const normal = normalizarCuenta(actual, { agregadoPor: ctx.uid });
+    const conElPago = conPago({ ...actual, ...normal }, pago);
+    const saldada = cuentaSaldada(conElPago);
+    const cambios = { ...normal, pagos: conElPago.pagos, ventas: arrayUnion(venta.numero), actualizadoEn: serverTimestamp() };
+    if (saldada && actual.estado === "abierta") {
+      Object.assign(cambios, { estado: "cerrada", cerradaPor: ctx.uid, cerradaEn: serverTimestamp(), totales: calcularTotalesCuenta(actual) });
+    }
+    tx.update(r, cambios);
+    return saldada;
   });
-  return { venta, cerrada: true };
+  return { venta, cerrada };
 };
+// Atajos: a una o varias personas, líneas elegidas a un pagador, el resto al titular
+export const cobrarParticipantes = (clubId, cuenta, participanteIds, calculo, ctx) => cobrarSaldo(clubId, cuenta, cobroDe(cuenta, participanteIds), calculo, { ...ctx, pagadorId: participanteIds.length === 1 ? participanteIds[0] : null });
+export const cobrarLineas = (clubId, cuenta, lineaIds, pagadorId, calculo, ctx) => cobrarSaldo(clubId, cuenta, cobroDeLineas(cuenta, lineaIds, pagadorId), calculo, { ...ctx, pagadorId });
+export const cobrarRestoAlTitular = (clubId, cuenta, calculo, ctx) => {
+  const titular = participantesDe(cuenta).find((p) => p.tipo === "titular");
+  return cobrarSaldo(clubId, cuenta, cobroRestoAlTitular(cuenta), calculo, { ...ctx, pagadorId: titular ? titular.id : null, cliente: cuenta.nombreJugador });
+};
+
+// Participantes (lo que el staff escribe directo: excluir de la cancha, monto fijo). Sumar, quitar e invitar van
+// por Functions (participantesService) porque también los usa el titular desde el celular.
+export const actualizarParticipante = (clubId, grupoId, participanteId, cambios) =>
+  runTransaction(db, async (tx) => {
+    const r = ref(clubId, grupoId);
+    const snap = await tx.get(r);
+    if (!snap.exists()) throw new Error("La cuenta no existe");
+    const actual = conId(snap);
+    if (actual.estado !== "abierta") throw new CuentaCerradaError();
+    const participantes = participantesDe(actual).map((p) => (p.id === participanteId ? { ...p, ...cambios } : p));
+    actualizarCuentaEnTx(tx, r, actual, { participantes, participantesUids: uidsDe(participantes) });
+  });
+// Asignación desde el panel (el staff puede cualquier línea impaga); desde el celular va por la Function
+export const asignarLineasCuenta = (clubId, grupoId, lineaIds, asignadoA) =>
+  runTransaction(db, async (tx) => {
+    const r = ref(clubId, grupoId);
+    const snap = await tx.get(r);
+    if (!snap.exists()) throw new Error("La cuenta no existe");
+    const actual = conId(snap);
+    if (actual.estado !== "abierta") throw new CuentaCerradaError();
+    if ((lineaIds || []).some((id) => lineaPagada(actual, id))) throw new CuentaNoEditableError();
+    const ids = new Set(lineaIds || []);
+    const a = [...new Set((asignadoA || []).filter(Boolean))];
+    const items = (actual.items || []).map((it) => (ids.has(it.lineaId) ? { ...it, asignadoA: a } : it));
+    actualizarCuentaEnTx(tx, r, actual, { items });
+  });
+// Cuentas cerradas filtradas (desde Reportes → Consumo por cancha): por cancha y rango de fechas
+export const getCuentasDeCancha = async (clubId, canchaId, desde, hasta) => {
+  const snap = await getDocs(query(col(clubId, "cuentas"), where("canchaId", "==", canchaId), where("fecha", ">=", desde), where("fecha", "<=", hasta)));
+  return snap.docs.map(conId).sort((a, b) => `${b.fecha}${b.horaInicio}`.localeCompare(`${a.fecha}${a.horaInicio}`));
+};
+// Jugador: las cuentas abiertas en las que participa (titular o sumado), en cualquier club
+export const escucharCuentasDondeParticipo = (uid, onDatos, onError) =>
+  onSnapshot(
+    query(collectionGroup(db, "cuentas"), where("participantesUids", "array-contains", uid), where("estado", "==", "abierta")),
+    (snap) => onDatos(snap.docs.map((d) => ({ ...conId(d), clubId: d.ref.parent.parent.id }))),
+    onError,
+  );
 
 // Anula una cuenta abierta sin partes cobradas: los consumos se descartan (nunca movieron stock ni caja)
 export const anularCuenta = async (clubId, cuenta, { motivo, uid, nombre }) => {
