@@ -13,6 +13,7 @@ import { haceCuanto, resumenItems } from "../../../utils/pedidos";
 import { formatPrecio } from "../../../utils/format";
 import { EVENTO_AUDIO_LISTO, audioListo, desbloquearAudio, guardarSonido, sonarNuevoPedido, sonidoGuardado } from "../../../components/pos/sonido";
 import useMediaQuery from "../../../utils/useMediaQuery";
+import FichaTurno from "../../../components/turno/FichaTurno";
 
 // Barra: el tablero de pedidos en tiempo real, en Noche para leerse desde lejos. Pendientes → En preparación →
 // Listos. Aceptar suma los items a la cuenta del turno (cuentasService.aceptarPedido); rechazar lleva motivo.
@@ -81,6 +82,8 @@ export default function Barra() {
   const uid = user?.uid || null;
   const nombre = perfil?.nombre || user?.displayName || user?.email || "";
   const puedeEntrar = !!clubActual && puede("pedidos");
+  const puedeCuentas = !!clubActual && (puede("cobrarTurnos") || puede("vender"));
+  const [ficha, setFicha] = useState(null); // grupoId del turno cuya ficha está abierta (sin permiso de cuentas)
   const online = useOnline();
 
   const [estado, setEstado] = useState({ para: null, lista: [], error: false });
@@ -191,12 +194,24 @@ export default function Barra() {
 
   const tarjeta = (p) => {
     const esta = ocupado === p.id;
+    const grupoId = p.cuentaId || p.reservaGrupoId;
+    const lineaTurno = `${p.canchaNombre} · ${p.horaInicio}`;
     return (
       <article key={p.id} className="pd-card flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="heading-md m-0 pd-tnum">
-              {p.canchaNombre} · {p.horaInicio}
+              {puedeCuentas && grupoId ? (
+                <Link to={`/admin/bar/cuentas/${grupoId}`} className="hover:underline">
+                  {lineaTurno}
+                </Link>
+              ) : grupoId ? (
+                <button type="button" className="text-left hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus" onClick={() => setFicha(grupoId)}>
+                  {lineaTurno}
+                </button>
+              ) : (
+                lineaTurno
+              )}
             </p>
             <p className="body-sm text-ink-2 m-0 break-words">
               <strong className="text-ink">{p.nombre}</strong> · {haceCuanto(p.tiempos?.creado || p.creadoEn, ahora) || "…"}
@@ -314,6 +329,7 @@ export default function Barra() {
       )}
 
       {dialogo?.tipo === "rechazar" && <RechazarDialog pedido={dialogo.pedido} onCerrar={() => setDialogo(null)} onRechazar={(motivo) => rechazar(dialogo.pedido, motivo)} />}
+      {ficha && <FichaTurno clubId={clubId} club={clubActual} grupoId={ficha} onCerrar={() => setFicha(null)} />}
     </div>
   );
 }

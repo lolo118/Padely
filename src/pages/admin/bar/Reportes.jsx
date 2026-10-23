@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAuthStore } from "../../../store/authStore";
@@ -358,7 +359,15 @@ export default function Reportes() {
               vacio="Sin cuentas del turno cerradas en el período."
               claveFila={(c) => c.id}
               columnas={[
-                { clave: "nombre", label: "Cancha", render: (c) => <span className="font-semibold">{c.nombre}</span> },
+                {
+                  clave: "nombre",
+                  label: "Cancha",
+                  render: (c) => (
+                    <Link to={unDia ? `/admin/bar/cuentas?cancha=${c.id}&fecha=${rango.desde}` : `/admin/bar/cuentas?cancha=${c.id}&desde=${rango.desde}&hasta=${rango.hasta}`} className="font-semibold hover:underline">
+                      {c.nombre}
+                    </Link>
+                  ),
+                },
                 { clave: "cuentas", label: "Cuentas", num: true, render: (c) => fmtCant(c.cuentas) },
                 { clave: "consumos", label: "Consumos", num: true, render: (c) => formatPrecio(c.consumos) },
                 { clave: "cancha", label: "Cancha cobrada", num: true, render: (c) => formatPrecio(c.cancha) },

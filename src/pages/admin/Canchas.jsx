@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Check, Coins, Lock, Plus, Settings, Trash2, X } from "lucide-react";
+import FichaTurno from "../../components/turno/FichaTurno";
 import { useAuthStore } from "../../store/authStore";
 import PerfilIncompleto from "../../components/PerfilIncompleto";
 import SinPermiso from "../../components/SinPermiso";
@@ -91,7 +93,7 @@ const itemsTarifa = [
 // Etiqueta del Badge de seña: "Seña $ 5.000 pendiente" (warning) o "Seña cobrada" (success)
 const etiquetaSeña = (info) => (info.tone === "success" ? info.label : `Seña ${formatPrecio(info.monto)} ${info.label}`);
 
-function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData }) {
+function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData, onAbrirTurno }) {
   const [weekData, setWeekData] = useState({});
   const [loadingWeek, setLoadingWeek] = useState(true);
 
@@ -191,7 +193,7 @@ function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData
                       }
                       // Hora siguiente de una reserva de varias horas: sigue el bloque del primer turno
                       if (reserva && !esPrimerSlot(reserva)) {
-                        return <SlotCell key={d.date} estado={estadoDeReserva(reserva)} linea1="↳" linea2={nombreCorto} />;
+                        return <SlotCell key={d.date} estado={estadoDeReserva(reserva)} linea1="↳" linea2={nombreCorto} onClick={onAbrirTurno ? () => onAbrirTurno(reserva, reservas) : undefined} aria-label={`Ver turno de ${reserva.nombreJugador || "jugador"}`} />;
                       }
                       if (reserva && reserva.status === "bloqueado") {
                         return <SlotCell key={d.date} estado="bloqueada" linea2={motivoDeBloqueo(reserva.nombreJugador) || undefined} />;
@@ -203,6 +205,8 @@ function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData
                             estado={estadoDeReserva(reserva)}
                             linea1={nombreCorto}
                             linea2={rangoHoras(reserva.horaInicio, reserva.horaFin)}
+                            onClick={onAbrirTurno ? () => onAbrirTurno(reserva, reservas) : undefined}
+                            aria-label={`Ver turno de ${reserva.nombreJugador || "jugador"}, ${rangoHoras(reserva.horaInicio, reserva.horaFin)}`}
                           />
                         );
                       }
@@ -522,7 +526,13 @@ export default function Canchas() {
   // El id del club cuyos datos ya se cargaron: mientras no coincida con el actual se muestra el esqueleto
   const [cargadoPara, setCargadoPara] = useState(null);
   const [tabCanchas, setTabCanchas] = useState("Canchas");
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(getTodayLocal());
+  // Deep link: /admin/canchas?fecha=YYYY-MM-DD&turno=<grupoId> abre esa fecha con la ficha del turno
+  const [searchParams, setSearchParams] = useSearchParams();
+  const fechaParam = searchParams.get("fecha");
+  const turnoParam = searchParams.get("turno");
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(() => (fechaParam && /^\d{4}-\d{2}-\d{2}$/.test(fechaParam) ? fechaParam : getTodayLocal()));
+  // Ficha del turno abierta: la reserva agrupada (id = grupoId)
+  const [ficha, setFicha] = useState(null);
 
   // Form nueva cancha
   const [mostrarForm, setMostrarForm] = useState(false);
@@ -735,6 +745,36 @@ export default function Canchas() {
       console.error("Error al guardar config:", err);
       toast.error("No pudimos guardar la configuración. Intentá de nuevo.");
     }
+  };
+
+  // Abrir la ficha de un turno a partir de cualquiera de sus slots (la lista en la que vive: la del día o la semana)
+  const abrirFicha = useCallback((slot, lista = null) => {
+    if (!slot) return;
+    const grupoId = grupoDeReserva(slot);
+    const fuente = lista || reservas;
+    const agrupada = agruparReservas(fuente.filter((r) => grupoDeReserva(r) === grupoId && r.status !== "cancelada")).find((r) => r.id === grupoId) || agruparReservas([slot])[0];
+    setFicha(agrupada ? { ...agrupada, clubId } : null);
+  }, [reservas, clubId]);
+  const cerrarFicha = () => {
+    setFicha(null);
+    if (turnoParam) setSearchParams({});
+  };
+  // El deep link abre la ficha cuando las reservas de esa fecha ya están (derivado, sin efecto)
+  const fichaDeepLink = useMemo(() => {
+    if (!turnoParam || !reservas.length) return null;
+    const slot = reservas.find((r) => grupoDeReserva(r) === turnoParam && r.status !== "cancelada") || reservas.find((r) => grupoDeReserva(r) === turnoParam);
+    if (!slot) return null;
+    const agrupada = agruparReservas(reservas.filter((r) => grupoDeReserva(r) === turnoParam && (r.status === "cancelada") === (slot.status === "cancelada"))).find((r) => r.id === turnoParam) || agruparReservas([slot])[0];
+    return agrupada ? { ...agrupada, clubId } : null;
+  }, [turnoParam, reservas, clubId]);
+  const fichaVisible = ficha || fichaDeepLink;
+  // Los cambios hechos desde la ficha vuelven a la grilla
+  const cambioDesdeFicha = (cambios) => {
+    if (cambios && Object.keys(cambios).length && fichaVisible) {
+      setReservas((prev) => actualizarGrupoLocal(prev, fichaVisible.id, cambios));
+      setFicha((f) => (f ? { ...f, ...cambios } : f));
+    }
+    if (clubId) getReservas(clubId, fechaSeleccionada).then(setReservas).catch((err) => console.error("Error recargando reservas:", err));
   };
 
   // El slot vivo de una cancha a una hora, con los campos de grupo completos aunque sea un documento viejo
@@ -1439,6 +1479,8 @@ export default function Canchas() {
                                   linea1="↳"
                                   linea2={reserva.nombreJugador || "Reservado"}
                                   title={`${reserva.nombreJugador || "Reservado"} · ${rangoHoras(reserva.horaInicio, reserva.horaFin)}`}
+                                  onClick={() => abrirFicha(reserva)}
+                                  aria-label={`Ver turno de ${reserva.nombreJugador || "jugador"}`}
                                 />
                               );
                             }
@@ -1469,6 +1511,8 @@ export default function Canchas() {
                                     linea1={reserva.nombreJugador || "Reservado"}
                                     linea2={rango}
                                     title={`${reserva.nombreJugador || "Reservado"} · ${rango}`}
+                                    onClick={() => abrirFicha(reserva)}
+                                    aria-label={`Ver turno de ${reserva.nombreJugador || "jugador"}, ${rango}`}
                                   />
                                 );
                               }
@@ -1479,6 +1523,8 @@ export default function Canchas() {
                                     linea1={reserva.nombreJugador || "Reservado"}
                                     linea2={rango}
                                     className="flex-1"
+                                    onClick={() => abrirFicha(reserva)}
+                                    aria-label={`Ver turno de ${reserva.nombreJugador || "jugador"}, ${rango}`}
                                   />
                                   <div className="flex justify-center gap-1">
                                     {reserva.status === "pendiente" && (
@@ -1580,6 +1626,7 @@ export default function Canchas() {
                   fechaBase={fechaSeleccionada}
                   getReservasForDate={getReservasForDate}
                   getTurnosFijosData={turnosFijos}
+                  onAbrirTurno={abrirFicha}
                 />
               )}
             </Card>
@@ -1595,6 +1642,8 @@ export default function Canchas() {
       {tabCanchas === "Turnos fijos" && club && (
         puedeReservas ? <TabTurnosFijos clubId={club.id} /> : <SinPermiso />
       )}
+
+      {fichaVisible && club && <FichaTurno clubId={club.id} club={club} reserva={fichaVisible} onCambio={cambioDesdeFicha} onCerrar={cerrarFicha} />}
 
       {/* Modal reserva manual */}
       {mostrarModalManual && modalManualData && (

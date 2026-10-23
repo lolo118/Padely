@@ -15,6 +15,7 @@ import CobrarDialog from "../../../components/pos/CobrarDialog";
 import VentasDeHoy from "../../../components/pos/VentasDeHoy";
 import PostVentaDialog from "../../../components/pos/PostVentaDialog";
 import TicketPreview from "../../../components/TicketPreview";
+import FichaTurno from "../../../components/turno/FichaTurno";
 import { htmlTicketVenta } from "../../../print/ticketVenta";
 import { imprimirHtml } from "../../../print/imprimir";
 import { dispositivoGuardado, escucharCajaAbierta } from "../../../services/cajaService";
@@ -66,6 +67,7 @@ export default function Vender() {
   const [cuentasAbiertas, setCuentasAbiertas] = useState([]);
   // "Para:": a quién se le cargan las líneas (participante de la cuenta; "" = sin asignar)
   const [paraId, setParaId] = useState("");
+  const [ficha, setFicha] = useState(null); // ficha del turno (desde la franja)
   const [searchParams] = useSearchParams();
   const preseleccionId = searchParams.get("cuenta");
   const [ancho, setAncho] = useState(anchoTicketGuardado);
@@ -369,8 +371,10 @@ export default function Vender() {
           onSeleccionar={seleccionarCuenta}
           cuentasAbiertas={cuentasAbiertas}
           preseleccionId={preseleccionId}
+          onInfo={(r) => setFicha({ ...r, clubId })}
         />
       )}
+      {ficha && <FichaTurno clubId={clubId} club={clubActual} reserva={ficha} onCerrar={() => setFicha(null)} />}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
         <GrillaProductos

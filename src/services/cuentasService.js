@@ -193,6 +193,14 @@ function actualizarCuentaEnTx(tx, r, cuenta, cambios, { uid = null } = {}) {
 
 // Agrega líneas del POS a la cuenta de una reserva; si la cuenta no existe la crea con los datos de la reserva.
 // Devuelve la cuenta resultante (sin timestamps del servidor resueltos).
+// Abre la cuenta del turno sin consumos (desde la ficha del turno): el titular como primer participante
+export const abrirCuentaDelTurno = (clubId, grupoId, { uid, nombre, reserva = null }) =>
+  runTransaction(db, async (tx) => {
+    const { cuenta, nueva, extra, ref: r } = await cuentaAbiertaEnTx(tx, clubId, grupoId, { uid, nombre, reserva });
+    if (!nueva && extra && Object.keys(extra).length) tx.update(r, { ...extra, actualizadoEn: serverTimestamp() });
+    return cuenta;
+  });
+
 // asignadoA: participante elegido en el selector "Para:" del POS ([] = sin asignar)
 export const agregarItemsACuenta = async (clubId, grupoId, items, { uid, nombre, reserva, asignadoA = [] }) => {
   const ahora = Timestamp.now();

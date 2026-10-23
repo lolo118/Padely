@@ -22,6 +22,7 @@ import { canchasDelTorneo } from "../../utils/torneo";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
 import { Badge, Button, Card, StatTile } from "../../components/ui";
+import FichaTurno from "../../components/turno/FichaTurno";
 
 export default function Dashboard() {
   const { user } = useAuthStore();
@@ -46,6 +47,28 @@ export default function Dashboard() {
   const [torneosClub, setTorneosClub] = useState([]);
   const [loading, setLoading] = useState(true);
   const [mostrarAyuda, setMostrarAyuda] = useState(true);
+  // Ficha del turno abierta desde "Próximas reservas" / "Turnos activos" (reserva agrupada)
+  const [ficha, setFicha] = useState(null);
+  const cambioDesdeFicha = (cambios) => {
+    if (!ficha) return;
+    if (cambios && Object.keys(cambios).length) {
+      setReservasHoy((prev) => prev.map((r) => (r.id === ficha.id ? { ...r, ...cambios } : r)));
+      setFicha((f) => (f ? { ...f, ...cambios } : f));
+    }
+  };
+  const filaTurno = (r) => ({
+    role: "button",
+    tabIndex: 0,
+    className: "flex items-center justify-between gap-3 py-3 w-full text-left cursor-pointer hover:bg-surface-hover rounded-md px-1 -mx-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+    onClick: () => setFicha({ ...r, clubId }),
+    onKeyDown: (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setFicha({ ...r, clubId });
+      }
+    },
+    "aria-label": `Ver turno de ${r.nombreJugador || "jugador"}, ${rangoHoras(r.horaInicio, r.horaFin)}`,
+  });
   // Cajas abiertas del bar (null = cargando); solo para quien tiene algún permiso de caja
   const [cajasAbiertas, setCajasAbiertas] = useState(null);
   const [cuentasAbiertas, setCuentasAbiertas] = useState([]);
@@ -478,7 +501,7 @@ export default function Dashboard() {
         ) : (
           <ul className="m-0 mt-2 p-0 list-none divide-y divide-line">
             {proximasReservas.map((r, i) => (
-              <li key={i} className="flex items-center justify-between gap-3 py-3">
+              <li key={i} {...filaTurno(r)}>
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="numeral-md pd-tnum min-w-14 flex-none">{rangoHoras(r.horaInicio, r.horaFin)}</span>
                   <div className="min-w-0">
@@ -508,7 +531,7 @@ export default function Dashboard() {
           return (
             <ul className="m-0 mt-2 p-0 list-none divide-y divide-line">
               {turnosAhora.map((r, i) => (
-                <li key={i} className="flex items-center justify-between gap-3 py-3">
+                <li key={i} {...filaTurno(r)}>
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="numeral-md pd-tnum min-w-14 flex-none">{rangoHoras(r.horaInicio, r.horaFin)}</span>
                     <div className="min-w-0">
@@ -612,6 +635,7 @@ export default function Dashboard() {
           )}
         </div>
       )}
+      {ficha && club && <FichaTurno clubId={clubId} club={club} reserva={ficha} onCambio={cambioDesdeFicha} onCerrar={() => setFicha(null)} />}
     </div>
   );
 }

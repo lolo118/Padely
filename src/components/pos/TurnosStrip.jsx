@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Info } from "lucide-react";
 import { Badge, Button } from "../ui";
 import { escucharReservasDeHoy } from "../../services/cuentasService";
 import { textoTurno, ventanaDeTurno } from "../../utils/cuentas";
@@ -10,7 +11,7 @@ import { formatPrecio } from "../../utils/format";
 //   clubId · seleccionId (grupoId | null) · onSeleccionar(reserva | null) · cuentasAbiertas (lista) ·
 //   preseleccionId (desde ?cuenta= en la URL: se selecciona una vez cuando aparece)
 
-export default function TurnosStrip({ clubId, seleccionId = null, onSeleccionar, cuentasAbiertas = [], preseleccionId = null, deshabilitado = false }) {
+export default function TurnosStrip({ clubId, seleccionId = null, onSeleccionar, cuentasAbiertas = [], preseleccionId = null, deshabilitado = false, onInfo = null }) {
   const [reservas, setReservas] = useState({ para: null, lista: [], error: false });
   const [verTodos, setVerTodos] = useState(false);
   const [ahora, setAhora] = useState(() => new Date());
@@ -73,24 +74,26 @@ export default function TurnosStrip({ clubId, seleccionId = null, onSeleccionar,
             const cerrado = !cuenta && r.cuentaCerrada === true;
             const pendientes = Number(cuenta?.pedidosPendientes) || 0;
             return (
-              <button
-                key={id}
-                type="button"
-                role="option"
-                aria-selected={activo}
-                className={["pd-pill h-11! shrink-0", cerrado && "text-ink-3! opacity-60"].filter(Boolean).join(" ")}
-                disabled={deshabilitado || cerrado}
-                title={cerrado ? "La cuenta de este turno ya se cerró" : undefined}
-                onClick={() => onSeleccionar?.(activo ? null : r)}
-              >
-                {textoTurno({ canchaNombre: r.canchaName, horaInicio: r.horaInicio, horaFin: r.horaFin, nombreJugador: r.nombreJugador })}
-                {cuenta && (
-                  <Badge tone={activo ? "neutral" : "court"} className="pd-tnum">
-                    {formatPrecio(cuenta.totales?.total)} abierta
-                  </Badge>
-                )}
-                {pendientes > 0 && <Badge tone="warning">{pendientes === 1 ? "1 pedido" : `${pendientes} pedidos`}</Badge>}
-              </button>
+              <span key={id} className="inline-flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={activo}
+                  className={["pd-pill h-11! shrink-0", cerrado && "text-ink-3! opacity-60"].filter(Boolean).join(" ")}
+                  disabled={deshabilitado || cerrado}
+                  title={cerrado ? "La cuenta de este turno ya se cerró" : undefined}
+                  onClick={() => onSeleccionar?.(activo ? null : r)}
+                >
+                  {textoTurno({ canchaNombre: r.canchaName, horaInicio: r.horaInicio, horaFin: r.horaFin, nombreJugador: r.nombreJugador })}
+                  {cuenta && (
+                    <Badge tone={activo ? "neutral" : "court"} className="pd-tnum">
+                      {formatPrecio(cuenta.totales?.total)} abierta
+                    </Badge>
+                  )}
+                  {pendientes > 0 && <Badge tone="warning">{pendientes === 1 ? "1 pedido" : `${pendientes} pedidos`}</Badge>}
+                </button>
+                {onInfo && <Button variant="ghost" size="sm" iconOnly aria-label={`Ficha del turno de ${r.nombreJugador || "jugador"}`} icon={<Info className="pd-icon" size={20} aria-hidden="true" />} onClick={() => onInfo(r)} />}
+              </span>
             );
           })}
         </div>

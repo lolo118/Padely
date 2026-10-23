@@ -217,6 +217,14 @@ export const eliminarReservaGrupo = async (clubId, grupoId) => {
 // Reservas agrupadas (una por grupoId) a partir de la lista de slots de getReservas
 export const getReservasAgrupadas = async (clubId, fecha, opciones) => agruparReservas(await getReservas(clubId, fecha, opciones));
 
+// Contacto de una reserva (su primer turno), solo el club; null si no hay
+export const getContactoReserva = async (clubId, reservaId) => {
+  const snap = await getDoc(contactoReservaRef(clubId, reservaId));
+  if (!snap.exists()) return null;
+  const c = snap.data();
+  return { email: c.email || "", telefono: c.telefono || "" };
+};
+
 // Contactos de las reservas del club ({ [reservaId]: { email, telefono } }), solo el club
 export const getContactosReservas = async (clubId) => {
   const snap = await getDocs(collection(db, "clubs", clubId, "contactosReservas"));

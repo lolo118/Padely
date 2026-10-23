@@ -3,7 +3,8 @@ import { Repeat } from "lucide-react";
 // Una cancha a una hora dentro de la grilla pd-grid (cancha × hora).
 // estado: "libre" | "elegido" | "reservada" | "pendiente" | "fijo" | "bloqueada" | "pasado"
 // linea1: el texto principal (por defecto la palabra del estado) · linea2: segunda línea (precio, nombre)
-// libre y elegido son botones (onClick); el resto, celdas estáticas. Cada estado lleva su palabra.
+// libre y elegido son botones (onClick); el resto, celdas estáticas salvo que lleven onClick (abren la ficha del
+// turno). Cada estado lleva su palabra.
 const CLASE = {
   libre: "pd-slot-free",
   elegido: "pd-slot-free",
@@ -34,7 +35,7 @@ export default function SlotCell({ estado = "libre", linea1, linea2, onClick, di
       {linea2 && <small>{linea2}</small>}
     </>
   );
-  if (estado === "libre" || estado === "elegido") {
+  if (estado === "libre" || estado === "elegido" || typeof onClick === "function") {
     return (
       <button
         type="button"
