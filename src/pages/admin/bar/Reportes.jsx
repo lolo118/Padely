@@ -139,6 +139,10 @@ export default function Reportes() {
   const canchas = porCanchaLista(totales);
   const cierres = [...totales.cierres].sort((a, b) => (b.cerradaEn?.toMillis?.() || 0) - (a.cerradaEn?.toMillis?.() || 0));
   const sinDatos = !cargando && !estado.error && estado.rollups.length === 0;
+  // Margen solo sobre líneas con costo conocido; el sufijo dice qué le falta o qué se estimó
+  const sufijosMargen = [ind.margenParcial && "parcial", ind.margenEstimado && "con costos estimados"].filter(Boolean);
+  const etiquetaMargen = sufijosMargen.length ? `Margen (${sufijosMargen.join(", ")})` : "Margen";
+  const sinMargen = ind.margen === null && ind.ventas > 0;
   const etiquetaPeriodo = unDia ? formatDiaCorto(rango.desde) : `${formatDiaCorto(rango.desde)} – ${formatDiaCorto(rango.hasta)}`;
 
   const recalcular = async () => {
@@ -223,12 +227,18 @@ export default function Reportes() {
       {/* 1. Indicadores */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4" aria-busy={cargando || undefined}>
         <StatTile value={cargando ? "…" : fmtCant(ind.ventas)} label="Ventas" />
-        <StatTile value={cargando ? "…" : formatPrecio(ind.total)} label="Total vendido" />
+        <StatTile value={cargando ? "…" : formatPrecio(ind.total)} label="Total vendido" delta={ind.descuentos > 0 ? `Descuentos −${formatPrecio(ind.descuentos)}` : undefined} down={ind.descuentos > 0} />
         <StatTile value={cargando ? "…" : formatPrecio(ind.ticketPromedio)} label="Ticket promedio" />
-        <StatTile value={cargando ? "…" : formatPrecio(ind.margen)} label={ind.margenParcial ? "Margen (parcial)" : "Margen"} />
+        <StatTile value={cargando ? "…" : ind.margen === null ? "—" : formatPrecio(ind.margen)} label={etiquetaMargen} />
         <StatTile value={cargando ? "…" : fmtCant(ind.anuladas)} label="Anuladas" delta={ind.totalAnulado ? `−${formatPrecio(ind.totalAnulado)}` : undefined} down={ind.totalAnulado > 0} />
       </div>
-      {ind.margenParcial && <p className="pd-help -mt-3 m-0">Margen parcial: hay ventas con productos sin costo cargado (o pedidos desde el celular, que no llevan costo). Cargá los costos en Productos.</p>}
+      {(sinMargen || ind.margenParcial || ind.margenEstimado) && (
+        <p className="pd-help -mt-3 m-0">
+          {sinMargen && "Sin margen: ninguna línea del período tiene costo conocido. Si el día es anterior a este reporte, probá \"Recalcular este día\". "}
+          {ind.margenParcial && "Margen parcial: las líneas sin costo (productos sin costo cargado, o pedidos desde el celular, que no llevan costo) quedan fuera del margen, no entran a precio completo. Cargá los costos en Productos y recalculá el día. "}
+          {ind.margenEstimado && "Con costos estimados: al recalcular el día, las líneas sin costo tomaron el costo actual del producto."}
+        </p>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* 2. Por medio de pago */}
@@ -309,7 +319,7 @@ export default function Reportes() {
               },
               { clave: "cantidad", label: "Cantidad", num: true, render: (p) => fmtCant(p.cantidad) },
               { clave: "total", label: "Total", num: true, render: (p) => formatPrecio(p.total) },
-              { clave: "margen", label: "Margen", num: true, render: (p) => formatPrecio(p.margen) },
+              { clave: "margen", label: "Margen", num: true, render: (p) => (p.margen === null ? "—" : formatPrecio(p.margen)) },
             ]}
             filas={top}
           />

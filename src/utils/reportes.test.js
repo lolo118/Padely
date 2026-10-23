@@ -1,7 +1,7 @@
 // node --test src/utils/reportes.test.js
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aCsv, diasEntre, filasExportacion, indicadores, nombreArchivo, porCanchaLista, porCategoriaConParticipacion, porMedioLista, rangoDePeriodo, seriePorDia, seriePorHora, sumarRollups, tipoLineaDe, topProductos } from "./reportes.js";
+import { aCsv, diasEntre, filasExportacion, indicadores, margenDe, nombreArchivo, porCanchaLista, porCategoriaConParticipacion, porMedioLista, rangoDePeriodo, seriePorDia, seriePorHora, sumarRollups, tipoLineaDe, topProductos } from "./reportes.js";
 
 test("rango del período", () => {
   // 2026-10-22 es jueves
@@ -18,20 +18,20 @@ test("rango del período", () => {
 
 const dia1 = {
   fecha: "2026-10-21",
-  ventas: { cantidad: 3, total: 7000, anuladas: 1, totalAnulado: 1000, lineasSinCosto: 0 },
+  ventas: { cantidad: 3, total: 7000, anuladas: 1, totalAnulado: 1000, lineasSinCosto: 1, totalConCosto: 4000, descuentos: 300 },
   porMedio: { efectivo: 4000, tarjeta: 3000 },
-  porCategoria: { bebidas: { cantidad: 4, total: 4000, costo: 2000 }, sin: { cantidad: 1, total: 3000, costo: 0 } },
-  porProducto: { agua: { nombre: "Agua", cantidad: 3, total: 3000, costo: 1500 }, cerveza: { nombre: "Cerveza", cantidad: 1, total: 1000, costo: 500 } },
+  porCategoria: { bebidas: { cantidad: 4, total: 4000, costo: 2000, totalConCosto: 4000 }, sin: { cantidad: 1, total: 3000, costo: 0, totalConCosto: 0 } },
+  porProducto: { agua: { nombre: "Agua", cantidad: 3, total: 3000, costo: 1500, totalConCosto: 3000 }, cerveza: { nombre: "Cerveza", cantidad: 1, total: 1000, costo: 500, totalConCosto: 1000 } },
   porHora: { 20: { cantidad: 2, total: 5000 }, 21: { cantidad: 1, total: 2000 } },
   porCancha: { k1: { nombre: "Cancha 1", total: 10000, consumos: 3000, cobros: 2, cuentas: 1 } },
   cajas: { cierres: [{ cajaId: "c1", dispositivo: "Caja 1", esperadoEfectivo: 9000, efectivoContado: 9000, diferencia: 0 }] },
 };
 const dia2 = {
   fecha: "2026-10-22",
-  ventas: { cantidad: 2, total: 5000, anuladas: 0, totalAnulado: 0, lineasSinCosto: 1 },
+  ventas: { cantidad: 2, total: 5000, anuladas: 0, totalAnulado: 0, lineasSinCosto: 1, totalConCosto: 2000 },
   porMedio: { efectivo: 1000, qr: 4000 },
-  porCategoria: { bebidas: { cantidad: 2, total: 2000, costo: 800 } },
-  porProducto: { agua: { nombre: "Agua", cantidad: 2, total: 2000, costo: 800 }, alfajor: { nombre: "Alfajor", cantidad: 1, total: 3000, costo: 0 } },
+  porCategoria: { bebidas: { cantidad: 2, total: 2000, costo: 800, totalConCosto: 2000 } },
+  porProducto: { agua: { nombre: "Agua", cantidad: 2, total: 2000, costo: 800, totalConCosto: 2000 }, alfajor: { nombre: "Alfajor", cantidad: 1, total: 3000, costo: 0, totalConCosto: 0 } },
   porHora: { 20: { cantidad: 2, total: 5000 } },
   porCancha: {},
 };
@@ -53,11 +53,14 @@ test("suma de rollups e indicadores", () => {
   assert.equal(i.ventas, 4); // 5 − 1 anulada
   assert.equal(i.total, 12000);
   assert.equal(i.ticketPromedio, 3000);
-  assert.equal(i.margen, 9000 - 2800); // consumos (4000+3000+2000) − costo (2000+0+800)
+  assert.equal(i.margen, 6000 - 2800); // solo las líneas con costo: totalConCosto (4000+2000) − costo (2000+0+800)
   assert.equal(i.margenParcial, true);
+  assert.equal(i.margenEstimado, false);
+  assert.equal(i.descuentos, 300);
   assert.equal(i.anuladas, 1);
-  assert.equal(indicadores(sumarRollups([dia1])).margenParcial, false);
+  assert.equal(indicadores(sumarRollups([dia2])).margenParcial, true);
   assert.equal(indicadores(sumarRollups([])).ticketPromedio, 0);
+  assert.equal(indicadores(sumarRollups([])).margen, null);
 });
 
 test("top productos, categorías, medios, canchas y series", () => {
@@ -65,6 +68,7 @@ test("top productos, categorías, medios, canchas y series", () => {
   const top = topProductos(t, 2);
   assert.deepEqual(top.map((p) => p.nombre), ["Agua", "Alfajor"]);
   assert.equal(top[0].margen, 5000 - 2300);
+  assert.equal(top[1].margen, null); // el Alfajor no tiene costo: "—", nunca sus 3000 completos
   const cats = porCategoriaConParticipacion(t, { bebidas: "Bebidas" });
   assert.equal(cats[0].nombre, "Bebidas");
   assert.equal(cats[0].participacion, 67); // 6000 de 9000
@@ -80,6 +84,52 @@ test("top productos, categorías, medios, canchas y series", () => {
   assert.equal(dias.length, 3);
   assert.deepEqual(dias.map((d) => d.total), [0, 7000, 5000]);
   assert.equal(dias[1].name, "21/10");
+});
+
+// Rollups tal como los escribe functions/rollup.js (sus pruebas cubren la agregación; acá, lo que se muestra)
+const conCosto = { fecha: "2026-10-22", ventas: { cantidad: 1, total: 5020, totalConCosto: 5020 }, porCategoria: { beb: { cantidad: 3, total: 5020, costo: 2500, totalConCosto: 5020 } }, porProducto: { agua: { nombre: "Agua", cantidad: 2, total: 2000, costo: 1000, totalConCosto: 2000 }, cerveza: { nombre: "Cerveza", cantidad: 1, total: 3020, costo: 1500, totalConCosto: 3020 } } };
+const mixta = { fecha: "2026-10-22", ventas: { cantidad: 1, total: 2286, totalConCosto: 1040, lineasSinCosto: 1, descuentos: 254 }, porCategoria: { beb: { cantidad: 1, total: 1040, costo: 500, totalConCosto: 1040 }, kiosco: { cantidad: 1, total: 1500, costo: 0, totalConCosto: 0 } }, porProducto: { agua: { nombre: "Agua", cantidad: 1, total: 1040, costo: 500, totalConCosto: 1040 }, alfajor: { nombre: "Alfajor", cantidad: 1, total: 1500, costo: 0, totalConCosto: 0 } } };
+const sinCosto = { fecha: "2026-10-22", ventas: { cantidad: 1, total: 1500, lineasSinCosto: 1 }, porCategoria: { kiosco: { cantidad: 1, total: 1500, costo: 0, totalConCosto: 0 } }, porProducto: { alfajor: { nombre: "Alfajor", cantidad: 1, total: 1500, costo: 0, totalConCosto: 0 } } };
+const estimada = { fecha: "2026-10-22", ventas: { cantidad: 1, total: 2286, totalConCosto: 2540, lineasCostoEstimado: 1, descuentos: 254 }, porCategoria: { beb: { cantidad: 1, total: 1040, costo: 500, totalConCosto: 1040 }, kiosco: { cantidad: 1, total: 1500, costo: 600, totalConCosto: 1500 } }, porProducto: { agua: { nombre: "Agua", cantidad: 1, total: 1040, costo: 500, totalConCosto: 1040 }, alfajor: { nombre: "Alfajor", cantidad: 1, total: 1500, costo: 600, totalConCosto: 1500 } } };
+const anulada = { fecha: "2026-10-22", ventas: { total: -5020, anuladas: 1, totalAnulado: 5020, totalConCosto: -5020 }, porCategoria: { beb: { cantidad: -3, total: -5020, costo: -2500, totalConCosto: -5020 } }, porProducto: { agua: { nombre: "Agua", cantidad: -2, total: -2000, costo: -1000, totalConCosto: -2000 }, cerveza: { nombre: "Cerveza", cantidad: -1, total: -3020, costo: -1500, totalConCosto: -3020 } } };
+
+test("margen solo sobre costos conocidos: todas con costo, mixtas, ninguna, estimadas y una anulación", () => {
+  const todas = indicadores(sumarRollups([conCosto]));
+  assert.equal(todas.margen, 5020 - 2500);
+  assert.equal(todas.margenParcial, false);
+  assert.equal(todas.margenEstimado, false);
+  assert.equal(todas.descuentos, 0);
+
+  const mix = indicadores(sumarRollups([mixta]));
+  assert.equal(mix.margen, 1040 - 500); // el Alfajor (sin costo) queda fuera, no entra a precio completo
+  assert.equal(mix.margenParcial, true);
+  assert.equal(mix.descuentos, 254);
+  const topMix = topProductos(sumarRollups([mixta]));
+  assert.equal(topMix.find((p) => p.nombre === "Alfajor").margen, null);
+  assert.equal(topMix.find((p) => p.nombre === "Agua").margen, 540);
+  assert.equal(porCategoriaConParticipacion(sumarRollups([mixta]), { beb: "Bebidas", kiosco: "Kiosco" }).find((c) => c.nombre === "Kiosco").margen, null);
+
+  const ninguna = indicadores(sumarRollups([sinCosto]));
+  assert.equal(ninguna.margen, null);
+  assert.equal(ninguna.margenParcial, true);
+
+  const est = indicadores(sumarRollups([estimada]));
+  assert.equal(est.margen, 2540 - 1100);
+  assert.equal(est.margenEstimado, true);
+  assert.equal(est.margenParcial, false);
+
+  // La anulación de la venta con costo deja solo la mixta
+  const trasAnular = indicadores(sumarRollups([conCosto, mixta, anulada]));
+  assert.equal(trasAnular.margen, 540);
+  assert.equal(trasAnular.ventas, 1);
+  assert.equal(trasAnular.total, 2286);
+  assert.equal(trasAnular.anuladas, 1);
+  assert.equal(topProductos(sumarRollups([conCosto, anulada])).length, 0); // nada vendido: sin filas
+  assert.equal(indicadores(sumarRollups([conCosto, anulada])).margen, null);
+
+  // Un rollup anterior a P3-6b (sin totalConCosto) no muestra un margen inventado
+  assert.equal(margenDe({ total: 7240, costo: 0 }), null);
+  assert.equal(margenDe({ totalConCosto: 0, costo: 650 }), null);
 });
 
 test("tipo de línea, filas de exportación y CSV es-AR", () => {

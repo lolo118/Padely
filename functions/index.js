@@ -1451,6 +1451,7 @@ exports.onPedidoUpdated = onDocumentUpdated("clubs/{clubId}/pedidos/{pedidoId}",
 // BAR — REPORTES DIARIOS, CATÁLOGO PÚBLICO, ALERTAS DE STOCK Y TICKETS PÚBLICOS
 // Los reportes se leen de clubs/{c}/reportesDiarios/{YYYY-MM-DD} (fecha local de Argentina), que mantienen las
 // Functions con FieldValue.increment: una venta suma, su anulación resta (ventas.anuladas y totalAnulado suman).
+// Qué suma cada venta (cubos, descuentos, margen sobre costos conocidos) está en ./rollup.js, con sus pruebas.
 // Nunca se recorre `ventas` al abrir Reportes. `recalcularReporte` (callable) reconstruye un día desde cero.
 // catalogo/{productoId} es la proyección pública (sin costo ni stock) que leen jugadores y sesiones anónimas.
 // alertasStock/{productoId} vive mientras el stock esté en o bajo el mínimo; avisosStockDiario avisa a las 8:30.
@@ -1459,79 +1460,11 @@ exports.onPedidoUpdated = onDocumentUpdated("clubs/{clubId}/pedidos/{pedidoId}",
 // ============================================================================
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 
-const CLAVES_MEDIO = ["efectivo", "transferencia", "tarjeta", "qr"];
-const TOP_PRODUCTOS = 200;
+// La agregación vive en ./rollup (pura, con pruebas): qué suma una venta, cómo se anula y cómo cierra el día
+const { aporteDeVenta, horaDe, limpiarClave, sumarAporte, tipoLineaDe, costoNumerico } = require("./rollup");
 const fechaDe = (ts) => (ts && typeof ts.toDate === "function" ? fechaLocalArgentina(ts.toDate()) : fechaLocalArgentina());
-const horaDe = (ts) => {
-  const date = ts && typeof ts.toDate === "function" ? ts.toDate() : new Date();
-  const partes = new Intl.DateTimeFormat("en-GB", { timeZone: ZONA_HORARIA, hour: "2-digit", hour12: false }).formatToParts(date);
-  const h = Number((partes.find((p) => p.type === "hour") || {}).value) || 0;
-  return String(h % 24).padStart(2, "0");
-};
 // Rango [inicio, fin) en UTC de un día local argentino (UTC−3 fijo, sin horario de verano)
 const rangoDelDia = (fecha) => ({ inicio: new Date(`${fecha}T00:00:00-03:00`), fin: new Date(`${fecha}T24:00:00-03:00`) });
-const limpiarClave = (s) => String(s || "sin").replace(/[.~*/[\]]/g, "_") || "sin";
-
-// Tipo de una línea de venta: lo trae desde P3-6; las viejas se infieren
-function tipoLineaDe(it) {
-  if (it && it.tipoLinea) return it.tipoLinea;
-  if (it && it.productoId) return "consumo";
-  return Number(it && it.subtotal) < 0 ? "seña" : "cancha";
-}
-
-// Lo que una venta aporta al reporte de su día, como objeto anidado de números (signo +1 venta, −1 anulación).
-// categorias: { productoId: categoriaId } ya leído; cuenta: doc de la cuenta (para porCancha) o null.
-function aporteDeVenta(venta, { categorias = {}, cuenta = null, signo = 1 }) {
-  const items = Array.isArray(venta.items) ? venta.items : [];
-  const pagos = Array.isArray(venta.pagos) ? venta.pagos : [];
-  const total = Number(venta.total) || 0;
-  const a = { ventas: {}, porMedio: {}, porCategoria: {}, porProducto: {}, porHora: {}, porCancha: {} };
-  if (signo > 0) {
-    a.ventas.cantidad = 1;
-    a.ventas.total = total;
-  } else {
-    a.ventas.anuladas = 1;
-    a.ventas.totalAnulado = total;
-    a.ventas.total = -total;
-  }
-  for (const p of pagos) if (CLAVES_MEDIO.includes(p && p.medio)) a.porMedio[p.medio] = (a.porMedio[p.medio] || 0) + signo * (Number(p.monto) || 0);
-  const hora = horaDe(venta.creadoEn);
-  a.porHora[hora] = { cantidad: signo, total: signo * total };
-  let costoIncompleto = 0;
-  let consumos = 0;
-  let cancha = 0;
-  for (const it of items) {
-    const tipo = tipoLineaDe(it);
-    const subtotal = Number(it.subtotal) || 0;
-    if (tipo !== "consumo") {
-      cancha += subtotal;
-      continue;
-    }
-    consumos += subtotal;
-    const cantidad = Number(it.cantidad) || 0;
-    const costo = it.costo === null || it.costo === undefined ? null : (Number(it.costo) || 0) * cantidad;
-    if (costo === null) costoIncompleto += 1;
-    const pid = it.productoId ? limpiarClave(it.productoId) : null;
-    const cat = limpiarClave((it.categoriaId !== undefined && it.categoriaId !== null ? it.categoriaId : pid ? categorias[it.productoId] : null) || "sin");
-    const c = (a.porCategoria[cat] = a.porCategoria[cat] || { cantidad: 0, total: 0, costo: 0 });
-    c.cantidad += signo * cantidad;
-    c.total += signo * subtotal;
-    c.costo += signo * (costo || 0);
-    if (pid) {
-      const p = (a.porProducto[pid] = a.porProducto[pid] || { cantidad: 0, total: 0, costo: 0 });
-      p.cantidad += signo * cantidad;
-      p.total += signo * subtotal;
-      p.costo += signo * (costo || 0);
-      p.nombre = it.nombre || null;
-    }
-  }
-  if (costoIncompleto) a.ventas.lineasSinCosto = signo * costoIncompleto;
-  if (venta.cuentaId && cuenta && cuenta.canchaId) {
-    const k = limpiarClave(cuenta.canchaId);
-    a.porCancha[k] = { nombre: cuenta.canchaNombre || null, total: signo * cancha, consumos: signo * consumos, cobros: signo };
-  }
-  return a;
-}
 
 // Convierte el aporte en un objeto con FieldValue.increment por hoja (nombres quedan como texto)
 function comoIncrementos(aporte) {
@@ -1605,21 +1538,23 @@ function sumarAlReporte(tx, clubRef, fecha, aporte) {
 }
 
 // ----- Reconstrucción completa de un día (callable "recalcularReporte") -----
+// Las líneas sin costo toman el costo ACTUAL del producto (una lectura de productos por recálculo) y cuentan en
+// lineasCostoEstimado; nunca se escribe nada en la venta. Las que tampoco tienen costo en el producto quedan fuera
+// del margen (lineasSinCosto).
 async function reconstruirReporteDiario(clubId, fecha) {
   const clubRef = db.collection("clubs").doc(clubId);
   const { inicio, fin } = rangoDelDia(fecha);
-  const [ventasSnap, cajasSnap] = await Promise.all([
+  const [ventasSnap, cajasSnap, productosSnap] = await Promise.all([
     clubRef.collection("ventas").where("creadoEn", ">=", inicio).where("creadoEn", "<", fin).get(),
     clubRef.collection("cajas").where("cerradaEn", ">=", inicio).where("cerradaEn", "<", fin).get(),
+    clubRef.collection("productos").get(),
   ]);
+  const costosActuales = {};
+  productosSnap.docs.forEach((d) => {
+    const c = costoNumerico(d.data().costo);
+    if (c !== null) costosActuales[d.id] = c;
+  });
   const acumulado = { ventas: {}, porMedio: {}, porCategoria: {}, porProducto: {}, porHora: {}, porCancha: {} };
-  const sumar = (destino, aporte) => {
-    for (const [k, v] of Object.entries(aporte)) {
-      if (typeof v === "number") destino[k] = (destino[k] || 0) + v;
-      else if (typeof v === "string") destino[k] = v;
-      else if (v && typeof v === "object") sumar((destino[k] = destino[k] || {}), v);
-    }
-  };
   const cuentas = new Map();
   for (const d of ventasSnap.docs) {
     const venta = d.data();
@@ -1632,8 +1567,8 @@ async function reconstruirReporteDiario(clubId, fecha) {
       }
       cuenta = cuentas.get(venta.cuentaId);
     }
-    sumar(acumulado, aporteDeVenta(venta, { categorias, cuenta, signo: 1 }));
-    if (venta.estado === "anulada") sumar(acumulado, aporteDeVenta(venta, { categorias, cuenta, signo: -1 }));
+    sumarAporte(acumulado, aporteDeVenta(venta, { categorias, cuenta, signo: 1, costosActuales }));
+    if (venta.estado === "anulada") sumarAporte(acumulado, aporteDeVenta(venta, { categorias, cuenta, signo: -1, costosActuales }));
   }
   // Cuentas cerradas ese día por cancha
   const cuentasSnap = await clubRef.collection("cuentas").where("cerradaEn", ">=", inicio).where("cerradaEn", "<", fin).get();
@@ -1650,7 +1585,7 @@ async function reconstruirReporteDiario(clubId, fecha) {
     .filter(Boolean)
     .sort((a, b) => (a.cerradaEn && a.cerradaEn.toMillis ? a.cerradaEn.toMillis() : 0) - (b.cerradaEn && b.cerradaEn.toMillis ? b.cerradaEn.toMillis() : 0));
   await clubRef.collection("reportesDiarios").doc(fecha).set({ fecha, ...acumulado, cajas: { cierres }, recalculadoEn: FieldValue.serverTimestamp(), actualizadoEn: FieldValue.serverTimestamp() });
-  return { ventas: ventasSnap.size, cierres: cierres.length };
+  return { ventas: ventasSnap.size, cierres: cierres.length, estimadas: Number(acumulado.ventas.lineasCostoEstimado) || 0 };
 }
 
 function cierreDeCaja(cajaId, caja) {
@@ -1681,7 +1616,7 @@ exports.recalcularReporte = onCall({ region: "us-central1" }, async (request) =>
   const puede = esDueño || (staff && staff.activo === true && Array.isArray(staff.permisos) && staff.permisos.includes("verReportes"));
   if (!puede) throw new HttpsError("permission-denied", "Solo quien ve los reportes puede recalcularlos");
   const resultado = await reconstruirReporteDiario(clubId, fecha);
-  logger.info(`recalcularReporte ${clubId}/${fecha} por ${uid}: ${resultado.ventas} ventas, ${resultado.cierres} cierres`);
+  logger.info(`recalcularReporte ${clubId}/${fecha} por ${uid}: ${resultado.ventas} ventas, ${resultado.cierres} cierres, ${resultado.estimadas} líneas con costo estimado`);
   return { ok: true, fecha, ...resultado };
 });
 

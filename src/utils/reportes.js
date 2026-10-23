@@ -49,7 +49,11 @@ export function diasEntre(desde, hasta) {
   return out;
 }
 
-const vacio = () => ({ ventas: { cantidad: 0, total: 0, anuladas: 0, totalAnulado: 0, lineasSinCosto: 0 }, porMedio: { efectivo: 0, transferencia: 0, tarjeta: 0, qr: 0 }, porCategoria: {}, porProducto: {}, porHora: {}, porCancha: {}, porDia: {}, cierres: [] });
+// Campos de ventas.*: cantidad, total (neto de anulaciones), anuladas, totalAnulado, totalConCosto (subtotales de las
+// líneas con costo conocido), lineasSinCosto, lineasCostoEstimado (recálculo con el costo actual del producto),
+// descuentos (descuento general de los tickets), otros (cancha/seña cobradas sin cuenta del turno)
+const CAMPOS_VENTAS = ["cantidad", "total", "anuladas", "totalAnulado", "totalConCosto", "lineasSinCosto", "lineasCostoEstimado", "descuentos", "otros"];
+const vacio = () => ({ ventas: Object.fromEntries(CAMPOS_VENTAS.map((k) => [k, 0])), porMedio: { efectivo: 0, transferencia: 0, tarjeta: 0, qr: 0 }, porCategoria: {}, porProducto: {}, porHora: {}, porCancha: {}, porDia: {}, cierres: [] });
 
 // Suma los rollups de varios días en una sola vista
 export function sumarRollups(rollups = []) {
@@ -57,24 +61,22 @@ export function sumarRollups(rollups = []) {
   for (const r of rollups) {
     if (!r) continue;
     const v = r.ventas || {};
-    t.ventas.cantidad += num(v.cantidad);
-    t.ventas.total += num(v.total);
-    t.ventas.anuladas += num(v.anuladas);
-    t.ventas.totalAnulado += num(v.totalAnulado);
-    t.ventas.lineasSinCosto += num(v.lineasSinCosto);
+    for (const k of CAMPOS_VENTAS) t.ventas[k] += num(v[k]);
     for (const m of Object.keys(t.porMedio)) t.porMedio[m] += num(r.porMedio && r.porMedio[m]);
     for (const [k, c] of Object.entries(r.porCategoria || {})) {
-      const d = (t.porCategoria[k] = t.porCategoria[k] || { cantidad: 0, total: 0, costo: 0 });
+      const d = (t.porCategoria[k] = t.porCategoria[k] || { cantidad: 0, total: 0, costo: 0, totalConCosto: 0 });
       d.cantidad += num(c.cantidad);
       d.total += num(c.total);
       d.costo += num(c.costo);
+      d.totalConCosto += num(c.totalConCosto);
     }
     for (const [k, p] of Object.entries(r.porProducto || {})) {
-      const d = (t.porProducto[k] = t.porProducto[k] || { nombre: p.nombre || k, cantidad: 0, total: 0, costo: 0 });
+      const d = (t.porProducto[k] = t.porProducto[k] || { nombre: p.nombre || k, cantidad: 0, total: 0, costo: 0, totalConCosto: 0 });
       d.nombre = p.nombre || d.nombre;
       d.cantidad += num(p.cantidad);
       d.total += num(p.total);
       d.costo += num(p.costo);
+      d.totalConCosto += num(p.totalConCosto);
     }
     for (const [h, x] of Object.entries(r.porHora || {})) {
       const d = (t.porHora[h] = t.porHora[h] || { cantidad: 0, total: 0 });
@@ -92,31 +94,36 @@ export function sumarRollups(rollups = []) {
     if (r.fecha) t.porDia[r.fecha] = { cantidad: num(v.cantidad) - num(v.anuladas), total: num(v.total) };
     for (const c of (r.cajas && r.cajas.cierres) || []) t.cierres.push({ ...c, fecha: r.fecha });
   }
-  for (const k of ["cantidad", "total", "anuladas", "totalAnulado"]) t.ventas[k] = redondear(t.ventas[k]);
+  for (const k of CAMPOS_VENTAS) t.ventas[k] = redondear(t.ventas[k]);
   for (const m of Object.keys(t.porMedio)) t.porMedio[m] = redondear(t.porMedio[m]);
   return t;
 }
+
+// Margen = totalConCosto − costo: solo las líneas con costo conocido. null cuando no hay ninguna (se muestra "—"),
+// nunca el total completo como si el costo fuera 0.
+export const margenDe = (x) => (num(x?.totalConCosto) > 0 ? redondear(num(x.totalConCosto) - num(x.costo)) : null);
 
 // Indicadores de la cabecera
 export function indicadores(t) {
   const netas = Math.max(0, num(t.ventas.cantidad) - num(t.ventas.anuladas));
   const costo = Object.values(t.porCategoria).reduce((s, c) => s + num(c.costo), 0);
-  const consumos = Object.values(t.porCategoria).reduce((s, c) => s + num(c.total), 0);
   return {
     ventas: netas,
     total: redondear(t.ventas.total),
     ticketPromedio: netas ? redondear(t.ventas.total / netas) : 0,
-    margen: redondear(consumos - costo),
+    margen: margenDe({ totalConCosto: t.ventas.totalConCosto, costo }),
     margenParcial: num(t.ventas.lineasSinCosto) > 0,
+    margenEstimado: num(t.ventas.lineasCostoEstimado) > 0,
+    descuentos: redondear(t.ventas.descuentos),
     anuladas: num(t.ventas.anuladas),
     totalAnulado: redondear(t.ventas.totalAnulado),
   };
 }
 
-// Top N productos por total vendido, con margen
+// Top N productos por total vendido, con margen (null si ninguna de sus líneas tiene costo)
 export function topProductos(t, n = 10) {
   return Object.entries(t.porProducto)
-    .map(([id, p]) => ({ id, nombre: p.nombre || id, cantidad: num(p.cantidad), total: redondear(p.total), margen: redondear(num(p.total) - num(p.costo)) }))
+    .map(([id, p]) => ({ id, nombre: p.nombre || id, cantidad: num(p.cantidad), total: redondear(p.total), margen: margenDe(p) }))
     .filter((p) => p.total > 0 || p.cantidad > 0)
     .sort((a, b) => b.total - a.total || b.cantidad - a.cantidad)
     .slice(0, n);
@@ -124,7 +131,7 @@ export function topProductos(t, n = 10) {
 
 // Categorías con participación (%) sobre los consumos; `nombres`: { categoriaId: nombre }
 export function porCategoriaConParticipacion(t, nombres = {}) {
-  const filas = Object.entries(t.porCategoria).map(([id, c]) => ({ id, nombre: id === "sin" ? "Sin categoría" : nombres[id] || id, cantidad: num(c.cantidad), total: redondear(c.total), margen: redondear(num(c.total) - num(c.costo)) }));
+  const filas = Object.entries(t.porCategoria).map(([id, c]) => ({ id, nombre: id === "sin" ? "Sin categoría" : nombres[id] || id, cantidad: num(c.cantidad), total: redondear(c.total), margen: margenDe(c) }));
   const total = filas.reduce((s, f) => s + f.total, 0);
   return filas.map((f) => ({ ...f, participacion: total > 0 ? Math.round((f.total / total) * 100) : 0 })).sort((a, b) => b.total - a.total);
 }
