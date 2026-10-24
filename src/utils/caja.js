@@ -10,7 +10,8 @@ export const MEDIOS_CAJA = ["efectivo", "transferencia", "tarjeta", "qr"];
 export const TIPOS_MOVIMIENTO_CAJA = ["retiro", "ingreso", "gasto"];
 export const TIPOS_RESERVADOS_CAJA = ["venta", "anulacion", "cobroCuenta", "seña"];
 
-export const ETIQUETA_MEDIO = { efectivo: "Efectivo", transferencia: "Transferencia", tarjeta: "Tarjeta", qr: "QR" };
+// "mercadopago" (pagos online, P3-8) no es un medio de caja: su plata va a la cuenta de MP del club, nunca a una caja
+export const ETIQUETA_MEDIO = { efectivo: "Efectivo", transferencia: "Transferencia", tarjeta: "Tarjeta", qr: "QR", mercadopago: "Mercado Pago" };
 export const ETIQUETA_TIPO = {
   retiro: "Retiro",
   ingreso: "Ingreso",

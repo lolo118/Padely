@@ -1097,6 +1097,8 @@ exports.onVentaUpdated = onDocumentUpdated("clubs/{clubId}/ventas/{numero}", asy
       return `anulación aplicada (${n} movimientos)`;
     });
     logger.info(`onVentaUpdated ${clubId}/${numero}: ${resultado}`);
+    // P3-8: una venta de cuenta anulada devuelve la deuda a la cuenta; una venta de Mercado Pago se devuelve
+    if (resultado.startsWith("anulación aplicada")) await revertirVentaDeCuenta(clubId, numero, despues);
   } catch (err) {
     logger.error(`onVentaUpdated ${clubId}/${numero}`, err);
   }
@@ -2440,3 +2442,473 @@ exports.mpRefrescarTokens = onSchedule({ schedule: "every day 05:00", timeZone: 
   }
   logger.info(`mpRefrescarTokens: ${renovados} de ${snap.size} clubes renovados`);
 });
+
+// ----- Pagos (Checkout Pro): preferencia → webhook → venta online + pago congelado en la cuenta -----
+// Los saldos se calculan con EL MISMO código que el cliente: functions/lib/cuentas.mjs es una copia generada de
+// src/utils/cuentas.js (functions/sync-utils.mjs; el test cuentasCopia.test.js falla si quedó vieja).
+let cuentasUtilPromesa = null;
+const cuentasUtil = () => (cuentasUtilPromesa ||= import("./lib/cuentas.mjs"));
+const MP_WEBHOOK_URL = `${FUNCTIONS_URL}/mpWebhook`;
+const PERMISOS_COBRO = ["cobrarTurnos", "vender"];
+const horaCorta = (c) => `${fechaCortaArgentina(c.fecha)} ${c.horaInicio || ""}`.trim();
+
+// Avisa al dueño y al staff activo con alguno de estos permisos (una campana por persona)
+async function avisarStaff(clubRef, permisos, datos) {
+  const [clubSnap, staffSnap] = await Promise.all([clubRef.get(), clubRef.collection("staff").where("activo", "==", true).get()]);
+  const uids = new Set();
+  if (clubSnap.exists && clubSnap.data().ownerUid) uids.add(clubSnap.data().ownerUid);
+  staffSnap.docs.forEach((d) => {
+    const s = d.data();
+    if (s.uid && Array.isArray(s.permisos) && permisos.some((p) => s.permisos.includes(p))) uids.add(s.uid);
+  });
+  if (!uids.size) return 0;
+  const batch = db.batch();
+  uids.forEach((uid) => batch.set(nuevaNotificacionRef(uid), { ...datos, leida: false, createdAt: FieldValue.serverTimestamp() }));
+  await batch.commit();
+  return uids.size;
+}
+
+// Una preferencia pendiente y vigente para el mismo destino (mismos participantes / misma reserva) se reutiliza
+async function pagoMpPendiente(clubRef, filtro) {
+  let q = clubRef.collection("pagosMp").where("estado", "==", "pendiente");
+  q = filtro.grupoId ? q.where("grupoId", "==", filtro.grupoId) : q.where("reservaId", "==", filtro.reservaId);
+  const snap = await q.get();
+  const ahora = Date.now();
+  return (
+    snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .find((p) => (p.venceEn && p.venceEn.toMillis ? p.venceEn.toMillis() : 0) > ahora && p.monto === filtro.monto && JSON.stringify([...(p.participanteIds || [])].sort()) === JSON.stringify([...(filtro.participanteIds || [])].sort())) || null
+  );
+}
+
+exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, async (request) => {
+  const uid = exigirAuth(request, { anonimoOk: true });
+  const anonimo = esAnonimoReq(request);
+  const d = request.data || {};
+  const clubId = texto(d.clubId, 80);
+  const tipo = texto(d.tipo, 20);
+  if (!clubId || !["parte", "seña", "mostrador"].includes(tipo)) throw new HttpsError("invalid-argument", "clubId y tipo (parte | seña | mostrador)");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const clubSnap = await clubRef.get();
+  if (!clubSnap.exists) throw new HttpsError("not-found", "El club no existe");
+  const club = clubSnap.data();
+  if (!club.mercadoPago || club.mercadoPago.conectado !== true) throw new HttpsError("failed-precondition", "El club no tiene Mercado Pago conectado");
+  const tokens = await tokensDelClub(clubRef);
+  if (!tokens || !tokens.accessToken) throw new HttpsError("failed-precondition", "El club no tiene Mercado Pago conectado");
+  const util = await cuentasUtil();
+  const comisionPct = Number(club.mercadoPago.comisionPadelyPct) || 0;
+
+  let destino; // { monto, titulo, backUrl, pagador, participanteIds, lineas, piezas, grupoId, reservaId, filtro }
+  if (tipo === "seña") {
+    if (anonimo) throw new HttpsError("permission-denied", "Entrá con tu cuenta de Padely");
+    const reservaId = texto(d.reservaId, 120);
+    if (!reservaId) throw new HttpsError("invalid-argument", "reservaId");
+    const rSnap = await clubRef.collection("reservas").doc(reservaId).get();
+    if (!rSnap.exists) throw new HttpsError("not-found", "La reserva no existe");
+    const r = rSnap.data();
+    if (r.jugadorUid !== uid) throw new HttpsError("permission-denied", "La reserva no es tuya");
+    if (r.status === "cancelada") throw new HttpsError("failed-precondition", "La reserva está cancelada");
+    const seña = Number(r.seña) || 0;
+    if (seña <= 0) throw new HttpsError("failed-precondition", "Esta reserva no lleva seña");
+    if (r.señaPagada) throw new HttpsError("failed-precondition", "La seña ya está pagada");
+    const nombre = await nombreDeUsuario(uid, r.nombreJugador || "");
+    destino = { monto: seña, titulo: `${club.nombre || "Club"} · ${r.canchaName || "Cancha"} · ${fechaCortaArgentina(r.fecha)} ${r.horaInicio || r.hora || ""} · Seña`, backUrl: `${APP_URL}/mis-reservas`, pagador: { uid, nombre }, participanteIds: [], lineas: [], piezas: [], grupoId: null, reservaId, filtro: { reservaId, monto: seña, participanteIds: [] } };
+  } else {
+    const grupoId = texto(d.grupoId, 120);
+    if (!grupoId) throw new HttpsError("invalid-argument", "grupoId");
+    const cSnap = await clubRef.collection("cuentas").doc(grupoId).get();
+    if (!cSnap.exists) throw new HttpsError("not-found", "La cuenta del turno no existe");
+    const cuenta = cSnap.data();
+    if (cuenta.estado !== "abierta") throw new HttpsError("failed-precondition", "La cuenta ya está cerrada");
+    const saldos = util.saldosDeCuenta(cuenta);
+    if (saldos.legacy) throw new HttpsError("failed-precondition", "Esta cuenta se cobra por partes desde el mostrador");
+    let cobro;
+    let pagador;
+    let participanteIds;
+    if (tipo === "parte") {
+      const yo = util.participantePorUid(cuenta, uid);
+      if (!yo) throw new HttpsError("permission-denied", "No estás en este turno");
+      const pedido = texto(d.participanteId, 80);
+      if (pedido && pedido !== yo.id) throw new HttpsError("permission-denied", "Solo podés pagar tu parte");
+      const s = saldos.participantes.find((p) => p.id === yo.id);
+      if (!s || s.debe <= 0) throw new HttpsError("failed-precondition", "No tenés nada pendiente");
+      cobro = util.cobroDe(cuenta, [yo.id], { saldos });
+      pagador = { uid, nombre: yo.nombre || (await nombreDeUsuario(uid, "Jugador")) };
+      participanteIds = [yo.id];
+    } else {
+      if (anonimo) throw new HttpsError("permission-denied", "Entrá con tu cuenta de Padely");
+      const acceso = await accesoClub(clubRef, uid, PERMISOS_COBRO);
+      if (!acceso.esStaff) throw new HttpsError("permission-denied", "Solo quien cobra puede armar un QR de Mercado Pago");
+      const ids = Array.isArray(d.participanteIds) ? d.participanteIds.map((x) => texto(x, 80)).filter(Boolean) : [];
+      const lineaIds = Array.isArray(d.lineaIds) ? d.lineaIds.map((x) => texto(x, 80)).filter(Boolean) : [];
+      const pagadorId = texto(d.pagadorId, 80);
+      if (lineaIds.length) {
+        if (!pagadorId) throw new HttpsError("invalid-argument", "pagadorId");
+        cobro = util.cobroDeLineas(cuenta, lineaIds, pagadorId, { saldos });
+        participanteIds = [pagadorId];
+      } else {
+        if (!ids.length) throw new HttpsError("invalid-argument", "participanteIds o lineaIds");
+        cobro = util.cobroDe(cuenta, ids, { saldos });
+        participanteIds = ids.length === 1 ? ids : cobro.cubreA;
+      }
+      const nombres = participanteIds.map((id) => (util.participantePorId(cuenta, id) || {}).nombre).filter(Boolean);
+      pagador = { uid: null, nombre: nombres.join(", ") || cuenta.nombreJugador || "" };
+    }
+    if (!cobro || cobro.total <= 0) throw new HttpsError("failed-precondition", "No hay nada para cobrar");
+    destino = {
+      monto: cobro.total,
+      titulo: `${club.nombre || "Club"} · ${cuenta.canchaNombre || "Cancha"} · ${horaCorta(cuenta)} · ${tipo === "parte" ? "Tu parte" : pagador.nombre ? `Parte de ${pagador.nombre}` : "Cuenta"}`,
+      backUrl: `${APP_URL}/turno/${clubId}/${grupoId}`,
+      pagador,
+      participanteIds,
+      lineas: cobro.lineas,
+      piezas: cobro.piezas,
+      grupoId,
+      reservaId: null,
+      filtro: { grupoId, monto: cobro.total, participanteIds },
+    };
+  }
+
+  // ¿Ya hay una preferencia pendiente y vigente igual? Se devuelve esa
+  const previa = await pagoMpPendiente(clubRef, destino.filtro);
+  if (previa) return { ok: true, pagoMpId: previa.id, initPoint: previa.initPoint, monto: previa.monto, venceEn: previa.venceEn.toMillis(), reutilizado: true };
+
+  const pagoMpRef = clubRef.collection("pagosMp").doc();
+  const pref = mp.cuerpoPreferencia({ titulo: destino.titulo, monto: destino.monto, pagoMpId: pagoMpRef.id, pagador: destino.pagador, notificationUrl: `${MP_WEBHOOK_URL}?club=${clubId}`, backUrl: destino.backUrl, comisionPct });
+  let r;
+  try {
+    r = await mpFetch("/checkout/preferences", { method: "POST", token: tokens.accessToken, body: pref.body, idempotencia: pagoMpRef.id });
+  } catch (err) {
+    logger.error(`mpCrearPago ${clubId}: preferencia rechazada (${err.status || ""}) ${err.message}`);
+    throw new HttpsError("unavailable", "Mercado Pago no aceptó el cobro. Probá de nuevo en un momento.");
+  }
+  const initPoint = r.init_point || r.sandbox_init_point || null;
+  if (!r.id || !initPoint) throw new HttpsError("unavailable", "Mercado Pago no devolvió el link de pago");
+  await pagoMpRef.set({
+    tipo,
+    estado: "pendiente",
+    clubId,
+    grupoId: destino.grupoId,
+    reservaId: destino.reservaId,
+    participanteIds: destino.participanteIds,
+    lineas: destino.lineas,
+    piezas: destino.piezas,
+    monto: pref.total,
+    comision: pref.fee,
+    comisionPct,
+    preferenceId: String(r.id),
+    initPoint,
+    sandboxInitPoint: r.sandbox_init_point || null,
+    paymentId: null,
+    pagador: destino.pagador,
+    creadoPor: uid,
+    creadoEn: FieldValue.serverTimestamp(),
+    venceEn: Timestamp.fromMillis(pref.venceEnMs),
+    aprobadoEn: null,
+    ventaNumero: null,
+    devolucion: null,
+    liveMode: tokens.liveMode === true,
+    actualizadoEn: FieldValue.serverTimestamp(),
+  });
+  logger.info(`mpCrearPago ${clubId}/${pagoMpRef.id}: ${tipo} $${pref.total} por ${uid}${anonimo ? " (anónimo)" : ""}`);
+  return { ok: true, pagoMpId: pagoMpRef.id, initPoint, monto: pref.total, venceEn: pref.venceEnMs, reutilizado: false };
+});
+
+// Aplica un pago APROBADO en una sola transacción: relee la cuenta, aplica solo las piezas que siguen sin cubrir
+// (si el mostrador cobró algo mientras tanto, lo pagado de más queda como excedente a devolver), crea la venta online
+// (MP-000001…, dispositivo "Online", cajaId null: nunca entra en una caja física), congela el pago en la cuenta y la
+// cierra si ya nadie debe. Idempotente por paymentId.
+async function aplicarPagoAprobado(clubRef, pagoMpRef, pago) {
+  const util = await cuentasUtil();
+  const clubSnap = await clubRef.get();
+  const club = clubSnap.exists ? clubSnap.data() : {};
+  const paymentId = String(pago.id);
+  const montoPagado = Number(pago.transaction_amount) || 0;
+  return db.runTransaction(async (tx) => {
+    const pmSnap = await tx.get(pagoMpRef);
+    if (!pmSnap.exists) return { resultado: "sin pagoMp" };
+    const pm = pmSnap.data();
+    if (pm.estado === "aprobado") return { resultado: pm.paymentId === paymentId ? "ya aplicado" : "ya aprobado con otro pago", pm };
+    if (pm.tipo === "seña") {
+      const cabezaRef = clubRef.collection("reservas").doc(pm.reservaId);
+      const [cabeza, slots] = await Promise.all([tx.get(cabezaRef), tx.get(clubRef.collection("reservas").where("grupoId", "==", pm.reservaId))]);
+      const docs = slots.docs.length ? slots.docs : cabeza.exists ? [cabeza] : [];
+      const reserva = cabeza.exists ? cabeza.data() : docs[0] ? docs[0].data() : null;
+      const cambios = { señaPagada: true, señaMedio: "mercadopago", señaPagoMpId: pagoMpRef.id, señaPagadaEn: FieldValue.serverTimestamp() };
+      if (reserva && reserva.status === "pendiente" && club.reservaDirecta !== false) cambios.status = "confirmada";
+      docs.forEach((s) => tx.update(s.ref, cambios));
+      tx.update(pagoMpRef, { estado: "aprobado", paymentId, aprobadoEn: FieldValue.serverTimestamp(), montoPagado, montoAplicado: pm.monto, excedente: 0, estadoMp: pago.status, actualizadoEn: FieldValue.serverTimestamp() });
+      return { resultado: "seña aplicada", pm, reserva, confirmada: cambios.status === "confirmada" };
+    }
+    const cuentaRef = clubRef.collection("cuentas").doc(pm.grupoId);
+    const contadorRef = clubRef.collection("contadoresDispositivos").doc("MP");
+    const [cSnap, contSnap] = await Promise.all([tx.get(cuentaRef), tx.get(contadorRef)]);
+    if (!cSnap.exists) throw new Error(`cuenta ${pm.grupoId} inexistente`);
+    const cuenta = cSnap.data();
+    const piezas = Array.isArray(pm.piezas) ? pm.piezas : [];
+    const { aplicadas, montoAplicado, excedente } = mp.aplicarPiezas(cuenta, piezas);
+    const indices = new Set(piezas.map((p, i) => (aplicadas.includes(p) ? i : -1)).filter((i) => i >= 0));
+    const lineasVenta = (pm.lineas || []).filter((_, i) => indices.has(i));
+    const total = montoAplicado;
+    const n = (Number(contSnap.exists ? contSnap.data().usado : 0) || 0) + 1;
+    const numero = total > 0 ? mp.numeroMp(n) : null;
+    if (total > 0) {
+      tx.set(clubRef.collection("ventas").doc(numero), {
+        numero,
+        dispositivo: "Online",
+        codigoDispositivo: "MP",
+        secuencia: n,
+        cajaId: null,
+        items: lineasVenta,
+        subtotal: total,
+        descuento: null,
+        descuentoTotal: 0,
+        total,
+        pagos: [{ medio: "mercadopago", monto: total, ref: paymentId }],
+        pagado: total,
+        vuelto: 0,
+        cuentaId: pm.grupoId,
+        participanteIds: pm.participanteIds || [],
+        cliente: { nombre: (pm.pagador && pm.pagador.nombre) || cuenta.nombreJugador || null },
+        creadoPor: (pm.pagador && pm.pagador.uid) || pm.creadoPor || "mercadopago",
+        creadoPorNombre: (pm.pagador && pm.pagador.nombre) || "Mercado Pago",
+        estado: "ok",
+        anulacion: null,
+        aplicado: false,
+        fiscal: null,
+        mpPaymentId: paymentId,
+        pagoMpId: pagoMpRef.id,
+        mpMontoCobrado: montoPagado,
+        mpExcedente: excedente,
+        creadoEn: FieldValue.serverTimestamp(),
+        actualizadoEn: FieldValue.serverTimestamp(),
+      });
+      tx.set(contadorRef, { codigo: "MP", dispositivo: "Online", usado: n, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
+    }
+    const pagoCongelado = {
+      id: `mp_${pagoMpRef.id}`,
+      ventaNumero: numero,
+      participanteIds: pm.participanteIds || [],
+      lineas: aplicadas.map((p) => ({ lineaId: p.lineaId || null, tipo: p.tipo, monto: Number(p.monto) || 0, participanteId: p.participanteId || null })),
+      total,
+      medios: [{ medio: "mercadopago", monto: total }],
+      en: Timestamp.now(),
+      por: (pm.pagador && pm.pagador.uid) || null,
+      porNombre: (pm.pagador && pm.pagador.nombre) || "Mercado Pago",
+      cubreA: [...new Set(aplicadas.map((p) => p.participanteId).filter(Boolean))],
+      mpPaymentId: paymentId,
+      pagoMpId: pagoMpRef.id,
+    };
+    const pagos = total > 0 ? [...(cuenta.pagos || []), pagoCongelado] : cuenta.pagos || [];
+    const saldada = cuenta.estado === "abierta" && total > 0 && util.saldosDeCuenta({ ...cuenta, pagos }).saldada;
+    const cambios = { pagos, actualizadoEn: FieldValue.serverTimestamp() };
+    if (numero) cambios.ventas = FieldValue.arrayUnion(numero);
+    if (excedente > 0) cambios.alertas = FieldValue.arrayUnion("mp-excedente");
+    if (saldada) Object.assign(cambios, { estado: "cerrada", cerradaPor: (pm.pagador && pm.pagador.uid) || "mercadopago", cerradaEn: FieldValue.serverTimestamp(), totales: util.calcularTotalesCuenta(cuenta) });
+    tx.update(cuentaRef, cambios);
+    tx.update(pagoMpRef, { estado: "aprobado", paymentId, aprobadoEn: FieldValue.serverTimestamp(), ventaNumero: numero, montoPagado, montoAplicado: total, excedente, excedenteDevuelto: null, estadoMp: pago.status, actualizadoEn: FieldValue.serverTimestamp() });
+    return { resultado: "aplicado", pm, cuenta, numero, total, excedente, saldada };
+  });
+}
+
+async function procesarNotificacionMp(clubId, paymentId) {
+  const clubRef = db.collection("clubs").doc(clubId);
+  const tokens = await tokensDelClub(clubRef);
+  if (!tokens || !tokens.accessToken) {
+    logger.warn(`mpWebhook ${clubId}: club sin tokens; pago ${paymentId} ignorado`);
+    return;
+  }
+  const pago = await mpFetch(`/v1/payments/${encodeURIComponent(paymentId)}`, { token: tokens.accessToken });
+  const pagoMpId = (pago && pago.external_reference) || (pago && pago.metadata && pago.metadata.pago_mp_id) || null;
+  if (!pagoMpId) {
+    logger.info(`mpWebhook ${clubId}: pago ${paymentId} sin external_reference (${pago && pago.status})`);
+    return;
+  }
+  const pagoMpRef = clubRef.collection("pagosMp").doc(String(pagoMpId));
+  const estado = pago.status;
+  if (estado === "approved") {
+    const r = await aplicarPagoAprobado(clubRef, pagoMpRef, pago);
+    logger.info(`mpWebhook ${clubId}/${pagoMpId}: ${r.resultado}${r.numero ? ` → ${r.numero} $${r.total}` : ""}${r.excedente ? ` excedente $${r.excedente}` : ""}${r.saldada ? " · cuenta cerrada" : ""}`);
+    if (r.resultado !== "aplicado" && r.resultado !== "seña aplicada") return;
+    const pm = r.pm;
+    const club = (await clubRef.get()).data() || {};
+    const monto = Math.round(Number(pago.transaction_amount) || pm.monto).toLocaleString("es-AR");
+    try {
+      if (pm.pagador && pm.pagador.uid && pm.pagador.anonimo !== true && !String(pm.pagador.uid).startsWith("anon")) {
+        const esAnon = r.cuenta ? (cc.participantesActivos(r.cuenta).find((p) => p.uid === pm.pagador.uid) || {}).anonimo === true : false;
+        if (!esAnon) {
+          await avisoA(pm.pagador.uid, {
+            tipo: "mp_pago_aprobado",
+            titulo: pm.tipo === "seña" ? `Seña pagada · $ ${monto}` : `Pago aprobado · $ ${monto}`,
+            mensaje: pm.tipo === "seña" ? `Tu seña en ${club.nombre || "el club"} quedó pagada con Mercado Pago.` : `Tu parte del turno en ${club.nombre || "el club"} quedó pagada con Mercado Pago.`,
+            link: pm.tipo === "seña" ? "/mis-reservas" : `/mi-cuenta/${clubId}/${pm.grupoId}`,
+            icono: "💳",
+          });
+        }
+      }
+      const quien = (pm.pagador && pm.pagador.nombre) || "Un jugador";
+      if (pm.tipo === "seña") {
+        await avisarStaff(clubRef, ["gestionarReservas", ...PERMISOS_COBRO], { tipo: "mp_seña", titulo: "Seña pagada por Mercado Pago", mensaje: `${quien} pagó la seña ($ ${monto}) del turno ${r.reserva ? `${r.reserva.canchaName || ""} ${fechaCortaArgentina(r.reserva.fecha)} ${r.reserva.horaInicio || r.reserva.hora || ""}` : ""}.`, link: `/admin/canchas?fecha=${(r.reserva && r.reserva.fecha) || ""}&turno=${pm.reservaId}`, icono: "💳" });
+      } else {
+        await avisarStaff(clubRef, PERMISOS_COBRO, { tipo: "mp_pago", titulo: "Pago por Mercado Pago", mensaje: `${quien} pagó su parte por Mercado Pago ($ ${monto}) · ${r.cuenta ? horaCorta(r.cuenta) : ""}${r.saldada ? " · la cuenta se cerró" : ""}.`, link: `/admin/bar/cuentas/${pm.grupoId}`, icono: "💳" });
+        if (r.excedente > 0) {
+          await avisarStaff(clubRef, PERMISOS_COBRO, { tipo: "mp_excedente", titulo: "Pago de más por Mercado Pago", mensaje: `${quien} pagó $ ${Math.round(r.excedente).toLocaleString("es-AR")} que ya se habían cobrado en el mostrador: devolvelo desde la cuenta.`, link: `/admin/bar/cuentas/${pm.grupoId}`, icono: "💳" });
+        }
+      }
+    } catch (err) {
+      logger.error(`mpWebhook ${clubId}/${pagoMpId}: avisos`, err);
+    }
+    return;
+  }
+  // No aprobado: rechazado/cancelado cierran la preferencia; pendiente/en proceso solo anotan
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(pagoMpRef);
+    if (!snap.exists) return;
+    const pm = snap.data();
+    if (pm.estado === "aprobado" && (estado === "refunded" || estado === "charged_back")) {
+      tx.update(pagoMpRef, { estado: "devuelto", estadoMp: estado, devolucion: pm.devolucion || { origen: "mercadopago", en: FieldValue.serverTimestamp() }, actualizadoEn: FieldValue.serverTimestamp() });
+      return;
+    }
+    if (pm.estado !== "pendiente") return;
+    if (estado === "rejected" || estado === "cancelled") tx.update(pagoMpRef, { estado: "rechazado", paymentId, estadoMp: estado, motivo: pago.status_detail || null, actualizadoEn: FieldValue.serverTimestamp() });
+    else tx.update(pagoMpRef, { paymentId, estadoMp: estado, actualizadoEn: FieldValue.serverTimestamp() });
+  });
+  logger.info(`mpWebhook ${clubId}/${pagoMpId}: pago ${paymentId} ${estado}`);
+  if (estado === "rejected" || estado === "cancelled") {
+    const snap = await pagoMpRef.get();
+    const pm = snap.exists ? snap.data() : null;
+    if (pm && pm.pagador && pm.pagador.uid) {
+      try {
+        await avisoA(pm.pagador.uid, { tipo: "mp_pago_rechazado", titulo: "Pago rechazado", mensaje: `Mercado Pago no aprobó tu pago${pago.status_detail ? ` (${pago.status_detail})` : ""}. Podés intentar de nuevo o pagar en el mostrador.`, link: pm.tipo === "seña" ? "/mis-reservas" : `/mi-cuenta/${clubId}/${pm.grupoId}`, icono: "💳" });
+      } catch (err) {
+        logger.error(`mpWebhook ${clubId}/${pagoMpId}: aviso de rechazo`, err);
+      }
+    }
+  }
+}
+
+// Webhook de Mercado Pago: valida la firma HMAC (x-signature / x-request-id), lee el pago con el token del club y lo
+// aplica. Responde 200 después de procesar (MP espera hasta 22 s y reintenta cada 15 min si no hay 200).
+exports.mpWebhook = onRequest({ region: REGION, secrets: [MP_WEBHOOK_SECRET, MP_CLIENT_SECRET], timeoutSeconds: 60 }, async (req, res) => {
+  const clubId = texto(req.query && req.query.club, 80);
+  const { dataId, tipo } = mp.datosDeNotificacion(req.query || {}, req.body || {});
+  const firma = mp.firmaValida({ xSignature: req.get("x-signature"), xRequestId: req.get("x-request-id"), dataId, secreto: MP_WEBHOOK_SECRET.value() });
+  if (!firma.ok) {
+    logger.warn(`mpWebhook: firma inválida (${firma.motivo}) club=${clubId || "?"} data.id=${dataId || "?"}`);
+    res.status(401).send("firma inválida");
+    return;
+  }
+  if (!clubId || !dataId || (tipo && tipo !== "payment")) {
+    res.status(200).send("ok");
+    return;
+  }
+  try {
+    await procesarNotificacionMp(clubId, dataId);
+    res.status(200).send("ok");
+  } catch (err) {
+    logger.error(`mpWebhook ${clubId}: ${err.message || err}`);
+    res.status(500).send("error");
+  }
+});
+
+// Cada 15 minutos: las preferencias pendientes vencidas pasan a "vencido"
+exports.expirarPagosMp = onSchedule({ schedule: "every 15 minutes", timeZone: ZONA_HORARIA }, async () => {
+  const snap = await db.collectionGroup("pagosMp").where("estado", "==", "pendiente").where("venceEn", "<=", Timestamp.now()).get();
+  if (snap.empty) return;
+  const ops = snap.docs.map((d) => (b) => b.update(d.ref, { estado: "vencido", actualizadoEn: FieldValue.serverTimestamp() }));
+  await escribirEnLotes(ops);
+  logger.info(`expirarPagosMp: ${snap.size} vencidos`);
+});
+
+// Devolución (total o parcial) con el token del club. Devuelve { ok, refundId } o { ok: false, error }.
+async function devolverPagoMp(clubRef, paymentId, { monto = null, idempotencia }) {
+  const tokens = await tokensDelClub(clubRef);
+  if (!tokens || !tokens.accessToken) return { ok: false, error: "club sin tokens" };
+  try {
+    const r = await mpFetch(`/v1/payments/${encodeURIComponent(paymentId)}/refunds`, { method: "POST", token: tokens.accessToken, body: monto ? { amount: Number(monto) } : {}, idempotencia });
+    return { ok: true, refundId: r && r.id ? String(r.id) : null, estado: r && r.status };
+  } catch (err) {
+    return { ok: false, error: `${err.status || ""} ${err.message || err}`.trim() };
+  }
+}
+
+// Staff: devuelve el excedente de un pago aprobado de más (carrera con el mostrador)
+exports.mpDevolverExcedente = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, async (request) => {
+  const uid = exigirAuth(request);
+  const clubId = texto(request.data && request.data.clubId, 80);
+  const pagoMpId = texto(request.data && request.data.pagoMpId, 80);
+  if (!clubId || !pagoMpId) throw new HttpsError("invalid-argument", "clubId y pagoMpId");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const acceso = await accesoClub(clubRef, uid, PERMISOS_COBRO);
+  if (!acceso.esStaff) throw new HttpsError("permission-denied", "Solo quien cobra puede devolver");
+  const pagoMpRef = clubRef.collection("pagosMp").doc(pagoMpId);
+  const snap = await pagoMpRef.get();
+  if (!snap.exists) throw new HttpsError("not-found", "El pago no existe");
+  const pm = snap.data();
+  if (pm.estado !== "aprobado" || !pm.paymentId) throw new HttpsError("failed-precondition", "El pago no está aprobado");
+  const excedente = Number(pm.excedente) || 0;
+  if (excedente <= 0 || pm.excedenteDevuelto) throw new HttpsError("failed-precondition", "No hay excedente para devolver");
+  const r = await devolverPagoMp(clubRef, pm.paymentId, { monto: excedente, idempotencia: `exc_${pagoMpId}` });
+  if (!r.ok) {
+    await pagoMpRef.update({ excedenteError: r.error, actualizadoEn: FieldValue.serverTimestamp() });
+    throw new HttpsError("unavailable", "Mercado Pago no aceptó la devolución: hacela desde tu cuenta de MP.");
+  }
+  const batch = db.batch();
+  batch.update(pagoMpRef, { excedenteDevuelto: { monto: excedente, refundId: r.refundId, en: FieldValue.serverTimestamp(), por: uid }, excedenteError: null, actualizadoEn: FieldValue.serverTimestamp() });
+  if (pm.grupoId) batch.update(clubRef.collection("cuentas").doc(pm.grupoId), { alertas: FieldValue.arrayRemove("mp-excedente"), actualizadoEn: FieldValue.serverTimestamp() });
+  await batch.commit();
+  logger.info(`mpDevolverExcedente ${clubId}/${pagoMpId}: $${excedente} devueltos por ${uid}`);
+  return { ok: true, monto: excedente, refundId: r.refundId };
+});
+
+// Al anular una venta de cuenta: el pago congelado se saca de la cuenta (la deuda vuelve) y, si era de Mercado Pago,
+// se devuelve el pago completo con el token del club. Si falla, aviso al dueño.
+async function revertirVentaDeCuenta(clubId, numero, venta) {
+  const clubRef = db.collection("clubs").doc(clubId);
+  if (venta.cuentaId) {
+    try {
+      const cuentaRef = clubRef.collection("cuentas").doc(String(venta.cuentaId));
+      const reabierta = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(cuentaRef);
+        if (!snap.exists) return false;
+        const cuenta = snap.data();
+        const pagos = (cuenta.pagos || []).filter((p) => p.ventaNumero !== numero);
+        if (pagos.length === (cuenta.pagos || []).length) return false;
+        const cambios = { pagos, alertas: FieldValue.arrayUnion("venta-anulada"), actualizadoEn: FieldValue.serverTimestamp() };
+        let reabre = false;
+        if (cuenta.estado === "cerrada") {
+          Object.assign(cambios, { estado: "abierta", cerradaPor: null, cerradaEn: null, reabiertaPorAnulacion: numero });
+          reabre = true;
+          const slots = await tx.get(clubRef.collection("reservas").where("grupoId", "==", String(venta.cuentaId)));
+          slots.docs.forEach((d) => tx.update(d.ref, { cuentaCerrada: false }));
+        }
+        tx.update(cuentaRef, cambios);
+        return reabre;
+      });
+      logger.info(`onVentaUpdated ${clubId}/${numero}: pago quitado de la cuenta${reabierta ? " (reabierta)" : ""}`);
+    } catch (err) {
+      logger.error(`onVentaUpdated ${clubId}/${numero}: no se pudo quitar el pago de la cuenta`, err);
+    }
+  }
+  if (venta.mpPaymentId) {
+    const r = await devolverPagoMp(clubRef, String(venta.mpPaymentId), { idempotencia: `anul_${numero}` });
+    const ventaRef = clubRef.collection("ventas").doc(numero);
+    const pagoMpRef = venta.pagoMpId ? clubRef.collection("pagosMp").doc(String(venta.pagoMpId)) : null;
+    const batch = db.batch();
+    if (r.ok) {
+      batch.update(ventaRef, { mpDevolucion: { refundId: r.refundId, monto: venta.mpMontoCobrado || venta.total, en: FieldValue.serverTimestamp() } });
+      if (pagoMpRef) batch.update(pagoMpRef, { estado: "devuelto", devolucion: { refundId: r.refundId, monto: venta.mpMontoCobrado || venta.total, en: FieldValue.serverTimestamp(), motivo: (venta.anulacion && venta.anulacion.motivo) || null }, actualizadoEn: FieldValue.serverTimestamp() });
+      logger.info(`onVentaUpdated ${clubId}/${numero}: devolución MP ${r.refundId || ""}`);
+    } else {
+      batch.update(ventaRef, { mpDevolucion: { error: r.error, en: FieldValue.serverTimestamp() } });
+      if (pagoMpRef) batch.update(pagoMpRef, { devolucion: { error: r.error, en: FieldValue.serverTimestamp() }, actualizadoEn: FieldValue.serverTimestamp() });
+      logger.error(`onVentaUpdated ${clubId}/${numero}: devolución MP falló (${r.error})`);
+    }
+    await batch.commit();
+    if (!r.ok) {
+      const clubSnap = await clubRef.get();
+      const ownerUid = clubSnap.exists ? clubSnap.data().ownerUid : null;
+      if (ownerUid) await avisoA(ownerUid, { tipo: "mp_devolucion_error", titulo: "No se pudo devolver el pago de Mercado Pago", mensaje: `La venta ${numero} se anuló pero Mercado Pago no aceptó la devolución: hacela desde tu cuenta de MP.`, link: `/admin/bar/cuentas${venta.cuentaId ? `/${venta.cuentaId}` : ""}`, icono: "💳" }).catch(() => {});
+    }
+  }
+}

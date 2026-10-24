@@ -15,7 +15,7 @@
 // (y queda fuera del margen). Al recalcular un día, una línea sin costo toma el costo ACTUAL del producto
 // (costosActuales) y cuenta en lineasCostoEstimado; si el producto tampoco tiene costo, sigue en lineasSinCosto.
 const ZONA_HORARIA = "America/Argentina/Buenos_Aires";
-const CLAVES_MEDIO = ["efectivo", "transferencia", "tarjeta", "qr"];
+const CLAVES_MEDIO = ["efectivo", "transferencia", "tarjeta", "qr", "mercadopago"];
 const redondear = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 // "HH" local argentina de un Timestamp (o de ahora)

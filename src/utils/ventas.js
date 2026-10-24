@@ -107,7 +107,7 @@ export function unirBloques(actual, nuevo) {
 
 const pesos = (n) => "$ " + Math.round(Number(n || 0)).toLocaleString("es-AR", { maximumFractionDigits: 0 });
 const cant = (n) => (Number(n) || 0).toLocaleString("es-AR", { maximumFractionDigits: 3 });
-export const ETIQUETA_MEDIO_VENTA = { efectivo: "Efectivo", transferencia: "Transferencia", tarjeta: "Tarjeta", qr: "QR" };
+export const ETIQUETA_MEDIO_VENTA = { efectivo: "Efectivo", transferencia: "Transferencia", tarjeta: "Tarjeta", qr: "QR", mercadopago: "Mercado Pago" };
 
 // Ticket como texto plano para WhatsApp (wa.me)
 export function textoTicketWhatsApp(venta, club = {}) {

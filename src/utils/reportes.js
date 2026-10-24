@@ -53,7 +53,7 @@ export function diasEntre(desde, hasta) {
 // líneas con costo conocido), lineasSinCosto, lineasCostoEstimado (recálculo con el costo actual del producto),
 // descuentos (descuento general de los tickets), otros (cancha/seña cobradas sin cuenta del turno)
 const CAMPOS_VENTAS = ["cantidad", "total", "anuladas", "totalAnulado", "totalConCosto", "lineasSinCosto", "lineasCostoEstimado", "descuentos", "otros"];
-const vacio = () => ({ ventas: Object.fromEntries(CAMPOS_VENTAS.map((k) => [k, 0])), porMedio: { efectivo: 0, transferencia: 0, tarjeta: 0, qr: 0 }, porCategoria: {}, porProducto: {}, porHora: {}, porCancha: {}, porDia: {}, cierres: [] });
+const vacio = () => ({ ventas: Object.fromEntries(CAMPOS_VENTAS.map((k) => [k, 0])), porMedio: { efectivo: 0, transferencia: 0, tarjeta: 0, qr: 0, mercadopago: 0 }, porCategoria: {}, porProducto: {}, porHora: {}, porCancha: {}, porDia: {}, cierres: [] });
 
 // Suma los rollups de varios días en una sola vista
 export function sumarRollups(rollups = []) {
@@ -142,6 +142,7 @@ export const porMedioLista = (t) =>
     { medio: "transferencia", label: "Transferencia", total: redondear(t.porMedio.transferencia) },
     { medio: "tarjeta", label: "Tarjeta", total: redondear(t.porMedio.tarjeta) },
     { medio: "qr", label: "QR", total: redondear(t.porMedio.qr) },
+    { medio: "mercadopago", label: "Mercado Pago", total: redondear(t.porMedio.mercadopago) },
   ].filter((m) => m.total !== 0);
 
 // Serie por hora (08…23) para hoy/ayer, o por día para períodos largos

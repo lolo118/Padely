@@ -23,7 +23,7 @@ import useMediaQuery from "../../../utils/useMediaQuery";
 // Reportes del bar: lo que el dueño abre el lunes. Se arma sumando los rollups diarios (reportesDiarios) del
 // período, nunca recorriendo ventas. "Recalcular este día" reconstruye un día desde ventas y cajas (callable).
 
-const COLORES = ["var(--court)", "var(--success)", "var(--ink-3)", "var(--line-strong)"];
+const COLORES = ["var(--court)", "var(--success)", "var(--ink-3)", "var(--line-strong)", "var(--lime-text)"];
 const TICK = { fontSize: 12, fill: "var(--ink-3)", fontFamily: "var(--font-sans)" };
 const TOOLTIP = {
   contentStyle: { background: "var(--surface-raised)", border: "1px solid var(--line)", borderRadius: 12, color: "var(--ink)" },

@@ -41,7 +41,7 @@ test("suma de rollups e indicadores", () => {
   assert.equal(t.ventas.cantidad, 5);
   assert.equal(t.ventas.total, 12000);
   assert.equal(t.ventas.anuladas, 1);
-  assert.deepEqual(t.porMedio, { efectivo: 5000, transferencia: 0, tarjeta: 3000, qr: 4000 });
+  assert.deepEqual(t.porMedio, { efectivo: 5000, transferencia: 0, tarjeta: 3000, qr: 4000, mercadopago: 0 });
   assert.equal(t.porProducto.agua.cantidad, 5);
   assert.equal(t.porProducto.agua.total, 5000);
   assert.equal(t.porHora["20"].total, 10000);
