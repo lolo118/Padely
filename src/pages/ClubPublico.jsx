@@ -37,6 +37,7 @@ import {
   crearReserva,
 } from "../services/canchaService";
 import { getTorneosDeClub } from "../services/torneoService";
+import { pagarConMercadoPago } from "../services/mercadoPagoService";
 import { canchasDelTorneo, listaCategorias } from "../utils/torneo";
 import {
   doc,
@@ -198,6 +199,7 @@ export default function ClubPublico() {
     telefono: "",
   });
   const [guardando, setGuardando] = useState(false);
+  const [pagandoSeña, setPagandoSeña] = useState(false);
   const [tab, setTab] = useState("canchas");
 
   // Torneos del club: se cargan una sola vez, la primera vez que se abre la pestaña (null = todavía no)
@@ -394,6 +396,19 @@ export default function ClubPublico() {
     }
   };
 
+  // Seña online (P3-8): la Function arma el pago y Mercado Pago vuelve a /mis-reservas?mp=ok|pendiente|error
+  const pagarSeñaMp = async () => {
+    if (!reservaExitosa?.grupoId) return;
+    setPagandoSeña(true);
+    try {
+      await pagarConMercadoPago({ clubId: club.id, tipo: "seña", reservaId: reservaExitosa.grupoId });
+    } catch (err) {
+      console.error("No pudimos abrir Mercado Pago:", err);
+      toast.error(err?.message || "No pudimos abrir Mercado Pago. Podés pagar la seña en el club.");
+      setPagandoSeña(false);
+    }
+  };
+
   const handleReservar = async (e) => {
     e.preventDefault();
     if (!modalData || !club) return;
@@ -403,7 +418,7 @@ export default function ClubPublico() {
     // Una sola reserva de N horas seguidas (N documentos en una transacción); el rango va en las notificaciones
     const rango = rangoHoras(modalData.hora, horaFinElegida);
     try {
-      await crearReserva(club.id, {
+      const grupoId = await crearReserva(club.id, {
         canchaId: modalData.cancha.id,
         canchaName: modalData.cancha.nombre,
         fecha: fechaSeleccionada,
@@ -435,6 +450,8 @@ export default function ClubPublico() {
         seña: señaReserva,
         status: reservaDirecta ? "confirmada" : "pendiente",
         clubNombre: club.nombre,
+        grupoId,
+        pagarSeñaMp: !!user && señaReserva > 0 && club.mercadoPago?.conectado === true,
       });
       setMostrarModal(false);
     } catch (err) {
@@ -1213,7 +1230,7 @@ export default function ClubPublico() {
             </dl>
             {reservaExitosa.seña > 0 && (
               <p className="body-sm text-ink-2 mt-2">
-                Seña {formatPrecio(reservaExitosa.seña)} · el resto lo pagás en el club
+                Seña {formatPrecio(reservaExitosa.seña)} · {reservaExitosa.pagarSeñaMp ? "pagala ahora con Mercado Pago o en el club" : "la pagás en el club"} · el resto lo pagás en el club
               </p>
             )}
 
@@ -1221,9 +1238,18 @@ export default function ClubPublico() {
               <Button onClick={() => { setReservaExitosa(null); navigate("/mis-reservas"); }}>
                 Ver mis reservas
               </Button>
-              <Button variant="primary" onClick={() => setReservaExitosa(null)}>
-                Entendido
-              </Button>
+              {reservaExitosa.pagarSeñaMp ? (
+                <>
+                  <Button onClick={() => setReservaExitosa(null)}>Entendido</Button>
+                  <Button variant="primary" cargando={pagandoSeña ? "Abriendo Mercado Pago…" : ""} onClick={pagarSeñaMp}>
+                    Pagar la seña con Mercado Pago
+                  </Button>
+                </>
+              ) : (
+                <Button variant="primary" onClick={() => setReservaExitosa(null)}>
+                  Entendido
+                </Button>
+              )}
             </div>
           </div>
         </div>

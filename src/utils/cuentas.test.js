@@ -4,6 +4,9 @@ import assert from "node:assert/strict";
 import {
   calcularTotalesCuenta,
   cuentaDesdeReserva,
+  estadoPagoDe,
+  nuevoParticipante,
+  saldosDeCuenta,
   cuentaEditable,
   dividirEnPartesIguales,
   dividirPorJugador,
@@ -195,4 +198,22 @@ test("B-P3-7b-1: la seña marcada después de abrir la cuenta se acredita si nad
   assert.equal(sincronizarSeña(conConsumoPagado, { seña: 3000, señaPagada: true }).cambios.totales.total, 12100);
   // Cerrada o anulada: no se toca
   assert.deepEqual(sincronizarSeña({ ...abierta, estado: "cerrada" }, { seña: 3000, señaPagada: true }), { cambios: null, alerta: null });
+});
+
+test("P3-8: quien pagó por Mercado Pago figura 'Pagó · Mercado Pago'", () => {
+  const cuenta = cuentaDesdeReserva({ id: "g", grupoId: "g", canchaId: "k1", canchaName: "Cancha 1", fecha: "2026-10-24", horaInicio: "20:00", horaFin: "21:00", turnos: 1, jugadorUid: "u1", nombreJugador: "Gómez", precioTotal: 10000, seña: 0, señaPagada: false }, { agregadoPor: "t" });
+  cuenta.participantes.push(nuevoParticipante({ id: "p2", nombre: "Juan", tipo: "jugador" }));
+  const pagoMp = { id: "mp_1", ventaNumero: "MP-000001", participanteIds: ["p2"], total: 5000, medios: [{ medio: "mercadopago", monto: 5000 }], lineas: [{ lineaId: null, tipo: "cancha", monto: 5000, participanteId: "p2" }] };
+  const s = saldosDeCuenta({ ...cuenta, pagos: [pagoMp] });
+  const juan = s.participantes.find((p) => p.id === "p2");
+  assert.equal(juan.debe, 0);
+  assert.equal(juan.medioPago, "mercadopago");
+  assert.equal(estadoPagoDe(juan).texto, "Pagó · Mercado Pago");
+  assert.equal(estadoPagoDe(juan, { vos: true }).texto, "Pagaste · Mercado Pago");
+  assert.equal(s.participantes.find((p) => p.id === "titular").medioPago, null);
+  // Un pago del mostrador y otro de MP a nombre de la misma persona: "mixto" (sin coletilla)
+  const mostrador = { id: "m", ventaNumero: "D1-000001", participanteIds: ["titular"], total: 5000, medios: [{ medio: "efectivo", monto: 5000 }], lineas: [{ lineaId: null, tipo: "cancha", monto: 5000, participanteId: "titular" }] };
+  const s2 = saldosDeCuenta({ ...cuenta, pagos: [pagoMp, mostrador, { ...pagoMp, id: "mp_2", participanteIds: ["titular"], lineas: [{ lineaId: "x", tipo: "consumo", monto: 100, participanteId: "titular" }] }], items: [{ lineaId: "x", nombre: "Agua", cantidad: 1, subtotal: 100, asignadoA: ["titular"] }] });
+  assert.equal(s2.participantes.find((p) => p.id === "titular").medioPago, "mixto");
+  assert.equal(estadoPagoDe(s2.participantes.find((p) => p.id === "titular")).texto, "Pagó");
 });

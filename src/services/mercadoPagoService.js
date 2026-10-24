@@ -37,3 +37,11 @@ export const getVentasMpEntre = async (clubId, desde, hasta) => {
 
 export const clubConectadoMp = (club) => !!club?.mercadoPago?.conectado;
 export const MEDIO_MP = "mercadopago";
+
+// Jugador: arma el pago (parte o seña) y manda al checkout de Mercado Pago, que vuelve a back_urls con ?mp=ok|pendiente|error
+export const pagarConMercadoPago = async (datos) => {
+  const r = await mpCrearPago(datos);
+  if (!r?.initPoint) throw new Error("Mercado Pago no devolvió el link de pago");
+  window.location.assign(r.initPoint);
+  return r;
+};

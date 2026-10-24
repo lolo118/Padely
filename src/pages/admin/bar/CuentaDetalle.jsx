@@ -8,6 +8,7 @@ import { toast } from "../../../components/Toast";
 import { confirmar } from "../../../components/ConfirmDialog";
 import { Alert, Badge, Button, Card, Field, Input, Select } from "../../../components/ui";
 import CobrarDialog from "../../../components/pos/CobrarDialog";
+import QrMercadoPagoDialog from "../../../components/pagos/QrMercadoPagoDialog";
 import PostVentaDialog from "../../../components/pos/PostVentaDialog";
 import DividirDialog from "../../../components/pos/DividirDialog";
 import TicketPreview from "../../../components/TicketPreview";
@@ -32,14 +33,18 @@ import {
   cobrarTodo,
   escucharCuenta,
   guardarDivision,
+  quitarAlertaCuenta,
   quitarItemDeCuenta,
   setCobrarCancha,
 } from "../../../services/cuentasService";
 import { quitarParticipante } from "../../../services/participantesService";
+import { clubConectadoMp, escucharPagosMpDeCuenta, mpDevolverExcedente } from "../../../services/mercadoPagoService";
+import { anularVenta } from "../../../services/ventasService";
+import { ETIQUETA_MEDIO_VENTA } from "../../../utils/ventas";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { useOnline } from "../../../utils/conexion";
-import { ALERTA_SEÑA_POSTERIOR, calcularTotalesCuenta, canchaPagadaEnParte, cobroDeLineas, cobroRestoAlTitular, cuentaEditable, esLegacyDividida, lineaPagada, partePagada, partesPagadas, participantesActivos, saldosDeCuenta, textoReparto, textoTurno } from "../../../utils/cuentas";
+import { ALERTA_MP_EXCEDENTE, ALERTA_SEÑA_POSTERIOR, ALERTA_VENTA_ANULADA, calcularTotalesCuenta, canchaPagadaEnParte, cobroDeLineas, cobroRestoAlTitular, cuentaEditable, esLegacyDividida, lineaPagada, partePagada, partesPagadas, participantesActivos, saldosDeCuenta, textoReparto, textoTurno } from "../../../utils/cuentas";
 import { formatPrecio } from "../../../utils/format";
 import { formatDiaCorto, formatFechaHora, formatHora } from "../../../utils/formatDate";
 
@@ -163,6 +168,14 @@ export default function CuentaDetalle() {
   const [ticketCuenta, setTicketCuenta] = useState(null);
   const [ocupado, setOcupado] = useState(false);
   const [ancho] = useState(anchoTicketGuardado);
+  // Pagos de Mercado Pago de esta cuenta (QR pendiente, aprobados, excedente a devolver): solo si el club tiene MP
+  const mpConectado = clubConectadoMp(clubActual);
+  const [pagosMp, setPagosMp] = useState([]);
+  useEffect(() => {
+    if (!clubId || !id || !puedeEntrar || !mpConectado) return undefined;
+    // "vigente" se calcula al llegar la foto (no en el render): pendiente y sin vencer
+    return escucharPagosMpDeCuenta(clubId, id, (lista) => setPagosMp(lista.map((p) => ({ ...p, vigente: p.estado === "pendiente" && (p.venceEn?.toMillis?.() || 0) > Date.now() }))), (err) => console.error("Error escuchando los pagos de Mercado Pago:", err));
+  }, [clubId, id, puedeEntrar, mpConectado]);
   // La seña se muestra como está en la RESERVA (la cuenta guarda una foto que puede quedar vieja)
   const [reservaSeña, setReservaSeña] = useState(null); // { seña, señaPagada, señaMedio } | null
   useEffect(() => {
@@ -266,6 +279,51 @@ export default function CuentaDetalle() {
     console.error(texto, e);
     toast.error(e instanceof CuentaNoEditableError || e instanceof CuentaCerradaError ? e.message : e?.code === "permission-denied" ? "Sin permiso." : e?.message || texto);
   };
+  // ----- Mercado Pago (P3-8) -----
+  const excedenteMp = pagosMp.find((p) => p.estado === "aprobado" && Number(p.excedente) > 0 && !p.excedenteDevuelto) || null;
+  const mpPendiente = pagosMp.find((p) => p.vigente) || null;
+  const abrirMp = (destino) => setDialogo({ tipo: "mp", destino: { tipo: "mostrador", grupoId: cuenta.id, ...destino } });
+  const mpAprobado = (pm) => {
+    toast.success(`Pago por Mercado Pago aprobado${pm.ventaNumero ? ` · ${pm.ventaNumero}` : ""} · ${formatPrecio(pm.montoAplicado ?? pm.monto)}`);
+    setDialogo(null);
+    setSeleccion(new Set());
+  };
+  const devolverExcedente = async () => {
+    if (!excedenteMp) return;
+    const ok = await confirmar({ titulo: "Devolver el pago de más", mensaje: `Se devuelven ${formatPrecio(excedenteMp.excedente)} a la cuenta de Mercado Pago de quien pagó.`, confirmText: "Devolver" });
+    if (!ok) return;
+    setOcupado(true);
+    try {
+      await mpDevolverExcedente({ clubId, pagoMpId: excedenteMp.id });
+      toast.success(`Devueltos ${formatPrecio(excedenteMp.excedente)} por Mercado Pago`);
+    } catch (e) {
+      avisarError(e, "No pudimos devolver el pago.");
+    } finally {
+      setOcupado(false);
+    }
+  };
+  // Devolver un pago de MP = anular su venta: la Function devuelve la plata y saca el pago de la cuenta (la deuda vuelve)
+  const devolverPagoMp = async (pg) => {
+    const ok = await confirmar({ titulo: "Devolver este pago", mensaje: `Se anula la venta ${pg.ventaNumero} y se devuelven ${formatPrecio(pg.total)} por Mercado Pago. La deuda vuelve a la cuenta.`, confirmText: "Devolver", danger: true });
+    if (!ok) return;
+    setOcupado(true);
+    try {
+      await anularVenta(clubId, pg.ventaNumero, { motivo: "Devolución por Mercado Pago", uid, nombre });
+      toast.success(`Venta ${pg.ventaNumero} anulada: la devolución se hace en unos segundos`);
+    } catch (e) {
+      avisarError(e, "No pudimos anular la venta.");
+    } finally {
+      setOcupado(false);
+    }
+  };
+  const quitarAlerta = async (alerta) => {
+    try {
+      await quitarAlertaCuenta(clubId, cuenta.id, alerta);
+    } catch (e) {
+      avisarError(e, "No pudimos quitar el aviso.");
+    }
+  };
+
   const quitar = async (linea) => {
     try {
       await quitarItemDeCuenta(clubId, cuenta.id, linea.lineaId);
@@ -393,6 +451,45 @@ export default function CuentaDetalle() {
         </Alert>
       )}
       {abierta && legacy && !editable && <Alert>Cuenta dividida (modo anterior): ya hay partes cobradas, los consumos y la división no se cambian más. Cobrá las partes que faltan.</Alert>}
+      {excedenteMp && (
+        <Alert tone="warning">
+          <p className="m-0">
+            <strong>Pago de más por Mercado Pago: devolver {formatPrecio(excedenteMp.excedente)}.</strong> {excedenteMp.pagador?.nombre || "El jugador"} pagó online algo que ya se había cobrado en el mostrador.
+          </p>
+          <Button size="sm" variant="primary" className="mt-2" disabled={ocupado} onClick={devolverExcedente}>
+            Devolver {formatPrecio(excedenteMp.excedente)}
+          </Button>
+        </Alert>
+      )}
+      {alertas.includes(ALERTA_MP_EXCEDENTE) && !excedenteMp && pagosMp.length > 0 && abierta && (
+        <Alert>
+          El pago de más por Mercado Pago ya se devolvió.
+          <Button size="sm" variant="ghost" className="ml-3" onClick={() => quitarAlerta(ALERTA_MP_EXCEDENTE)}>
+            Entendido
+          </Button>
+        </Alert>
+      )}
+      {alertas.includes(ALERTA_VENTA_ANULADA) && (
+        <Alert tone="warning">
+          Se anuló un pago de esta cuenta: la deuda volvió a quien la tenía.
+          {abierta && (
+            <Button size="sm" variant="ghost" className="ml-3" onClick={() => quitarAlerta(ALERTA_VENTA_ANULADA)}>
+              Entendido
+            </Button>
+          )}
+        </Alert>
+      )}
+      {mpPendiente && abierta && (
+        <Alert>
+          Hay un QR de Mercado Pago esperando el pago de {formatPrecio(mpPendiente.monto)}
+          {mpPendiente.pagador?.nombre ? ` (${mpPendiente.pagador.nombre})` : ""}.
+          {mpPendiente.pedido && (
+            <Button size="sm" className="ml-3" onClick={() => abrirMp(mpPendiente.pedido)}>
+              Ver QR
+            </Button>
+          )}
+        </Alert>
+      )}
       {alertas.includes(ALERTA_SEÑA_POSTERIOR) && (
         <Alert tone="warning">
           <strong>La seña se marcó cobrada después de cobrar parte de la cancha:</strong> revisá el reparto. Lo ya cobrado no se cambia; la seña no se descontó sola.
@@ -648,10 +745,17 @@ export default function CuentaDetalle() {
                           {cubre.length ? <span className="body-sm text-ink-2 font-normal"> · también por {cubre.join(", ")}</span> : null}
                         </p>
                         <p className="body-sm text-ink-2 m-0 pd-tnum">
-                          {pg.ventaNumero} · {(pg.medios || []).map((m) => m.medio).join(" + ") || "—"} · {formatFechaHora(pg.en)}
+                          {pg.ventaNumero} · {(pg.medios || []).map((m) => ETIQUETA_MEDIO_VENTA[m.medio] || m.medio).join(" + ") || "—"} · {formatFechaHora(pg.en)}
                         </p>
                       </div>
-                      <span className="font-semibold pd-tnum">{formatPrecio(pg.total)}</span>
+                      <span className="flex items-center gap-2">
+                        {pg.mpPaymentId && puedeAnular && (
+                          <Button size="sm" variant="ghost" disabled={ocupado} onClick={() => devolverPagoMp(pg)}>
+                            Devolver pago
+                          </Button>
+                        )}
+                        <span className="font-semibold pd-tnum">{formatPrecio(pg.total)}</span>
+                      </span>
                     </li>
                   );
                 })}
@@ -720,15 +824,16 @@ export default function CuentaDetalle() {
         </aside>
       </div>
 
-      {dialogo === "cobrarTodo" && <CobrarDialog total={saldos.pendiente} sinNumeros={sinNumeros} onCerrar={() => setDialogo(null)} onConfirmar={confirmarCobrarTodo} />}
+      {dialogo === "cobrarTodo" && <CobrarDialog total={saldos.pendiente} sinNumeros={sinNumeros} onCerrar={() => setDialogo(null)} onConfirmar={confirmarCobrarTodo} onMercadoPago={mpConectado ? () => abrirMp({ participanteIds: saldos.participantes.filter((p) => p.debe > 0).map((p) => p.id) }) : null} />}
       {dialogo === "cobrarResto" && <CobrarDialog total={restoTotal} sinNumeros={sinNumeros} onCerrar={() => setDialogo(null)} onConfirmar={confirmarCobrarResto} />}
-      {participanteCobrando && <CobrarDialog total={participanteCobrando.debe} sinNumeros={sinNumeros} onCerrar={() => setDialogo(null)} onConfirmar={(calculo) => confirmarCobrarA(participanteCobrando.id, calculo)} />}
+      {participanteCobrando && <CobrarDialog total={participanteCobrando.debe} sinNumeros={sinNumeros} onCerrar={() => setDialogo(null)} onConfirmar={(calculo) => confirmarCobrarA(participanteCobrando.id, calculo)} onMercadoPago={mpConectado ? () => abrirMp({ participanteIds: [participanteCobrando.id] }) : null} />}
       {dialogo?.tipo === "quienPaga" && (
         <QuienPagaDialog participantes={participantes} titularId={saldos?.titularId} total={totalSeleccion} onCerrar={() => setDialogo(null)} onElegir={(pagadorId) => setDialogo({ tipo: "cobrarSel", lineaIds: dialogo.lineaIds, pagadorId })} />
       )}
       {dialogo?.tipo === "cobrarSel" && (
-        <CobrarDialog total={cobroDeLineas(cuenta, dialogo.lineaIds, dialogo.pagadorId, { saldos }).total} sinNumeros={sinNumeros} onCerrar={() => setDialogo(null)} onConfirmar={(calculo) => confirmarCobrarSel(dialogo.lineaIds, dialogo.pagadorId, calculo)} />
+        <CobrarDialog total={cobroDeLineas(cuenta, dialogo.lineaIds, dialogo.pagadorId, { saldos }).total} sinNumeros={sinNumeros} onCerrar={() => setDialogo(null)} onConfirmar={(calculo) => confirmarCobrarSel(dialogo.lineaIds, dialogo.pagadorId, calculo)} onMercadoPago={mpConectado ? () => abrirMp({ lineaIds: dialogo.lineaIds, pagadorId: dialogo.pagadorId }) : null} />
       )}
+      {dialogo?.tipo === "mp" && <QrMercadoPagoDialog clubId={clubId} datos={dialogo.destino} descripcion={textoTurno(cuenta)} onAprobado={mpAprobado} onCerrar={() => setDialogo(null)} />}
       {dialogo?.tipo === "asignar" && (
         <AsignarSheet lineas={(cuenta.items || []).filter((it) => dialogo.lineaIds.includes(it.lineaId))} participantes={participantes} onCerrar={() => setDialogo(null)} onGuardar={(ids) => asignar(dialogo.lineaIds, ids)} />
       )}

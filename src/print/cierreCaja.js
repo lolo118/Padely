@@ -27,7 +27,7 @@ function desgloseDe(movimientos) {
 }
 
 // { club: { nombre, direccion, ciudad }, caja, movimientos, ancho } → HTML del cuerpo del ticket
-export function htmlCierreCaja({ club = {}, caja = {}, movimientos = [] }) {
+export function htmlCierreCaja({ club = {}, caja = {}, movimientos = [], ventasMp = [] }) {
   const t = { ...TOTALES_CERO, ...(caja.totales || {}) };
   const desglose = desgloseDe(movimientos);
   const esperado = caja.esperadoEfectivo ?? efectivoEsperado(caja);
@@ -60,6 +60,8 @@ export function htmlCierreCaja({ club = {}, caja = {}, movimientos = [] }) {
     if (d.gastos) partes.push(fila("Gastos", firmado(-d.gastos), "indent"));
     if (d.otros) partes.push(fila("Otros", firmado(d.otros), "indent"));
   }
+  // Pagos online (P3-8): van a la cuenta de Mercado Pago del club, nunca a esta caja; solo informativo
+  if (ventasMp.length) partes.push(fila("Mercado Pago (no entra en caja)", formatPrecio(ventasMp.reduce((s, v) => s + (Number(v.total) || 0), 0)), "ticket-muted"));
   partes.push(sep());
 
   partes.push(fila("Efectivo esperado", formatPrecio(esperado), "ticket-strong"));

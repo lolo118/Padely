@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CircleDot, ShoppingBag, UserPlus } from "lucide-react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { ArrowLeft, CircleDot, CreditCard, ShoppingBag, UserPlus } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { escucharCuenta } from "../services/cuentasService";
 import { getClubConfig } from "../services/canchaService";
+import { clubConectadoMp, pagarConMercadoPago } from "../services/mercadoPagoService";
 import { asignarLineasTurno } from "../services/participantesService";
 import { calcularTotalesCuenta, esLegacyDividida, estadoPagoDe, iniciales, lineaPagada, lineasDeVentaParaParte, parteDelJugador, partePagada, participantePorUid, participantesActivos, plural, puedeAsignar, saldosDeCuenta, textoRepartoLargo } from "../utils/cuentas";
 import { puedePedir } from "../utils/pedidos";
@@ -19,8 +20,8 @@ import PedirUI from "../components/pedidos/PedirUI";
 // "Mi cuenta" / "Tu turno": lo que ve cada persona del turno (titular, jugador sumado o invitado anónimo que entró por
 // el link). Primero "Tu parte" (cancha, tus consumos, los compartidos "÷3", lo sin asignar, pagado, debe), después
 // "Todos" (quién pagó y quién debe: esa transparencia es el punto), y los consumos con su "para quién". El titular y
-// los dueños de una línea la reasignan (Function asignarLineas). "Pedir a la barra" durante el turno. Sin pagos acá
-// todavía (P3-8): se paga en el mostrador. Rutas: /mi-cuenta/:clubId/:grupoId (jugador) y /turno/:clubId/:grupoId
+// los dueños de una línea la reasignan (Function asignarLineas). "Pedir a la barra" durante el turno. Con Mercado Pago
+// conectado cada uno paga su parte desde acá (P3-8); si no, en el mostrador. Rutas: /mi-cuenta/:clubId/:grupoId (jugador) y /turno/:clubId/:grupoId
 // (pública: también para sesiones anónimas).
 
 const fmtCant = (n) => (Number(n) || 0).toLocaleString("es-AR", { maximumFractionDigits: 3 });
@@ -37,6 +38,25 @@ export default function MiCuenta() {
   const [vista, setVista] = useState("cuenta"); // "cuenta" | "pedir"
   const [dialogo, setDialogo] = useState(null); // { tipo: "asignar", linea } | "invitar"
   const [ahora, setAhora] = useState(() => new Date());
+  // Vuelta de Mercado Pago (?mp=ok|pendiente|error): se lee una vez y se limpia de la URL; con "ok" se espera hasta
+  // 60 s a que el webhook refleje el pago en la cuenta (que ya se escucha en vivo)
+  const [params, setParams] = useSearchParams();
+  const [mpRetorno] = useState(() => params.get("mp"));
+  const [mpEsperaVencida, setMpEsperaVencida] = useState(false);
+  const [pagando, setPagando] = useState(false);
+  useEffect(() => {
+    if (!mpRetorno) return undefined;
+    setParams(
+      (p) => {
+        p.delete("mp");
+        return p;
+      },
+      { replace: true },
+    );
+    if (mpRetorno !== "ok") return undefined;
+    const t = setTimeout(() => setMpEsperaVencida(true), 60000);
+    return () => clearTimeout(t);
+  }, [mpRetorno, setParams]);
 
   useEffect(() => {
     if (!clubId || !grupoId || !user) return undefined;
@@ -119,6 +139,18 @@ export default function MiCuenta() {
   const legacy = esLegacyDividida(cuenta);
   const miParteLegacy = legacy ? parteDelJugador(cuenta, user?.uid, perfil?.nombre) : null;
   const abierta = cuenta.estado === "abierta";
+  const mpDisponible = abierta && !!miSaldo && miSaldo.debe > 0 && clubConectadoMp(club);
+  const esperandoMp = mpRetorno === "ok" && abierta && !!miSaldo && miSaldo.debe > 0 && !mpEsperaVencida;
+  const pagarMp = async () => {
+    setPagando(true);
+    try {
+      await pagarConMercadoPago({ clubId, tipo: "parte", grupoId });
+    } catch (e) {
+      console.error("No pudimos abrir Mercado Pago:", e);
+      toast.error(e?.message || "No pudimos abrir Mercado Pago. Probá de nuevo o pagá en el mostrador.");
+      setPagando(false);
+    }
+  };
   const nombreMio = yo?.nombre || perfil?.nombre || user.displayName || "";
 
   const asignar = async (linea, asignadoA) => {
@@ -164,6 +196,12 @@ export default function MiCuenta() {
       {cuenta.estado === "anulada" && <Alert tone="danger">El club anuló esta cuenta.</Alert>}
       {abierta && !yo && !legacy && <Alert>Estás viendo la cuenta del turno. Si jugás en este turno, pedile al titular o al club que te sumen.</Alert>}
 
+      {mpRetorno === "ok" && miSaldo && miSaldo.debe <= 0 && <Alert tone="success">Pago aprobado por Mercado Pago. Gracias.</Alert>}
+      {esperandoMp && <Alert>Estamos confirmando tu pago con Mercado Pago… En cuanto llegue, tu parte figura pagada acá.</Alert>}
+      {mpRetorno === "ok" && mpEsperaVencida && miSaldo && miSaldo.debe > 0 && <Alert tone="warning">Todavía no nos llegó la confirmación de Mercado Pago. Si pagaste, en unos minutos se refleja acá; si no, probá de nuevo o pagá en el mostrador.</Alert>}
+      {mpRetorno === "pendiente" && <Alert tone="warning">Mercado Pago dejó tu pago pendiente. Cuando se acredite, lo vas a ver acá.</Alert>}
+      {mpRetorno === "error" && <Alert tone="danger">El pago no se completó. Podés intentar de nuevo o pagar en el mostrador.</Alert>}
+
       {/* Tu parte */}
       {miSaldo && (
         <Card variant="night">
@@ -201,7 +239,12 @@ export default function MiCuenta() {
               </li>
             )}
           </ul>
-          {abierta && <p className="body-sm text-ink-3 m-0 mt-3">Pagás en el mostrador. Pronto vas a poder pagar desde acá.</p>}
+          {mpDisponible && !esperandoMp && (
+            <Button variant="primary" className="w-full mt-4" icon={<CreditCard className="pd-icon" size={20} aria-hidden="true" />} cargando={pagando ? "Abriendo Mercado Pago…" : ""} onClick={pagarMp}>
+              Pagar mi parte con Mercado Pago · {formatPrecio(miSaldo.debe)}
+            </Button>
+          )}
+          {abierta && <p className="body-sm text-ink-3 m-0 mt-3">{clubConectadoMp(club) ? "También podés pagar en el mostrador." : "Pagás en el mostrador."}</p>}
         </Card>
       )}
       {legacy && miParteLegacy && (

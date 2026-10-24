@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, QrCode, X } from "lucide-react";
 import Dialogo from "../Dialogo";
 import { Alert, Badge, Button, Field, Input, Pills } from "../ui";
 import { MEDIOS } from "../../services/cajaService";
@@ -15,7 +15,8 @@ let seq = 0;
 const nuevaFila = (medio, monto = "") => ({ id: `f${++seq}`, medio, monto, ref: "" });
 const num = (v) => Number(String(v ?? "").replace(",", ".")) || 0;
 
-export default function CobrarDialog({ total, sinNumeros = false, onConfirmar, onCerrar }) {
+// onMercadoPago (opcional, P3-8): abre el cobro con QR de Mercado Pago en vez de registrar la venta acá
+export default function CobrarDialog({ total, sinNumeros = false, onConfirmar, onCerrar, onMercadoPago = null }) {
   const [filas, setFilas] = useState(() => [nuevaFila("efectivo", String(total))]);
   const [confirmando, setConfirmando] = useState(false);
   const [error, setError] = useState("");
@@ -105,6 +106,11 @@ export default function CobrarDialog({ total, sinNumeros = false, onConfirmar, o
           </Button>
         </div>
         <p className="pd-help m-0 -mt-2">La fila nueva arranca con lo que falta; cambiá el medio si hace falta.</p>
+        {onMercadoPago && (
+          <Button className="w-full" disabled={confirmando} icon={<QrCode className="pd-icon" size={20} aria-hidden="true" />} onClick={onMercadoPago}>
+            Mercado Pago (QR)
+          </Button>
+        )}
 
         <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
           <span className="heading-sm">

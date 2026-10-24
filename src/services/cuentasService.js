@@ -1,4 +1,5 @@
 import {
+  arrayRemove,
   arrayUnion,
   collection,
   collectionGroup,
@@ -453,3 +454,6 @@ export const anularCuenta = async (clubId, cuenta, { motivo, uid, nombre }) => {
     actualizadoEn: serverTimestamp(),
   });
 };
+
+// Staff: saca una alerta de la cuenta (las reglas dejan tocar alertas en una cuenta abierta)
+export const quitarAlertaCuenta = (clubId, cuentaId, alerta) => updateDoc(doc(db, "clubs", clubId, "cuentas", cuentaId), { alertas: arrayRemove(alerta), actualizadoEn: serverTimestamp() });

@@ -2525,6 +2525,7 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
     let cobro;
     let pagador;
     let participanteIds;
+    let pedido = null; // lo que pidió el mostrador, para volver a abrir el mismo QR
     if (tipo === "parte") {
       const yo = util.participantePorUid(cuenta, uid);
       if (!yo) throw new HttpsError("permission-denied", "No estás en este turno");
@@ -2546,10 +2547,12 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
         if (!pagadorId) throw new HttpsError("invalid-argument", "pagadorId");
         cobro = util.cobroDeLineas(cuenta, lineaIds, pagadorId, { saldos });
         participanteIds = [pagadorId];
+        pedido = { lineaIds, pagadorId };
       } else {
         if (!ids.length) throw new HttpsError("invalid-argument", "participanteIds o lineaIds");
         cobro = util.cobroDe(cuenta, ids, { saldos });
         participanteIds = ids.length === 1 ? ids : cobro.cubreA;
+        pedido = { participanteIds: ids };
       }
       const nombres = participanteIds.map((id) => (util.participantePorId(cuenta, id) || {}).nombre).filter(Boolean);
       pagador = { uid: null, nombre: nombres.join(", ") || cuenta.nombreJugador || "" };
@@ -2566,12 +2569,13 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
       grupoId,
       reservaId: null,
       filtro: { grupoId, monto: cobro.total, participanteIds },
+      pedido,
     };
   }
 
   // ¿Ya hay una preferencia pendiente y vigente igual? Se devuelve esa
   const previa = await pagoMpPendiente(clubRef, destino.filtro);
-  if (previa) return { ok: true, pagoMpId: previa.id, initPoint: previa.initPoint, monto: previa.monto, venceEn: previa.venceEn.toMillis(), reutilizado: true };
+  if (previa) return { ok: true, pagoMpId: previa.id, initPoint: previa.initPoint, linkCorto: previa.linkCorto || null, monto: previa.monto, venceEn: previa.venceEn.toMillis(), reutilizado: true };
 
   const pagoMpRef = clubRef.collection("pagosMp").doc();
   const pref = mp.cuerpoPreferencia({ titulo: destino.titulo, monto: destino.monto, pagoMpId: pagoMpRef.id, pagador: destino.pagador, notificationUrl: `${MP_WEBHOOK_URL}?club=${clubId}`, backUrl: destino.backUrl, comisionPct });
@@ -2584,6 +2588,9 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
   }
   const initPoint = r.init_point || r.sandbox_init_point || null;
   if (!r.id || !initPoint) throw new HttpsError("unavailable", "Mercado Pago no devolvió el link de pago");
+  // El init_point (~113 bytes) no entra en el QR de src/utils/qr.js (máx. 106): el QR lleva este link corto → mpIr
+  const linkCorto = `${FUNCTIONS_URL}/mpIr?p=${pagoMpRef.id}`;
+  await db.collection("pagosMpIndice").doc(pagoMpRef.id).set({ clubId, creadoEn: FieldValue.serverTimestamp() });
   await pagoMpRef.set({
     tipo,
     estado: "pendiente",
@@ -2598,6 +2605,8 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
     comisionPct,
     preferenceId: String(r.id),
     initPoint,
+    linkCorto,
+    pedido: destino.pedido || null,
     sandboxInitPoint: r.sandbox_init_point || null,
     paymentId: null,
     pagador: destino.pagador,
@@ -2611,7 +2620,30 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
     actualizadoEn: FieldValue.serverTimestamp(),
   });
   logger.info(`mpCrearPago ${clubId}/${pagoMpRef.id}: ${tipo} $${pref.total} por ${uid}${anonimo ? " (anónimo)" : ""}`);
-  return { ok: true, pagoMpId: pagoMpRef.id, initPoint, monto: pref.total, venceEn: pref.venceEnMs, reutilizado: false };
+  return { ok: true, pagoMpId: pagoMpRef.id, initPoint, linkCorto, monto: pref.total, venceEn: pref.venceEnMs, reutilizado: false };
+});
+
+// Link corto para el QR del mostrador: pagosMpIndice/{id} → clubs/{c}/pagosMp/{id} → 302 al checkout de Mercado Pago
+exports.mpIr = onRequest({ region: REGION }, async (req, res) => {
+  const id = texto(req.query && req.query.p, 40);
+  res.set("Cache-Control", "no-store");
+  if (!id || !/^[A-Za-z0-9_-]+$/.test(id)) {
+    res.status(404).type("text/plain").send("Link inválido");
+    return;
+  }
+  const indice = await db.collection("pagosMpIndice").doc(id).get();
+  if (!indice.exists) {
+    res.status(404).type("text/plain").send("Este link de pago no existe.");
+    return;
+  }
+  const snap = await db.collection("clubs").doc(indice.data().clubId).collection("pagosMp").doc(id).get();
+  const pm = snap.exists ? snap.data() : null;
+  const vigente = pm && pm.estado === "pendiente" && pm.venceEn && pm.venceEn.toMillis() > Date.now() && pm.initPoint;
+  if (!vigente) {
+    res.status(410).type("text/plain").send(pm && pm.estado === "aprobado" ? "Este pago ya se hizo." : "Este QR ya no está vigente: pedí uno nuevo en el mostrador.");
+    return;
+  }
+  res.redirect(302, pm.initPoint);
 });
 
 // Aplica un pago APROBADO en una sola transacción: relee la cuenta, aplica solo las piezas que siguen sin cubrir

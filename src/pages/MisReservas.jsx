@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { CircleDot } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { query, where, getDocs, collectionGroup, getDoc, doc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { cancelarReservaGrupo } from "../services/canchaService";
+import { pagarConMercadoPago } from "../services/mercadoPagoService";
 import { notificarReservaCanceladaPorJugador } from "../services/notificationService";
 import { formatDiaCorto, getTodayLocal } from "../utils/formatDate";
 import { formatPrecio } from "../utils/format";
@@ -46,6 +48,35 @@ export default function MisReservas() {
   const { user } = useAuthStore();
   const [reservas, setReservas] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Seña online (P3-8): solo el titular, con seña pendiente y el club con Mercado Pago conectado
+  const [pagandoSeña, setPagandoSeña] = useState(null);
+  const puedePagarSeñaMp = (r) => r.clubMp === true && r.jugadorUid === user?.uid && Number(r.seña) > 0 && !r.señaPagada && !ESTADOS_CERRADOS.includes(r.status);
+  const pagarSeñaMp = async (r) => {
+    setPagandoSeña(claveReserva(r));
+    try {
+      await pagarConMercadoPago({ clubId: r.clubId, tipo: "seña", reservaId: r.grupoId || r.id });
+    } catch (e) {
+      console.error("No pudimos abrir Mercado Pago:", e);
+      toast.error(e?.message || "No pudimos abrir Mercado Pago. Podés pagar la seña en el club.");
+      setPagandoSeña(null);
+    }
+  };
+  // Vuelta de Mercado Pago (?mp=ok|pendiente|error): un aviso y la URL limpia
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const mp = params.get("mp");
+    if (!mp) return;
+    if (mp === "ok") toast.success("Pago recibido. La seña figura pagada en cuanto Mercado Pago lo confirma (unos segundos).");
+    else if (mp === "pendiente") toast.info("Mercado Pago dejó el pago pendiente: cuando se acredite, la seña figura pagada.");
+    else toast.error("El pago de la seña no se completó. Podés intentar de nuevo o pagarla en el club.");
+    setParams(
+      (p) => {
+        p.delete("mp");
+        return p;
+      },
+      { replace: true },
+    );
+  }, [params, setParams]);
 
   const [hoyStr] = useState(() => getTodayLocal());
   const [verCanceladas, setVerCanceladas] = useState(false);
@@ -102,14 +133,16 @@ export default function MisReservas() {
           if (!clubesPorId.has(clubId)) {
             let clubNombre = "";
             let clubOwnerUid = null;
+            let clubMp = false;
             try {
               const clubSnap = await getDoc(clubRef);
               if (clubSnap.exists()) {
                 clubNombre = clubSnap.data().nombre || clubSnap.data().name || "";
                 clubOwnerUid = clubSnap.data().ownerUid || null;
+                clubMp = clubSnap.data().mercadoPago?.conectado === true;
               }
             } catch (err) { console.error(err); }
-            clubesPorId.set(clubId, { clubNombre, clubOwnerUid });
+            clubesPorId.set(clubId, { clubNombre, clubOwnerUid, clubMp });
           }
           datos.push({ id: d.id, clubId, ...clubesPorId.get(clubId), ...data });
         }
@@ -270,6 +303,11 @@ export default function MisReservas() {
         {r.status !== "cancelada" && <CuentaTurnoResumen reserva={r} cuenta={cuentaDe(r)} pedidos={pedidosDe(r)} uid={user?.uid} onInvitar={(reserva, cuenta) => setInvitando({ reserva, cuenta })} />}
         {!pasada && r.status !== "cancelada" && (
           <Card.Foot>
+            {puedePagarSeñaMp(r) && (
+              <Button size="sm" variant="primary" cargando={pagandoSeña === claveReserva(r) ? "Abriendo Mercado Pago…" : ""} onClick={() => pagarSeñaMp(r)}>
+                Pagar seña con Mercado Pago
+              </Button>
+            )}
             <Button size="sm" onClick={() => cancelarReserva(r)}>
               Cancelar reserva
             </Button>

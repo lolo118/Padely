@@ -25,6 +25,7 @@ import {
 } from "../../../services/cajaService";
 import { ANCHOS_TICKET, anchoTicketGuardado, guardarAnchoTicket } from "../../../print/imprimir";
 import { htmlCierreCaja } from "../../../print/cierreCaja";
+import { clubConectadoMp, getVentasMpEntre } from "../../../services/mercadoPagoService";
 import { efectivoEsperado, montoConSigno, tonoDiferencia } from "../../../utils/caja";
 import { pendientesDeSync } from "../../../utils/conexion";
 import { db } from "../../../lib/firebase";
@@ -539,11 +540,21 @@ export default function Caja() {
   };
 
   // Ticket de cierre de una caja cerrada (al cerrar, con los movimientos ya en pantalla; desde el historial, leyéndolos)
-  const abrirTicketCierre = (cajaCerrada, movimientosDeLaCaja, textoCerrar = "Cerrar") => {
+  const abrirTicketCierre = async (cajaCerrada, movimientosDeLaCaja, textoCerrar = "Cerrar") => {
+    // Línea informativa: lo cobrado por Mercado Pago mientras la caja estuvo abierta (no entra en la caja)
+    let ventasMp = [];
+    if (clubConectadoMp(clubActual)) {
+      try {
+        const aFecha = (v) => (v?.toDate ? v.toDate() : v instanceof Date ? v : new Date());
+        ventasMp = await getVentasMpEntre(clubId, aFecha(cajaCerrada.abiertaEn), aFecha(cajaCerrada.cerradaEn));
+      } catch (e) {
+        console.error("No pudimos leer las ventas de Mercado Pago:", e);
+      }
+    }
     setTicket({
       titulo: "Cierre de caja",
       descripcion: `${cajaCerrada.dispositivo} · ${formatDiaHora(cajaCerrada.abiertaEn)} → ${formatHora(cajaCerrada.cerradaEn)}`,
-      html: htmlCierreCaja({ club: clubActual, caja: cajaCerrada, movimientos: movimientosDeLaCaja, ancho }),
+      html: htmlCierreCaja({ club: clubActual, caja: cajaCerrada, movimientos: movimientosDeLaCaja, ancho, ventasMp }),
       textoCerrar,
     });
   };

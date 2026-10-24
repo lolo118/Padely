@@ -96,5 +96,5 @@ export function agruparReservas(lista) {
 export function estadoSeña(r) {
   const monto = Number(r?.seña) || 0;
   if (monto <= 0) return null;
-  return r.señaPagada ? { tone: "success", label: "Seña cobrada" } : { tone: "warning", monto, label: "pendiente" };
+  return r.señaPagada ? { tone: "success", label: r.señaMedio === "mercadopago" ? "Seña pagada por Mercado Pago" : "Seña cobrada", medio: r.señaMedio || null } : { tone: "warning", monto, label: "pendiente" };
 }

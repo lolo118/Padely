@@ -367,17 +367,20 @@ function pagosCongelados(cuenta) {
   const propio = new Map(); // participanteId → lo que pagó con su propia plata (el pago lo lista en participanteIds)
   const pagadoPor = new Map(); // participanteId → id de quien le cubrió algo sin ser él
   const canchaDe = new Set(); // participantes con su cancha ya pagada
+  const medioDe = new Map(); // participanteId → "mercadopago" | "mostrador" | "mixto": con qué se pagó lo suyo
   let canchaBruta = 0;
   let señaAplicada = 0;
   let total = 0;
   for (const pago of cuenta?.pagos || []) {
     total += num(pago.total);
     const pagadores = Array.isArray(pago.participanteIds) ? pago.participanteIds : [];
+    const medioPago = Array.isArray(pago.medios) && pago.medios.length > 0 && pago.medios.every((m) => m.medio === "mercadopago") ? "mercadopago" : "mostrador";
     for (const l of pago.lineas || []) {
       const pid = l.participanteId || null;
       const monto = num(l.monto);
       if (pid) {
         porParticipante.set(pid, redondear((porParticipante.get(pid) || 0) + monto));
+        medioDe.set(pid, medioDe.has(pid) && medioDe.get(pid) !== medioPago ? "mixto" : medioPago);
         if (pagadores.includes(pid)) propio.set(pid, redondear((propio.get(pid) || 0) + monto));
         else if (pagadores.length && !pagadoPor.has(pid)) pagadoPor.set(pid, pagadores[0]);
       }
@@ -394,7 +397,7 @@ function pagosCongelados(cuenta) {
       }
     }
   }
-  return { porLinea, porParticipante, propio, pagadoPor, canchaDe, canchaBruta: redondear(canchaBruta), señaAplicada: redondear(señaAplicada), total: redondear(total) };
+  return { porLinea, porParticipante, propio, pagadoPor, canchaDe, medioDe, canchaBruta: redondear(canchaBruta), señaAplicada: redondear(señaAplicada), total: redondear(total) };
 }
 
 // Cuentas cerradas antes de la cuenta compartida (o cerradas con "Cobrar todo" sin pagos): sus ventas no están en
@@ -437,7 +440,7 @@ export function saldosDeCuenta(cuenta) {
   const saldo = new Map(
     lista.map((p) => [
       p.id,
-      { id: p.id, nombre: p.nombre, tipo: p.tipo, uid: p.uid || null, anonimo: !!p.anonimo, excluirCancha: !!p.excluirCancha, canchaFija: p.canchaFija === null || p.canchaFija === undefined ? null : num(p.canchaFija), canchaBruta: 0, seña: 0, cancha: 0, canchaPagada: pagos.canchaDe.has(p.id), consumos: [], sinAsignar: 0, pagado: pagos.porParticipante.get(p.id) || 0, pagoPropio: pagos.propio.get(p.id) || 0, cubiertoPor: pagos.pagadoPor.get(p.id) || null, debe: 0, total: 0 },
+      { id: p.id, nombre: p.nombre, tipo: p.tipo, uid: p.uid || null, anonimo: !!p.anonimo, excluirCancha: !!p.excluirCancha, canchaFija: p.canchaFija === null || p.canchaFija === undefined ? null : num(p.canchaFija), canchaBruta: 0, seña: 0, cancha: 0, canchaPagada: pagos.canchaDe.has(p.id), consumos: [], sinAsignar: 0, pagado: pagos.porParticipante.get(p.id) || 0, pagoPropio: pagos.propio.get(p.id) || 0, cubiertoPor: pagos.pagadoPor.get(p.id) || null, medioPago: pagos.medioDe.get(p.id) || null, debe: 0, total: 0 },
     ]),
   );
 
@@ -641,6 +644,8 @@ export const cuentaSaldada = (cuenta) => saldosDeCuenta(cuenta).saldada;
 // cancha, se copian seña y señaPagada y se recalculan los totales; si ya hay cancha cobrada, el dinero congelado no se
 // toca: queda la alerta "seña-posterior" para que el staff revise el reparto. Puro; lo usan el cliente y la Function.
 export const ALERTA_SEÑA_POSTERIOR = "seña-posterior";
+export const ALERTA_MP_EXCEDENTE = "mp-excedente"; // el webhook aplicó un pago de Mercado Pago que ya se había cobrado en el mostrador
+export const ALERTA_VENTA_ANULADA = "venta-anulada"; // se anuló una venta de la cuenta: la deuda volvió a quien la tenía
 export function sincronizarSeña(cuenta, reserva) {
   if (!cuenta || cuenta.estado !== "abierta" || !reserva) return { cambios: null, alerta: null };
   const c = cuenta.cancha || {};
@@ -695,7 +700,7 @@ export function estadoPagoDe(p, { vos = false } = {}) {
   if (!p) return { tono: "neutral", texto: "" };
   if (p.debe > 0) return { tono: "warning", texto: `${vos ? "Debés" : "Debe"} ${formatearPesos(p.debe)}` };
   if (p.pagado > 0 && p.pagoPropio <= 0 && p.cubiertoPorNombre) return { tono: "success", texto: `Lo pagó ${p.cubiertoPorNombre}`, cubierto: true };
-  if (p.pagado > 0) return { tono: "success", texto: vos ? "Pagaste" : "Pagó" };
+  if (p.pagado > 0) return { tono: "success", texto: `${vos ? "Pagaste" : "Pagó"}${p.medioPago === "mercadopago" ? " · Mercado Pago" : ""}` };
   return { tono: "success", texto: "Al día" };
 }
 const formatearPesos = (n) => "$ " + Math.round(num(n)).toLocaleString("es-AR", { maximumFractionDigits: 0 });
