@@ -211,15 +211,18 @@ service cloud.firestore {
       allow create: if noAnonimo() && request.resource.data.ownerUid == request.auth.uid && naceActivo();
       // Configura el dueño o el staff con 'configurarClub' (que nunca cambia el dueño ni la fecha de alta); ninguno
       // de los dos toca la suspensión, que es del super-admin (y él solo toca esos campos). Borrar: solo el dueño.
-      allow update: if (clubOwner(clubId) && !tocaSuspension())
+      // mercadoPago (conexión y comisión) lo escriben solo las Functions.
+      allow update: if (clubOwner(clubId) && !tocaSuspension()
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['mercadoPago']))
         || (signedIn() && staffCon(clubId, 'configurarClub')
-            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ownerUid', 'createdAt'])
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ownerUid', 'createdAt', 'mercadoPago'])
             && !tocaSuspension())
         || (superAdmin() && soloSuspension());
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
 
       // Datos privados del club (CBU, alias, CUIT, razón social): quien configura; los teléfonos de los turnos
       // fijos, quien gestiona reservas. El documento clubs/{clubId} es de lectura pública y no debe contenerlos.
+      // privado/mercadopago (tokens de MP) y privado/mpOauthState: NINGÚN cliente los lee ni escribe (solo Functions).
       match /privado/{docId} {
         allow read, write: if (docId == 'datos' && esStaff(clubId, 'configurarClub'))
           || (docId == 'turnosFijos' && esStaff(clubId, 'gestionarReservas'));
@@ -446,6 +449,15 @@ service cloud.firestore {
               && changedOnly(['estado', 'items', 'totales', 'division', 'ventas', 'pagos', 'participantes', 'participantesUids', 'cerradaPor', 'cerradaEn', 'anulacion',
                               'historial', 'abiertaPor', 'abiertaPorNombre', 'abiertaEn', 'actualizadoEn']));
         allow delete: if false;
+      }
+
+      // Pagos por Mercado Pago (una preferencia de Checkout Pro cada uno): los escriben solo las Functions. Los lee
+      // quien cobra y quien paga (pagador.uid); nunca llevan tokens ni datos de tarjeta.
+      match /pagosMp/{pagoId} {
+        allow read: if esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender')
+          || (signedIn() && resource.data.get('pagador', {}).get('uid', null) == request.auth.uid)
+          || superAdmin();
+        allow write: if false;
       }
 
       // Link de invitación a la cuenta del turno (/t/unirse/{clubId}/{token}): lo escribe la Function

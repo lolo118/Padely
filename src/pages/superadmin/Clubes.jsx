@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Badge, Button, Card, SearchInput } from "../../components/ui";
+import { Alert, Badge, Button, Card, Field, Input, SearchInput } from "../../components/ui";
+import Dialogo from "../../components/Dialogo";
 import { toast } from "../../components/Toast";
 import { getClubesAdmin, reactivarEntidad, suspenderEntidad } from "../../services/superadminService";
+import { mpSetComision } from "../../services/mercadoPagoService";
 import { useAuthStore } from "../../store/authStore";
 import { ubicacionCorta } from "../../utils/format";
 import SuspensionDialog from "./SuspensionDialog";
@@ -39,11 +41,60 @@ function Estado({ club }) {
   );
 }
 
+// Comisión de Padely por pago de Mercado Pago (marketplace_fee): 0 a 10 % en pasos de 0,5
+function ComisionDialog({ club, onCerrar, onGuardado }) {
+  const [pct, setPct] = useState(String(Number(club?.mercadoPago?.comisionPadelyPct) || 0));
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+  const guardar = async () => {
+    const n = Number(String(pct).replace(",", "."));
+    if (!Number.isFinite(n) || n < 0 || n > 10 || Math.round(n * 2) !== n * 2) {
+      setError("Entre 0 y 10, en pasos de 0,5.");
+      return;
+    }
+    setGuardando(true);
+    try {
+      await mpSetComision({ clubId: club.id, pct: n });
+      toast.success(`Comisión de ${club.nombre || "el club"}: ${n} %`);
+      onGuardado(n);
+    } catch (err) {
+      console.error("Error guardando la comisión:", err);
+      setError(err?.message || "No pudimos guardar la comisión.");
+      setGuardando(false);
+    }
+  };
+  return (
+    <Dialogo
+      titulo="Comisión Padely"
+      descripcion={`${club.nombre || "Club"} · se descuenta de cada pago por Mercado Pago (marketplace_fee)`}
+      onCerrar={onCerrar}
+      onSubmit={guardar}
+      acciones={
+        <>
+          <Button onClick={onCerrar}>Cancelar</Button>
+          <Button type="submit" variant="primary" cargando={guardando ? "Guardando…" : ""}>
+            Guardar
+          </Button>
+        </>
+      }
+    >
+      <div className="mt-4">
+        <Field label="Comisión (%)" help="0 = Padely no retiene nada. Cambia los pagos nuevos, no los ya creados." error={error}>
+          <Input type="number" min="0" max="10" step="0.5" inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} data-autofocus className="pd-tnum" />
+        </Field>
+      </div>
+    </Dialogo>
+  );
+}
+
 function Acciones({ club, onAccion, className = "" }) {
   return (
     <div className={["pd-btn-group", className].filter(Boolean).join(" ")}>
       <Button size="sm" as="link" to={`/club/${club.id}`}>
         Ver página pública
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => onAccion("comision", club)}>
+        {`Comisión MP ${Number(club?.mercadoPago?.comisionPadelyPct) || 0} %`}
       </Button>
       {club.suspendido ? (
         <Button size="sm" onClick={() => onAccion("reactivar", club)}>
@@ -107,7 +158,8 @@ export default function Clubes() {
     );
   }, [ordenados, busqueda]);
 
-  const abrirDialogo = (modo, club) => setDialogo({ modo, club });
+  const abrirDialogo = (modo, club) => (modo === "comision" ? setComisionDe(club) : setDialogo({ modo, club }));
+  const [comisionDe, setComisionDe] = useState(null); // club con el diálogo de comisión abierto
   const cerrarDialogo = () => {
     if (!procesando) setDialogo(null);
   };
@@ -205,6 +257,10 @@ export default function Clubes() {
                     <dt>Alta</dt>
                     <dd className="pd-tnum">{fechaAlta(club.createdAt)}</dd>
                   </div>
+                  <div>
+                    <dt>Mercado Pago</dt>
+                    <dd>{club.mercadoPago?.conectado ? `Conectado${club.mercadoPago.liveMode === false ? " (prueba)" : ""}` : "—"}</dd>
+                  </div>
                   {club.suspendido && club.suspendidoMotivo && (
                     <div className="col-span-full">
                       <dt>Motivo</dt>
@@ -259,6 +315,16 @@ export default function Clubes() {
         </>
       )}
 
+      {comisionDe && (
+        <ComisionDialog
+          club={comisionDe}
+          onCerrar={() => setComisionDe(null)}
+          onGuardado={(pct) => {
+            setClubes((prev) => prev.map((c) => (c.id === comisionDe.id ? { ...c, mercadoPago: { ...(c.mercadoPago || {}), comisionPadelyPct: pct } } : c)));
+            setComisionDe(null);
+          }}
+        />
+      )}
       <SuspensionDialog
         abierto={!!dialogo}
         modo={dialogo?.modo}

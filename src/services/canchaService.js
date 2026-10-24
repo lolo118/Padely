@@ -21,7 +21,6 @@ import { db } from "../lib/firebase";
 import { getTodayLocal, horaActualStr } from "../utils/formatDate";
 import { horasDeReserva, sumarHoras } from "../utils/tarifas";
 import { agruparReservas, mismaReserva, normalizarReserva } from "../utils/reservas";
-import { sincronizarSeñaDeReserva } from "./cuentasService";
 
 // --- CANCHAS ---
 
@@ -205,7 +204,11 @@ export const marcarSeñaPagada = async (clubId, grupoId, pagada = true) => {
   const n = await actualizarReservaGrupo(clubId, grupoId, { señaPagada: !!pagada });
   try {
     const cabeza = await getDoc(doc(db, "clubs", clubId, "reservas", grupoId));
-    if (cabeza.exists()) await sincronizarSeñaDeReserva(clubId, grupoId, { seña: cabeza.data().seña, señaPagada: !!pagada });
+    // Import dinámico: canchaService vive en el bundle principal y cuentasService arrastra el POS entero
+    if (cabeza.exists()) {
+      const { sincronizarSeñaDeReserva } = await import("./cuentasService");
+      await sincronizarSeñaDeReserva(clubId, grupoId, { seña: cabeza.data().seña, señaPagada: !!pagada });
+    }
   } catch (err) {
     console.error("La cuenta del turno se sincroniza desde el servidor:", err?.code || err);
   }

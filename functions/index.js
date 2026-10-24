@@ -2289,3 +2289,154 @@ exports.reconstruirPerfilesPublicos = onCall({ region: REGION, timeoutSeconds: 5
   logger.info(`reconstruirPerfilesPublicos por ${uid}: ${usuarios} usuarios, ${visibles} visibles`);
   return { ok: true, usuarios, visibles };
 });
+
+// ============================================================================
+// MERCADO PAGO (P3-8). Modelo marketplace: cada club conecta SU cuenta de MP por OAuth y cada preferencia se crea
+// con el token del club, así la plata va a su cuenta; Padely puede retener marketplace_fee (comisionPadelyPct,
+// 0 por defecto, la fija el super-admin). Los tokens viven en clubs/{c}/privado/mercadopago (ningún cliente lo lee).
+// Secretos: MP_CLIENT_SECRET y MP_WEBHOOK_SECRET (firebase functions:secrets:set); MP_CLIENT_ID es un parámetro
+// (functions/.env.padely-dev). Nada de esto se escribe en logs.
+// ============================================================================
+const { onRequest } = require("firebase-functions/v2/https");
+const { defineSecret, defineString } = require("firebase-functions/params");
+const mp = require("./mercadopago");
+const MP_CLIENT_SECRET = defineSecret("MP_CLIENT_SECRET");
+const MP_WEBHOOK_SECRET = defineSecret("MP_WEBHOOK_SECRET");
+const MP_CLIENT_ID = defineString("MP_CLIENT_ID");
+const APP_URL = "https://padely.netlify.app";
+const FUNCTIONS_URL = `https://${REGION}-padely-dev.cloudfunctions.net`;
+const MP_REDIRECT_URI = `${FUNCTIONS_URL}/mpOAuthCallback`;
+const MP_STATE_MIN = 10;
+const MP_REFRESH_DIAS = 30;
+
+// Llamada a la API de MP. Nunca registra el token ni el cuerpo de la respuesta de /oauth/token.
+async function mpFetch(path, { method = "GET", token = null, body = null, idempotencia = null } = {}) {
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (idempotencia) headers["X-Idempotency-Key"] = idempotencia;
+  const res = await fetch(`${mp.MP_API}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const texto = await res.text();
+  let json = null;
+  try {
+    json = texto ? JSON.parse(texto) : null;
+  } catch {
+    json = null;
+  }
+  if (!res.ok) {
+    const err = new Error(`MP ${method} ${path} → ${res.status}${json && json.message ? `: ${json.message}` : ""}`);
+    err.status = res.status;
+    err.detalle = json;
+    throw err;
+  }
+  return json;
+}
+const privadoMpRef = (clubRef) => clubRef.collection("privado").doc("mercadopago");
+const stateMpRef = (clubRef) => clubRef.collection("privado").doc("mpOauthState");
+
+// Tokens del club, renovados si vencen pronto (o si lo pide `forzar`). null si no está conectado.
+async function tokensDelClub(clubRef, { forzar = false } = {}) {
+  const snap = await privadoMpRef(clubRef).get();
+  if (!snap.exists || !snap.data().accessToken) return null;
+  const t = snap.data();
+  const vence = Number(t.expiraEnMs) || 0;
+  if (!forzar && vence - Date.now() > MP_REFRESH_DIAS * 24 * 3600 * 1000) return t;
+  if (!t.refreshToken) return t;
+  try {
+    const r = await mpFetch("/oauth/token", { method: "POST", body: mp.cuerpoTokenPorRefresh({ clientId: MP_CLIENT_ID.value(), clientSecret: MP_CLIENT_SECRET.value(), refreshToken: t.refreshToken }) });
+    const nuevos = mp.tokensDeRespuesta(r);
+    const datos = { ...t, ...nuevos, userId: nuevos.userId || t.userId, publicKey: nuevos.publicKey || t.publicKey, refrescadoEn: FieldValue.serverTimestamp() };
+    await privadoMpRef(clubRef).set(datos, { merge: true });
+    logger.info(`mp: tokens renovados para ${clubRef.id}`);
+    return datos;
+  } catch (err) {
+    logger.error(`mp: no se pudieron renovar los tokens de ${clubRef.id} (${err.status || ""})`);
+    return t;
+  }
+}
+
+exports.mpConectarUrl = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, async (request) => {
+  const uid = exigirAuth(request);
+  const clubId = texto(request.data && request.data.clubId, 80);
+  if (!clubId) throw new HttpsError("invalid-argument", "clubId");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const acceso = await accesoClub(clubRef, uid, []);
+  if (!acceso.esDueño) throw new HttpsError("permission-denied", "Solo el dueño del club conecta Mercado Pago");
+  const state = mp.nuevoState(MP_CLIENT_SECRET.value(), clubId);
+  await stateMpRef(clubRef).set({ state, uid, creadoEn: FieldValue.serverTimestamp(), creadoEnMs: Date.now() });
+  return { ok: true, url: mp.urlAutorizacion({ clientId: MP_CLIENT_ID.value(), state, redirectUri: MP_REDIRECT_URI }) };
+});
+
+// Vuelta de la autorización de MP: valida el state, cambia el code por tokens, guarda y vuelve a Configuración
+exports.mpOAuthCallback = onRequest({ region: REGION, secrets: [MP_CLIENT_SECRET] }, async (req, res) => {
+  const volver = (q) => res.redirect(302, `${APP_URL}/admin/configuracion?${new URLSearchParams(q).toString()}`);
+  try {
+    const { code, state, error } = req.query || {};
+    if (error) return volver({ mp: "error", motivo: String(error).slice(0, 80) });
+    const st = mp.stateValido(state, MP_CLIENT_SECRET.value());
+    if (!st.ok || !st.prefijo) return volver({ mp: "error", motivo: "state" });
+    const clubRef = db.collection("clubs").doc(st.prefijo);
+    const guardado = await stateMpRef(clubRef).get();
+    if (!guardado.exists || guardado.data().state !== state || Date.now() - (Number(guardado.data().creadoEnMs) || 0) > MP_STATE_MIN * 60000) return volver({ mp: "error", motivo: "state-vencido" });
+    if (!code) return volver({ mp: "error", motivo: "sin-code" });
+    const r = await mpFetch("/oauth/token", { method: "POST", body: mp.cuerpoTokenPorCodigo({ clientId: MP_CLIENT_ID.value(), clientSecret: MP_CLIENT_SECRET.value(), code: String(code), redirectUri: MP_REDIRECT_URI }) });
+    const tokens = mp.tokensDeRespuesta(r);
+    if (!tokens.accessToken) return volver({ mp: "error", motivo: "sin-token" });
+    let nickname = null;
+    try {
+      const me = await mpFetch("/users/me", { token: tokens.accessToken });
+      nickname = (me && me.nickname) || null;
+    } catch {
+      nickname = null;
+    }
+    const batch = db.batch();
+    batch.set(privadoMpRef(clubRef), { ...tokens, conectadoEn: FieldValue.serverTimestamp(), conectadoPor: guardado.data().uid || null });
+    batch.set(clubRef, { mercadoPago: { conectado: true, userId: tokens.userId, nickname, conectadoEn: FieldValue.serverTimestamp(), liveMode: tokens.liveMode, comisionPadelyPct: (await clubRef.get()).get("mercadoPago.comisionPadelyPct") || 0 } }, { merge: true });
+    batch.delete(stateMpRef(clubRef));
+    await batch.commit();
+    logger.info(`mp: club ${st.prefijo} conectado (user ${tokens.userId}, live ${tokens.liveMode})`);
+    return volver({ mp: "ok" });
+  } catch (err) {
+    logger.error(`mpOAuthCallback: ${err.message || err}`);
+    return volver({ mp: "error", motivo: "token" });
+  }
+});
+
+exports.mpDesconectar = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  const clubId = texto(request.data && request.data.clubId, 80);
+  if (!clubId) throw new HttpsError("invalid-argument", "clubId");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const acceso = await accesoClub(clubRef, uid, []);
+  if (!acceso.esDueño) throw new HttpsError("permission-denied", "Solo el dueño del club desconecta Mercado Pago");
+  const batch = db.batch();
+  batch.delete(privadoMpRef(clubRef));
+  batch.set(clubRef, { mercadoPago: { conectado: false, userId: null, nickname: null, liveMode: null, desconectadoEn: FieldValue.serverTimestamp() } }, { merge: true });
+  await batch.commit();
+  logger.info(`mp: club ${clubId} desconectado por ${uid}`);
+  return { ok: true };
+});
+
+// Super-admin: comisión de Padely por pago (marketplace_fee), 0 a 10 % en pasos de 0,5
+exports.mpSetComision = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  const admin = await db.collection("superadmins").doc(uid).get();
+  if (!admin.exists) throw new HttpsError("permission-denied", "Solo el super-admin");
+  const clubId = texto(request.data && request.data.clubId, 80);
+  const pct = Number(request.data && request.data.pct);
+  if (!clubId || !Number.isFinite(pct) || pct < 0 || pct > mp.COMISION_MAX_PCT || Math.round(pct * 2) !== pct * 2) throw new HttpsError("invalid-argument", "clubId y pct entre 0 y 10 en pasos de 0,5");
+  await db.collection("clubs").doc(clubId).set({ mercadoPago: { comisionPadelyPct: pct } }, { merge: true });
+  logger.info(`mp: comisión de ${clubId} = ${pct} % por ${uid}`);
+  return { ok: true, pct };
+});
+
+// Todos los días a las 5: renueva los tokens que vencen en menos de 30 días
+exports.mpRefrescarTokens = onSchedule({ schedule: "every day 05:00", timeZone: ZONA_HORARIA, secrets: [MP_CLIENT_SECRET] }, async () => {
+  const snap = await db.collection("clubs").where("mercadoPago.conectado", "==", true).get();
+  let renovados = 0;
+  for (const d of snap.docs) {
+    const antes = await privadoMpRef(d.ref).get();
+    const t = await tokensDelClub(d.ref);
+    if (t && antes.exists && t.expiraEnMs !== antes.data().expiraEnMs) renovados += 1;
+  }
+  logger.info(`mpRefrescarTokens: ${renovados} de ${snap.size} clubes renovados`);
+});

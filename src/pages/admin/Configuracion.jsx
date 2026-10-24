@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AlertTriangle, Check, ChevronDown, ChevronUp, Copy, ImagePlus, Upload } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
+import { clubConectadoMp, mpConectarUrl, mpDesconectar } from "../../services/mercadoPagoService";
 import { actualizarClubConfig, getClubPrivado, actualizarClubPrivado } from "../../services/canchaService";
 import {
   getStaffDelClub,
@@ -130,7 +132,8 @@ export default function Configuracion() {
 
   const [club, setClub] = useState(null);
   const [guardando, setGuardando] = useState(false);
-  const [tab, setTab] = useState("datos");
+  // La vuelta de Mercado Pago (?mp=…) abre directamente la sección Pagos
+  const [tab, setTab] = useState(() => (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mp") ? "pagos" : "datos"));
   const [mensaje, setMensaje] = useState("");
   const [subiendoLogo, setSubiendoLogo] = useState(false);
   const [logoUrl, setLogoUrl] = useState(null);
@@ -193,11 +196,52 @@ export default function Configuracion() {
           { value: "horarios", label: "Horarios" },
           { value: "redes", label: "Redes sociales" },
           { value: "facturacion", label: "Facturación" },
+          { value: "pagos", label: "Pagos" },
         ]
       : []),
     ...(puedeStaff ? [{ value: "equipo", label: "Equipo" }] : []),
   ];
   const tabActiva = tabs.some((t) => t.value === tab) ? tab : tabs[0]?.value;
+
+  // Mercado Pago: vuelta de la autorización (?mp=ok|error) y conectar / desconectar
+  const [searchParams, setSearchParams] = useSearchParams();
+  const mpVuelta = searchParams.get("mp");
+  const mpMotivo = searchParams.get("motivo");
+  const [mpOcupado, setMpOcupado] = useState(false);
+  useEffect(() => {
+    if (!mpVuelta) return;
+    if (mpVuelta === "ok") toast.success("Mercado Pago conectado");
+    else toast.error(`No se pudo conectar Mercado Pago${mpMotivo ? ` (${mpMotivo})` : ""}. Probá de nuevo.`);
+    recargarClub();
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mpVuelta]);
+  const conectarMp = async () => {
+    setMpOcupado(true);
+    try {
+      const { url } = await mpConectarUrl({ clubId });
+      window.location.assign(url);
+    } catch (err) {
+      console.error("Error pidiendo la autorización de MP:", err);
+      toast.error(err?.message || "No pudimos iniciar la conexión con Mercado Pago.");
+      setMpOcupado(false);
+    }
+  };
+  const desconectarMp = async () => {
+    const ok = await confirmar({ titulo: "¿Desconectar Mercado Pago?", mensaje: "Los jugadores dejan de poder pagar online y el mostrador pierde el QR de Mercado Pago. Los pagos ya hechos no cambian.", confirmText: "Desconectar", danger: true });
+    if (!ok) return;
+    setMpOcupado(true);
+    try {
+      await mpDesconectar({ clubId });
+      await recargarClub();
+      toast.success("Mercado Pago desconectado");
+    } catch (err) {
+      console.error("Error desconectando MP:", err);
+      toast.error("No pudimos desconectar Mercado Pago.");
+    } finally {
+      setMpOcupado(false);
+    }
+  };
   const equipoVisible = tabActiva === "equipo" && !!clubId;
   const equipoCargado = equipoDeClub === clubId;
 
@@ -1033,6 +1077,65 @@ export default function Configuracion() {
               <Input type="text" value={form.ticketPie} onChange={(e) => setForm({ ...form, ticketPie: e.target.value })} maxLength={80} placeholder="Gracias por venir" />
             </Field>
           </div>
+        </Card>
+      )}
+
+      {/* Pagos: la cuenta de Mercado Pago del club (la conecta solo el dueño; los tokens nunca llegan al navegador) */}
+      {tabActiva === "pagos" && (
+        <Card className="mb-4">
+          <Card.Row className="items-start!">
+            <div>
+              <Card.Title className="mb-1!">Mercado Pago</Card.Title>
+              <p className="body-sm text-ink-2 mt-0 mb-0">Los pagos van directo a tu cuenta de Mercado Pago: la parte de cada jugador desde el celular, la seña al reservar y el QR del mostrador.</p>
+            </div>
+            {clubConectadoMp(clubActual) ? (
+              <span className="pd-badge-group">
+                <Badge tone="success" dot>
+                  Conectado
+                </Badge>
+                {clubActual?.mercadoPago?.liveMode === false && <Badge tone="warning">Modo prueba</Badge>}
+              </span>
+            ) : (
+              <Badge>Sin conectar</Badge>
+            )}
+          </Card.Row>
+          {clubConectadoMp(clubActual) ? (
+            <>
+              <dl className="pd-dl mt-4">
+                <div>
+                  <dt>Cuenta</dt>
+                  <dd>{clubActual.mercadoPago.nickname || clubActual.mercadoPago.userId || "—"}</dd>
+                </div>
+                <div>
+                  <dt>Conectada</dt>
+                  <dd>{clubActual.mercadoPago.conectadoEn ? formatFecha(clubActual.mercadoPago.conectadoEn.toDate ? clubActual.mercadoPago.conectadoEn.toDate().toISOString().slice(0, 10) : clubActual.mercadoPago.conectadoEn) : "—"}</dd>
+                </div>
+                <div>
+                  <dt>Comisión Padely</dt>
+                  <dd className="pd-tnum">{Number(clubActual.mercadoPago.comisionPadelyPct) || 0} %</dd>
+                </div>
+              </dl>
+              {clubActual?.mercadoPago?.liveMode === false && <Alert className="mt-4">Cuenta de prueba de Mercado Pago: los pagos son de prueba. Para cobrar de verdad, conectá la cuenta real del club.</Alert>}
+              {esDueño ? (
+                <div className="pd-btn-group mt-4">
+                  <Button variant="ghost" onClick={desconectarMp} cargando={mpOcupado ? "Desconectando…" : ""}>
+                    Desconectar
+                  </Button>
+                </div>
+              ) : (
+                <p className="pd-help mt-4 mb-0">Solo el dueño del club puede desconectar la cuenta.</p>
+              )}
+            </>
+          ) : esDueño ? (
+            <div className="mt-4 flex flex-col gap-3">
+              <Alert>Vas a entrar a Mercado Pago con la cuenta del club y autorizar a Padely a crear cobros a tu nombre. Padely nunca ve tu contraseña ni guarda datos de tarjetas.</Alert>
+              <Button variant="primary" className="self-start" onClick={conectarMp} cargando={mpOcupado ? "Abriendo Mercado Pago…" : ""}>
+                Conectar Mercado Pago
+              </Button>
+            </div>
+          ) : (
+            <p className="pd-help mt-4 mb-0">Solo el dueño del club puede conectar Mercado Pago.</p>
+          )}
         </Card>
       )}
 
