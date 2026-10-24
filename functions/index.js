@@ -1112,6 +1112,39 @@ exports.onVentaUpdated = onDocumentUpdated("clubs/{clubId}/ventas/{numero}", asy
 // y avisa al jugador que reservó. Al pasar a "anulada" solo avisa (nada se movió).
 // La caja NO se toca acá: la mueven las ventas (sus pagos) vía onVentaCreated → onMovimientoCajaCreated.
 // ============================================================================
+// B-P3-7b-1 (respaldo del cliente): cuando cambia la seña de una reserva (marcada cobrada, monto, pago online), la
+// cuenta ABIERTA del turno se entera: copia seña/señaPagada si nadie pagó cancha todavía; si no, alerta. Idempotente.
+exports.onReservaUpdated = onDocumentUpdated("clubs/{clubId}/reservas/{reservaId}", async (event) => {
+  const { clubId, reservaId } = event.params;
+  const antes = event.data && event.data.before ? event.data.before.data() : null;
+  const despues = event.data && event.data.after ? event.data.after.data() : null;
+  if (!antes || !despues) return;
+  if (!!antes.señaPagada === !!despues.señaPagada && Number(antes.seña || 0) === Number(despues.seña || 0)) return;
+  const grupoId = despues.grupoId || reservaId;
+  if (grupoId !== reservaId) return; // solo la cabeza del grupo (los demás slots repiten los mismos campos)
+  const cuentaRef = db.collection("clubs").doc(clubId).collection("cuentas").doc(grupoId);
+  try {
+    const resultado = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(cuentaRef);
+      if (!snap.exists) return "sin cuenta";
+      const cuenta = snap.data();
+      const { cambios, alerta } = cc.sincronizarSeña(cuenta, despues);
+      if (cambios) {
+        tx.update(cuentaRef, { ...cambios, actualizadoEn: FieldValue.serverTimestamp() });
+        return "copiada";
+      }
+      if (alerta && !(cuenta.alertas || []).includes(alerta)) {
+        tx.update(cuentaRef, { alertas: FieldValue.arrayUnion(alerta), actualizadoEn: FieldValue.serverTimestamp() });
+        return "alerta";
+      }
+      return "sin cambios";
+    });
+    logger.info(`onReservaUpdated ${clubId}/${reservaId}: seña → cuenta ${resultado}`);
+  } catch (err) {
+    logger.error(`onReservaUpdated ${clubId}/${reservaId}`, err);
+  }
+});
+
 // El link de invitación de una cuenta deja de servir cuando la cuenta se anula (al cerrar, dentro de la transacción)
 async function desactivarInvitacion(clubRef, cuentaRef, cuenta) {
   const inv = cuenta && cuenta.invitacion;

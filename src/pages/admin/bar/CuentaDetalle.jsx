@@ -36,8 +36,10 @@ import {
   setCobrarCancha,
 } from "../../../services/cuentasService";
 import { quitarParticipante } from "../../../services/participantesService";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../../../lib/firebase";
 import { useOnline } from "../../../utils/conexion";
-import { calcularTotalesCuenta, canchaPagadaEnParte, cobroDeLineas, cobroRestoAlTitular, cuentaEditable, esLegacyDividida, lineaPagada, partePagada, partesPagadas, participantesActivos, saldosDeCuenta, textoReparto, textoTurno } from "../../../utils/cuentas";
+import { ALERTA_SEÑA_POSTERIOR, calcularTotalesCuenta, canchaPagadaEnParte, cobroDeLineas, cobroRestoAlTitular, cuentaEditable, esLegacyDividida, lineaPagada, partePagada, partesPagadas, participantesActivos, saldosDeCuenta, textoReparto, textoTurno } from "../../../utils/cuentas";
 import { formatPrecio } from "../../../utils/format";
 import { formatDiaCorto, formatFechaHora, formatHora } from "../../../utils/formatDate";
 
@@ -161,6 +163,18 @@ export default function CuentaDetalle() {
   const [ticketCuenta, setTicketCuenta] = useState(null);
   const [ocupado, setOcupado] = useState(false);
   const [ancho] = useState(anchoTicketGuardado);
+  // La seña se muestra como está en la RESERVA (la cuenta guarda una foto que puede quedar vieja)
+  const [reservaSeña, setReservaSeña] = useState(null); // { seña, señaPagada, señaMedio } | null
+  useEffect(() => {
+    if (!clubId || !id || !puedeEntrar) return undefined;
+    let vivo = true;
+    getDoc(doc(db, "clubs", clubId, "reservas", id))
+      .then((snap) => vivo && setReservaSeña(snap.exists() ? { seña: Number(snap.data().seña) || 0, señaPagada: !!snap.data().señaPagada, señaMedio: snap.data().señaMedio || null } : null))
+      .catch((err) => console.error("Error leyendo la seña de la reserva:", err));
+    return () => {
+      vivo = false;
+    };
+  }, [clubId, id, puedeEntrar, estado.cuenta?.cancha?.señaPagada]);
 
   useEffect(() => {
     if (!clubId || !puedeEntrar) return undefined;
@@ -217,6 +231,9 @@ export default function CuentaDetalle() {
   const participantes = participantesActivos(cuenta);
   const c = cuenta.cancha || {};
   const señaCobradaEnCuenta = cuenta.estado === "cerrada" && c.cobrar !== false && c.señaPagada !== true && Number(c.seña) > 0;
+  // Estado de la seña a mostrar: el de la reserva cuando lo tenemos; la foto de la cuenta si no
+  const señaMostrada = reservaSeña ? { monto: reservaSeña.seña, pagada: reservaSeña.señaPagada, medio: reservaSeña.señaMedio } : { monto: Number(c.seña) || 0, pagada: !!c.señaPagada, medio: null };
+  const alertas = Array.isArray(cuenta.alertas) ? cuenta.alertas : [];
   const canchaCongelada = canchaPagadaEnParte(cuenta);
   const ctx = () => ({ dispositivo, cajaId: caja?.id, uid, nombre });
   const puedeCobrar = abierta && !!caja && !sinNumeros;
@@ -376,6 +393,11 @@ export default function CuentaDetalle() {
         </Alert>
       )}
       {abierta && legacy && !editable && <Alert>Cuenta dividida (modo anterior): ya hay partes cobradas, los consumos y la división no se cambian más. Cobrá las partes que faltan.</Alert>}
+      {alertas.includes(ALERTA_SEÑA_POSTERIOR) && (
+        <Alert tone="warning">
+          <strong>La seña se marcó cobrada después de cobrar parte de la cancha:</strong> revisá el reparto. Lo ya cobrado no se cambia; la seña no se descontó sola.
+        </Alert>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
         <div className="flex flex-col gap-6 min-w-0">
@@ -412,11 +434,13 @@ export default function CuentaDetalle() {
               <div>
                 <dt>Seña</dt>
                 <dd className="flex items-center gap-2">
-                  <span className="pd-tnum">{Number(c.seña) > 0 ? formatPrecio(c.seña) : "Sin seña"}</span>
-                  {Number(c.seña) > 0 && (
-                    <Badge tone={c.señaPagada || señaCobradaEnCuenta ? "success" : "warning"}>{señaCobradaEnCuenta ? "pagada con la cuenta" : c.señaPagada ? "pagada" : "pendiente"}</Badge>
+                  <span className="pd-tnum">{señaMostrada.monto > 0 ? formatPrecio(señaMostrada.monto) : "Sin seña"}</span>
+                  {señaMostrada.monto > 0 && (
+                    <Badge tone={señaMostrada.pagada || señaCobradaEnCuenta ? "success" : "warning"}>
+                      {señaCobradaEnCuenta && !señaMostrada.medio ? "pagada con la cuenta" : señaMostrada.pagada ? (señaMostrada.medio === "mercadopago" ? "pagada · Mercado Pago" : "pagada") : "pendiente"}
+                    </Badge>
                   )}
-                  {Number(c.seña) > 0 && c.señaPagada && !legacy && <span className="body-sm text-ink-3">a favor de {cuenta.nombreJugador || "quien reservó"}</span>}
+                  {señaMostrada.monto > 0 && c.señaPagada && !legacy && <span className="body-sm text-ink-3">a favor de {cuenta.nombreJugador || "quien reservó"}</span>}
                 </dd>
               </div>
               {!legacy && c.cobrar !== false && saldos?.reparto && (

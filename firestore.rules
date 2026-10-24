@@ -427,7 +427,7 @@ service cloud.firestore {
         // avisoVencidaEnviado, cierreAutomatico, pedidosPendientes.
         allow update: if (resource.data.estado == 'abierta'
             && (((esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender'))
-                 && changedOnly(['items', 'totales', 'division', 'cancha', 'ventas', 'pagos', 'participantes', 'participantesUids', 'actualizadoEn', 'nombreJugador'])
+                 && changedOnly(['items', 'totales', 'division', 'cancha', 'ventas', 'pagos', 'participantes', 'participantesUids', 'alertas', 'actualizadoEn', 'nombreJugador'])
                  && request.resource.data.estado == 'abierta')
                 || (esStaff(clubId, 'pedidos')
                     && changedOnly(['items', 'totales', 'division', 'participantes', 'participantesUids', 'actualizadoEn'])

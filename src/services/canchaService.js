@@ -21,6 +21,7 @@ import { db } from "../lib/firebase";
 import { getTodayLocal, horaActualStr } from "../utils/formatDate";
 import { horasDeReserva, sumarHoras } from "../utils/tarifas";
 import { agruparReservas, mismaReserva, normalizarReserva } from "../utils/reservas";
+import { sincronizarSeñaDeReserva } from "./cuentasService";
 
 // --- CANCHAS ---
 
@@ -198,9 +199,18 @@ export const actualizarReservaGrupo = async (clubId, grupoId, datos) => {
 export const cancelarReservaGrupo = (clubId, grupoId, extra = {}) =>
   actualizarReservaGrupo(clubId, grupoId, { status: "cancelada", ...extra });
 
-// Marca (o desmarca) la seña como cobrada en todos los turnos de la reserva
-export const marcarSeñaPagada = (clubId, grupoId, pagada = true) =>
-  actualizarReservaGrupo(clubId, grupoId, { señaPagada: !!pagada });
+// Marca (o desmarca) la seña como cobrada en todos los turnos de la reserva, y se lo cuenta a la cuenta abierta del
+// turno si la hay (B-P3-7b-1). Si quien marca no puede escribir cuentas, la Function onReservaUpdated lo hace igual.
+export const marcarSeñaPagada = async (clubId, grupoId, pagada = true) => {
+  const n = await actualizarReservaGrupo(clubId, grupoId, { señaPagada: !!pagada });
+  try {
+    const cabeza = await getDoc(doc(db, "clubs", clubId, "reservas", grupoId));
+    if (cabeza.exists()) await sincronizarSeñaDeReserva(clubId, grupoId, { seña: cabeza.data().seña, señaPagada: !!pagada });
+  } catch (err) {
+    console.error("La cuenta del turno se sincroniza desde el servidor:", err?.code || err);
+  }
+  return n;
+};
 
 // Borra todos los turnos de una reserva y sus contactos
 export const eliminarReservaGrupo = async (clubId, grupoId) => {

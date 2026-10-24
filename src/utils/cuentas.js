@@ -635,6 +635,23 @@ export function nuevoPago({ ventaNumero, participanteIds = [], piezas = [], medi
 export const conPago = (cuenta, pago) => ({ ...cuenta, pagos: [...(cuenta?.pagos || []), pago] });
 export const cuentaSaldada = (cuenta) => saldosDeCuenta(cuenta).saldada;
 
+// ----- Seña de la reserva → cuenta abierta (B-P3-7b-1) -----
+// La cuenta guarda una foto de la seña (cancha.seña / señaPagada) al nacer. Si después la reserva cambia (el club
+// marca la seña cobrada, o se paga online), la cuenta abierta tiene que enterarse: si NADIE pagó todavía una pieza de
+// cancha, se copian seña y señaPagada y se recalculan los totales; si ya hay cancha cobrada, el dinero congelado no se
+// toca: queda la alerta "seña-posterior" para que el staff revise el reparto. Puro; lo usan el cliente y la Function.
+export const ALERTA_SEÑA_POSTERIOR = "seña-posterior";
+export function sincronizarSeña(cuenta, reserva) {
+  if (!cuenta || cuenta.estado !== "abierta" || !reserva) return { cambios: null, alerta: null };
+  const c = cuenta.cancha || {};
+  const seña = redondear(num(reserva.seña));
+  const pagada = !!reserva.señaPagada;
+  if (redondear(num(c.seña)) === seña && !!c.señaPagada === pagada) return { cambios: null, alerta: null };
+  if (canchaPagadaEnParte(cuenta)) return { cambios: null, alerta: ALERTA_SEÑA_POSTERIOR };
+  const cancha = { ...c, seña, señaPagada: pagada };
+  return { cambios: { cancha, totales: calcularTotalesCuenta({ ...cuenta, cancha }) }, alerta: null };
+}
+
 // ----- Textos -----
 // "Entre 6 · $ 2.500 c/u" (+ excepciones)
 export const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;

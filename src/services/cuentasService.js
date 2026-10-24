@@ -41,6 +41,7 @@ import {
   nuevoParticipante,
   participantePorUid,
   participantesDe,
+  sincronizarSeña,
   titularDe,
   totalDeLineas,
   uidsDe,
@@ -379,6 +380,27 @@ export const cobrarRestoAlTitular = (clubId, cuenta, calculo, ctx) => {
   const titular = participantesDe(cuenta).find((p) => p.tipo === "titular");
   return cobrarSaldo(clubId, cuenta, cobroRestoAlTitular(cuenta), calculo, { ...ctx, pagadorId: titular ? titular.id : null, cliente: cuenta.nombreJugador });
 };
+
+// B-P3-7b-1: la seña de la reserva cambió (marcada cobrada, monto, online) → la cuenta abierta del turno se entera.
+// Devuelve "copiada" | "alerta" | "sin cambios" | "sin cuenta". Si quien escribe no puede tocar cuentas (reglas), el
+// que llama ignora el error: la Function onReservaUpdated hace lo mismo del lado del servidor.
+export const sincronizarSeñaDeReserva = (clubId, grupoId, reserva) =>
+  runTransaction(db, async (tx) => {
+    const r = ref(clubId, grupoId);
+    const snap = await tx.get(r);
+    if (!snap.exists()) return "sin cuenta";
+    const actual = conId(snap);
+    const { cambios, alerta } = sincronizarSeña(actual, reserva);
+    if (cambios) {
+      tx.update(r, { ...cambios, actualizadoEn: serverTimestamp() });
+      return "copiada";
+    }
+    if (alerta && !(actual.alertas || []).includes(alerta)) {
+      tx.update(r, { alertas: arrayUnion(alerta), actualizadoEn: serverTimestamp() });
+      return "alerta";
+    }
+    return "sin cambios";
+  });
 
 // Participantes (lo que el staff escribe directo: excluir de la cancha, monto fijo). Sumar, quitar e invitar van
 // por Functions (participantesService) porque también los usa el titular desde el celular.

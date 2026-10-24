@@ -97,6 +97,20 @@ function pagadoPorParticipante(cuenta) {
   }
   return { pagaron, cubierto };
 }
+// ¿Alguien ya pagó una pieza de cancha (o seña)? Entonces la seña de la reserva ya no se copia a la cuenta
+const canchaPagadaEnParte = (cuenta) => ((cuenta && cuenta.pagos) || []).some((pg) => (pg.lineas || []).some((l) => (l.tipo === "cancha" || l.tipo === "seña") && num(l.monto) !== 0));
+const ALERTA_SEÑA_POSTERIOR = "seña-posterior";
+// B-P3-7b-1 del lado del servidor: misma regla que src/utils/cuentas.js sincronizarSeña
+function sincronizarSeña(cuenta, reserva) {
+  if (!cuenta || cuenta.estado !== "abierta" || !reserva) return { cambios: null, alerta: null };
+  const c = cuenta.cancha || {};
+  const seña = redondear(num(reserva.seña));
+  const pagada = !!reserva.señaPagada;
+  if (redondear(num(c.seña)) === seña && !!c.señaPagada === pagada) return { cambios: null, alerta: null };
+  if (canchaPagadaEnParte(cuenta)) return { cambios: null, alerta: ALERTA_SEÑA_POSTERIOR };
+  const cancha = { ...c, seña, señaPagada: pagada };
+  return { cambios: { cancha, totales: calcularTotalesCuenta({ ...cuenta, cancha }) }, alerta: null };
+}
 // Una línea con pagos congelados no se reasigna ni se quita
 const lineaPagada = (cuenta, lineaId) => ((cuenta && cuenta.pagos) || []).some((pg) => (pg.lineas || []).some((l) => l.tipo === "consumo" && l.lineaId === lineaId && num(l.monto) !== 0));
 const algoPagadoDe = (cuenta, participanteId) => ((cuenta && cuenta.pagos) || []).some((pg) => (pg.participanteIds || []).includes(participanteId) || (pg.lineas || []).some((l) => l.participanteId === participanteId && num(l.monto) !== 0));
@@ -116,6 +130,9 @@ const ventanaUnirse = (t, ahoraMs = Date.now(), margenMs = 2 * 60 * 60000) => !!
 const terminoHace = (t, ahoraMs = Date.now(), margenMs = 2 * 60 * 60000) => !!(t && t.fecha) && ahoraMs > finDelTurno(t) + margenMs;
 
 module.exports = {
+  ALERTA_SEÑA_POSTERIOR,
+  canchaPagadaEnParte,
+  sincronizarSeña,
   ID_TITULAR,
   PARTICIPANTES_MAX,
   ZONA_HORARIA,

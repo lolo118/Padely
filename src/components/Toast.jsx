@@ -7,9 +7,9 @@ let proximoId = 1;
 // eslint-disable-next-line react-refresh/only-export-components -- store + componente en un mismo módulo a propósito
 export const useToast = create((set, get) => ({
   toasts: [],
-  agregar: (tipo, mensaje, duracion = 4000) => {
+  agregar: (tipo, mensaje, duracion = 4000, accion = null) => {
     const id = proximoId++;
-    set((s) => ({ toasts: [...s.toasts, { id, tipo, mensaje }] }));
+    set((s) => ({ toasts: [...s.toasts, { id, tipo, mensaje, accion }] }));
     if (duracion > 0) setTimeout(() => get().quitar(id), duracion);
     return id;
   },
@@ -21,6 +21,8 @@ export const toast = {
   success: (mensaje) => useToast.getState().agregar("success", mensaje),
   error: (mensaje) => useToast.getState().agregar("error", mensaje),
   info: (mensaje) => useToast.getState().agregar("info", mensaje),
+  // Con un botón y sin tiempo: queda hasta que se toca ("Hay una versión nueva" · "Actualizar")
+  accion: (mensaje, { etiqueta, onAccion }) => useToast.getState().agregar("info", mensaje, 0, { etiqueta, onAccion }),
 };
 
 // pd-toast, siempre Noche (data-theme="dark"): check lime, triángulo danger o info en court.
@@ -53,8 +55,21 @@ export function Toaster() {
             onClick={() => quitar(t.id)}
           >
             <Icono className="pd-icon" size={20} aria-hidden="true" style={estilo} />
-            <div className="pd-toast-body">
+            <div className="pd-toast-body flex flex-wrap items-center gap-3">
               <strong>{t.mensaje}</strong>
+              {t.accion && (
+                <button
+                  type="button"
+                  className="pd-btn pd-btn-sm pd-btn-primary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    quitar(t.id);
+                    t.accion.onAccion?.();
+                  }}
+                >
+                  {t.accion.etiqueta}
+                </button>
+              )}
             </div>
           </div>
         );

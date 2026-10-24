@@ -11,7 +11,7 @@ import { actualizarReservaGrupo, cancelarReservaGrupo, getContactoReserva, marca
 import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
 import { abrirCuentaDelTurno, escucharCuenta } from "../../services/cuentasService";
 import { escucharPedidosDeCuenta } from "../../services/pedidosService";
-import { calcularTotalesCuenta, estadoPagoDe, iniciales, saldosDeCuenta, textoCanchaDe } from "../../utils/cuentas";
+import { ALERTA_SEÑA_POSTERIOR, calcularTotalesCuenta, estadoPagoDe, iniciales, saldosDeCuenta, textoCanchaDe } from "../../utils/cuentas";
 import { ESTADOS_ACTIVOS, etiquetaEstado, resumenItems, tonoEstado } from "../../utils/pedidos";
 import { estadoSeña, normalizarReserva, rangoHoras } from "../../utils/reservas";
 import { telefonoWhatsApp } from "../../utils/ventas";
@@ -194,6 +194,11 @@ export default function FichaTurno({ clubId, club, reserva: reservaProp = null, 
               <Card.Title as="h3">Cuenta</Card.Title>
               {laCuenta && <Badge tone={laCuenta.estado === "abierta" ? "success" : laCuenta.estado === "anulada" ? "danger" : "neutral"} dot={laCuenta.estado === "abierta"}>{laCuenta.estado === "abierta" ? "Abierta" : laCuenta.estado === "anulada" ? "Anulada" : "Cerrada"}</Badge>}
             </Card.Row>
+            {laCuenta && Array.isArray(laCuenta.alertas) && laCuenta.alertas.includes(ALERTA_SEÑA_POSTERIOR) && (
+              <Alert tone="warning" className="mt-3">
+                La seña se marcó cobrada después de cobrar parte de la cancha: revisá el reparto.
+              </Alert>
+            )}
             {!laCuenta ? (
               <>
                 <Card.Meta className="mt-2!">{reserva.cuentaCerrada ? `Cuenta cerrada · ${formatPrecio(reserva.cuentaTotal)}` : "Todavía no hay cuenta para este turno."}</Card.Meta>

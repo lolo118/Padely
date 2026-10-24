@@ -15,9 +15,11 @@ import {
   parteDelJugador,
   repartir,
   redondearA10,
+  sincronizarSeña,
   textoTurno,
   totalDeLineas,
   ventanaDeTurno,
+  ALERTA_SEÑA_POSTERIOR,
 } from "./cuentas.js";
 
 const cuenta = {
@@ -164,4 +166,33 @@ test("ventana del turno y cuenta desde la reserva", () => {
   assert.equal(l.subtotal, 2000);
   assert.equal(l.estado, "entregado");
   assert.ok(l.lineaId.length > 8);
+});
+
+test("B-P3-7b-1: la seña marcada después de abrir la cuenta se acredita si nadie pagó cancha; si no, alerta", () => {
+  // Cuenta abierta con la seña pendiente (foto al nacer): cobra la cancha completa
+  const abierta = { ...cuenta, participantes: [{ id: "titular", uid: "u-gomez", nombre: "Gómez", tipo: "titular", estado: "activo" }] };
+  assert.equal(calcularTotalesCuenta(abierta).total, 15100);
+  // El club marca la seña cobrada en la reserva
+  const r1 = sincronizarSeña(abierta, { seña: 3000, señaPagada: true });
+  assert.equal(r1.alerta, null);
+  assert.equal(r1.cambios.cancha.señaPagada, true);
+  assert.equal(r1.cambios.cancha.seña, 3000);
+  assert.equal(r1.cambios.totales.total, 12100); // 15.100 − 3.000: la seña ya no se cobra dos veces
+  assert.equal(r1.cambios.totales.seña, 3000);
+  // Sin cambios: nada que escribir
+  assert.deepEqual(sincronizarSeña({ ...abierta, cancha: r1.cambios.cancha }, { seña: 3000, señaPagada: true }), { cambios: null, alerta: null });
+  // Si cambia el monto de la seña (sigue pendiente) también se copia
+  const r2 = sincronizarSeña(abierta, { seña: 4500, señaPagada: false });
+  assert.equal(r2.cambios.cancha.seña, 4500);
+  assert.equal(r2.cambios.totales.total, 15100);
+  // Alguien ya pagó su parte de cancha: el dinero congelado no se toca, queda la alerta
+  const conCanchaPagada = { ...abierta, pagos: [{ id: "x", ventaNumero: "D1-000001", participanteIds: ["titular"], total: 5000, lineas: [{ lineaId: null, tipo: "cancha", monto: 5000, participanteId: "titular" }] }] };
+  const r3 = sincronizarSeña(conCanchaPagada, { seña: 3000, señaPagada: true });
+  assert.equal(r3.cambios, null);
+  assert.equal(r3.alerta, ALERTA_SEÑA_POSTERIOR);
+  // Solo consumos pagados: la cancha sigue libre, se acredita
+  const conConsumoPagado = { ...abierta, pagos: [{ id: "y", ventaNumero: "D1-000002", participanteIds: ["titular"], total: 1040, lineas: [{ lineaId: "a1", tipo: "consumo", monto: 1040, participanteId: "titular" }] }] };
+  assert.equal(sincronizarSeña(conConsumoPagado, { seña: 3000, señaPagada: true }).cambios.totales.total, 12100);
+  // Cerrada o anulada: no se toca
+  assert.deepEqual(sincronizarSeña({ ...abierta, estado: "cerrada" }, { seña: 3000, señaPagada: true }), { cambios: null, alerta: null });
 });

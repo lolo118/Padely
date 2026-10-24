@@ -6,9 +6,47 @@ import "./lib/installPrompt";
 import App from "./App.jsx";
 import ErrorBoundary, { ErrorFallback } from "./components/ErrorBoundary.jsx";
 
-// Service worker (autoUpdate): cuando se activa una versión nueva, la página se recarga sola, así nunca
-// queda un index.html viejo pidiendo chunks que ya no existen.
-registerSW({ immediate: true });
+// Service worker (prompt): la versión nueva queda esperando. Se avisa con un toast "Hay una versión nueva de Padely"
+// con "Actualizar" (recarga), y se actualiza sola cuando la pantalla lleva 30 s sin tocarse y no hay un formulario a
+// medio escribir (los kioscos del bar quedan abiertos días). El SW busca versiones nuevas cada hora y al volver a la
+// pestaña. Otra pestaña que actualizó también recarga esta (controllerchange) si no hay nada sin guardar.
+const IDLE_MS = 30000;
+let ultimaActividad = Date.now();
+["pointerdown", "keydown", "touchstart"].forEach((ev) => window.addEventListener(ev, () => (ultimaActividad = Date.now()), { passive: true }));
+const formularioSucio = () => {
+  const activo = document.activeElement;
+  if (activo && ["INPUT", "TEXTAREA", "SELECT"].includes(activo.tagName)) return true;
+  return [...document.querySelectorAll("input, textarea")].some((el) => el.type !== "checkbox" && el.type !== "radio" && el.type !== "hidden" && el.value !== el.defaultValue && el.value !== "");
+};
+let recargando = false;
+const recargar = () => {
+  if (recargando) return;
+  recargando = true;
+  window.location.reload();
+};
+const updateSW = registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    import("./components/Toast.jsx").then(({ toast }) => toast.accion("Hay una versión nueva de Padely", { etiqueta: "Actualizar", onAccion: () => updateSW(true) }));
+    const intentar = () => {
+      if (Date.now() - ultimaActividad >= IDLE_MS && !formularioSucio()) updateSW(true);
+      else setTimeout(intentar, 5000);
+    };
+    setTimeout(intentar, IDLE_MS);
+  },
+  onRegisteredSW(_url, registro) {
+    if (!registro) return;
+    setInterval(() => registro.update().catch(() => {}), 60 * 60 * 1000);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") registro.update().catch(() => {});
+    });
+  },
+});
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!formularioSucio()) recargar();
+  });
+}
 
 // Si igual un index.html viejo pide un chunk que ya no está (deploy en el medio de una visita), se recarga la
 // página en vez de caer al ErrorBoundary: como mucho una vez cada 10 segundos (la marca guarda cuándo fue la

@@ -8,7 +8,9 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: "autoUpdate",
+      // "prompt": la versión nueva espera a que la app la active (main.jsx: toast "Hay una versión nueva" con
+      // "Actualizar", o solo si nadie toca la pantalla 30 s y no hay formularios a medio escribir)
+      registerType: "prompt",
       includeAssets: ["logo.png", "logo-dark.png", "apple-touch-icon.png"],
       manifest: {
         name: "Padely",
@@ -26,16 +28,23 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Solo se precachean los assets del build. Firestore/Auth (googleapis) nunca pasan por el SW:
-        // no hay runtimeCaching y los pedidos cross-origin se dejan ir a la red.
-        navigateFallback: "/index.html",
-        globPatterns: ["**/*.{js,css,html,png,svg}"],
-        runtimeCaching: [],
-        // Una versión nueva reemplaza a la vieja apenas se instala y toma las pestañas abiertas (los kioscos del bar
-        // quedan abiertos días): así una ruta nueva no cae en el 404 del index.html viejo.
+        // Assets con hash: precacheados (caché primero). index.html y la app shell: RED PRIMERO, con la copia en caché
+        // solo sin conexión (así un deploy nuevo se ve en la próxima carga y nadie queda con el bundle viejo).
+        // Firestore/Auth (googleapis) nunca pasan por el SW: los pedidos cross-origin van directo a la red.
+        cacheId: "padely-v2",
+        navigateFallback: null,
+        globPatterns: ["**/*.{js,css,png,svg}"],
+        globIgnores: ["**/index.html"],
+        runtimeCaching: [
+          {
+            urlPattern: ({ request, url }) => request.mode === "navigate" && url.origin === self.location.origin,
+            handler: "NetworkFirst",
+            options: { cacheName: "padely-shell-v2", networkTimeoutSeconds: 4, cacheableResponse: { statuses: [0, 200] } },
+          },
+        ],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        skipWaiting: true,
+        skipWaiting: false,
       },
     }),
   ],
