@@ -2117,7 +2117,10 @@ exports.sumarJugador = onCall({ region: REGION }, async (request) => {
       await avisoA(otroUid, {
         tipo: "turno_sumado",
         titulo: "Te sumaron a un turno",
-        mensaje: `${quien} te sumó al turno del ${fechaCortaArgentina(resultado.cuenta.fecha)} · ${resultado.cuenta.horaInicio || ""} en ${acceso.club.nombre || "el club"}.`,
+        // Staff: "Te sumaron al turno de Gómez · vie 23 oct · 14:00 en Club X"; titular: "Gómez te sumó al turno del vie 23 oct · 14:00 en Club X"
+        mensaje: esTitular
+          ? `${quien} te sumó al turno del ${fechaCortaArgentina(resultado.cuenta.fecha)} · ${resultado.cuenta.horaInicio || ""} en ${acceso.club.nombre || "el club"}.`
+          : `Te sumaron al turno de ${resultado.cuenta.nombreJugador || "un jugador"} · ${fechaCortaArgentina(resultado.cuenta.fecha)} · ${resultado.cuenta.horaInicio || ""} en ${acceso.club.nombre || "el club"}.`,
         link: `/mi-cuenta/${clubId}/${grupoId}`,
         icono: "🎾",
       });
