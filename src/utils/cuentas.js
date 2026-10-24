@@ -364,16 +364,23 @@ export function puedeAsignar({ cuenta, linea, asignadoA, participante = null, es
 function pagosCongelados(cuenta) {
   const porLinea = new Map(); // lineaId → Map(participanteId → monto)
   const porParticipante = new Map(); // participanteId → total pagado a su nombre
+  const propio = new Map(); // participanteId → lo que pagó con su propia plata (el pago lo lista en participanteIds)
+  const pagadoPor = new Map(); // participanteId → id de quien le cubrió algo sin ser él
   const canchaDe = new Set(); // participantes con su cancha ya pagada
   let canchaBruta = 0;
   let señaAplicada = 0;
   let total = 0;
   for (const pago of cuenta?.pagos || []) {
     total += num(pago.total);
+    const pagadores = Array.isArray(pago.participanteIds) ? pago.participanteIds : [];
     for (const l of pago.lineas || []) {
       const pid = l.participanteId || null;
       const monto = num(l.monto);
-      if (pid) porParticipante.set(pid, redondear((porParticipante.get(pid) || 0) + monto));
+      if (pid) {
+        porParticipante.set(pid, redondear((porParticipante.get(pid) || 0) + monto));
+        if (pagadores.includes(pid)) propio.set(pid, redondear((propio.get(pid) || 0) + monto));
+        else if (pagadores.length && !pagadoPor.has(pid)) pagadoPor.set(pid, pagadores[0]);
+      }
       if (l.tipo === "consumo" && l.lineaId) {
         const m = porLinea.get(l.lineaId) || new Map();
         m.set(pid, redondear((m.get(pid) || 0) + monto));
@@ -387,7 +394,28 @@ function pagosCongelados(cuenta) {
       }
     }
   }
-  return { porLinea, porParticipante, canchaDe, canchaBruta: redondear(canchaBruta), señaAplicada: redondear(señaAplicada), total: redondear(total) };
+  return { porLinea, porParticipante, propio, pagadoPor, canchaDe, canchaBruta: redondear(canchaBruta), señaAplicada: redondear(señaAplicada), total: redondear(total) };
+}
+
+// Cuentas cerradas antes de la cuenta compartida (o cerradas con "Cobrar todo" sin pagos): sus ventas no están en
+// pagos[]. Están PAGADAS: se arma un pago congelado por cada venta que falte (la primera cubre todo lo que quedaba
+// sin cubrir; pagador = el titular) para leer los saldos. Solo en lectura: nunca se escribe en la cuenta (B-P3-7-1).
+export const ventasSinPago = (cuenta) => {
+  const enPagos = new Set((cuenta?.pagos || []).map((p) => p.ventaNumero).filter(Boolean));
+  return (cuenta?.ventas || []).filter((v) => !enPagos.has(v));
+};
+export function pagosEfectivos(cuenta) {
+  const pagos = cuenta?.pagos || [];
+  if (!cuenta || cuenta.estado !== "cerrada" || esLegacyDividida(cuenta)) return pagos;
+  const faltan = ventasSinPago(cuenta);
+  if (!faltan.length) return pagos;
+  const s = saldosDeCuenta({ ...cuenta, estado: "abierta", ventas: [] });
+  const titularId = s.titularId;
+  const sinteticos = faltan.map((numero, i) => {
+    const piezas = i === 0 ? cobroDe({ ...cuenta, estado: "abierta" }, s.participantes.filter((p) => p.debe > 0).map((p) => p.id), { saldos: s }).piezas : [];
+    return { ...nuevoPago({ ventaNumero: numero, participanteIds: titularId ? [titularId] : [], piezas, medios: [], por: cuenta.cerradaPor || null, porNombre: null, ahora: cuenta.cerradaEn || null }), id: `sintetico_${numero}`, sintetico: true };
+  });
+  return [...pagos, ...sinteticos];
 }
 const sumaDe = (m) => redondear([...m.values()].reduce((s, v) => s + v, 0));
 const ordenTitularPrimero = (lista, titularId) => [...lista.filter((p) => p.id === titularId), ...lista.filter((p) => p.id !== titularId)];
@@ -395,10 +423,13 @@ const ordenTitularPrimero = (lista, titularId) => [...lista.filter((p) => p.id =
 // Saldos de la cuenta: qué debe cada participante activo y cómo va la cuenta. Puro y determinista.
 export function saldosDeCuenta(cuenta) {
   const totales = calcularTotalesCuenta(cuenta);
-  const pagos = pagosCongelados(cuenta);
+  const cerrada = cuenta?.estado === "cerrada";
+  const anulada = cuenta?.estado === "anulada";
+  const pagos = pagosCongelados({ ...cuenta, pagos: pagosEfectivos(cuenta) });
   if (esLegacyDividida(cuenta)) {
-    const pagadoTotal = redondear((cuenta.division.partes || []).filter(partePagada).reduce((s, p) => s + num(p.total), 0));
-    return { legacy: true, participantes: [], titularId: null, totalCuenta: totales.total, pagadoTotal, pendiente: Math.max(0, redondear(totales.total - pagadoTotal)), saldada: divisionCompleta(cuenta), consumosTotal: totales.consumos, canchaTotal: totales.cancha, señaCredito: totales.seña, asignadoTotal: 0, sinAsignarTotal: totales.consumos, reparto: null };
+    // Legacy P3-4: cerrada o anulada, nadie debe nada
+    const pagadoTotal = cerrada ? totales.total : redondear((cuenta.division.partes || []).filter(partePagada).reduce((s, p) => s + num(p.total), 0));
+    return { legacy: true, anulada, participantes: [], titularId: null, totalCuenta: totales.total, pagadoTotal, pendiente: cerrada || anulada ? 0 : Math.max(0, redondear(totales.total - pagadoTotal)), saldada: cerrada || divisionCompleta(cuenta), consumosTotal: totales.consumos, canchaTotal: totales.cancha, señaCredito: totales.seña, asignadoTotal: 0, sinAsignarTotal: totales.consumos, reparto: null };
   }
   const lista = participantesActivos(cuenta);
   const titular = lista.find((p) => p.tipo === "titular") || lista[0] || null;
@@ -406,7 +437,7 @@ export function saldosDeCuenta(cuenta) {
   const saldo = new Map(
     lista.map((p) => [
       p.id,
-      { id: p.id, nombre: p.nombre, tipo: p.tipo, uid: p.uid || null, anonimo: !!p.anonimo, excluirCancha: !!p.excluirCancha, canchaFija: p.canchaFija === null || p.canchaFija === undefined ? null : num(p.canchaFija), canchaBruta: 0, seña: 0, cancha: 0, canchaPagada: pagos.canchaDe.has(p.id), consumos: [], sinAsignar: 0, pagado: pagos.porParticipante.get(p.id) || 0, debe: 0, total: 0 },
+      { id: p.id, nombre: p.nombre, tipo: p.tipo, uid: p.uid || null, anonimo: !!p.anonimo, excluirCancha: !!p.excluirCancha, canchaFija: p.canchaFija === null || p.canchaFija === undefined ? null : num(p.canchaFija), canchaBruta: 0, seña: 0, cancha: 0, canchaPagada: pagos.canchaDe.has(p.id), consumos: [], sinAsignar: 0, pagado: pagos.porParticipante.get(p.id) || 0, pagoPropio: pagos.propio.get(p.id) || 0, cubiertoPor: pagos.pagadoPor.get(p.id) || null, debe: 0, total: 0 },
     ]),
   );
 
@@ -493,20 +524,24 @@ export function saldosDeCuenta(cuenta) {
   }
 
   for (const s of saldo.values()) {
-    s.debe = Math.max(0, redondear(s.cancha + s.consumos.reduce((a, c) => a + c.monto, 0)));
+    // Una cuenta anulada no se cobra: lo que quedaba no es deuda de nadie
+    s.debe = anulada ? 0 : Math.max(0, redondear(s.cancha + s.consumos.reduce((a, c) => a + c.monto, 0)));
     s.total = redondear(s.pagado + s.debe);
+    s.cubiertoPorNombre = s.cubiertoPor ? (saldo.get(s.cubiertoPor) || {}).nombre || null : null;
   }
   const participantes = [...saldo.values()];
   const pendiente = redondear(participantes.reduce((a, s) => a + s.debe, 0));
   const canchaCubierta = canchaTotal <= 0 || redondear(pagos.canchaBruta) >= canchaTotal - 0.005;
   return {
     legacy: false,
+    anulada,
+    sinteticos: pagosEfectivos(cuenta).filter((p) => p.sintetico).length,
     participantes,
     titularId,
     totalCuenta: totales.total,
     pagadoTotal: pagos.total,
     pendiente,
-    saldada: pendiente === 0 && cubiertas && canchaCubierta,
+    saldada: cerrada || (pendiente === 0 && cubiertas && canchaCubierta),
     consumosTotal: totales.consumos,
     canchaTotal,
     canchaPagada: pagos.canchaBruta,
@@ -602,15 +637,49 @@ export const cuentaSaldada = (cuenta) => saldosDeCuenta(cuenta).saldada;
 
 // ----- Textos -----
 // "Entre 6 · $ 2.500 c/u" (+ excepciones)
+export const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 export function textoReparto(saldos) {
   const r = saldos?.reparto;
   if (!r) return "";
   const partes = [];
   if (r.entre > 0) partes.push(`Entre ${r.entre} · ${formatearPesos(r.cuota)} c/u`);
-  if (r.fijos) partes.push(`${r.fijos} con monto fijo`);
-  if (r.excluidos) partes.push(`${r.excluidos} sin cancha`);
-  if (r.pagaron) partes.push(`${r.pagaron} ya pagaron`);
+  if (r.fijos) partes.push(plural(r.fijos, "con monto fijo", "con monto fijo"));
+  if (r.excluidos) partes.push(plural(r.excluidos, "sin cancha", "sin cancha"));
+  if (r.pagaron) partes.push(plural(r.pagaron, "ya pagó", "ya pagaron"));
   return partes.join(" · ");
+}
+// Explicación larga del reparto de la cancha (Mi cuenta): cómo se reparte AHORA, quién quedó afuera y quién ya pagó
+export function textoRepartoLargo(saldos, { canchaTotal = null, señaCredito = null } = {}) {
+  const r = saldos?.reparto;
+  if (!r) return "";
+  const cancha = canchaTotal === null ? saldos.canchaTotal : canchaTotal;
+  const seña = señaCredito === null ? saldos.señaCredito : señaCredito;
+  const partes = [`La cancha (${formatearPesos(cancha)}) se reparte en partes iguales`];
+  if (r.entre > 0) partes.push(r.entre === r.cabezas ? `entre ${plural(r.entre, "persona", "personas")}` : `ahora entre ${plural(r.entre, "persona que falta pagar", "personas que faltan pagar")}`);
+  if (r.fijos) partes.push(plural(r.fijos, "tiene un monto fijo", "tienen un monto fijo"));
+  if (r.excluidos) partes.push(plural(r.excluidos, "no paga cancha", "no pagan cancha"));
+  if (r.pagaron) partes.push(plural(r.pagaron, "ya pagó la suya", "ya pagaron la suya"));
+  let texto = partes.join("; ") + ".";
+  if (seña > 0) texto += ` La seña (${formatearPesos(seña)}) va a favor de quien reservó.`;
+  return texto;
+}
+// "Cancha $ 3.000 − seña $ 380 = $ 2.620" (o solo "Cancha $ 3.000") para la fila de un participante
+export function textoCanchaDe(p) {
+  if (!p) return "";
+  if (p.canchaPagada) return "Cancha pagada";
+  if (p.excluirCancha) return "Sin cancha";
+  if (p.canchaBruta <= 0) return "Cancha —";
+  const fijo = p.canchaFija !== null && p.canchaFija !== undefined ? " (fijo)" : "";
+  if (p.seña > 0) return `Cancha ${formatearPesos(p.canchaBruta)} − seña ${formatearPesos(p.seña)} = ${formatearPesos(p.cancha)}${fijo}`;
+  return `Cancha ${formatearPesos(p.canchaBruta)}${fijo}`;
+}
+// Badge de estado de pago de un participante: { tono, texto } ("Debe $ X" / "Pagó" / "Lo pagó Gómez" / "Al día")
+export function estadoPagoDe(p, { vos = false } = {}) {
+  if (!p) return { tono: "neutral", texto: "" };
+  if (p.debe > 0) return { tono: "warning", texto: `${vos ? "Debés" : "Debe"} ${formatearPesos(p.debe)}` };
+  if (p.pagado > 0 && p.pagoPropio <= 0 && p.cubiertoPorNombre) return { tono: "success", texto: `Lo pagó ${p.cubiertoPorNombre}`, cubierto: true };
+  if (p.pagado > 0) return { tono: "success", texto: vos ? "Pagaste" : "Pagó" };
+  return { tono: "success", texto: "Al día" };
 }
 const formatearPesos = (n) => "$ " + Math.round(num(n)).toLocaleString("es-AR", { maximumFractionDigits: 0 });
 // Teléfono argentino → "549" + área + número (solo dígitos); "" si no da
