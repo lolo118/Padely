@@ -1,0 +1,73 @@
+@echo off
+setlocal
+rem P3-8: Mercado Pago. Reglas (clubs.mercadoPago, pagosMp, privado), indices (pagosMp, ventas Online) y functions
+rem (mpConectarUrl, mpOAuthCallback, mpDesconectar, mpSetComision, mpRefrescarTokens, mpCrearPago, mpWebhook, mpIr,
+rem expirarPagosMp, mpDevolverExcedente + onVentaUpdated con devoluciones).
+rem La CLI aborta si el codigo de functions tarda mas de 10 s en cargar
+set FUNCTIONS_DISCOVERY_TIMEOUT=120
+cd /d "%~dp0.."
+set LOG=.phase3-logs\10-mercadopago-deploy.log
+set LOCK=.phase3-logs\deploy.lock
+rem Lock de deploy (incidente 2026-10-22: dos CLIs a la vez se pisaron con 409). Si hay un lock de menos de 30 min, no arranca.
+powershell -NoProfile -Command "if ((Test-Path '%LOCK%') -and (((Get-Date) - (Get-Item '%LOCK%').LastWriteTime).TotalMinutes -lt 30)) { exit 1 } else { exit 0 }"
+if errorlevel 1 (
+  echo Ya hay un deploy en curso: %LOCK% tiene menos de 30 min >> "%LOG%"
+  echo Ya hay un deploy en curso
+  exit /b 1
+)
+echo %DATE% %TIME% > "%LOCK%"
+echo ==== P3-8: deploy de reglas + indices + functions (padely-dev) ==== > "%LOG%"
+echo Inicio: %DATE% %TIME% >> "%LOG%"
+git log --oneline -1 >> "%LOG%" 2>&1
+rem [0/4] Los secretos tienen que existir ANTES de deployar (las functions los declaran). El valor va a NUL: nunca al log.
+echo [0/4] secretos MP_CLIENT_SECRET y MP_WEBHOOK_SECRET >> "%LOG%"
+call npx firebase functions:secrets:access MP_CLIENT_SECRET --project padely-dev > NUL 2>&1
+if errorlevel 1 (
+  echo Falta el secreto MP_CLIENT_SECRET: corre npx firebase functions:secrets:set MP_CLIENT_SECRET --project padely-dev >> "%LOG%"
+  echo Falta el secreto MP_CLIENT_SECRET: corre npx firebase functions:secrets:set MP_CLIENT_SECRET --project padely-dev
+  goto fallo
+)
+call npx firebase functions:secrets:access MP_WEBHOOK_SECRET --project padely-dev > NUL 2>&1
+if errorlevel 1 (
+  echo Falta el secreto MP_WEBHOOK_SECRET: corre npx firebase functions:secrets:set MP_WEBHOOK_SECRET --project padely-dev >> "%LOG%"
+  echo Falta el secreto MP_WEBHOOK_SECRET: corre npx firebase functions:secrets:set MP_WEBHOOK_SECRET --project padely-dev
+  goto fallo
+)
+echo OK secretos presentes (valores no registrados) >> "%LOG%"
+echo [1/4] node functions/sync-utils.mjs + npm --prefix functions install >> "%LOG%"
+call node functions\sync-utils.mjs >> "%LOG%" 2>&1
+if errorlevel 1 (
+  echo FALLO sync-utils >> "%LOG%"
+  goto fallo
+)
+call npm --prefix functions install --no-audit --no-fund >> "%LOG%" 2>&1
+if errorlevel 1 (
+  echo FALLO npm install en functions >> "%LOG%"
+  goto fallo
+)
+echo [2/4] firebase deploy --only firestore:rules >> "%LOG%"
+call npx firebase deploy --only firestore:rules --project padely-dev --non-interactive >> "%LOG%" 2>&1
+if errorlevel 1 (
+  echo FALLO el deploy de reglas >> "%LOG%"
+  goto fallo
+)
+echo [3/4] firebase deploy --only firestore:indexes >> "%LOG%"
+call npx firebase deploy --only firestore:indexes --project padely-dev --non-interactive >> "%LOG%" 2>&1
+if errorlevel 1 (
+  echo FALLO el deploy de indices >> "%LOG%"
+  goto fallo
+)
+echo [4/4] firebase deploy --only functions >> "%LOG%"
+call npx firebase deploy --only functions --project padely-dev --non-interactive >> "%LOG%" 2>&1
+if errorlevel 1 (
+  echo FALLO el deploy de functions >> "%LOG%"
+  goto fallo
+)
+echo OK reglas + indices + functions >> "%LOG%"
+echo Fin: %DATE% %TIME% >> "%LOG%"
+del "%LOCK%" 2>nul
+exit /b 0
+:fallo
+echo Fin: %DATE% %TIME% >> "%LOG%"
+del "%LOCK%" 2>nul
+exit /b 1
