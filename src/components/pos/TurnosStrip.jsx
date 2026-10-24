@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Info } from "lucide-react";
 import { Badge, Button } from "../ui";
 import { escucharReservasDeHoy } from "../../services/cuentasService";
-import { textoTurno, ventanaDeTurno } from "../../utils/cuentas";
+import { saldosDeCuenta, textoTurno, ventanaDeTurno } from "../../utils/cuentas";
 import { formatPrecio } from "../../utils/format";
 
 // Franja de turnos del POS: las reservas confirmadas de hoy que están "en juego" (desde 30 min antes hasta 60 min
@@ -87,7 +87,7 @@ export default function TurnosStrip({ clubId, seleccionId = null, onSeleccionar,
                   {textoTurno({ canchaNombre: r.canchaName, horaInicio: r.horaInicio, horaFin: r.horaFin, nombreJugador: r.nombreJugador })}
                   {cuenta && (
                     <Badge tone={activo ? "neutral" : "court"} className="pd-tnum">
-                      {formatPrecio(cuenta.totales?.total)} abierta
+                      {(cuenta.pagos || []).length ? `${formatPrecio(saldosDeCuenta(cuenta).pendiente)} pendiente` : `${formatPrecio(cuenta.totales?.total)} abierta`}
                     </Badge>
                   )}
                   {pendientes > 0 && <Badge tone="warning">{pendientes === 1 ? "1 pedido" : `${pendientes} pedidos`}</Badge>}

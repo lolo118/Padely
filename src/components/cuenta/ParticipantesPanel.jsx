@@ -2,7 +2,7 @@ import { useState } from "react";
 import { UserPlus } from "lucide-react";
 import Dialogo from "../Dialogo";
 import { Badge, Button, Card, Field, Input } from "../ui";
-import { etiquetaTipoParticipante, iniciales } from "../../utils/cuentas";
+import { estadoPagoDe, etiquetaTipoParticipante, iniciales, textoCanchaDe } from "../../utils/cuentas";
 import { formatPrecio } from "../../utils/format";
 
 // Panel de participantes de una cuenta compartida: cada persona con su tipo, su parte de cancha, sus consumos, lo
@@ -86,17 +86,17 @@ export default function ParticipantesPanel({ saldos, abierta, puedeCobrar, puede
                   {p.anonimo && <Badge>Sin cuenta</Badge>}
                 </p>
                 <p className="body-sm text-ink-2 m-0 pd-tnum">
-                  Cancha {p.canchaPagada ? "pagada" : p.excluirCancha ? "no" : fmt(p.cancha)}
-                  {!p.canchaPagada && !p.excluirCancha && p.canchaFija !== null ? " (fijo)" : ""}
-                  {p.seña > 0 ? ` · seña −${fmt(p.seña)}` : ""}
-                  {" · Consumos "}
+                  {textoCanchaDe(p)}
+                  {" · Bar "}
                   {fmt(consumos)}
                   {p.sinAsignar > 0 ? ` (${fmt(p.sinAsignar)} sin asignar)` : ""}
-                  {p.pagado > 0 ? ` · Pagó ${fmt(p.pagado)}` : ""}
+                  {p.pagado > 0 ? ` · ${p.pagoPropio > 0 ? "Pagó" : "Cubierto"} ${fmt(p.pagado)}` : ""}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {alDia ? <Badge tone="success">{p.pagado > 0 ? "Pagó" : "Al día"}</Badge> : <Badge tone="warning" className="pd-tnum">{`Debe ${fmt(p.debe)}`}</Badge>}
+                <Badge tone={estadoPagoDe(p).tono} className={estadoPagoDe(p).cubierto ? "opacity-80" : alDia ? undefined : "pd-tnum"}>
+                  {estadoPagoDe(p).texto}
+                </Badge>
                 {abierta && !alDia && (
                   <Button size="sm" variant="primary" disabled={!puedeCobrar || ocupado} onClick={() => onCobrar(p)} title={!puedeCobrar ? "Abrí la caja para cobrar" : undefined}>
                     Cobrar a {p.nombre.split(" ")[0]}

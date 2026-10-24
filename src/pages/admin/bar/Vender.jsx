@@ -203,6 +203,7 @@ export default function Vender() {
       await agregarItemsACuenta(clubId, grupoId, totales.lineas, { uid, nombre, reserva: cuentaSel, asignadoA: para ? [para.id] : [] });
       toast.success(`Agregado a la cuenta de ${cuentaSel.nombreJugador || cuentaSel.canchaName || "el turno"}${para ? ` · para ${para.nombre}` : ""} · ${formatPrecio(totales.subtotal)}`);
       limpiar();
+      setParaId(""); // la próxima carga vuelve a "Sin asignar": nada va a la misma persona sin elegirla
     } catch (e) {
       console.error("Error agregando a la cuenta:", e);
       const motivo = e instanceof CuentaNoEditableError || e instanceof CuentaCerradaError ? e.message : e?.code === "permission-denied" ? "sin permiso" : e?.code === "unavailable" ? "sin conexión" : e?.message || "error desconocido";

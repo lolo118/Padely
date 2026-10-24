@@ -5,7 +5,7 @@ import { useAuthStore } from "../store/authStore";
 import { escucharCuenta } from "../services/cuentasService";
 import { getClubConfig } from "../services/canchaService";
 import { asignarLineasTurno } from "../services/participantesService";
-import { calcularTotalesCuenta, esLegacyDividida, iniciales, lineaPagada, lineasDeVentaParaParte, parteDelJugador, partePagada, participantePorUid, participantesActivos, puedeAsignar, saldosDeCuenta } from "../utils/cuentas";
+import { calcularTotalesCuenta, esLegacyDividida, estadoPagoDe, iniciales, lineaPagada, lineasDeVentaParaParte, parteDelJugador, partePagada, participantePorUid, participantesActivos, plural, puedeAsignar, saldosDeCuenta, textoRepartoLargo } from "../utils/cuentas";
 import { puedePedir } from "../utils/pedidos";
 import { formatPrecio } from "../utils/format";
 import { formatDiaCorto, formatHora } from "../utils/formatDate";
@@ -169,23 +169,19 @@ export default function MiCuenta() {
         <Card variant="night">
           <Card.Row className="items-start!">
             <Card.Eyebrow>Tu parte · {nombreMio}</Card.Eyebrow>
-            {miSaldo.debe > 0 ? <Badge tone="warning" className="pd-tnum">{`Debés ${formatPrecio(miSaldo.debe)}`}</Badge> : <Badge tone="success">{miSaldo.pagado > 0 ? "Pagaste" : "Al día"}</Badge>}
+            <Badge tone={estadoPagoDe(miSaldo, { vos: true }).tono} className={estadoPagoDe(miSaldo, { vos: true }).cubierto ? "opacity-80" : "pd-tnum"}>
+              {estadoPagoDe(miSaldo, { vos: true }).texto}
+            </Badge>
           </Card.Row>
           <p className="numeral-lg pd-tnum m-0 mt-1">{formatPrecio(miSaldo.total)}</p>
           <ul className="m-0 mt-3 p-0 list-none grid gap-1 body-sm">
             {(miSaldo.canchaBruta > 0 || miSaldo.canchaPagada) && (
               <li className="flex justify-between gap-3 pd-tnum">
                 <span>
-                  Cancha{miSaldo.excluirCancha ? "" : saldos.reparto?.cabezas > 1 && miSaldo.canchaFija === null ? ` (÷${saldos.reparto.cabezas})` : ""}
-                  {miSaldo.canchaPagada ? " · pagada" : ""}
+                  Cancha
+                  {miSaldo.canchaPagada ? " · pagada" : miSaldo.canchaFija !== null ? " (monto fijo)" : saldos.reparto?.entre > 1 ? (saldos.reparto.entre === saldos.reparto.cabezas ? ` (÷${saldos.reparto.entre})` : ` (÷${saldos.reparto.entre} entre los que faltan pagar)`) : ""}
                 </span>
-                <span>{miSaldo.canchaPagada ? "—" : formatPrecio(miSaldo.canchaBruta)}</span>
-              </li>
-            )}
-            {miSaldo.seña > 0 && (
-              <li className="flex justify-between gap-3 pd-tnum text-ink-2">
-                <span>Seña a tu favor</span>
-                <span>−{formatPrecio(miSaldo.seña)}</span>
+                <span>{miSaldo.canchaPagada ? "—" : miSaldo.seña > 0 ? `${formatPrecio(miSaldo.canchaBruta)} − seña ${formatPrecio(miSaldo.seña)} = ${formatPrecio(miSaldo.cancha)}` : formatPrecio(miSaldo.canchaBruta)}</span>
               </li>
             )}
             {miSaldo.consumos.map((x, i) => (
@@ -213,7 +209,7 @@ export default function MiCuenta() {
           <Card.Eyebrow>Tu parte</Card.Eyebrow>
           <Card.Row className="items-end!">
             <p className="numeral-lg pd-tnum m-0">{formatPrecio(miParteLegacy.total)}</p>
-            {partePagada(miParteLegacy) ? <Badge tone="success">Pagada · {miParteLegacy.ventaNumero}</Badge> : <Badge tone="warning">Pendiente</Badge>}
+            {partePagada(miParteLegacy) || !abierta ? <Badge tone="success">Pagada{miParteLegacy.ventaNumero ? ` · ${miParteLegacy.ventaNumero}` : ""}</Badge> : <Badge tone="warning">Pendiente</Badge>}
           </Card.Row>
           <ul className="m-0 mt-3 p-0 list-none grid gap-1 body-sm">
             {lineasDeVentaParaParte(cuenta, miParteLegacy).map((l, i) => (
@@ -263,11 +259,17 @@ export default function MiCuenta() {
                   {p.tipo === "titular" ? <span className="text-ink-3"> · titular</span> : ""}
                 </span>
                 <span className="pd-tnum body-sm text-ink-2">{formatPrecio(p.total)}</span>
-                {p.debe > 0 ? <Badge tone="warning" className="pd-tnum">{`Debe ${formatPrecio(p.debe)}`}</Badge> : <Badge tone="success">{p.pagado > 0 ? "Pagó" : "Al día"}</Badge>}
+                <Badge tone={estadoPagoDe(p).tono} className={estadoPagoDe(p).cubierto ? "opacity-80" : "pd-tnum"}>
+                  {estadoPagoDe(p).texto}
+                </Badge>
               </li>
             ))}
           </ul>
-          {saldos.reparto && c.cobrar !== false && <p className="pd-help mt-3 mb-0">La cancha se reparte entre {saldos.reparto.cabezas} en partes iguales{totales.seña > 0 ? `; la seña (${formatPrecio(totales.seña)}) va a favor de quien reservó` : ""}. Lo que nadie se asignó se divide entre todos al cobrar.</p>}
+          {saldos.reparto && c.cobrar !== false && abierta && (
+            <p className="pd-help mt-3 mb-0">
+              {textoRepartoLargo(saldos)} Lo que nadie se asignó se divide entre {plural(saldos.participantes.length, "persona", "personas")} al cobrar.
+            </p>
+          )}
         </Card>
       )}
 
@@ -314,7 +316,7 @@ export default function MiCuenta() {
           </div>
           {Number(c.seña) > 0 && (
             <div className="flex justify-between text-ink-2">
-              <dt>Seña {c.señaPagada ? "pagada" : "pendiente"}</dt>
+              <dt>Seña {c.señaPagada ? "pagada" : cuenta.estado === "cerrada" && c.cobrar !== false ? "pagada con la cuenta" : "pendiente"}</dt>
               <dd className="m-0 pd-tnum">{totales.seña > 0 ? `−${formatPrecio(totales.seña)}` : formatPrecio(c.seña)}</dd>
             </div>
           )}
@@ -334,7 +336,7 @@ export default function MiCuenta() {
                 <span className="body-sm font-semibold">{p.nombre}</span>
                 <span className="flex items-center gap-2">
                   <span className="pd-tnum">{formatPrecio(p.total)}</span>
-                  {partePagada(p) ? <Badge tone="success">Pagada</Badge> : <Badge tone="warning">Pendiente</Badge>}
+                  {partePagada(p) || !abierta ? <Badge tone="success">Pagada</Badge> : <Badge tone="warning">Pendiente</Badge>}
                 </span>
               </li>
             ))}

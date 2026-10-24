@@ -48,6 +48,7 @@ export default function MisReservas() {
   const [loading, setLoading] = useState(true);
 
   const [hoyStr] = useState(() => getTodayLocal());
+  const [verCanceladas, setVerCanceladas] = useState(false);
   // Cuentas del turno abiertas a nombre del jugador (cualquier club), por grupoId de la reserva
   const [cuentas, setCuentas] = useState([]);
   useEffect(() => {
@@ -122,10 +123,13 @@ export default function MisReservas() {
           .sort((a, b) => (a.fecha + a.horaInicio).localeCompare(b.fecha + b.horaInicio));
 
         const anteriores = grupos
-          .filter((r) => r.fecha < hoyStr || r.status === "cancelada")
+          .filter((r) => r.fecha < hoyStr && r.status !== "cancelada")
+          .sort((a, b) => (b.fecha + (b.horaInicio || "")).localeCompare(a.fecha + (a.horaInicio || "")));
+        const canceladas = grupos
+          .filter((r) => r.status === "cancelada")
           .sort((a, b) => (b.fecha + (b.horaInicio || "")).localeCompare(a.fecha + (a.horaInicio || "")));
 
-        setReservas([...proximas, ...anteriores]);
+        setReservas([...proximas, ...anteriores, ...canceladas]);
       } catch (err) {
         console.error("Error al cargar reservas:", err);
       }
@@ -207,8 +211,10 @@ export default function MisReservas() {
     );
   }
 
+  // Tres grupos por estado y fecha: una cancelada nunca se mezcla con las próximas ni con las anteriores
   const proximas = reservas.filter((r) => r.fecha >= hoyStr && r.status !== "cancelada");
-  const anteriores = reservas.filter((r) => r.fecha < hoyStr || r.status === "cancelada");
+  const anteriores = reservas.filter((r) => r.fecha < hoyStr && r.status !== "cancelada");
+  const canceladas = reservas.filter((r) => r.status === "cancelada");
 
   // Un turno al que me sumaron: la cuenta compartida vista desde mi lado
   function tarjetaParticipo(c) {
@@ -313,6 +319,25 @@ export default function MisReservas() {
                 Anteriores <span className="pd-count text-ink-3 font-semibold">{anteriores.length}</span>
               </h2>
               <div className="flex flex-col gap-4">{anteriores.map((r) => tarjeta(r, true))}</div>
+            </section>
+          )}
+
+          {/* Canceladas: plegadas, nunca mezcladas con las demás */}
+          {canceladas.length > 0 && (
+            <section aria-labelledby="reservas-canceladas">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <h2 id="reservas-canceladas" className="heading-lg m-0 text-ink-2">
+                  Canceladas <span className="pd-count text-ink-3 font-semibold">{canceladas.length}</span>
+                </h2>
+                <Button size="sm" variant="ghost" onClick={() => setVerCanceladas((v) => !v)} aria-expanded={verCanceladas} aria-controls="lista-canceladas">
+                  {verCanceladas ? "Ocultar" : "Ver"}
+                </Button>
+              </div>
+              {verCanceladas && (
+                <div id="lista-canceladas" className="flex flex-col gap-4">
+                  {canceladas.map((r) => tarjeta(r, true))}
+                </div>
+              )}
             </section>
           )}
         </div>

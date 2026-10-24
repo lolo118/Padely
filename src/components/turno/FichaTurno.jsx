@@ -11,7 +11,7 @@ import { actualizarReservaGrupo, cancelarReservaGrupo, getContactoReserva, marca
 import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
 import { abrirCuentaDelTurno, escucharCuenta } from "../../services/cuentasService";
 import { escucharPedidosDeCuenta } from "../../services/pedidosService";
-import { calcularTotalesCuenta, iniciales, saldosDeCuenta } from "../../utils/cuentas";
+import { calcularTotalesCuenta, estadoPagoDe, iniciales, saldosDeCuenta, textoCanchaDe } from "../../utils/cuentas";
 import { ESTADOS_ACTIVOS, etiquetaEstado, resumenItems, tonoEstado } from "../../utils/pedidos";
 import { estadoSeña, normalizarReserva, rangoHoras } from "../../utils/reservas";
 import { telefonoWhatsApp } from "../../utils/ventas";
@@ -155,8 +155,8 @@ export default function FichaTurno({ clubId, club, reserva: reservaProp = null, 
   };
 
   return (
-    <div className="pd-backdrop z-50 md:place-items-stretch md:justify-items-end md:p-0" onClick={cerrarPorFondo}>
-      <section ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={tituloId} className="pd-dialog outline-none max-w-[480px]! w-full max-h-[calc(100dvh-32px)] overflow-y-auto md:max-h-none md:h-dvh md:rounded-none! md:border-y-0! md:border-r-0! flex flex-col gap-4">
+    <div className="pd-backdrop z-50 md:place-items-stretch! md:justify-items-end! md:p-0!" onClick={cerrarPorFondo}>
+      <section ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={tituloId} className="pd-dialog outline-none max-w-[480px]! w-full max-h-[calc(100dvh-32px)] overflow-y-auto md:max-h-none! md:h-dvh md:rounded-none! md:border-y-0! md:border-r-0! md:shadow-[var(--shadow-overlay)] flex flex-col gap-4">
         <header className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="pd-eyebrow m-0">
@@ -232,8 +232,15 @@ export default function FichaTurno({ clubId, club, reserva: reservaProp = null, 
                         <span className="pd-avatar pd-avatar-sm" aria-hidden="true">
                           {iniciales(p.nombre)}
                         </span>
-                        <span className="min-w-0 flex-1 truncate body-sm">{p.nombre}</span>
-                        {p.debe > 0 ? <Badge tone="warning" className="pd-tnum">{`Debe ${formatPrecio(p.debe)}`}</Badge> : <Badge tone="success">{p.pagado > 0 ? "Pagó" : "Al día"}</Badge>}
+                        <span className="min-w-0 flex-1 body-sm">
+                          <span className="block truncate">{p.nombre}</span>
+                          <span className="block text-ink-3 pd-tnum truncate">
+                            {textoCanchaDe(p)} · bar {formatPrecio(p.consumos.reduce((a, c) => a + c.monto, 0))}
+                          </span>
+                        </span>
+                        <Badge tone={estadoPagoDe(p).tono} className={estadoPagoDe(p).cubierto ? "opacity-80" : "pd-tnum"}>
+                          {estadoPagoDe(p).texto}
+                        </Badge>
                       </li>
                     ))}
                   </ul>

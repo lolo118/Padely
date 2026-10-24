@@ -18,6 +18,7 @@ import { tonoDiferencia } from "../../../utils/caja";
 import { formatPrecio } from "../../../utils/format";
 import { formatDiaCorto, formatFechaHora, formatHora, getTodayLocal } from "../../../utils/formatDate";
 import ExportarMenu from "../../../components/reportes/ExportarMenu";
+import useMediaQuery from "../../../utils/useMediaQuery";
 
 // Reportes del bar: lo que el dueño abre el lunes. Se arma sumando los rollups diarios (reportesDiarios) del
 // período, nunca recorriendo ventas. "Recalcular este día" reconstruye un día desde ventas y cajas (callable).
@@ -32,13 +33,14 @@ const TOOLTIP = {
 const LEGEND = { fontSize: 12, fontFamily: "var(--font-sans)" };
 const fmtCant = (n) => (Number(n) || 0).toLocaleString("es-AR", { maximumFractionDigits: 3 });
 
-// Tabla en escritorio, tarjetas en el teléfono. columnas: [{ clave, label, num?, render? }]
+// Tabla en escritorio, tarjetas en el teléfono: UN solo layout en el DOM (useMediaQuery). columnas: [{ clave, label, num?, render? }]
 function Tabla({ columnas, filas, claveFila, vacio }) {
+  const escritorio = useMediaQuery("(min-width: 768px)");
   if (!filas.length) return <p className="body-sm text-ink-2 m-0 py-6 text-center">{vacio}</p>;
   const valor = (f, c) => (c.render ? c.render(f) : f[c.clave]);
-  return (
-    <>
-      <div className="flex flex-col gap-3 md:hidden">
+  if (!escritorio) {
+    return (
+      <div className="flex flex-col gap-3">
         {filas.map((f) => (
           <Card key={claveFila(f)}>
             <Card.Title className="text-[17px]! leading-6!">{valor(f, columnas[0])}</Card.Title>
@@ -53,9 +55,12 @@ function Tabla({ columnas, filas, claveFila, vacio }) {
           </Card>
         ))}
       </div>
-      <div className="pd-table-wrap hidden md:block">
-        <div className="overflow-x-auto">
-          <table className="pd-table">
+    );
+  }
+  return (
+    <div className="pd-table-wrap">
+      <div className="overflow-x-auto">
+        <table className="pd-table">
             <thead>
               <tr>
                 {columnas.map((c) => (
@@ -77,9 +82,8 @@ function Tabla({ columnas, filas, claveFila, vacio }) {
               ))}
             </tbody>
           </table>
-        </div>
       </div>
-    </>
+    </div>
   );
 }
 
