@@ -2744,25 +2744,21 @@ async function aplicarPagoAprobado(clubRef, pagoMpRef, pago) {
   });
 }
 
-async function procesarNotificacionMp(clubId, paymentId) {
-  const clubRef = db.collection("clubs").doc(clubId);
-  const tokens = await tokensDelClub(clubRef);
-  if (!tokens || !tokens.accessToken) {
-    logger.warn(`mpWebhook ${clubId}: club sin tokens; pago ${paymentId} ignorado`);
-    return;
-  }
-  const pago = await mpFetch(`/v1/payments/${encodeURIComponent(paymentId)}`, { token: tokens.accessToken });
+// Aplica un pago YA LEÍDO de la API con el token del club (nunca el cuerpo de la notificación): busca el pagoMp por
+// external_reference en ESTE club; si no existe, se ignora. Devuelve un texto corto para el log.
+async function aplicarPagoLeido(clubRef, pago) {
+  const clubId = clubRef.id;
+  const paymentId = String(pago.id);
   const pagoMpId = (pago && pago.external_reference) || (pago && pago.metadata && pago.metadata.pago_mp_id) || null;
-  if (!pagoMpId) {
-    logger.info(`mpWebhook ${clubId}: pago ${paymentId} sin external_reference (${pago && pago.status})`);
-    return;
-  }
+  if (!pagoMpId) return `pago ${paymentId} sin external_reference (${pago.status}) → ignorado`;
   const pagoMpRef = clubRef.collection("pagosMp").doc(String(pagoMpId));
+  const existe = await pagoMpRef.get();
+  if (!existe.exists) return `pago ${paymentId} (ref ${pagoMpId}) no es de este club → ignorado`;
   const estado = pago.status;
   if (estado === "approved") {
     const r = await aplicarPagoAprobado(clubRef, pagoMpRef, pago);
     logger.info(`mpWebhook ${clubId}/${pagoMpId}: ${r.resultado}${r.numero ? ` → ${r.numero} $${r.total}` : ""}${r.excedente ? ` excedente $${r.excedente}` : ""}${r.saldada ? " · cuenta cerrada" : ""}`);
-    if (r.resultado !== "aplicado" && r.resultado !== "seña aplicada") return;
+    if (r.resultado !== "aplicado" && r.resultado !== "seña aplicada") return `pago ${paymentId}: ${r.resultado}`;
     const pm = r.pm;
     const club = (await clubRef.get()).data() || {};
     const monto = Math.round(Number(pago.transaction_amount) || pm.monto).toLocaleString("es-AR");
@@ -2791,7 +2787,7 @@ async function procesarNotificacionMp(clubId, paymentId) {
     } catch (err) {
       logger.error(`mpWebhook ${clubId}/${pagoMpId}: avisos`, err);
     }
-    return;
+    return `pago ${paymentId}: ${r.resultado}`;
   }
   // No aprobado: rechazado/cancelado cierran la preferencia; pendiente/en proceso solo anotan
   await db.runTransaction(async (tx) => {
@@ -2818,30 +2814,84 @@ async function procesarNotificacionMp(clubId, paymentId) {
       }
     }
   }
+  return `pago ${paymentId} ${estado}`;
 }
 
-// Webhook de Mercado Pago: valida la firma HMAC (x-signature / x-request-id), lee el pago con el token del club y lo
-// aplica. Responde 200 después de procesar (MP espera hasta 22 s y reintenta cada 15 min si no hay 200).
+// Webhook de Mercado Pago (B-P3-8-2). La firma HMAC (x-signature / x-request-id) se calcula y se registra, pero la
+// notificación es solo una pista: todo pago se relee de la API con el token del club y se aplica solo si existe, es de
+// este club (external_reference → pagosMp) y está aprobado (idempotente por paymentId). Responde 200 a toda
+// notificación bien formada después de procesarla (ids desconocidos → "ignorado"); 401 solo si el club no existe;
+// 500 solo ante un error interno (MP reintenta cada 15 min).
 exports.mpWebhook = onRequest({ region: REGION, secrets: [MP_WEBHOOK_SECRET, MP_CLIENT_SECRET], timeoutSeconds: 60 }, async (req, res) => {
   const clubId = texto(req.query && req.query.club, 80);
-  const { dataId, tipo } = mp.datosDeNotificacion(req.query || {}, req.body || {});
-  const firma = mp.firmaValida({ xSignature: req.get("x-signature"), xRequestId: req.get("x-request-id"), dataId, secreto: MP_WEBHOOK_SECRET.value() });
-  if (!firma.ok) {
-    logger.warn(`mpWebhook: firma inválida (${firma.motivo}) club=${clubId || "?"} data.id=${dataId || "?"}`);
-    res.status(401).send("firma inválida");
-    return;
-  }
-  if (!clubId || !dataId || (tipo && tipo !== "payment")) {
-    res.status(200).send("ok");
+  const datos = mp.datosDeNotificacion(req.query || {}, req.body || {});
+  const xSignature = req.get("x-signature");
+  const firma = xSignature ? mp.firmaValida({ xSignature, xRequestId: req.get("x-request-id"), dataId: datos.dataId, secreto: MP_WEBHOOK_SECRET.value() }) : { ok: false, motivo: "ausente" };
+  const firmaTxt = !xSignature ? "ausente" : firma.ok ? "ok" : `inválida (${firma.motivo})`;
+  const clubRef = clubId ? db.collection("clubs").doc(clubId) : null;
+  const clubSnap = clubRef ? await clubRef.get() : null;
+  if (!clubSnap || !clubSnap.exists) {
+    logger.warn(`mpWebhook: club desconocido (${clubId || "sin club"}) · firma ${firmaTxt} · ${datos.tipo || "?"} ${datos.dataId || "?"}`);
+    res.status(401).send("club desconocido");
     return;
   }
   try {
-    await procesarNotificacionMp(clubId, dataId);
-    res.status(200).send("ok");
+    const tokens = await tokensDelClub(clubRef);
+    const leer = (path) =>
+      tokens && tokens.accessToken
+        ? mpFetch(path, { token: tokens.accessToken }).catch((err) => {
+            if (err.status === 404) return null;
+            throw err;
+          })
+        : Promise.resolve(null);
+    const r = await mp.procesarNotificacion({
+      tipo: datos.tipo,
+      dataId: datos.dataId,
+      deps: {
+        leerPago: (id) => leer(`/v1/payments/${encodeURIComponent(id)}`),
+        leerOrden: (id) => leer(`/merchant_orders/${encodeURIComponent(id)}`),
+        aplicar: (pago) => aplicarPagoLeido(clubRef, pago),
+      },
+    });
+    logger.info(`mpWebhook ${clubId}: firma ${firmaTxt} · ${datos.tipo || "payment"} ${datos.dataId || "?"} → ${r.resultado}: ${r.resumen}${tokens && tokens.accessToken ? "" : " (club sin tokens)"}`);
+    res.status(200).send(r.resultado);
   } catch (err) {
-    logger.error(`mpWebhook ${clubId}: ${err.message || err}`);
+    logger.error(`mpWebhook ${clubId}: firma ${firmaTxt} · ${err.message || err}`);
     res.status(500).send("error");
   }
+});
+
+// B-P3-8-3: el club devolvió a mano desde su cuenta de Mercado Pago (la API no aceptó la devolución). Marca el
+// excedente o la devolución de una venta anulada como resueltos, con quién y cuándo, y limpia la alerta.
+exports.mpMarcarDevueltoManual = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  const clubId = texto(request.data && request.data.clubId, 80);
+  const pagoMpId = texto(request.data && request.data.pagoMpId, 80);
+  const que = texto(request.data && request.data.que, 20) || "excedente";
+  if (!clubId || !pagoMpId || !["excedente", "venta"].includes(que)) throw new HttpsError("invalid-argument", "clubId, pagoMpId y que (excedente | venta)");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const acceso = await accesoClub(clubRef, uid, ["anularVenta", ...PERMISOS_COBRO]);
+  if (!acceso.esStaff) throw new HttpsError("permission-denied", "Solo quien cobra o anula ventas puede marcar devoluciones");
+  const pagoMpRef = clubRef.collection("pagosMp").doc(pagoMpId);
+  const snap = await pagoMpRef.get();
+  if (!snap.exists) throw new HttpsError("not-found", "El pago no existe");
+  const pm = snap.data();
+  const porNombre = acceso.nombre || (await nombreDeUsuario(uid, null));
+  const batch = db.batch();
+  if (que === "excedente") {
+    const excedente = Number(pm.excedente) || 0;
+    if (excedente <= 0 || pm.excedenteDevuelto) throw new HttpsError("failed-precondition", "No hay un excedente pendiente de devolver");
+    batch.update(pagoMpRef, { excedenteDevuelto: { ...mp.devolucionDe({ ok: true }, { monto: excedente, manual: true, por: uid }), porNombre, en: FieldValue.serverTimestamp() }, excedenteError: null, actualizadoEn: FieldValue.serverTimestamp() });
+    if (pm.grupoId) batch.update(clubRef.collection("cuentas").doc(pm.grupoId), { alertas: FieldValue.arrayRemove("mp-excedente"), actualizadoEn: FieldValue.serverTimestamp() });
+  } else {
+    if (!pm.devolucion || pm.devolucion.ok) throw new HttpsError("failed-precondition", "Ese pago no tiene una devolución pendiente");
+    const devolucion = { ...pm.devolucion, ...mp.devolucionDe({ ok: true }, { monto: pm.devolucion.monto, manual: true, por: uid }), porNombre, en: FieldValue.serverTimestamp() };
+    batch.update(pagoMpRef, { estado: "devuelto", devolucion, actualizadoEn: FieldValue.serverTimestamp() });
+    if (pm.ventaNumero) batch.update(clubRef.collection("ventas").doc(pm.ventaNumero), { devolucion, actualizadoEn: FieldValue.serverTimestamp() });
+  }
+  await batch.commit();
+  logger.info(`mpMarcarDevueltoManual ${clubId}/${pagoMpId}: ${que} marcado por ${uid}`);
+  return { ok: true };
 });
 
 // Cada 15 minutos: las preferencias pendientes vencidas pasan a "vencido"

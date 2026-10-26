@@ -91,6 +91,38 @@ function datosDeNotificacion(query = {}, body = {}) {
   return { dataId: dataId !== null ? String(dataId) : null, tipo, accion: (body && body.action) || null, liveMode: body && body.live_mode };
 }
 
+// ----- Notificaciones (B-P3-8-2) -----
+// Qué hacer con una notificación. La firma se calcula y se registra aparte, pero NUNCA se confía en el cuerpo: todo
+// pago se relee de la API con el token del club (deps.leerPago(id) → objeto, o null si no existe) y se aplica solo
+// si existe y su external_reference es un pagoMp de ESTE club (lo verifica deps.aplicar, que devuelve un texto para el
+// log). merchant_order → deps.leerOrden(id).payments. Otros temas (plan, subscription, …) se ignoran.
+// Devuelve { resultado: "ok" | "ignorado", resumen }.
+const TEMAS_PAGO = ["payment", "payments"];
+const TEMAS_ORDEN = ["merchant_order", "merchant_orders", "topic_merchant_order_wh"];
+async function procesarNotificacion({ tipo = null, dataId = null, deps }) {
+  if (!dataId) return { resultado: "ignorado", resumen: "sin data.id" };
+  let ids = [];
+  if (!tipo || TEMAS_PAGO.includes(tipo)) ids = [String(dataId)];
+  else if (TEMAS_ORDEN.includes(tipo)) {
+    const orden = await deps.leerOrden(String(dataId));
+    ids = ((orden && orden.payments) || []).map((p) => p && p.id).filter((id) => id !== null && id !== undefined).map(String);
+    if (!ids.length) return { resultado: "ignorado", resumen: orden ? `orden ${dataId} sin pagos` : `orden ${dataId} desconocida` };
+  } else return { resultado: "ignorado", resumen: `tema ${tipo} ignorado` };
+  const partes = [];
+  let aplicados = 0;
+  for (const id of ids) {
+    const pago = await deps.leerPago(id);
+    if (!pago) {
+      partes.push(`pago ${id} desconocido → ignorado`);
+      continue;
+    }
+    const r = await deps.aplicar(pago);
+    aplicados += 1;
+    partes.push(typeof r === "string" ? r : `pago ${id} ${pago.status}`);
+  }
+  return { resultado: aplicados ? "ok" : "ignorado", resumen: partes.join(" · ") };
+}
+
 // ----- Ventas online (B-P3-8-1) -----
 // Una venta se anula con la callable mpAnularVenta solo si está "ok", es online (cajaId null) y se cobró por Mercado Pago
 function ventaAnulableOnline(venta) {
@@ -181,6 +213,7 @@ module.exports = {
   nuevoState,
   numeroMp,
   partesDeFirma,
+  procesarNotificacion,
   stateValido,
   tokensDeRespuesta,
   urlAutorizacion,

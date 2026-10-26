@@ -38,7 +38,7 @@ import {
   setCobrarCancha,
 } from "../../../services/cuentasService";
 import { quitarParticipante } from "../../../services/participantesService";
-import { clubConectadoMp, escucharPagosMpDeCuenta, mpAnularVenta, mpDevolverExcedente } from "../../../services/mercadoPagoService";
+import { clubConectadoMp, escucharPagosMpDeCuenta, mpAnularVenta, mpDevolverExcedente, mpMarcarDevueltoManual } from "../../../services/mercadoPagoService";
 import { ETIQUETA_MEDIO_VENTA } from "../../../utils/ventas";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
@@ -301,6 +301,22 @@ export default function CuentaDetalle() {
       setOcupado(false);
     }
   };
+  // Devoluciones que la API de MP no aceptó: el club las hace desde su cuenta de MP y las marca acá (B-P3-8-3)
+  const devolucionesFallidas = pagosMp.filter((p) => p.devolucion && p.devolucion.ok === false);
+  const marcarDevueltoManual = async (pm, que) => {
+    const monto = que === "excedente" ? pm.excedente : pm.devolucion?.monto;
+    const ok = await confirmar({ titulo: "¿Ya lo devolviste desde Mercado Pago?", mensaje: `Marcamos ${formatPrecio(monto)} como devueltos a mano, con tu nombre y la hora. No se le pide nada a Mercado Pago.`, confirmText: "Sí, ya lo devolví" });
+    if (!ok) return;
+    setOcupado(true);
+    try {
+      await mpMarcarDevueltoManual({ clubId, pagoMpId: pm.id, que });
+      toast.success("Devolución marcada como hecha");
+    } catch (e) {
+      avisarError(e, "No pudimos marcar la devolución.");
+    } finally {
+      setOcupado(false);
+    }
+  };
   // Devolver un pago de MP = anular su venta online con la callable mpAnularVenta (B-P3-8-1): saca el pago de la
   // cuenta (la deuda vuelve) y pide la devolución; el resultado vuelve en la misma llamada
   const devolverPagoMp = async (pg) => {
@@ -457,11 +473,27 @@ export default function CuentaDetalle() {
           <p className="m-0">
             <strong>Pago de más por Mercado Pago: devolver {formatPrecio(excedenteMp.excedente)}.</strong> {excedenteMp.pagador?.nombre || "El jugador"} pagó online algo que ya se había cobrado en el mostrador.
           </p>
-          <Button size="sm" variant="primary" className="mt-2" disabled={ocupado} onClick={devolverExcedente}>
-            Devolver {formatPrecio(excedenteMp.excedente)}
-          </Button>
+          {excedenteMp.excedenteError && <p className="body-sm m-0 mt-1">Mercado Pago no aceptó la devolución automática ({excedenteMp.excedenteError}). Hacela desde tu cuenta de Mercado Pago y marcala acá.</p>}
+          <div className="pd-btn-group mt-2">
+            <Button size="sm" variant="primary" disabled={ocupado} onClick={devolverExcedente}>
+              {excedenteMp.excedenteError ? "Reintentar la devolución" : `Devolver ${formatPrecio(excedenteMp.excedente)}`}
+            </Button>
+            <Button size="sm" disabled={ocupado} onClick={() => marcarDevueltoManual(excedenteMp, "excedente")}>
+              Ya lo devolví desde Mercado Pago
+            </Button>
+          </div>
         </Alert>
       )}
+      {devolucionesFallidas.map((pm) => (
+        <Alert key={pm.id} tone="danger">
+          <p className="m-0">
+            <strong>La venta {pm.ventaNumero || pm.devolucion.ventaNumero || "de Mercado Pago"} se anuló, pero Mercado Pago no aceptó devolver {formatPrecio(pm.devolucion.monto)}</strong> ({pm.devolucion.error}). Hacé la devolución desde tu cuenta de Mercado Pago y marcala acá.
+          </p>
+          <Button size="sm" className="mt-2" disabled={ocupado} onClick={() => marcarDevueltoManual(pm, "venta")}>
+            Ya lo devolví desde Mercado Pago
+          </Button>
+        </Alert>
+      ))}
       {alertas.includes(ALERTA_MP_EXCEDENTE) && !excedenteMp && pagosMp.length > 0 && abierta && (
         <Alert>
           El pago de más por Mercado Pago ya se devolvió.

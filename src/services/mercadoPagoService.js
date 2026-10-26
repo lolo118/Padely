@@ -22,6 +22,8 @@ export const mpDevolverExcedente = llamar("mpDevolverExcedente");
 // Staff con anularVenta (o dueño): { clubId, numero, motivo } → anula una venta online de MP, saca el pago de la cuenta y
 // pide la devolución → { numero, reabierta, devolucion: { ok, refundId | error, monto } }
 export const mpAnularVenta = llamar("mpAnularVenta");
+// Staff: { clubId, pagoMpId, que: "excedente" | "venta" } → el club ya devolvió a mano desde su cuenta de MP
+export const mpMarcarDevueltoManual = llamar("mpMarcarDevueltoManual");
 export const esVentaOnlineMp = (venta) => !!venta && !venta.cajaId && !!venta.mpPaymentId;
 
 export const escucharPagoMp = (clubId, pagoMpId, onDatos, onError) =>

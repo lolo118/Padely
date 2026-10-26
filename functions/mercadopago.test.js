@@ -116,3 +116,51 @@ test("B-P3-8-1: qué ventas se anulan con mpAnularVenta y cómo se guarda la dev
   // Marcada a mano desde la cuenta de MP del club
   assert.deepEqual(mp.devolucionDe({ ok: true }, { monto: 5000, manual: true, por: "u1" }), { ok: true, monto: 5000, manual: true, por: "u1", refundId: null, error: null });
 });
+
+// Fakes de la API: pagos conocidos por id; aplicar() anota lo que recibe
+const apiFalsa = (pagos, ordenes = {}) => {
+  const aplicados = [];
+  const deps = {
+    leerPago: async (id) => pagos[id] || null,
+    leerOrden: async (id) => ordenes[id] || null,
+    aplicar: async (pago) => {
+      aplicados.push(pago.id);
+      return `pago ${pago.id} ${pago.status} → aplicado`;
+    },
+  };
+  return { deps, aplicados };
+};
+
+test("B-P3-8-2: firma inválida + pago aprobado real → se aplica igual (la verdad está en la API, no en el cuerpo)", async () => {
+  const xSignature = "ts=1,v1=deadbeef"; // firma que no cierra
+  assert.equal(mp.firmaValida({ xSignature, xRequestId: "r", dataId: "185", secreto: SECRETO_PRUEBA }).ok, false);
+  const { deps, aplicados } = apiFalsa({ 185: { id: 185, status: "approved", external_reference: "pm1" } });
+  const r = await mp.procesarNotificacion({ ...mp.datosDeNotificacion({ "data.id": "185", type: "payment" }, { action: "payment.updated" }), deps });
+  assert.deepEqual(aplicados, [185]);
+  assert.equal(r.resultado, "ok");
+  assert.match(r.resumen, /185 approved/);
+});
+
+test("B-P3-8-2: firma inválida + pago desconocido → ignorado (200 sin aplicar nada)", async () => {
+  const { deps, aplicados } = apiFalsa({});
+  const r = await mp.procesarNotificacion({ tipo: "payment", dataId: "999", deps });
+  assert.deepEqual(aplicados, []);
+  assert.deepEqual(r, { resultado: "ignorado", resumen: "pago 999 desconocido → ignorado" });
+  // Sin data.id o con un tema que no es de pagos: ignorado
+  assert.equal((await mp.procesarNotificacion({ tipo: "payment", dataId: null, deps })).resultado, "ignorado");
+  assert.match((await mp.procesarNotificacion({ tipo: "subscription_preapproval", dataId: "5", deps })).resumen, /tema .* ignorado/);
+});
+
+test("B-P3-8-2: feed sin firma (?id=…&topic=…) → se procesa; merchant_order → sus pagos", async () => {
+  const datos = mp.datosDeNotificacion({ id: "77", topic: "payment" }, {});
+  assert.deepEqual([datos.dataId, datos.tipo], ["77", "payment"]);
+  const { deps, aplicados } = apiFalsa({ 77: { id: 77, status: "approved", external_reference: "pm7" }, 78: { id: 78, status: "rejected", external_reference: "pm8" } }, { 500: { id: 500, payments: [{ id: 77 }, { id: 78 }, { id: 79 }] } });
+  const r1 = await mp.procesarNotificacion({ ...datos, deps });
+  assert.equal(r1.resultado, "ok");
+  assert.deepEqual(aplicados, [77]);
+  const r2 = await mp.procesarNotificacion({ ...mp.datosDeNotificacion({ id: "500", topic: "merchant_order" }, {}), deps });
+  assert.equal(r2.resultado, "ok");
+  assert.deepEqual(aplicados, [77, 77, 78]);
+  assert.match(r2.resumen, /79 desconocido/);
+  assert.equal((await mp.procesarNotificacion({ tipo: "merchant_order", dataId: "501", deps })).resumen, "orden 501 desconocida");
+});
