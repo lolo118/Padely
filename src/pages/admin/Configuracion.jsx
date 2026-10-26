@@ -16,7 +16,7 @@ import {
 } from "../../services/staffService";
 import { uploadClubLogo } from "../../services/storageService";
 import { formatPrecio } from "../../utils/format";
-import { formatFecha } from "../../utils/formatDate";
+import { formatFecha, formatFechaHoraArg } from "../../utils/formatDate";
 import { MAX_TURNOS_POR_RESERVA, maxTurnosDelClub } from "../../utils/tarifas";
 import {
   INVITACION_DIAS,
@@ -1093,7 +1093,7 @@ export default function Configuracion() {
                 <Badge tone="success" dot>
                   Conectado
                 </Badge>
-                {clubActual?.mercadoPago?.liveMode === false && <Badge tone="warning">Modo prueba</Badge>}
+                {(clubActual?.mercadoPago?.esPrueba || clubActual?.mercadoPago?.liveMode === false) && <Badge tone="warning">Modo prueba</Badge>}
               </span>
             ) : (
               <Badge>Sin conectar</Badge>
@@ -1101,21 +1101,25 @@ export default function Configuracion() {
           </Card.Row>
           {clubConectadoMp(clubActual) ? (
             <>
-              <dl className="pd-dl mt-4">
-                <div>
-                  <dt>Cuenta</dt>
-                  <dd>{clubActual.mercadoPago.nickname || clubActual.mercadoPago.userId || "—"}</dd>
+              {/* Grilla propia (no pd-dl auto-fill): cada dato en su celda, el nombre de la cuenta no pisa la fecha */}
+              <dl className="m-0 mt-4 grid gap-4 sm:grid-cols-3">
+                <div className="min-w-0">
+                  <dt className="pd-eyebrow m-0">Cuenta</dt>
+                  <dd className="m-0 mt-1 font-semibold break-all">{clubActual.mercadoPago.nickname || clubActual.mercadoPago.userId || "—"}</dd>
+                  {clubActual.mercadoPago.nickname && clubActual.mercadoPago.userId && <dd className="m-0 body-sm text-ink-3 pd-tnum">ID {clubActual.mercadoPago.userId}</dd>}
                 </div>
-                <div>
-                  <dt>Conectada</dt>
-                  <dd>{clubActual.mercadoPago.conectadoEn ? formatFecha(clubActual.mercadoPago.conectadoEn.toDate ? clubActual.mercadoPago.conectadoEn.toDate().toISOString().slice(0, 10) : clubActual.mercadoPago.conectadoEn) : "—"}</dd>
+                <div className="min-w-0">
+                  <dt className="pd-eyebrow m-0">Conectada</dt>
+                  <dd className="m-0 mt-1 font-semibold pd-tnum">{clubActual.mercadoPago.conectadoEn ? formatFechaHoraArg(clubActual.mercadoPago.conectadoEn) : "—"}</dd>
+                  <dd className="m-0 body-sm text-ink-3">hora argentina</dd>
                 </div>
-                <div>
-                  <dt>Comisión Padely</dt>
-                  <dd className="pd-tnum">{Number(clubActual.mercadoPago.comisionPadelyPct) || 0} %</dd>
+                <div className="min-w-0">
+                  <dt className="pd-eyebrow m-0">Comisión Padely</dt>
+                  <dd className="m-0 mt-1 font-semibold pd-tnum">{Number(clubActual.mercadoPago.comisionPadelyPct) || 0} %</dd>
+                  <dd className="m-0 body-sm text-ink-3">sobre cada pago</dd>
                 </div>
               </dl>
-              {clubActual?.mercadoPago?.liveMode === false && <Alert className="mt-4">Cuenta de prueba de Mercado Pago: los pagos son de prueba. Para cobrar de verdad, conectá la cuenta real del club.</Alert>}
+              {(clubActual?.mercadoPago?.esPrueba || clubActual?.mercadoPago?.liveMode === false) && <Alert className="mt-4">Cuenta de prueba de Mercado Pago{clubActual?.mercadoPago?.esPrueba ? " (usuario de prueba)" : ""}: los pagos son de prueba. Para cobrar de verdad, conectá la cuenta real del club.</Alert>}
               {esDueño ? (
                 <div className="pd-btn-group mt-4">
                   <Button variant="ghost" onClick={desconectarMp} cargando={mpOcupado ? "Desconectando…" : ""}>

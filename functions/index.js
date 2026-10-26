@@ -2064,6 +2064,9 @@ exports.unirseATurno = onCall({ region: REGION }, async (request) => {
   const clubId = texto(request.data && request.data.clubId, 80);
   const token = texto(request.data && request.data.token, 40);
   const nombreDado = texto(request.data && request.data.nombre, 40);
+  // M2 (P3-8b): reclamar = id de un invitado sin cuenta con el mismo nombre que la persona dice ser; nuevo = "soy otra"
+  const reclamarId = texto(request.data && request.data.reclamar, 80);
+  const esNuevo = request.data && request.data.nuevo === true;
   if (!clubId || !token) throw new HttpsError("invalid-argument", "clubId y token");
   const clubRef = db.collection("clubs").doc(clubId);
   const invSnap = await clubRef.collection("invitacionesTurno").doc(token).get();
@@ -2081,14 +2084,25 @@ exports.unirseATurno = onCall({ region: REGION }, async (request) => {
     const participantes = cc.participantesDe(cuenta, { agregadoPor: uid, ahora: Timestamp.now() }).map((p) => ({ ...p }));
     const yo = participantes.find((p) => p.uid === uid);
     if (yo && yo.estado !== "quitado") return { participanteId: yo.id, nuevo: false, titularUid: cuenta.jugadorUid, cuenta };
+    let agregado = yo;
     if (yo) yo.estado = "activo";
-    else {
+    else if (reclamarId) {
+      // Reclama el lugar de un invitado sin cuenta con su mismo nombre que no pagó nada: queda con su uid
+      const cand = participantes.find((p) => p.id === reclamarId);
+      if (!cand || !cc.huespedReclamable(cand, cuenta, nombre)) throw new HttpsError("failed-precondition", "Ese lugar ya no se puede reclamar: sumate como una persona nueva");
+      Object.assign(cand, { uid, anonimo, tipo: anonimo ? "invitado" : "jugador", estado: "activo", reclamadoEn: Timestamp.now() });
+      agregado = cand;
+    } else {
+      if (!esNuevo) {
+        const cand = participantes.find((p) => cc.huespedReclamable(p, cuenta, nombre));
+        if (cand) throw new HttpsError("already-exists", `¿Sos ${cand.nombre}?`, { candidato: { id: cand.id, nombre: cand.nombre } });
+      }
       if (cc.participantesActivos({ participantes }).length >= cc.PARTICIPANTES_MAX) throw new HttpsError("resource-exhausted", `El turno ya tiene ${cc.PARTICIPANTES_MAX} personas`);
       participantes.push(cc.nuevoParticipante({ uid, nombre, tipo: anonimo ? "invitado" : "jugador", anonimo, origen: "link", agregadoPor: uid, ahora: Timestamp.now() }));
+      agregado = participantes[participantes.length - 1];
     }
     tx.update(ref, { participantes, participantesUids: cc.uidsDe(participantes), actualizadoEn: FieldValue.serverTimestamp() });
-    const agregado = yo || participantes[participantes.length - 1];
-    return { participanteId: agregado.id, nuevo: true, titularUid: cuenta.jugadorUid, cuenta };
+    return { participanteId: agregado.id, nuevo: true, reclamado: !!reclamarId, titularUid: cuenta.jugadorUid, cuenta };
   });
   if (resultado.nuevo && resultado.titularUid && resultado.titularUid !== uid) {
     try {
@@ -2385,15 +2399,17 @@ exports.mpOAuthCallback = onRequest({ region: REGION, secrets: [MP_CLIENT_SECRET
     const tokens = mp.tokensDeRespuesta(r);
     if (!tokens.accessToken) return volver({ mp: "error", motivo: "sin-token" });
     let nickname = null;
+    let esPrueba = false;
     try {
       const me = await mpFetch("/users/me", { token: tokens.accessToken });
       nickname = (me && me.nickname) || null;
+      esPrueba = mp.esUsuarioDePrueba(me);
     } catch {
       nickname = null;
     }
     const batch = db.batch();
     batch.set(privadoMpRef(clubRef), { ...tokens, conectadoEn: FieldValue.serverTimestamp(), conectadoPor: guardado.data().uid || null });
-    batch.set(clubRef, { mercadoPago: { conectado: true, userId: tokens.userId, nickname, conectadoEn: FieldValue.serverTimestamp(), liveMode: tokens.liveMode, comisionPadelyPct: (await clubRef.get()).get("mercadoPago.comisionPadelyPct") || 0 } }, { merge: true });
+    batch.set(clubRef, { mercadoPago: { conectado: true, userId: tokens.userId, nickname, esPrueba, conectadoEn: FieldValue.serverTimestamp(), liveMode: tokens.liveMode, comisionPadelyPct: (await clubRef.get()).get("mercadoPago.comisionPadelyPct") || 0 } }, { merge: true });
     batch.delete(stateMpRef(clubRef));
     await batch.commit();
     logger.info(`mp: club ${st.prefijo} conectado (user ${tokens.userId}, live ${tokens.liveMode})`);
@@ -2562,7 +2578,8 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
     destino = {
       monto: cobro.total,
       titulo: `${club.nombre || "Club"} · ${cuenta.canchaNombre || "Cancha"} · ${horaCorta(cuenta)} · ${tipo === "parte" ? "Tu parte" : pagador.nombre ? `Parte de ${pagador.nombre}` : "Cuenta"}`,
-      backUrl: `${APP_URL}/turno/${clubId}/${grupoId}`,
+      // M4: quien paga un QR del mostrador no ve la cuenta; vuelve a una página neutra (el club lo ve en su pantalla)
+      backUrl: tipo === "mostrador" ? `${APP_URL}/pago-recibido` : `${APP_URL}/turno/${clubId}/${grupoId}`,
       pagador,
       participanteIds,
       lineas: cobro.lineas,
@@ -2664,14 +2681,53 @@ async function aplicarPagoAprobado(clubRef, pagoMpRef, pago) {
     if (pm.estado === "aprobado") return { resultado: pm.paymentId === paymentId ? "ya aplicado" : "ya aprobado con otro pago", pm };
     if (pm.tipo === "seña") {
       const cabezaRef = clubRef.collection("reservas").doc(pm.reservaId);
-      const [cabeza, slots] = await Promise.all([tx.get(cabezaRef), tx.get(clubRef.collection("reservas").where("grupoId", "==", pm.reservaId))]);
+      const contadorRef = clubRef.collection("contadoresDispositivos").doc("MP");
+      const [cabeza, slots, contSnap] = await Promise.all([tx.get(cabezaRef), tx.get(clubRef.collection("reservas").where("grupoId", "==", pm.reservaId)), tx.get(contadorRef)]);
       const docs = slots.docs.length ? slots.docs : cabeza.exists ? [cabeza] : [];
       const reserva = cabeza.exists ? cabeza.data() : docs[0] ? docs[0].data() : null;
       const cambios = { señaPagada: true, señaMedio: "mercadopago", señaPagoMpId: pagoMpRef.id, señaPagadaEn: FieldValue.serverTimestamp() };
       if (reserva && reserva.status === "pendiente" && club.reservaDirecta !== false) cambios.status = "confirmada";
       docs.forEach((s) => tx.update(s.ref, cambios));
-      tx.update(pagoMpRef, { estado: "aprobado", paymentId, aprobadoEn: FieldValue.serverTimestamp(), montoPagado, montoAplicado: pm.monto, excedente: 0, estadoMp: pago.status, actualizadoEn: FieldValue.serverTimestamp() });
-      return { resultado: "seña aplicada", pm, reserva, confirmada: cambios.status === "confirmada" };
+      // M3: la seña cobrada online es plata que entró: una venta online con UNA línea "seña" (positiva) para que
+      // Reportes y el cierre la vean. La venta de la cuenta trae después su "Seña pagada" en negativo y el día cierra.
+      const n = (Number(contSnap.exists ? contSnap.data().usado : 0) || 0) + 1;
+      const numero = mp.numeroMp(n);
+      const monto = Number(pm.monto) || 0;
+      const nombreLinea = `Seña · ${(reserva && reserva.canchaName) || "Cancha"} · ${fechaCortaArgentina(reserva && reserva.fecha)} ${(reserva && (reserva.horaInicio || reserva.hora)) || ""}`.trim();
+      tx.set(clubRef.collection("ventas").doc(numero), {
+        numero,
+        dispositivo: "Online",
+        codigoDispositivo: "MP",
+        secuencia: n,
+        cajaId: null,
+        items: [{ productoId: null, nombre: nombreLinea, precio: monto, cantidad: 1, descuento: 0, subtotal: monto, tipoLinea: "seña", costo: null }],
+        subtotal: monto,
+        descuento: null,
+        descuentoTotal: 0,
+        total: monto,
+        pagos: [{ medio: "mercadopago", monto, ref: paymentId }],
+        pagado: monto,
+        vuelto: 0,
+        cuentaId: null,
+        reservaId: pm.reservaId,
+        participanteIds: [],
+        cliente: { nombre: (pm.pagador && pm.pagador.nombre) || (reserva && reserva.nombreJugador) || null },
+        creadoPor: (pm.pagador && pm.pagador.uid) || pm.creadoPor || "mercadopago",
+        creadoPorNombre: (pm.pagador && pm.pagador.nombre) || "Mercado Pago",
+        estado: "ok",
+        anulacion: null,
+        aplicado: false,
+        fiscal: null,
+        mpPaymentId: paymentId,
+        pagoMpId: pagoMpRef.id,
+        mpMontoCobrado: montoPagado,
+        mpExcedente: 0,
+        creadoEn: FieldValue.serverTimestamp(),
+        actualizadoEn: FieldValue.serverTimestamp(),
+      });
+      tx.set(contadorRef, { codigo: "MP", dispositivo: "Online", usado: n, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
+      tx.update(pagoMpRef, { estado: "aprobado", paymentId, aprobadoEn: FieldValue.serverTimestamp(), ventaNumero: numero, montoPagado, montoAplicado: pm.monto, excedente: 0, estadoMp: pago.status, actualizadoEn: FieldValue.serverTimestamp() });
+      return { resultado: "seña aplicada", pm, reserva, numero, total: monto, confirmada: cambios.status === "confirmada" };
     }
     const cuentaRef = clubRef.collection("cuentas").doc(pm.grupoId);
     const contadorRef = clubRef.collection("contadoresDispositivos").doc("MP");
@@ -2974,6 +3030,22 @@ async function revertirVentaDeCuenta(clubId, numero, venta) {
       logger.info(`onVentaUpdated ${clubId}/${numero}: pago quitado de la cuenta${reabierta ? " (reabierta)" : ""}`);
     } catch (err) {
       logger.error(`onVentaUpdated ${clubId}/${numero}: no se pudo quitar el pago de la cuenta`, err);
+    }
+  }
+  if (!venta.cuentaId && venta.reservaId) {
+    // Venta de una seña online (M3): al anularla, la seña de la reserva vuelve a pendiente (la cuenta abierta se
+    // sincroniza por onReservaUpdated)
+    try {
+      const reservaId = String(venta.reservaId);
+      const [slots, cabeza] = await Promise.all([clubRef.collection("reservas").where("grupoId", "==", reservaId).get(), clubRef.collection("reservas").doc(reservaId).get()]);
+      const refs = slots.docs.map((d) => d.ref);
+      if (!refs.length && cabeza.exists) refs.push(cabeza.ref);
+      const batch = db.batch();
+      refs.forEach((ref) => batch.update(ref, { señaPagada: false, señaMedio: null, señaPagoMpId: null, señaDevueltaEn: FieldValue.serverTimestamp() }));
+      await batch.commit();
+      logger.info(`venta ${clubId}/${numero}: la seña de la reserva ${reservaId} vuelve a pendiente`);
+    } catch (err) {
+      logger.error(`venta ${clubId}/${numero}: no se pudo volver la seña a pendiente`, err);
     }
   }
   if (venta.mpPaymentId) {

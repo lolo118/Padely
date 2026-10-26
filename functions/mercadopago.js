@@ -91,6 +91,14 @@ function datosDeNotificacion(query = {}, body = {}) {
   return { dataId: dataId !== null ? String(dataId) : null, tipo, accion: (body && body.action) || null, liveMode: body && body.live_mode };
 }
 
+// ----- Cuenta conectada (M1) -----
+// GET /users/me: un usuario de prueba trae tags ["test_user", …] o un nickname TEST…; live_mode del token no alcanza
+function esUsuarioDePrueba(me) {
+  if (!me) return false;
+  const tags = Array.isArray(me.tags) ? me.tags.map((t) => String(t).toLowerCase()) : [];
+  return tags.includes("test_user") || /^test/i.test(String(me.nickname || ""));
+}
+
 // ----- Notificaciones (B-P3-8-2) -----
 // Qué hacer con una notificación. La firma se calcula y se registra aparte, pero NUNCA se confía en el cuerpo: todo
 // pago se relee de la API con el token del club (deps.leerPago(id) → objeto, o null si no existe) y se aplica solo
@@ -207,6 +215,7 @@ module.exports = {
   cuerpoTokenPorRefresh,
   datosDeNotificacion,
   devolucionDe,
+  esUsuarioDePrueba,
   fechaMp,
   firmaValida,
   manifiesto,

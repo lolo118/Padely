@@ -78,3 +78,10 @@ export function formatDesde(valor) {
   const mismoDia = d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth() && d.getDate() === hoy.getDate();
   return mismoDia ? formatHora(d) : formatDiaHora(d);
 }
+
+// → "24/10/26 22:25" SIEMPRE en hora argentina, venga de donde venga el navegador (fechas que escribe el servidor)
+export function formatFechaHoraArg(valor) {
+  const d = aDate(valor);
+  if (!d) return "—";
+  return new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(d).replace(",", "");
+}

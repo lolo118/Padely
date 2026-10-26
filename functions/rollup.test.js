@@ -176,3 +176,20 @@ test("margen de las partes de una cuenta: costos proporcionales", () => {
   assert.equal(dia.porProducto.cerveza.totalConCosto, 6040);
   assert.equal(dia.ventas.lineasSinCosto, undefined);
 });
+
+test("M3 (P3-8b): la seña cobrada online (venta MP con línea seña) y la venta de la cuenta con su 'Seña pagada' cierran el día", () => {
+  const señaOnline = { numero: "MP-000003", creadoEn: ts(10), cuentaId: null, reservaId: "r1", items: [{ productoId: null, nombre: "Seña · Cancha 1 · lun 26 oct 19:00", precio: 6000, cantidad: 1, descuento: 0, subtotal: 6000, tipoLinea: "seña", costo: null }], subtotal: 6000, total: 6000, pagos: [{ medio: "mercadopago", monto: 6000 }], estado: "ok" };
+  const ventaCuenta = { numero: "D1-000010", creadoEn: ts(21), cuentaId: "g2", items: [{ productoId: null, nombre: "Cancha 1 · 19:00–21:00", precio: 20000, cantidad: 1, descuento: 0, subtotal: 20000, tipoLinea: "cancha", costo: null }, { productoId: null, nombre: "Seña pagada", precio: -6000, cantidad: 1, descuento: 0, subtotal: -6000, tipoLinea: "seña", costo: null }], subtotal: 14000, total: 14000, pagos: [{ medio: "efectivo", monto: 14000 }], estado: "ok" };
+  const dia = acumular([aporteDeVenta(señaOnline), aporteDeVenta(ventaCuenta, { cuenta: { canchaId: "c1", canchaNombre: "Cancha 1" } })]);
+  assert.equal(dia.ventas.total, 20000); // lo que entró en total: 6.000 online + 14.000 en el mostrador
+  assert.equal(dia.ventas.otros, 6000); // la seña online no tiene cuenta todavía: va a "otros"
+  assert.equal(dia.porCancha.c1.total, 14000); // la cancha neta de la seña
+  assert.equal(dia.porMedio.mercadopago, 6000);
+  assert.equal(dia.porMedio.efectivo, 14000);
+  assert.deepEqual(reconciliar(dia), { cubos: 20000, total: 20000, diferencia: 0 });
+  // Devolver la seña (anular su venta) resta exactamente lo que sumó
+  const conAnulacion = acumular([aporteDeVenta(señaOnline), aporteDeVenta(señaOnline, { signo: -1 })]);
+  assert.equal(conAnulacion.ventas.total, 0);
+  assert.equal(conAnulacion.ventas.otros, 0);
+  assert.equal(conAnulacion.porMedio.mercadopago, 0);
+});

@@ -9,7 +9,9 @@ const llamar = (nombre) => async (datos) => (await httpsCallable(functions, nomb
 
 // { clubId, grupoId } → { token, grupoId, url } — crea la cuenta si no existe
 export const crearInvitacionTurno = llamar("crearInvitacionTurno");
-// { clubId, token, nombre? } → { grupoId, participanteId } — también para sesiones anónimas
+// { clubId, token, nombre?, reclamar?: participanteId, nuevo?: true } → { grupoId, participanteId, reclamado } — también
+// para sesiones anónimas. Sin reclamar/nuevo, si hay un invitado sin cuenta con el mismo nombre y sin pagos la Function
+// responde already-exists con details.candidato { id, nombre } (M2): la página pregunta "¿Sos <nombre>?"
 export const unirseATurno = llamar("unirseATurno");
 // { clubId, grupoId, uid? | nombre? } → { participanteId }
 export const sumarJugador = llamar("sumarJugador");

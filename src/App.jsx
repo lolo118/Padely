@@ -50,6 +50,7 @@ const BarReportes = lazy(() => import("./pages/admin/bar/Reportes"));
 const QrCancha = lazy(() => import("./pages/QrCancha"));
 const TicketPublico = lazy(() => import("./pages/TicketPublico"));
 const UnirseTurno = lazy(() => import("./pages/UnirseTurno"));
+const PagoRecibido = lazy(() => import("./pages/PagoRecibido"));
 
 // Org pages
 const OrgDashboard = lazy(() => import("./pages/org/OrgDashboard"));
@@ -234,6 +235,8 @@ export default function App() {
             {/* Cuenta compartida: el link de invitación al turno y la vista del turno (también para anónimos) */}
             <Route path="/t/unirse/:clubId/:token" element={<UnirseTurno />} />
             <Route path="/turno/:clubId/:grupoId" element={<MiCuenta />} />
+            {/* Vuelta de un pago del QR del mostrador (Mercado Pago): página neutra, sin datos de la cuenta */}
+            <Route path="/pago-recibido" element={<PagoRecibido />} />
             <Route path="/terminos" element={<Terminos />} />
             <Route path="/privacidad" element={<Privacidad />} />
           </Route>

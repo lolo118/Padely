@@ -164,3 +164,11 @@ test("B-P3-8-2: feed sin firma (?id=…&topic=…) → se procesa; merchant_orde
   assert.match(r2.resumen, /79 desconocido/);
   assert.equal((await mp.procesarNotificacion({ tipo: "merchant_order", dataId: "501", deps })).resumen, "orden 501 desconocida");
 });
+
+test("M1: usuario de prueba por tags o nickname", () => {
+  assert.equal(mp.esUsuarioDePrueba({ nickname: "TESTUSER1376", tags: ["normal", "test_user"] }), true);
+  assert.equal(mp.esUsuarioDePrueba({ nickname: "TESTUSER1376" }), true);
+  assert.equal(mp.esUsuarioDePrueba({ nickname: "CLUBPADEL", tags: ["normal", "test_user"] }), true);
+  assert.equal(mp.esUsuarioDePrueba({ nickname: "CLUBPADEL", tags: ["normal"] }), false);
+  assert.equal(mp.esUsuarioDePrueba(null), false);
+});

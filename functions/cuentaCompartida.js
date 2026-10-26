@@ -44,6 +44,19 @@ function nuevoParticipante({ id = null, uid = null, nombre = "", tipo = "invitad
 }
 const titularDe = (cuenta, { agregadoPor = null, ahora = new Date() } = {}) =>
   nuevoParticipante({ id: ID_TITULAR, uid: (cuenta && cuenta.jugadorUid) || null, nombre: (cuenta && cuenta.nombreJugador) || "Titular", tipo: "titular", origen: "titular", agregadoPor, ahora });
+// M2 (P3-8b): un invitado sin cuenta (uid null o anónimo) con el mismo nombre normalizado, que no sea el titular y
+// que todavía no pagó nada (ningún pago congelado a su nombre ni hecho por él) puede ser reclamado por quien se suma
+// con ese nombre desde otro navegador, en vez de duplicarlo.
+function huespedReclamable(p, cuenta, nombre) {
+  if (!p || p.estado === "quitado" || p.tipo === "titular") return false;
+  if (p.uid && !p.anonimo) return false;
+  if (!nombre || nombreBusqueda(p.nombre) !== nombreBusqueda(nombre)) return false;
+  for (const pago of (cuenta && cuenta.pagos) || []) {
+    if (Array.isArray(pago.participanteIds) && pago.participanteIds.includes(p.id)) return false;
+    if ((pago.lineas || []).some((l) => l && l.participanteId === p.id)) return false;
+  }
+  return true;
+}
 const participantesDe = (cuenta, opts) => (Array.isArray(cuenta && cuenta.participantes) && cuenta.participantes.length ? cuenta.participantes : [titularDe(cuenta, opts)]);
 const participantesActivos = (cuenta) => participantesDe(cuenta).filter((p) => p && p.estado !== "quitado");
 const uidsDe = (participantes) => [...new Set((participantes || []).filter((p) => p && p.estado !== "quitado" && p.uid).map((p) => p.uid))];
@@ -143,6 +156,7 @@ module.exports = {
   inicioDelTurno,
   lineaPagada,
   algoPagadoDe,
+  huespedReclamable,
   nombreBusqueda,
   nuevoParticipante,
   pagadoPorParticipante,

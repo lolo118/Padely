@@ -65,3 +65,23 @@ test("pagado por participante: quién pagó y a quién le cubrieron", () => {
   assert.equal(cc.algoPagadoDe(cuenta, "p3"), true);
   assert.equal(cc.algoPagadoDe(cuenta, "p9"), false);
 });
+
+test("M2 (P3-8b): huésped reclamable — mismo nombre, sin cuenta, sin pagos; nunca el titular ni quien ya pagó", () => {
+  const { huespedReclamable } = require("./cuentaCompartida");
+  const martin = { id: "p2", nombre: "Martín", tipo: "invitado", uid: null, anonimo: false, estado: "activo" };
+  const anon = { id: "p3", nombre: "Lucia", tipo: "invitado", uid: "anon1", anonimo: true, estado: "activo" };
+  const conCuenta = { id: "p4", nombre: "Pedro", tipo: "jugador", uid: "u9", anonimo: false, estado: "activo" };
+  const titular = { id: "titular", nombre: "Gómez", tipo: "titular", uid: null, estado: "activo" };
+  const sinPagos = { pagos: [] };
+  assert.equal(huespedReclamable(martin, sinPagos, "martin"), true); // acentos y mayúsculas no importan
+  assert.equal(huespedReclamable(martin, sinPagos, "MARTIN "), true);
+  assert.equal(huespedReclamable(anon, sinPagos, "Lucía"), true);
+  assert.equal(huespedReclamable(martin, sinPagos, "Martina"), false);
+  assert.equal(huespedReclamable(conCuenta, sinPagos, "Pedro"), false);
+  assert.equal(huespedReclamable(titular, sinPagos, "Gómez"), false);
+  assert.equal(huespedReclamable({ ...martin, estado: "quitado" }, sinPagos, "Martín"), false);
+  // Ya pagó algo (a su nombre o con su plata): no se reclama
+  assert.equal(huespedReclamable(martin, { pagos: [{ participanteIds: ["titular"], lineas: [{ lineaId: "a", tipo: "consumo", monto: 100, participanteId: "p2" }] }] }, "Martín"), false);
+  assert.equal(huespedReclamable(martin, { pagos: [{ participanteIds: ["p2"], lineas: [] }] }, "Martín"), false);
+  assert.equal(huespedReclamable(martin, { pagos: [{ participanteIds: ["titular"], lineas: [{ lineaId: "a", tipo: "consumo", monto: 100, participanteId: "titular" }] }] }, "Martín"), true);
+});

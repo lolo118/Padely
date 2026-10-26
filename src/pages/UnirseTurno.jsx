@@ -6,6 +6,7 @@ import { useAuthStore } from "../store/authStore";
 import { getInvitacionTurno, unirseATurno } from "../services/participantesService";
 import { guardarNombreAnonimo, nombreAnonimoGuardado } from "../services/pedidosService";
 import { toast } from "../components/Toast";
+import { confirmar } from "../components/ConfirmDialog";
 import { Alert, Button, Card, Field, Input } from "../components/ui";
 import { formatDiaCorto } from "../utils/formatDate";
 
@@ -19,6 +20,9 @@ export default function UnirseTurno() {
   const user = useAuthStore((s) => s.user);
   const perfil = useAuthStore((s) => s.perfil);
   const loading = useAuthStore((s) => s.loading);
+  const rol = useAuthStore((s) => s.rol);
+  const clubActual = useAuthStore((s) => s.clubActual);
+  const staffDe = useAuthStore((s) => s.staffDe);
   const [inv, setInv] = useState({ valor: null, cargada: false, error: false });
   const [nombre, setNombre] = useState(nombreAnonimoGuardado);
   const [errorNombre, setErrorNombre] = useState("");
@@ -50,6 +54,8 @@ export default function UnirseTurno() {
   const anonimo = user?.isAnonymous === true;
   const nombreCuenta = perfil?.nombre || user?.displayName || user?.email || "";
   const next = encodeURIComponent(`/t/unirse/${clubId}/${token}`);
+  // M2: el dueño o el staff de ESTE club abriendo el link de WhatsApp: se le avisa y no se suma sin confirmar
+  const esDelClub = !anonimo && ((rol === "club" && clubActual?.id === clubId) || (staffDe || []).some((s) => s.clubId === clubId));
 
   const sumarme = async () => {
     const n = anonimo ? nombre.trim() : nombreCuenta;
@@ -61,8 +67,17 @@ export default function UnirseTurno() {
     setSumando(true);
     try {
       if (anonimo) guardarNombreAnonimo(n);
-      const r = await unirseATurno({ clubId, token, nombre: n });
-      toast.success("Listo, estás en el turno");
+      let r;
+      try {
+        r = await unirseATurno({ clubId, token, nombre: n });
+      } catch (err) {
+        // M2: ya hay un invitado sin cuenta con ese nombre que no pagó nada → ¿es la misma persona desde otro celular?
+        const cand = err?.code === "functions/already-exists" ? err.details?.candidato : null;
+        if (!cand) throw err;
+        const soyYo = await confirmar({ titulo: `¿Sos ${cand.nombre}?`, mensaje: "Ya hay alguien con ese nombre en el turno que todavía no pagó nada. Si sos vos, seguís con ese lugar y lo que ya tenía asignado.", confirmText: `Sí, soy ${cand.nombre}`, cancelText: "No, soy otra persona" });
+        r = await unirseATurno({ clubId, token, nombre: n, ...(soyYo ? { reclamar: cand.id } : { nuevo: true }) });
+      }
+      toast.success(r?.reclamado ? "Listo, seguís en el turno con tu lugar" : "Listo, estás en el turno");
       navigate(`/turno/${clubId}/${r.grupoId}`, { replace: true });
     } catch (err) {
       console.error("Error sumándose al turno:", err);
@@ -117,14 +132,22 @@ export default function UnirseTurno() {
             <Field label="¿Cómo te llamás?" help="Queda guardado en este celular." error={errorNombre}>
               <Input value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={40} autoFocus autoComplete="given-name" />
             </Field>
+          ) : esDelClub ? (
+            <Alert tone="court">
+              <strong>Estás con la cuenta del club.</strong> Si te sumás, entrás al turno como un jugador más, con tu parte de la cancha. Para cargar consumos o cobrar, usá{" "}
+              <Link to="/admin/bar/cuentas" className="font-semibold underline">
+                Cuentas
+              </Link>
+              .
+            </Alert>
           ) : (
             <Alert>
               Entrás como <strong>{nombreCuenta}</strong>.
             </Alert>
           )}
           <div className="flex flex-col gap-2">
-            <Button type="submit" variant="primary" cargando={sumando ? "Sumándote…" : ""}>
-              {anonimo ? "Sumarme" : `Sumarme como ${nombreCuenta.split(" ")[0] || "yo"}`}
+            <Button type="submit" variant={esDelClub ? "secondary" : "primary"} cargando={sumando ? "Sumándote…" : ""}>
+              {esDelClub ? "Sumarme igual" : anonimo ? "Sumarme" : `Sumarme como ${nombreCuenta.split(" ")[0] || "yo"}`}
             </Button>
             {anonimo && (
               <Button as="link" to={`/login?next=${next}`}>
