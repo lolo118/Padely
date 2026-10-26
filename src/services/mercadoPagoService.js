@@ -19,6 +19,10 @@ export const mpSetComision = llamar("mpSetComision");
 export const mpCrearPago = llamar("mpCrearPago");
 // Staff: { clubId, pagoMpId } → devuelve el excedente de un pago aprobado de más
 export const mpDevolverExcedente = llamar("mpDevolverExcedente");
+// Staff con anularVenta (o dueño): { clubId, numero, motivo } → anula una venta online de MP, saca el pago de la cuenta y
+// pide la devolución → { numero, reabierta, devolucion: { ok, refundId | error, monto } }
+export const mpAnularVenta = llamar("mpAnularVenta");
+export const esVentaOnlineMp = (venta) => !!venta && !venta.cajaId && !!venta.mpPaymentId;
 
 export const escucharPagoMp = (clubId, pagoMpId, onDatos, onError) =>
   onSnapshot(doc(db, "clubs", clubId, "pagosMp", pagoMpId), (snap) => onDatos(snap.exists() ? { id: snap.id, ...snap.data() } : null), onError);

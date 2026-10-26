@@ -99,3 +99,20 @@ test("piezas al aprobar: lo que el mostrador ya cobró queda como excedente", ()
   assert.equal(todo.montoAplicado, 0);
   assert.equal(todo.excedente, 3140);
 });
+
+test("B-P3-8-1: qué ventas se anulan con mpAnularVenta y cómo se guarda la devolución", () => {
+  const online = { estado: "ok", cajaId: null, mpPaymentId: "185", pagos: [{ medio: "mercadopago", monto: 5000 }] };
+  assert.deepEqual(mp.ventaAnulableOnline(online), { ok: true, motivo: null });
+  assert.equal(mp.ventaAnulableOnline({ ...online, estado: "anulada" }).ok, false);
+  assert.match(mp.ventaAnulableOnline({ ...online, cajaId: "caja1" }).motivo, /caja/);
+  assert.equal(mp.ventaAnulableOnline({ ...online, pagos: [{ medio: "efectivo", monto: 5000 }] }).ok, false);
+  assert.equal(mp.ventaAnulableOnline({ ...online, mpPaymentId: null }).ok, false);
+  assert.equal(mp.ventaAnulableOnline(null).ok, false);
+  assert.deepEqual(mp.devolucionDe({ ok: true, refundId: "r1" }, { monto: 5000 }), { ok: true, monto: 5000, manual: false, por: null, refundId: "r1", error: null });
+  const fallo = mp.devolucionDe({ ok: false, error: "401 Unauthorized use of live credentials" }, { monto: 5000 });
+  assert.equal(fallo.ok, false);
+  assert.equal(fallo.refundId, null);
+  assert.match(fallo.error, /live credentials/);
+  // Marcada a mano desde la cuenta de MP del club
+  assert.deepEqual(mp.devolucionDe({ ok: true }, { monto: 5000, manual: true, por: "u1" }), { ok: true, monto: 5000, manual: true, por: "u1", refundId: null, error: null });
+});

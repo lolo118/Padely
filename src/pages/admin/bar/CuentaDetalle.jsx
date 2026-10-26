@@ -38,8 +38,7 @@ import {
   setCobrarCancha,
 } from "../../../services/cuentasService";
 import { quitarParticipante } from "../../../services/participantesService";
-import { clubConectadoMp, escucharPagosMpDeCuenta, mpDevolverExcedente } from "../../../services/mercadoPagoService";
-import { anularVenta } from "../../../services/ventasService";
+import { clubConectadoMp, escucharPagosMpDeCuenta, mpAnularVenta, mpDevolverExcedente } from "../../../services/mercadoPagoService";
 import { ETIQUETA_MEDIO_VENTA } from "../../../utils/ventas";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
@@ -302,14 +301,16 @@ export default function CuentaDetalle() {
       setOcupado(false);
     }
   };
-  // Devolver un pago de MP = anular su venta: la Function devuelve la plata y saca el pago de la cuenta (la deuda vuelve)
+  // Devolver un pago de MP = anular su venta online con la callable mpAnularVenta (B-P3-8-1): saca el pago de la
+  // cuenta (la deuda vuelve) y pide la devolución; el resultado vuelve en la misma llamada
   const devolverPagoMp = async (pg) => {
-    const ok = await confirmar({ titulo: "Devolver este pago", mensaje: `Se anula la venta ${pg.ventaNumero} y se devuelven ${formatPrecio(pg.total)} por Mercado Pago. La deuda vuelve a la cuenta.`, confirmText: "Devolver", danger: true });
+    const ok = await confirmar({ titulo: "Devolver este pago", mensaje: `Se anula la venta ${pg.ventaNumero} y le pedimos a Mercado Pago que devuelva ${formatPrecio(pg.total)}. Si Mercado Pago no lo acepta, te avisamos para que lo hagas desde tu cuenta.`, confirmText: "Devolver", danger: true });
     if (!ok) return;
     setOcupado(true);
     try {
-      await anularVenta(clubId, pg.ventaNumero, { motivo: "Devolución por Mercado Pago", uid, nombre });
-      toast.success(`Venta ${pg.ventaNumero} anulada: la devolución se hace en unos segundos`);
+      const r = await mpAnularVenta({ clubId, numero: pg.ventaNumero, motivo: "Devolución por Mercado Pago" });
+      if (r?.devolucion?.ok) toast.success(`Venta ${pg.ventaNumero} anulada · Mercado Pago devuelve ${formatPrecio(r.devolucion.monto || pg.total)}`);
+      else toast.error(`Venta ${pg.ventaNumero} anulada, pero Mercado Pago no aceptó la devolución: hacela desde tu cuenta de MP y marcala como devuelta.`);
     } catch (e) {
       avisarError(e, "No pudimos anular la venta.");
     } finally {

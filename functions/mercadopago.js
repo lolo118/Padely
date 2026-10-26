@@ -91,6 +91,23 @@ function datosDeNotificacion(query = {}, body = {}) {
   return { dataId: dataId !== null ? String(dataId) : null, tipo, accion: (body && body.action) || null, liveMode: body && body.live_mode };
 }
 
+// ----- Ventas online (B-P3-8-1) -----
+// Una venta se anula con la callable mpAnularVenta solo si está "ok", es online (cajaId null) y se cobró por Mercado Pago
+function ventaAnulableOnline(venta) {
+  if (!venta) return { ok: false, motivo: "La venta no existe" };
+  if (venta.estado !== "ok") return { ok: false, motivo: "La venta ya está anulada" };
+  if (venta.cajaId) return { ok: false, motivo: "Esa venta es de una caja: se anula desde Vender" };
+  const pagos = Array.isArray(venta.pagos) ? venta.pagos : [];
+  if (!venta.mpPaymentId || !pagos.length || !pagos.every((p) => p && p.medio === "mercadopago")) return { ok: false, motivo: "Solo las ventas online de Mercado Pago se anulan desde acá" };
+  return { ok: true, motivo: null };
+}
+// Resultado de una devolución para guardar en la venta y en el pagoMp: { ok, refundId | error, monto, manual }
+function devolucionDe(r, { monto = null, manual = false, por = null } = {}) {
+  const base = { ok: !!(r && r.ok), monto: monto === null ? null : Number(monto) || 0, manual: !!manual, por: por || null };
+  if (base.ok) return { ...base, refundId: (r && r.refundId) || null, error: null };
+  return { ...base, refundId: null, error: String((r && r.error) || "sin detalle").slice(0, 300) };
+}
+
 // ----- Preferencia (Checkout Pro) -----
 const comisionDe = (monto, pct) => {
   const p = Math.min(COMISION_MAX_PCT, Math.max(0, Number(pct) || 0));
@@ -157,6 +174,7 @@ module.exports = {
   cuerpoTokenPorCodigo,
   cuerpoTokenPorRefresh,
   datosDeNotificacion,
+  devolucionDe,
   fechaMp,
   firmaValida,
   manifiesto,
@@ -166,4 +184,5 @@ module.exports = {
   stateValido,
   tokensDeRespuesta,
   urlAutorizacion,
+  ventaAnulableOnline,
 };

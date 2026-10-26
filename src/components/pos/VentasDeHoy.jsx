@@ -4,6 +4,7 @@ import { toast } from "../Toast";
 import { confirmar } from "../ConfirmDialog";
 import { Alert, Badge, Button, Field, Input } from "../ui";
 import { anularVenta, escucharVentasDeCaja } from "../../services/ventasService";
+import { esVentaOnlineMp, mpAnularVenta } from "../../services/mercadoPagoService";
 import { ETIQUETA_MEDIO } from "../../utils/caja";
 import { formatPrecio } from "../../utils/format";
 import { formatHora } from "../../utils/formatDate";
@@ -22,17 +23,27 @@ function AnularDialog({ venta, clubId, uid, nombre, onCerrar, onAnulada }) {
       setError("Contá por qué se anula.");
       return;
     }
+    const online = esVentaOnlineMp(venta);
     const ok = await confirmar({
       titulo: `¿Anular la venta ${venta.numero}?`,
-      mensaje: `Se repone el stock y se descuenta ${formatPrecio(venta.total)} de la caja. El número de ticket queda registrado como anulado.`,
+      mensaje: online
+        ? `Se anula la venta ${venta.numero} y le pedimos a Mercado Pago que devuelva ${formatPrecio(venta.total)}. Si Mercado Pago no lo acepta, te avisamos para que lo hagas desde tu cuenta.`
+        : `Se repone el stock y se descuenta ${formatPrecio(venta.total)} de la caja. El número de ticket queda registrado como anulado.`,
       confirmText: "Anular venta",
       danger: true,
     });
     if (!ok) return;
     setGuardando(true);
     try {
-      await anularVenta(clubId, venta.numero, { motivo: texto, uid, nombre });
-      toast.success(`Venta ${venta.numero} anulada`);
+      if (online) {
+        // Venta online de Mercado Pago (cajaId null): la regla de ventas no la deja tocar; va por la callable (B-P3-8-1)
+        const r = await mpAnularVenta({ clubId, numero: venta.numero, motivo: texto });
+        if (r?.devolucion?.ok) toast.success(`Venta ${venta.numero} anulada · Mercado Pago devuelve ${formatPrecio(r.devolucion.monto || venta.total)}`);
+        else toast.error(`Venta ${venta.numero} anulada, pero Mercado Pago no aceptó la devolución: hacela desde tu cuenta de MP.`);
+      } else {
+        await anularVenta(clubId, venta.numero, { motivo: texto, uid, nombre });
+        toast.success(`Venta ${venta.numero} anulada`);
+      }
       onAnulada();
     } catch (e) {
       console.error("Error anulando la venta:", e);

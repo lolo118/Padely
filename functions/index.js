@@ -1097,8 +1097,9 @@ exports.onVentaUpdated = onDocumentUpdated("clubs/{clubId}/ventas/{numero}", asy
       return `anulación aplicada (${n} movimientos)`;
     });
     logger.info(`onVentaUpdated ${clubId}/${numero}: ${resultado}`);
-    // P3-8: una venta de cuenta anulada devuelve la deuda a la cuenta; una venta de Mercado Pago se devuelve
-    if (resultado.startsWith("anulación aplicada")) await revertirVentaDeCuenta(clubId, numero, despues);
+    // P3-8: una venta de cuenta anulada devuelve la deuda a la cuenta; una venta de Mercado Pago se devuelve.
+    // Las online anuladas con mpAnularVenta (B-P3-8-1) ya hicieron ese camino en la callable: acá no se repite.
+    if (resultado.startsWith("anulación aplicada") && !(despues.anulacion && despues.anulacion.origen === "mpAnularVenta")) await revertirVentaDeCuenta(clubId, numero, despues);
   } catch (err) {
     logger.error(`onVentaUpdated ${clubId}/${numero}`, err);
   }
@@ -2882,8 +2883,8 @@ exports.mpDevolverExcedente = onCall({ region: REGION, secrets: [MP_CLIENT_SECRE
   if (excedente <= 0 || pm.excedenteDevuelto) throw new HttpsError("failed-precondition", "No hay excedente para devolver");
   const r = await devolverPagoMp(clubRef, pm.paymentId, { monto: excedente, idempotencia: `exc_${pagoMpId}` });
   if (!r.ok) {
-    await pagoMpRef.update({ excedenteError: r.error, actualizadoEn: FieldValue.serverTimestamp() });
-    throw new HttpsError("unavailable", "Mercado Pago no aceptó la devolución: hacela desde tu cuenta de MP.");
+    await pagoMpRef.update({ excedenteError: mp.devolucionDe(r, { monto: excedente }).error, excedenteErrorEn: FieldValue.serverTimestamp(), actualizadoEn: FieldValue.serverTimestamp() });
+    throw new HttpsError("unavailable", `Mercado Pago no aceptó la devolución (${mp.devolucionDe(r).error}). Si la hacés desde tu cuenta de MP, marcala como devuelta.`);
   }
   const batch = db.batch();
   batch.update(pagoMpRef, { excedenteDevuelto: { monto: excedente, refundId: r.refundId, en: FieldValue.serverTimestamp(), por: uid }, excedenteError: null, actualizadoEn: FieldValue.serverTimestamp() });
@@ -2895,12 +2896,15 @@ exports.mpDevolverExcedente = onCall({ region: REGION, secrets: [MP_CLIENT_SECRE
 
 // Al anular una venta de cuenta: el pago congelado se saca de la cuenta (la deuda vuelve) y, si era de Mercado Pago,
 // se devuelve el pago completo con el token del club. Si falla, aviso al dueño.
+// Devuelve { reabierta, devolucion } (devolucion null si la venta no era de Mercado Pago)
 async function revertirVentaDeCuenta(clubId, numero, venta) {
   const clubRef = db.collection("clubs").doc(clubId);
+  let reabierta = false;
+  let devolucion = null;
   if (venta.cuentaId) {
     try {
       const cuentaRef = clubRef.collection("cuentas").doc(String(venta.cuentaId));
-      const reabierta = await db.runTransaction(async (tx) => {
+      reabierta = await db.runTransaction(async (tx) => {
         const snap = await tx.get(cuentaRef);
         if (!snap.exists) return false;
         const cuenta = snap.data();
@@ -2923,19 +2927,16 @@ async function revertirVentaDeCuenta(clubId, numero, venta) {
     }
   }
   if (venta.mpPaymentId) {
+    const monto = venta.mpMontoCobrado || venta.total;
     const r = await devolverPagoMp(clubRef, String(venta.mpPaymentId), { idempotencia: `anul_${numero}` });
+    devolucion = { ...mp.devolucionDe(r, { monto }), en: Timestamp.now(), motivo: (venta.anulacion && venta.anulacion.motivo) || null, ventaNumero: numero };
     const ventaRef = clubRef.collection("ventas").doc(numero);
     const pagoMpRef = venta.pagoMpId ? clubRef.collection("pagosMp").doc(String(venta.pagoMpId)) : null;
     const batch = db.batch();
-    if (r.ok) {
-      batch.update(ventaRef, { mpDevolucion: { refundId: r.refundId, monto: venta.mpMontoCobrado || venta.total, en: FieldValue.serverTimestamp() } });
-      if (pagoMpRef) batch.update(pagoMpRef, { estado: "devuelto", devolucion: { refundId: r.refundId, monto: venta.mpMontoCobrado || venta.total, en: FieldValue.serverTimestamp(), motivo: (venta.anulacion && venta.anulacion.motivo) || null }, actualizadoEn: FieldValue.serverTimestamp() });
-      logger.info(`onVentaUpdated ${clubId}/${numero}: devolución MP ${r.refundId || ""}`);
-    } else {
-      batch.update(ventaRef, { mpDevolucion: { error: r.error, en: FieldValue.serverTimestamp() } });
-      if (pagoMpRef) batch.update(pagoMpRef, { devolucion: { error: r.error, en: FieldValue.serverTimestamp() }, actualizadoEn: FieldValue.serverTimestamp() });
-      logger.error(`onVentaUpdated ${clubId}/${numero}: devolución MP falló (${r.error})`);
-    }
+    batch.update(ventaRef, { devolucion, actualizadoEn: FieldValue.serverTimestamp() });
+    if (pagoMpRef) batch.update(pagoMpRef, r.ok ? { estado: "devuelto", devolucion, actualizadoEn: FieldValue.serverTimestamp() } : { devolucion, actualizadoEn: FieldValue.serverTimestamp() });
+    if (r.ok) logger.info(`venta ${clubId}/${numero}: devolución MP ${r.refundId || ""}`);
+    else logger.error(`venta ${clubId}/${numero}: devolución MP falló (${r.error})`);
     await batch.commit();
     if (!r.ok) {
       const clubSnap = await clubRef.get();
@@ -2943,4 +2944,33 @@ async function revertirVentaDeCuenta(clubId, numero, venta) {
       if (ownerUid) await avisoA(ownerUid, { tipo: "mp_devolucion_error", titulo: "No se pudo devolver el pago de Mercado Pago", mensaje: `La venta ${numero} se anuló pero Mercado Pago no aceptó la devolución: hacela desde tu cuenta de MP.`, link: `/admin/bar/cuentas${venta.cuentaId ? `/${venta.cuentaId}` : ""}`, icono: "💳" }).catch(() => {});
     }
   }
+  return { reabierta, devolucion };
 }
+
+// B-P3-8-1: las ventas online (cajaId null) no pueden anularse desde el cliente (la regla de ventas exige la caja
+// abierta): se anulan acá. Marca la venta anulada, saca el pago congelado de la cuenta (la deuda vuelve; una cuenta
+// cerrada se reabre con alerta), pide la devolución completa y guarda el resultado en la venta y el pagoMp.
+// onVentaUpdated hace rollup/stock como con cualquier anulación y NO repite la devolución (anulacion.origen).
+exports.mpAnularVenta = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, async (request) => {
+  const uid = exigirAuth(request);
+  const clubId = texto(request.data && request.data.clubId, 80);
+  const numero = texto(request.data && request.data.numero, 40);
+  const motivo = texto(request.data && request.data.motivo, 120) || "Devolución por Mercado Pago";
+  if (!clubId || !numero) throw new HttpsError("invalid-argument", "clubId y numero");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const acceso = await accesoClub(clubRef, uid, ["anularVenta"]);
+  if (!acceso.esStaff) throw new HttpsError("permission-denied", "Solo quien puede anular ventas (o el dueño) devuelve pagos de Mercado Pago");
+  const ventaRef = clubRef.collection("ventas").doc(numero);
+  const anulacion = { por: uid, porNombre: acceso.nombre || (await nombreDeUsuario(uid, null)), motivo, en: Timestamp.now(), origen: "mpAnularVenta" };
+  const venta = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ventaRef);
+    const v = snap.exists ? snap.data() : null;
+    const chequeo = mp.ventaAnulableOnline(v);
+    if (!chequeo.ok) throw new HttpsError(v ? "failed-precondition" : "not-found", chequeo.motivo);
+    tx.update(ventaRef, { estado: "anulada", anulacion, actualizadoEn: FieldValue.serverTimestamp() });
+    return { ...v, estado: "anulada", anulacion };
+  });
+  const r = await revertirVentaDeCuenta(clubId, numero, venta);
+  logger.info(`mpAnularVenta ${clubId}/${numero}: por ${uid} · devolución ${r.devolucion && r.devolucion.ok ? "ok" : "falló"}${r.reabierta ? " · cuenta reabierta" : ""}`);
+  return { ok: true, numero, reabierta: r.reabierta, devolucion: r.devolucion ? { ok: r.devolucion.ok, refundId: r.devolucion.refundId, error: r.devolucion.error, monto: r.devolucion.monto } : null };
+});
