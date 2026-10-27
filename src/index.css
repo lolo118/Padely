@@ -101,3 +101,11 @@ input:focus, select:focus, textarea:focus {
   background: var(--line-strong);
   border-radius: 3px;
 }
+
+/* P3-11c: en pantallas táctiles los botones chicos (36 px de alto) amplían su área de toque a 44 px sin cambiar el
+   dibujo (components.css es copia del design system y no se edita) */
+@media (pointer: coarse) {
+  .pd-btn-sm { position: relative; }
+  .pd-btn-sm::after { content: ""; position: absolute; inset: -4px 0; }
+  .pd-btn-sm.pd-btn-icon::after { inset: -4px; }
+}

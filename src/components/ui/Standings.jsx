@@ -66,7 +66,7 @@ export default function Standings({ grupo, cuadroLabel, rows = [], help, columna
         </table>
       </div>
       {help && (
-        <p className="pd-help px-4 py-3" style={{ borderTop: "1px solid var(--line)" }}>
+        <p className="pd-help px-4 py-3 border-t border-line">
           {help}
         </p>
       )}
