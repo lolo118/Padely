@@ -5,6 +5,7 @@ import useThemeStore from "../../store/themeStore";
 import PlayerLayout from "./PlayerLayout";
 import ThemeToggle from "../ThemeToggle";
 import AppBar from "../ui/AppBar";
+import EstadoBanner from "../EstadoBanner";
 
 // Layout de las páginas públicas (/torneos, /torneos/:id, /club/:id, /clubes):
 // con sesión se ve exactamente igual que hoy (PlayerLayout); sin sesión, la misma barra con "Ingresar".
@@ -37,6 +38,7 @@ export default function PublicLayout() {
       </AppBar>
 
       <main className="flex-1 w-full max-w-[960px] mx-auto px-4 sm:px-6 pt-5 pb-10">
+        <EstadoBanner className="mb-4" />
         <Outlet />
       </main>
     </div>

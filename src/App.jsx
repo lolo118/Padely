@@ -54,6 +54,7 @@ const QrCancha = lazy(() => import("./pages/QrCancha"));
 const TicketPublico = lazy(() => import("./pages/TicketPublico"));
 const UnirseTurno = lazy(() => import("./pages/UnirseTurno"));
 const PagoRecibido = lazy(() => import("./pages/PagoRecibido"));
+const Estado = lazy(() => import("./pages/Estado"));
 
 // Org pages
 const OrgDashboard = lazy(() => import("./pages/org/OrgDashboard"));
@@ -241,6 +242,7 @@ export default function App() {
             <Route path="/turno/:clubId/:grupoId" element={<MiCuenta />} />
             {/* Vuelta de un pago del QR del mostrador (Mercado Pago): página neutra, sin datos de la cuenta */}
             <Route path="/pago-recibido" element={<PagoRecibido />} />
+            <Route path="/estado" element={<Estado />} />
             <Route path="/terminos" element={<Terminos />} />
             <Route path="/privacidad" element={<Privacidad />} />
           </Route>

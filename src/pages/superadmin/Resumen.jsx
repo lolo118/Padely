@@ -3,6 +3,7 @@ import { Alert, Badge, Button, Card, StatTile } from "../../components/ui";
 import { toast } from "../../components/Toast";
 import { getResumenPlataforma, getUltimosUsuarios } from "../../services/superadminService";
 import { reconstruirPerfilesPublicos } from "../../services/participantesService";
+import EstadoForm from "./EstadoForm";
 
 // createdAt (Timestamp de Firestore, Date, número o string ISO) -> "DD/MM/YY"; "—" sin fecha válida
 const fechaAlta = (valor) => {
@@ -123,6 +124,8 @@ export default function Resumen() {
         <h1 className="heading-lg">Resumen</h1>
         <p className="body-sm text-ink-2">Padely · Super-admin</p>
       </header>
+
+      <EstadoForm />
 
       {hayError && (
         <Alert tone="danger">

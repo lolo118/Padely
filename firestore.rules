@@ -178,9 +178,10 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // P3-9: datos de pago de Padely (alias, CBU, WhatsApp) que ven los clubes en Mi plan; los edita el super-admin
+    // P3-9: datos de pago de Padely (alias, CBU, WhatsApp) que ven los clubes en Mi plan; los edita el super-admin.
+    // P3-12: "estado" (aviso de la plataforma, /estado y el banner) lo lee cualquiera, aun sin sesión.
     match /configuracionPadely/{docId} {
-      allow read: if signedIn();
+      allow read: if signedIn() || docId == 'estado';
       allow write: if superAdmin();
     }
 
