@@ -88,7 +88,8 @@ export default function Empezar() {
         horariosDisponibles: Object.keys(horarios).sort(),
       });
       toast.success("Cancha creada");
-      setPaso(1);
+      // La seña es de quien configura el club; sin ese permiso se pasa directo a compartir
+      setPaso(puede("configurarClub") ? 1 : 2);
     } catch (err) {
       console.error("Error al crear la cancha:", err);
       setError("No pudimos crear la cancha. Intentá de nuevo.");
