@@ -466,7 +466,7 @@ export default function DetalleTorneoPublico() {
       }
     } catch (err) {
       console.error("Error al crear inscripción:", err);
-      toast.error("No pudimos enviar la inscripción. Intentá de nuevo.");
+      toast.error(err?.code === "LIMITE" ? err.message : "No pudimos enviar la inscripción. Intentá de nuevo.");
     }
     setEnviando(false);
   };

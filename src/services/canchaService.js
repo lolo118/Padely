@@ -21,6 +21,7 @@ import { db } from "../lib/firebase";
 import { getTodayLocal, horaActualStr } from "../utils/formatDate";
 import { horasDeReserva, sumarHoras } from "../utils/tarifas";
 import { agruparReservas, mismaReserva, normalizarReserva } from "../utils/reservas";
+import { conReintentoSinLimite, limiteEnTx } from "./limitesService";
 
 // --- CANCHAS ---
 
@@ -119,7 +120,9 @@ export class SlotTakenError extends Error {
 // club, solo cuando cargó algún dato (un bloqueo borra el contacto viejo del turno).
 // reserva: { canchaId, canchaName, fecha, hora, turnos?, precios?: [por turno], precio?, seña?, jugadorUid,
 //            nombreJugador, email, telefono, status, ...otros }. Devuelve el grupoId.
-export const crearReserva = async (clubId, reserva) => {
+// opciones.limitarUid (P3-12): la reserva la hace un jugador desde la app → suma su contador de límites en la
+// misma transacción (las reglas lo exigen; ver services/limitesService.js). El club que reserva a mano no lo usa.
+export const crearReserva = async (clubId, reserva, { limitarUid = null } = {}) => {
   const { publica, contacto } = separarContactoReserva(reserva);
   const turnos = Math.min(3, Math.max(1, Number(publica.turnos) || 1));
   const horas = horasDeReserva(publica.hora, turnos);
@@ -131,11 +134,13 @@ export const crearReserva = async (clubId, reserva) => {
   const refs = horas.map((h) => doc(db, "clubs", clubId, "reservas", slotId(publica.canchaId, publica.fecha, h)));
   const grupoId = refs[0].id;
 
-  await runTransaction(db, async (tx) => {
+  const transaccion = (conLimite) => runTransaction(db, async (tx) => {
     const snaps = [];
     for (const ref of refs) snaps.push(await tx.get(ref));
     const ocupado = snaps.findIndex((s) => s.exists() && s.data().status !== "cancelada");
     if (ocupado >= 0) throw new SlotTakenError(horas[ocupado]);
+    const escribirLimite = conLimite ? await limiteEnTx(tx, limitarUid, "reservas") : null;
+    if (escribirLimite) escribirLimite();
     refs.forEach((ref, i) => {
       tx.set(ref, {
         ...campos,
@@ -167,6 +172,8 @@ export const crearReserva = async (clubId, reserva) => {
       }
     });
   });
+  if (limitarUid) await conReintentoSinLimite(transaccion);
+  else await transaccion(false);
   return grupoId;
 };
 

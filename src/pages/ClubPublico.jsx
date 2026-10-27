@@ -431,7 +431,7 @@ export default function ClubPublico() {
         email: formReserva.email,
         telefono: formReserva.telefono,
         status: reservaDirecta ? "confirmada" : "pendiente",
-      });
+      }, { limitarUid: user?.uid || null });
       logEvento("reserva_creada", {
         clubId: club.id,
         status: reservaDirecta ? "confirmada" : "pendiente",
@@ -466,6 +466,8 @@ export default function ClubPublico() {
         // Si se perdió el primer turno no queda nada que reservar; si fue una hora extra, el diálogo sigue
         // abierto con esa duración deshabilitada para elegir una más corta
         if (!err.hora || err.hora === modalData.hora) setMostrarModal(false);
+      } else if (err?.code === "LIMITE") {
+        toast.error(err.message);
       } else {
         console.error("Error:", err);
         toast.error("No pudimos crear la reserva. Intentá de nuevo.");

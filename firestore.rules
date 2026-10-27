@@ -144,6 +144,16 @@ service cloud.firestore {
     function nuevaReservaDeTorneo() {
       return request.resource.data.get('tipo', null) == 'torneo';
     }
+    // P3-12: límites de frecuencia. users/{uid}/limites/{tipo} = { ventanaInicio, cuenta, actualizadoEn } se escribe
+    // en el mismo batch/transacción que la reserva o la inscripción del jugador (src/services/limitesService.js):
+    // acá se exige que esté (actualizadoEn == request.time). La cuenta y la ventana las valida su propia regla.
+    function limiteRespetado(tipo) {
+      let ref = /databases/$(database)/documents/users/$(request.auth.uid)/limites/$(tipo);
+      return existsAfter(ref) && getAfter(ref).data.actualizadoEn == request.time;
+    }
+    function maximoDe(tipo) {
+      return tipo == 'reservas' ? 5 : 5;
+    }
     function pairMember(tid, pairId) {
       let p = get(/databases/$(database)/documents/tournaments/$(tid)/pairs/$(pairId)).data;
       return p.get('jugador1Uid', null) == request.auth.uid || p.get('jugador2Uid', null) == request.auth.uid;
@@ -218,6 +228,24 @@ service cloud.firestore {
             && changedOnly(['role'])
             && request.resource.data.role.size() == 1
             && request.resource.data.role[0] in ['jugador', 'club', 'organizador']);
+
+      // P3-12: contador de límites (ver limiteRespetado). Ventana nueva solo si la anterior venció en el servidor; si
+      // no, suma 1 sin pasar el máximo. Nadie lo borra (así no se esquiva el límite).
+      match /limites/{tipo} {
+        allow read: if isSelf(userId);
+        allow create, update: if isSelf(userId) && noAnonimo()
+          && tipo in ['reservas', 'inscripciones']
+          && request.resource.data.keys().hasOnly(['ventanaInicio', 'cuenta', 'actualizadoEn'])
+          && request.resource.data.actualizadoEn == request.time
+          && ((request.resource.data.ventanaInicio == request.time
+               && request.resource.data.cuenta == 1
+               && (resource == null || resource.data.ventanaInicio < request.time - duration.value(10, 'm')))
+              || (resource != null
+                  && request.resource.data.ventanaInicio == resource.data.ventanaInicio
+                  && request.resource.data.cuenta == resource.data.cuenta + 1
+                  && request.resource.data.cuenta <= maximoDe(tipo)));
+        allow delete: if false;
+      }
 
       match /notifications/{notifId} {
         allow read: if isSelf(userId);
@@ -649,6 +677,7 @@ service cloud.firestore {
               || (noAnonimo()
                   && request.resource.data.jugadorUid == request.auth.uid
                   && clubActivo(clubId)
+                  && limiteRespetado('reservas')
                   && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
                       || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente'))));
         // The club manages; a player may cancel his own, or re-book a slot whose previous reservation was cancelled
@@ -660,6 +689,7 @@ service cloud.firestore {
                   && sinContacto(['email', 'telefono'])
                   && request.resource.data.jugadorUid == request.auth.uid
                   && clubActivo(clubId)
+                  && limiteRespetado('reservas')
                   && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
                       || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente'))));
         allow delete: if !reservaDeTorneo() && esStaff(clubId, 'gestionarReservas');
@@ -742,7 +772,8 @@ service cloud.firestore {
         allow read: if signedIn();
         // Email y WhatsApp de los jugadores van en contactosInscripciones/{inscId}, nunca acá
         allow create: if noAnonimo() && request.resource.data.jugador1Uid == request.auth.uid
-          && sinContacto(['email1', 'email2', 'whatsapp1', 'whatsapp2']);
+          && sinContacto(['email1', 'email2', 'whatsapp1', 'whatsapp2'])
+          && limiteRespetado('inscripciones');
         // The organizer confirms/rejects; the invited partner accepts (must be logged in)
         allow update: if tournamentOrganizer(tid)
           || (noAnonimo()

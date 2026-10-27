@@ -14,6 +14,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { conReintentoSinLimite, limiteEnBatch } from "./limitesService";
 import { NIVELES } from "../utils/categorias";
 import {
   parejaPublica,
@@ -271,22 +272,27 @@ export const guardarBracket = async (torneoId, cuadroId, bracket, label) => {
 };
 // La inscripción y sus contactos se escriben en el mismo batch: las reglas aceptan el contacto solo si la
 // inscripción que queda es del jugador que lo escribe.
+// P3-12: suma el contador de límites del jugador en el mismo batch (las reglas lo exigen; antes del deploy de las
+// reglas se reintenta sin él).
 export const crearSolicitudInscripcion = async (torneoId, solicitud) => {
   const { publica, contactos } = separarContactos(solicitud);
   const ref = doc(collection(db, "tournaments", torneoId, "inscripciones"));
-  const batch = writeBatch(db);
-  batch.set(ref, {
-    ...publica,
-    status: "esperando_companero",
-    createdAt: serverTimestamp(),
+  return conReintentoSinLimite(async (conLimite) => {
+    const batch = writeBatch(db);
+    if (conLimite && publica.jugador1Uid) await limiteEnBatch(batch, publica.jugador1Uid, "inscripciones");
+    batch.set(ref, {
+      ...publica,
+      status: "esperando_companero",
+      createdAt: serverTimestamp(),
+    });
+    batch.set(doc(db, "tournaments", torneoId, "contactosInscripciones", ref.id), {
+      ...contactos,
+      jugador1Uid: publica.jugador1Uid || null,
+      createdAt: serverTimestamp(),
+    });
+    await batch.commit();
+    return ref.id;
   });
-  batch.set(doc(db, "tournaments", torneoId, "contactosInscripciones", ref.id), {
-    ...contactos,
-    jugador1Uid: publica.jugador1Uid || null,
-    createdAt: serverTimestamp(),
-  });
-  await batch.commit();
-  return ref.id;
 };
 
 // Contactos de las inscripciones ({ [inscId]: { whatsapp1, whatsapp2, email1, email2 } }), solo organizador
