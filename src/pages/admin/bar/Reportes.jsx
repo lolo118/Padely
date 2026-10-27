@@ -19,6 +19,7 @@ import { formatPrecio } from "../../../utils/format";
 import { formatDiaCorto, formatFechaHora, formatHora, getTodayLocal } from "../../../utils/formatDate";
 import ExportarMenu from "../../../components/reportes/ExportarMenu";
 import useMediaQuery from "../../../utils/useMediaQuery";
+import CreditosSenas from "../../../components/reportes/CreditosSenas";
 
 // Reportes del bar: lo que el dueño abre el lunes. Se arma sumando los rollups diarios (reportesDiarios) del
 // período, nunca recorriendo ventas. "Recalcular este día" reconstruye un día desde ventas y cajas (callable).
@@ -381,6 +382,9 @@ export default function Reportes() {
           </div>
         </Card>
       </div>
+
+      {/* P3-14 B: créditos por señas devueltas (solo si hay) */}
+      <CreditosSenas clubId={clubId} />
 
       {/* 7. Cierres de caja */}
       <Card className="p-0!">

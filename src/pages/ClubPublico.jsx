@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import useTituloPagina from "../hooks/useTituloPagina";
+import { getCreditoEnClub } from "../services/creditosService";
 import { formatFecha, getTodayLocal, addDaysLocal, horaActualStr } from "../utils/formatDate";
 import { formatPrecio, ubicacionCorta } from "../utils/format";
 import {
@@ -180,6 +181,15 @@ export default function ClubPublico() {
   const location = useLocation();
   const [club, setClub] = useState(null);
   useTituloPagina(club?.nombre);
+  // P3-14 B: crédito del jugador en este club (señas devueltas); se descuenta solo de la seña online
+  const [creditoClub, setCreditoClub] = useState(0);
+  useEffect(() => {
+    let vivo = true;
+    if (user?.uid && club?.id) getCreditoEnClub(user.uid, club.id).then((c) => vivo && setCreditoClub(c));
+    return () => {
+      vivo = false;
+    };
+  }, [user?.uid, club?.id]);
   const [canchas, setCanchas] = useState([]);
   const [reservas, setReservas] = useState([]);
   const [turnosFijos, setTurnosFijos] = useState([]);
@@ -403,7 +413,12 @@ export default function ClubPublico() {
     if (!reservaExitosa?.grupoId) return;
     setPagandoSeña(true);
     try {
-      await pagarConMercadoPago({ clubId: club.id, tipo: "seña", reservaId: reservaExitosa.grupoId });
+      const res = await pagarConMercadoPago({ clubId: club.id, tipo: "seña", reservaId: reservaExitosa.grupoId });
+      if (res?.cubiertoPorCredito) {
+        toast.success("Listo: pagaste la seña con tu crédito en el club.");
+        setReservaExitosa((r) => (r ? { ...r, señaCubierta: true } : r));
+        setPagandoSeña(false);
+      }
     } catch (err) {
       console.error("No pudimos abrir Mercado Pago:", err);
       toast.error(err?.message || "No pudimos abrir Mercado Pago. Podés pagar la seña en el club.");
@@ -1234,19 +1249,27 @@ export default function ClubPublico() {
             </dl>
             {reservaExitosa.seña > 0 && (
               <p className="body-sm text-ink-2 mt-2">
-                Seña {formatPrecio(reservaExitosa.seña)} · {reservaExitosa.pagarSeñaMp ? "pagala ahora con Mercado Pago o en el club" : "la pagás en el club"} · el resto lo pagás en el club
+                {reservaExitosa.señaCubierta
+                  ? `Seña ${formatPrecio(reservaExitosa.seña)} pagada con tu crédito · el resto lo pagás en el club`
+                  : `Seña ${formatPrecio(reservaExitosa.seña)} · ${reservaExitosa.pagarSeñaMp ? "pagala ahora con Mercado Pago o en el club" : "la pagás en el club"} · el resto lo pagás en el club`}
               </p>
+            )}
+            {/* P3-14 B: crédito de señas devueltas en este club */}
+            {reservaExitosa.seña > 0 && reservaExitosa.pagarSeñaMp && !reservaExitosa.señaCubierta && creditoClub > 0 && (
+              <Alert className="mt-3">
+                Tenés {formatPrecio(creditoClub)} de crédito en este club: {creditoClub >= reservaExitosa.seña ? "cubre toda la seña." : `se descuenta y pagás ${formatPrecio(reservaExitosa.seña - creditoClub)} por Mercado Pago.`}
+              </Alert>
             )}
 
             <div className="pd-dialog-actions">
               <Button onClick={() => { setReservaExitosa(null); navigate("/mis-reservas"); }}>
                 Ver mis reservas
               </Button>
-              {reservaExitosa.pagarSeñaMp ? (
+              {reservaExitosa.pagarSeñaMp && !reservaExitosa.señaCubierta ? (
                 <>
                   <Button onClick={() => setReservaExitosa(null)}>Entendido</Button>
                   <Button variant="primary" cargando={pagandoSeña ? "Abriendo Mercado Pago…" : ""} onClick={pagarSeñaMp}>
-                    Pagar la seña con Mercado Pago
+                    {creditoClub >= reservaExitosa.seña ? "Pagar la seña con mi crédito" : "Pagar la seña con Mercado Pago"}
                   </Button>
                 </>
               ) : (

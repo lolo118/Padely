@@ -47,6 +47,8 @@ export const MEDIO_MP = "mercadopago";
 // Jugador: arma el pago (parte o seña) y manda al checkout de Mercado Pago, que vuelve a back_urls con ?mp=ok|pendiente|error
 export const pagarConMercadoPago = async (datos) => {
   const r = await mpCrearPago(datos);
+  // P3-14 B: el crédito del jugador en el club cubrió toda la seña: no hay que ir a Mercado Pago
+  if (r?.cubiertoPorCredito) return r;
   if (!r?.initPoint) throw new Error("Mercado Pago no devolvió el link de pago");
   window.location.assign(r.initPoint);
   return r;

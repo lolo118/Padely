@@ -207,6 +207,11 @@ service cloud.firestore {
     }
 
     // Quién es super-admin: lo lee solo la propia cuenta; nadie lo escribe desde un cliente
+    // P3-14 B: Reportes del club → créditos dados en ese club (consulta de grupo por clubId)
+    match /{path=**}/creditos/{creditoId} {
+      allow read: if signedIn() && (esStaff(resource.data.clubId, 'verReportes') || superAdmin());
+    }
+
     match /superadmins/{uid} {
       allow read: if isSelf(uid);
       allow write: if false;
@@ -245,6 +250,12 @@ service cloud.firestore {
                   && request.resource.data.cuenta == resource.data.cuenta + 1
                   && request.resource.data.cuenta <= maximoDe(tipo)));
         allow delete: if false;
+      }
+
+      // P3-14 B: créditos de señas devueltas (los escriben las Functions); el jugador ve los suyos
+      match /creditos/{creditoId} {
+        allow read: if isSelf(userId);
+        allow write: if false;
       }
 
       match /notifications/{notifId} {

@@ -54,7 +54,12 @@ export default function MisReservas() {
   const pagarSeñaMp = async (r) => {
     setPagandoSeña(claveReserva(r));
     try {
-      await pagarConMercadoPago({ clubId: r.clubId, tipo: "seña", reservaId: r.grupoId || r.id });
+      const res = await pagarConMercadoPago({ clubId: r.clubId, tipo: "seña", reservaId: r.grupoId || r.id });
+      if (res?.cubiertoPorCredito) {
+        toast.success("Listo: pagaste la seña con tu crédito en el club.");
+        setPagandoSeña(null);
+        setTimeout(() => window.location.reload(), 900);
+      }
     } catch (e) {
       console.error("No pudimos abrir Mercado Pago:", e);
       toast.error(e?.message || "No pudimos abrir Mercado Pago. Podés pagar la seña en el club.");

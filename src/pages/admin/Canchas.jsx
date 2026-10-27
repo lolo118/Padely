@@ -297,7 +297,8 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
     });
     if (!ok) return;
     try {
-      await cancelarReservaGrupo(clubId, grupoId);
+      // P3-14 B: cancela el club → la seña pagada se devuelve siempre (onReservaUpdated)
+      await cancelarReservaGrupo(clubId, grupoId, { canceladaPor: "club" });
       if (reserva?.jugadorUid) {
         notificarReservaRechazada(reserva.jugadorUid, clubNombre, reserva.canchaName || "", reserva.fecha, rangoHoras(reserva.horaInicio, reserva.horaFin));
       }
@@ -828,7 +829,7 @@ export default function Canchas() {
     if (!ok) return;
     try {
       if (esBloqueo) await actualizarReserva(club.id, reservaId, { status: "cancelada" });
-      else await cancelarReservaGrupo(club.id, grupoId);
+      else await cancelarReservaGrupo(club.id, grupoId, { canceladaPor: "club" });
       if (reserva?.jugadorUid) {
         notificarReservaRechazada(reserva.jugadorUid, club.nombre, reserva.canchaName || "", reserva.fecha, rangoHoras(reserva.horaInicio, reserva.horaFin));
       }

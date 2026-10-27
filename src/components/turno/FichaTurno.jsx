@@ -136,7 +136,7 @@ export default function FichaTurno({ clubId, club, reserva: reservaProp = null, 
     const ok = await confirmar({ titulo: reserva.status === "confirmada" ? "Cancelar reserva" : "Rechazar reserva", mensaje: "Se le avisará al jugador.", confirmText: reserva.status === "confirmada" ? "Cancelar reserva" : "Rechazar", cancelText: "Volver", danger: true });
     if (!ok) return;
     hacer(async () => {
-      await cancelarReservaGrupo(clubId, grupoId);
+      await cancelarReservaGrupo(clubId, grupoId, { canceladaPor: "club" });
       if (reserva.jugadorUid) notificarReservaRechazada(reserva.jugadorUid, club?.nombre || "", reserva.canchaName || "", reserva.fecha, rangoHoras(reserva.horaInicio, reserva.horaFin));
       return { status: "cancelada" };
     }, reserva.status === "confirmada" ? "Reserva cancelada" : "Reserva rechazada");

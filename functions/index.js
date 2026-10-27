@@ -1128,6 +1128,8 @@ exports.onReservaUpdated = onDocumentUpdated("clubs/{clubId}/reservas/{reservaId
   if (!antes || !despues) return;
   // P3-9: la prueba de 30 días empieza con la primera reserva confirmada del club
   if (despues.status === "confirmada" && antes.status !== "confirmada") await iniciarPruebaDelClub(clubId, despues);
+  // P3-14 B: la seña pagada de una reserva cancelada se devuelve, queda como crédito o queda para el club
+  if (despues.status === "cancelada" && antes.status !== "cancelada" && (despues.grupoId || reservaId) === reservaId) await procesarSeñaCancelada(clubId, reservaId, despues);
   if (!!antes.señaPagada === !!despues.señaPagada && Number(antes.seña || 0) === Number(despues.seña || 0)) return;
   const grupoId = despues.grupoId || reservaId;
   if (grupoId !== reservaId) return; // solo la cabeza del grupo (los demás slots repiten los mismos campos)
@@ -2502,6 +2504,8 @@ exports.mpRefrescarTokens = onSchedule({ schedule: "every day 05:00", timeZone: 
 // src/utils/cuentas.js (functions/sync-utils.mjs; el test cuentasCopia.test.js falla si quedó vieja).
 let cuentasUtilPromesa = null;
 const cuentasUtil = () => (cuentasUtilPromesa ||= import("./lib/cuentas.mjs"));
+let senasUtilPromesa = null;
+const senasUtil = () => (senasUtilPromesa ||= import("./lib/senas.mjs"));
 let planesUtilPromesa = null;
 const planesUtil = () => (planesUtilPromesa ||= import("./lib/planes.mjs"));
 const MP_WEBHOOK_URL = `${FUNCTIONS_URL}/mpWebhook`;
@@ -2569,7 +2573,16 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
     if (seña <= 0) throw new HttpsError("failed-precondition", "Esta reserva no lleva seña");
     if (r.señaPagada) throw new HttpsError("failed-precondition", "La seña ya está pagada");
     const nombre = await nombreDeUsuario(uid, r.nombreJugador || "");
-    destino = { monto: seña, titulo: `${club.nombre || "Club"} · ${r.canchaName || "Cancha"} · ${fechaCortaArgentina(r.fecha)} ${r.horaInicio || r.hora || ""} · Seña`, backUrl: `${APP_URL}/mis-reservas`, pagador: { uid, nombre }, participanteIds: [], lineas: [], piezas: [], grupoId: null, reservaId, filtro: { reservaId, monto: seña, participanteIds: [] } };
+    // P3-14 B: el crédito del jugador en este club (señas devueltas) se aplica solo
+    const creditos = await creditosDisponibles(uid, clubId);
+    const credito = creditos.reduce((acc, c) => acc + c.monto, 0);
+    if (credito >= seña) {
+      await usarCreditoEnSeña({ uid, clubId, clubRef, reservaId, seña, creditos });
+      logger.info(`mpCrearPago ${clubId}: seña de ${reservaId} cubierta con crédito ($${seña})`);
+      return { cubiertoPorCredito: true, monto: 0, creditoAplicado: seña };
+    }
+    const creditoAplicado = credito > 0 ? credito : 0;
+    destino = { monto: seña - creditoAplicado, creditoAplicado, creditoIds: creditos.map((c) => c.id), titulo: `${club.nombre || "Club"} · ${r.canchaName || "Cancha"} · ${fechaCortaArgentina(r.fecha)} ${r.horaInicio || r.hora || ""} · Seña`, backUrl: `${APP_URL}/mis-reservas`, pagador: { uid, nombre }, participanteIds: [], lineas: [], piezas: [], grupoId: null, reservaId, filtro: { reservaId, monto: seña, participanteIds: [] } };
   } else {
     const grupoId = texto(d.grupoId, 120);
     if (!grupoId) throw new HttpsError("invalid-argument", "grupoId");
@@ -2655,6 +2668,8 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
     clubId,
     grupoId: destino.grupoId,
     reservaId: destino.reservaId,
+    creditoAplicado: destino.creditoAplicado || 0,
+    creditoIds: destino.creditoIds || [],
     participanteIds: destino.participanteIds,
     lineas: destino.lineas,
     piezas: destino.piezas,
@@ -2740,6 +2755,10 @@ async function aplicarPagoAprobado(clubRef, pagoMpRef, pago) {
       const cambios = { señaPagada: true, señaMedio: "mercadopago", señaPagoMpId: pagoMpRef.id, señaPagadaEn: FieldValue.serverTimestamp() };
       if (reserva && reserva.status === "pendiente" && club.reservaDirecta !== false) cambios.status = "confirmada";
       docs.forEach((s) => tx.update(s.ref, cambios));
+      // P3-14 B: el crédito que se descontó de esta seña queda usado
+      if (Number(pm.creditoAplicado) > 0 && pm.pagador && pm.pagador.uid) {
+        (pm.creditoIds || []).forEach((id) => tx.update(userRef(pm.pagador.uid).collection("creditos").doc(String(id)), { estado: "usado", usadoEn: FieldValue.serverTimestamp(), usadoEnReserva: pm.reservaId }));
+      }
       // M3: la seña cobrada online es plata que entró: una venta online con UNA línea "seña" (positiva) para que
       // Reportes y el cierre la vean. La venta de la cuenta trae después su "Seña pagada" en negativo y el día cierra.
       const n = (Number(contSnap.exists ? contSnap.data().usado : 0) || 0) + 1;
@@ -3385,3 +3404,86 @@ exports.migrarPrivacidad = onCall({ region: REGION, timeoutSeconds: 540, memory:
   logger.info(`migrarPrivacidad por ${uid}: ${JSON.stringify(r)}`);
   return { ok: true, ...r };
 });
+
+
+// ============================================================================
+// SEÑAS DE RESERVAS CANCELADAS (P3-14 B): devolución por MP, crédito en el club o queda para el club, según
+// src/utils/senas.js (política del club). Créditos: users/{uid}/creditos/{id} = { clubId, clubNombre, monto, estado:
+// disponible | usado, origen, creadoEn } (solo Functions); se aplican solos en la próxima seña online de ese club.
+// ============================================================================
+async function creditosDisponibles(uid, clubId) {
+  const snap = await userRef(uid).collection("creditos").where("clubId", "==", clubId).where("estado", "==", "disponible").get();
+  return snap.docs.map((d) => ({ id: d.id, monto: Number(d.data().monto) || 0 })).filter((c) => c.monto > 0);
+}
+
+// La seña entera sale del crédito: se usan los créditos necesarios (el sobrante vuelve como crédito nuevo) y la
+// reserva queda con la seña pagada (señaMedio "credito")
+async function usarCreditoEnSeña({ uid, clubId, clubRef, reservaId, seña, creditos }) {
+  await db.runTransaction(async (tx) => {
+    const refs = creditos.map((c) => userRef(uid).collection("creditos").doc(c.id));
+    const snaps = await Promise.all(refs.map((r) => tx.get(r)));
+    const slots = await tx.get(clubRef.collection("reservas").where("grupoId", "==", reservaId));
+    const cabeza = await tx.get(clubRef.collection("reservas").doc(reservaId));
+    let falta = seña;
+    snaps.forEach((snap, i) => {
+      if (falta <= 0 || !snap.exists || snap.data().estado !== "disponible") return;
+      const monto = Number(snap.data().monto) || 0;
+      tx.update(refs[i], { estado: "usado", usadoEn: FieldValue.serverTimestamp(), usadoEnReserva: reservaId });
+      if (monto > falta) tx.set(userRef(uid).collection("creditos").doc(), { ...snap.data(), monto: monto - falta, estado: "disponible", origen: { ...(snap.data().origen || {}), sobranteDe: snap.id }, creadoEn: FieldValue.serverTimestamp() });
+      falta -= Math.min(monto, falta);
+    });
+    if (falta > 0) throw new HttpsError("failed-precondition", "El crédito ya no alcanza: probá de nuevo");
+    const docs = slots.docs.length ? slots.docs : cabeza.exists ? [cabeza] : [];
+    docs.forEach((d) => tx.update(d.ref, { señaPagada: true, señaMedio: "credito", señaPagadaEn: FieldValue.serverTimestamp() }));
+  });
+}
+
+async function procesarSeñaCancelada(clubId, reservaId, reserva) {
+  try {
+    if (reserva.señaResultado) return;
+    const senas = await senasUtil();
+    const clubRef = db.collection("clubs").doc(clubId);
+    const club = (await clubRef.get()).data() || {};
+    const monto = Number(reserva.seña) || 0;
+    const r = senas.resolverSeñaCancelada({
+      canceladaPor: reserva.canceladaPor === "club" ? "club" : "jugador",
+      politica: senas.politicaDe(club),
+      inicioTurnoMs: senas.inicioDelTurnoMs(reserva.fecha, reserva.horaInicio || reserva.hora),
+      ahoraMs: Date.now(),
+      señaPagada: !!reserva.señaPagada,
+      monto,
+      medio: reserva.señaMedio || null,
+    });
+    if (r.accion === "nada") return;
+    const resultado = { accion: r.accion, motivo: r.motivo, monto, en: FieldValue.serverTimestamp() };
+    const nombreClub = club.nombre || "el club";
+    const montoTxt = `$ ${Math.round(monto).toLocaleString("es-AR")}`;
+    let mensajeJugador = null;
+    if (r.accion === "reembolso_mp") {
+      // La venta de la seña online (M3) se anula: onVentaUpdated → revertirVentaDeCuenta pide la devolución a MP y,
+      // si MP no la acepta, avisa al dueño para que la haga a mano (como cualquier devolución)
+      const ventas = await clubRef.collection("ventas").where("reservaId", "==", reservaId).where("estado", "==", "ok").limit(1).get();
+      if (!ventas.empty) await ventas.docs[0].ref.update({ estado: "anulada", anulacion: { por: "sistema", porNombre: "Padely", motivo: `Reserva cancelada: ${r.motivo}`, en: Timestamp.now(), origen: "señaCancelada" }, actualizadoEn: FieldValue.serverTimestamp() });
+      else resultado.sinVenta = true;
+      mensajeJugador = `Tu reserva en ${nombreClub} se canceló y te devolvemos la seña (${montoTxt}) por Mercado Pago.`;
+    } else if (r.accion === "credito") {
+      if (reserva.jugadorUid) {
+        await userRef(reserva.jugadorUid).collection("creditos").add({ clubId, clubNombre: club.nombre || null, monto, estado: "disponible", origen: { tipo: "seña", reservaId, fecha: reserva.fecha || null, motivo: r.motivo }, creadoEn: FieldValue.serverTimestamp() });
+        mensajeJugador = `Tu reserva en ${nombreClub} se canceló: la seña (${montoTxt}) te queda como crédito para tu próxima reserva ahí.`;
+      } else resultado.sinCuenta = true;
+    } else if (r.accion === "queda_club") {
+      mensajeJugador = `Tu reserva en ${nombreClub} se canceló. Según la política del club, la seña (${montoTxt}) no se devuelve (${r.motivo}).`;
+    }
+    await clubRef.collection("reservas").doc(reservaId).update({ señaResultado: resultado });
+    if (mensajeJugador && reserva.jugadorUid) {
+      await avisoA(reserva.jugadorUid, { tipo: "seña_cancelada", titulo: "Seña de tu reserva cancelada", mensaje: mensajeJugador, link: "/mis-reservas", icono: "💳" }).catch(() => {});
+    }
+    if (club.ownerUid) {
+      const textoClub = { reembolso_mp: `se devuelve por Mercado Pago`, credito: resultado.sinCuenta ? "no se pudo dar como crédito (reserva sin cuenta de jugador): resolvela a mano" : "quedó como crédito del jugador", queda_club: "queda para el club" }[r.accion];
+      await avisoA(club.ownerUid, { tipo: "seña_cancelada", titulo: "Reserva con seña cancelada", mensaje: `${reserva.nombreJugador || "Una reserva"} · ${reserva.fecha || ""} ${reserva.horaInicio || reserva.hora || ""}: la seña (${montoTxt}) ${textoClub}.`, link: `/admin/canchas?fecha=${reserva.fecha || ""}`, icono: "💳" }).catch(() => {});
+    }
+    logger.info(`seña cancelada ${clubId}/${reservaId}: ${r.accion} (${r.motivo})`);
+  } catch (err) {
+    logger.error(`seña cancelada ${clubId}/${reservaId}`, err);
+  }
+}

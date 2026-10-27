@@ -17,6 +17,7 @@ import {
 import { uploadClubLogo } from "../../services/storageService";
 import { formatPrecio } from "../../utils/format";
 import { comisionPct, estadoPlan } from "../../utils/planes";
+import { POLITICA_SEÑA_DEFECTO, politicaDe } from "../../utils/senas";
 import { getCuentaMp } from "../../services/planesService";
 import { formatFecha, formatFechaHoraArg } from "../../utils/formatDate";
 import { MAX_TURNOS_POR_RESERVA, maxTurnosDelClub } from "../../utils/tarifas";
@@ -175,6 +176,9 @@ export default function Configuracion() {
     // Reservas: seña (tipo + valor, el valor como texto del input) y turnos seguidos por reserva
     señaTipo: "ninguna",
     señaValor: "",
+    // P3-14 B: qué pasa con la seña si el jugador cancela (si cancela el club, se devuelve siempre)
+    politicaReembolso: POLITICA_SEÑA_DEFECTO.reembolso,
+    politicaHoras: String(POLITICA_SEÑA_DEFECTO.horas),
     maxTurnosPorReserva: MAX_TURNOS_POR_RESERVA,
   });
 
@@ -295,6 +299,8 @@ export default function Configuracion() {
         ticketAlias: clubData.ticket?.alias || "",
         ticketPie: clubData.ticket?.pie || "",
         señaTipo: tipoSeñaDelClub(clubData),
+        politicaReembolso: politicaDe(clubData).reembolso,
+        politicaHoras: String(politicaDe(clubData).horas),
         señaValor: Number(clubData.seña?.valor) > 0 ? String(Number(clubData.seña.valor)) : "",
         maxTurnosPorReserva: maxTurnosDelClub(clubData),
       });
@@ -349,7 +355,7 @@ export default function Configuracion() {
     setMensaje("");
     try {
       // Lo público va al documento del club; CBU, alias, CUIT y razón social, al subdocumento privado
-      const { cbu, alias, titularCuenta, cuit, razonSocial, señaTipo, señaValor, maxTurnosPorReserva, ticketEncabezado, ticketAlias, ticketPie, ...resto } = form;
+      const { cbu, alias, titularCuenta, cuit, razonSocial, señaTipo, señaValor, politicaReembolso, politicaHoras, maxTurnosPorReserva, ticketEncabezado, ticketAlias, ticketPie, ...resto } = form;
       const publicos = {
         ...resto,
         // Lo que se imprime en los tickets del bar (el alias de acá es el que el club ELIGE mostrar a sus clientes)
@@ -359,6 +365,7 @@ export default function Configuracion() {
           pie: ticketPie.trim() || null,
         },
         seña: { tipo: señaTipo, valor: señaTipo === "ninguna" ? 0 : Number(señaValor) },
+        politicaSeña: { reembolso: politicaReembolso, horas: Math.max(0, Math.round(Number(politicaHoras) || 0)) },
         maxTurnosPorReserva: Number(maxTurnosPorReserva),
         // La grilla sigue siendo horaria; se guarda para la próxima etapa
         duracionTurno: 60,
@@ -951,8 +958,24 @@ export default function Configuracion() {
                 )}
 
                 <p className="pd-help m-0">
-                  Se informa al reservar; se cobra en el club. En la próxima etapa se cobra online.
+                  Se informa al reservar. Con Mercado Pago conectado, el jugador la paga online; si no, se cobra en el club.
                 </p>
+                {form.señaTipo !== "ninguna" && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Si el jugador cancela" help="Si cancela el club, la seña se devuelve siempre. Pagada por Mercado Pago se devuelve por ahí; en efectivo queda como crédito en el club.">
+                      <Select value={form.politicaReembolso} onChange={(e) => setForm({ ...form, politicaReembolso: e.target.value })}>
+                        <option value="siempre">Se le devuelve siempre</option>
+                        <option value="hasta_horas">Se le devuelve si avisa con tiempo</option>
+                        <option value="nunca">No se le devuelve</option>
+                      </Select>
+                    </Field>
+                    {form.politicaReembolso === "hasta_horas" && (
+                      <Field label="Horas de anticipación">
+                        <Input type="number" min="0" inputMode="numeric" value={form.politicaHoras} onChange={(e) => setForm({ ...form, politicaHoras: e.target.value })} className="pd-tnum" />
+                      </Field>
+                    )}
+                  </div>
+                )}
               </div>
 
               <Field label="Turnos seguidos por reserva" help="Cuántas horas seguidas puede tomar un jugador en una reserva">
