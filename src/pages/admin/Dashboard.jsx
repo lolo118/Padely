@@ -11,7 +11,7 @@ import {
   actualizarReservaGrupo,
 } from "../../services/canchaService";
 import { notificarReservaConfirmada, notificarReservaRechazada } from "../../services/notificationService";
-import { addDaysLocal, formatDesde, formatFecha, getTodayLocal } from "../../utils/formatDate";
+import { addDaysLocal, formatDesde, formatFecha, formatFechaLarga, getTodayLocal } from "../../utils/formatDate";
 import { formatPrecio } from "../../utils/format";
 import { escucharCajasAbiertas } from "../../services/cajaService";
 import { escucharCuentasAbiertas } from "../../services/cuentasService";
@@ -19,6 +19,7 @@ import { escucharAlertasStock, escucharReporteDelDia } from "../../services/repo
 import { efectivoEsperado } from "../../utils/caja";
 import { agruparReservas, estadoSeña, rangoHoras } from "../../utils/reservas";
 import { canchasDelTorneo } from "../../utils/torneo";
+import { COMISION_FREE_PCT, estadoPlan } from "../../utils/planes";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
 import { Badge, Button, Card, StatTile } from "../../components/ui";
@@ -72,7 +73,9 @@ export default function Dashboard() {
   // Cajas abiertas del bar (null = cargando); solo para quien tiene algún permiso de caja
   const [cajasAbiertas, setCajasAbiertas] = useState(null);
   const [cuentasAbiertas, setCuentasAbiertas] = useState([]);
-  const puedeCaja = puede("abrirCaja") || puede("cerrarCaja") || puede("cerrarCajaAjena") || puede("verCajasCerradas") || puede("vender") || puede("cobrarTurnos");
+  // P3-9: en FREE el bar está bloqueado: sin tarjeta de Caja (ni sus lecturas en vivo)
+  const plan = club ? estadoPlan(club) : null;
+  const puedeCaja = (!plan || plan.pro) && (puede("abrirCaja") || puede("cerrarCaja") || puede("cerrarCajaAjena") || puede("verCajasCerradas") || puede("vender") || puede("cobrarTurnos"));
   // Reporte de hoy (rollup) y alertas de stock, para una línea cada uno en la tarjeta de Caja
   const [reporteHoy, setReporteHoy] = useState(null);
   const [alertasStock, setAlertasStock] = useState([]);
@@ -320,6 +323,22 @@ export default function Dashboard() {
           })}
         </p>
       </div>
+
+      {/* P3-9: el plan del club para quien lo configura (los clubes de antes, sin plan, no ven nada) */}
+      {plan && plan.tipo !== "legacy" && puede("configurarClub") && (
+        <Card variant="hover" as="div" className="mb-4 flex items-center justify-between gap-3 flex-wrap py-3!" {...linkProps("/admin/plan")}>
+          <span className="body-sm">
+            {plan.tipo === "prueba" && plan.sinEmpezar
+              ? "Tu prueba de 30 días con todo incluido empieza con tu primera reserva confirmada."
+              : plan.tipo === "prueba" && plan.pro
+                ? `Prueba: ${plan.diasRestantes === 1 ? "queda 1 día" : `quedan ${plan.diasRestantes} días`} (hasta el ${formatFechaLarga(plan.vence)}).`
+                : plan.tipo === "pro" && plan.pro
+                  ? `Plan PRO${plan.enGracia ? ` vencido: pagá antes del ${formatFechaLarga(plan.graciaHasta)}` : ` hasta el ${formatFechaLarga(plan.vence)}`}.`
+                  : `Plan FREE: canchas, reservas y seña online, con ${COMISION_FREE_PCT.toLocaleString("es-AR")} % por pago online.`}
+          </span>
+          <Badge tone={plan.pro ? (plan.enGracia || plan.avisoPrueba ? "warning" : "success") : "neutral"}>{plan.pro ? "Ver Mi plan" : "Pasar a PRO"}</Badge>
+        </Card>
+      )}
 
       {/* Alertas */}
       {(reservasPendientes.length > 0 || reservasMananaConfirmadas.length > 0) && (
