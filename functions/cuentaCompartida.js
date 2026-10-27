@@ -142,8 +142,23 @@ const ventanaUnirse = (t, ahoraMs = Date.now(), margenMs = 2 * 60 * 60000) => !!
 // ¿Terminó hace más de `margenMs`? (pedidos colgados, invitación vencida)
 const terminoHace = (t, ahoraMs = Date.now(), margenMs = 2 * 60 * 60000) => !!(t && t.fecha) && ahoraMs > finDelTurno(t) + margenMs;
 
+// P3-8c (B-P3-8b-2): qué hace el barrido de las 04:00 con una cuenta abierta de un día anterior. Se anula SOLO si no
+// tiene consumos ni plata (pagos congelados, ventas, seña pagada); con plata y nada pendiente se cierra; si todavía se
+// debe algo queda abierta y se avisa al dueño. `pendiente` = saldosDeCuenta(cuenta).pendiente.
+function decisionCuentaVencida(cuenta, { pendiente = 0 } = {}) {
+  const items = Array.isArray(cuenta && cuenta.items) ? cuenta.items : [];
+  const pagos = Array.isArray(cuenta && cuenta.pagos) ? cuenta.pagos.filter(Boolean) : [];
+  const ventas = Array.isArray(cuenta && cuenta.ventas) ? cuenta.ventas.filter(Boolean) : [];
+  const señaPagada = !!(cuenta && cuenta.cancha && cuenta.cancha.señaPagada);
+  const conPlata = pagos.length > 0 || ventas.length > 0 || señaPagada;
+  if (!items.length && !conPlata) return "anular";
+  if (conPlata && num(pendiente) <= 0) return "cerrar";
+  return "avisar";
+}
+
 module.exports = {
   ALERTA_SEÑA_POSTERIOR,
+  decisionCuentaVencida,
   canchaPagadaEnParte,
   sincronizarSeña,
   ID_TITULAR,

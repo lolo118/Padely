@@ -1350,20 +1350,36 @@ exports.cerrarCuentasVencidas = onSchedule({ schedule: "every day 04:00", timeZo
     logger.info("cerrarCuentasVencidas: sin cuentas vencidas");
     return;
   }
+  const util = await cuentasUtil();
   let anuladas = 0;
+  let cerradas = 0;
   let avisos = 0;
   for (const cuentaDoc of snap.docs) {
     try {
       const cuenta = cuentaDoc.data() || {};
-      const items = Array.isArray(cuenta.items) ? cuenta.items : [];
       const clubRef = cuentaDoc.ref.parent.parent;
-      if (!items.length) {
+      // B-P3-8b-2: nunca se anula una cuenta con plata (pagos, ventas, seña pagada)
+      const saldos = util.saldosDeCuenta(cuenta);
+      const decision = cc.decisionCuentaVencida(cuenta, { pendiente: saldos.pendiente });
+      if (decision === "cerrar") {
+        await cuentaDoc.ref.update({
+          estado: "cerrada",
+          cerradaPor: "sistema",
+          cerradaEn: FieldValue.serverTimestamp(),
+          cierreAutomatico: true,
+          totales: util.calcularTotalesCuenta(cuenta),
+          actualizadoEn: FieldValue.serverTimestamp(),
+        });
+        cerradas += 1;
+        continue;
+      }
+      if (decision === "anular") {
         await cuentaDoc.ref.update({
           estado: "anulada",
           cerradaPor: "sistema",
           cerradaEn: FieldValue.serverTimestamp(),
           cierreAutomatico: true,
-          anulacion: { por: "sistema", porNombre: "Padely", motivo: "sin consumos, vencida" },
+          anulacion: { por: "sistema", porNombre: "Padely", motivo: "sin consumos ni pagos, vencida" },
           actualizadoEn: FieldValue.serverTimestamp(),
         });
         anuladas += 1;
@@ -1376,7 +1392,7 @@ exports.cerrarCuentasVencidas = onSchedule({ schedule: "every day 04:00", timeZo
         await nuevaNotificacionRef(ownerUid).set({
           tipo: "cuenta_vencida",
           titulo: "Cuenta del turno sin cerrar",
-          mensaje: `La cuenta de ${cuenta.canchaNombre || "una cancha"} del ${cuenta.fecha || ""} (${cuenta.nombreJugador || "sin nombre"}) sigue abierta con consumos. Cobrala o anulala desde Bar → Cuentas.`,
+          mensaje: `La cuenta de ${cuenta.canchaNombre || "una cancha"} del ${cuenta.fecha || ""} (${cuenta.nombreJugador || "sin nombre"}) sigue abierta con $ ${Math.round(Number(saldos.pendiente) || 0).toLocaleString("es-AR")} pendientes. Cobrala o anulala desde Bar → Cuentas.`,
           link: "/admin/bar/cuentas",
           icono: "🧾",
           leida: false,
@@ -1389,7 +1405,7 @@ exports.cerrarCuentasVencidas = onSchedule({ schedule: "every day 04:00", timeZo
       logger.error(`cerrarCuentasVencidas: ${cuentaDoc.ref.path}`, err);
     }
   }
-  logger.info(`cerrarCuentasVencidas: ${anuladas} anuladas, ${avisos} avisos (${snap.size} vencidas)`);
+  logger.info(`cerrarCuentasVencidas: ${anuladas} anuladas, ${cerradas} cerradas, ${avisos} avisos (${snap.size} vencidas)`);
 });
 
 // ============================================================================

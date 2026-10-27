@@ -85,3 +85,21 @@ test("M2 (P3-8b): huésped reclamable — mismo nombre, sin cuenta, sin pagos; n
   assert.equal(huespedReclamable(martin, { pagos: [{ participanteIds: ["p2"], lineas: [] }] }, "Martín"), false);
   assert.equal(huespedReclamable(martin, { pagos: [{ participanteIds: ["titular"], lineas: [{ lineaId: "a", tipo: "consumo", monto: 100, participanteId: "titular" }] }] }, "Martín"), true);
 });
+
+test("B-P3-8b-2: el barrido de las 04:00 nunca anula una cuenta con plata", () => {
+  const d = cc.decisionCuentaVencida;
+  // Sin consumos y sin plata → anular (el caso que tenía sentido)
+  assert.equal(d({ items: [], pagos: [], ventas: [], cancha: { precioTotal: 20000, seña: 6000, señaPagada: false } }, { pendiente: 20000 }), "anular");
+  assert.equal(d({}, { pendiente: 0 }), "anular");
+  // Romero 25/10 (C-P3-8b): sin consumos, $ 10.000 pagados de $ 20.000 → queda abierta con aviso, no se anula
+  const romero = { items: [], pagos: [{ ventaNumero: "D1-000018", total: 5000 }, { ventaNumero: "MP-000002", total: 5000 }], ventas: ["D1-000018", "MP-000002"], cancha: { precioTotal: 20000, seña: 6000, señaPagada: false } };
+  assert.equal(d(romero, { pendiente: 10000 }), "avisar");
+  // Torres 24/10: seña cobrada + un pago por MP, todavía se debe → avisar
+  assert.equal(d({ items: [], pagos: [{ ventaNumero: "MP-000001", total: 3500 }], cancha: { señaPagada: true } }, { pendiente: 10500 }), "avisar");
+  // Solo la seña pagada (sin pagos) cuenta como plata
+  assert.equal(d({ items: [], pagos: [], cancha: { señaPagada: true, seña: 4500, precioTotal: 4500 } }, { pendiente: 0 }), "cerrar");
+  // Con plata y nada pendiente → cerrar
+  assert.equal(d({ items: [{ id: "a" }], pagos: [{ total: 15000 }] }, { pendiente: 0 }), "cerrar");
+  // Consumos sin pagar → avisar (como antes)
+  assert.equal(d({ items: [{ id: "a" }], pagos: [] }, { pendiente: 3000 }), "avisar");
+});
