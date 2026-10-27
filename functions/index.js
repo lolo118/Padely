@@ -3027,9 +3027,10 @@ exports.mpDevolverExcedente = onCall({ region: REGION, secrets: [MP_CLIENT_SECRE
 });
 
 // Al anular una venta de cuenta: el pago congelado se saca de la cuenta (la deuda vuelve) y, si era de Mercado Pago,
-// se devuelve el pago completo con el token del club. Si falla, aviso al dueño.
+// se devuelve el pago completo con el token del club. Si falla, aviso al dueño. Con { sinDevolucion } (P3-8c: un
+// duplicado o una venta ya devuelta por fuera) no se llama a Mercado Pago: queda devolucion { manual, sinDevolucion }.
 // Devuelve { reabierta, devolucion } (devolucion null si la venta no era de Mercado Pago)
-async function revertirVentaDeCuenta(clubId, numero, venta) {
+async function revertirVentaDeCuenta(clubId, numero, venta, { sinDevolucion = false, por = null, porNombre = null } = {}) {
   const clubRef = db.collection("clubs").doc(clubId);
   let reabierta = false;
   let devolucion = null;
@@ -3074,7 +3075,20 @@ async function revertirVentaDeCuenta(clubId, numero, venta) {
       logger.error(`venta ${clubId}/${numero}: no se pudo volver la seña a pendiente`, err);
     }
   }
-  if (venta.mpPaymentId) {
+  if (venta.mpPaymentId && sinDevolucion) {
+    const monto = venta.mpMontoCobrado || venta.total;
+    devolucion = { ...mp.devolucionDe({ ok: true }, { monto, manual: true, por }), sinDevolucion: true, porNombre, en: Timestamp.now(), motivo: (venta.anulacion && venta.anulacion.motivo) || null, ventaNumero: numero };
+    const batch = db.batch();
+    batch.update(clubRef.collection("ventas").doc(numero), { devolucion, actualizadoEn: FieldValue.serverTimestamp() });
+    if (venta.pagoMpId) {
+      const pagoMpRef = clubRef.collection("pagosMp").doc(String(venta.pagoMpId));
+      const pmSnap = await pagoMpRef.get();
+      // Solo si el pagoMp apunta a ESTA venta (un duplicado puede haberlo pisado); "anulado" es final para el webhook
+      if (pmSnap.exists && pmSnap.data().ventaNumero === numero) batch.update(pagoMpRef, { estado: "anulado", devolucion, actualizadoEn: FieldValue.serverTimestamp() });
+    }
+    await batch.commit();
+    logger.info(`venta ${clubId}/${numero}: anulada sin devolución por Mercado Pago (${devolucion.motivo || "sin motivo"})`);
+  } else if (venta.mpPaymentId) {
     const monto = venta.mpMontoCobrado || venta.total;
     const r = await devolverPagoMp(clubRef, String(venta.mpPaymentId), { idempotencia: `anul_${numero}` });
     devolucion = { ...mp.devolucionDe(r, { monto }), en: Timestamp.now(), motivo: (venta.anulacion && venta.anulacion.motivo) || null, ventaNumero: numero };
@@ -3103,13 +3117,18 @@ exports.mpAnularVenta = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, 
   const uid = exigirAuth(request);
   const clubId = texto(request.data && request.data.clubId, 80);
   const numero = texto(request.data && request.data.numero, 40);
-  const motivo = texto(request.data && request.data.motivo, 120) || "Devolución por Mercado Pago";
+  // P3-8c: sinDevolucion anula y saca el pago de la cuenta SIN pedir la devolución (duplicados, devoluciones hechas
+  // por fuera); exige un motivo escrito
+  const sinDevolucion = !!(request.data && request.data.sinDevolucion === true);
+  const motivoEscrito = texto(request.data && request.data.motivo, 120);
+  if (sinDevolucion && !motivoEscrito) throw new HttpsError("invalid-argument", "Para anular sin devolver, escribí el motivo");
+  const motivo = motivoEscrito || "Devolución por Mercado Pago";
   if (!clubId || !numero) throw new HttpsError("invalid-argument", "clubId y numero");
   const clubRef = db.collection("clubs").doc(clubId);
   const acceso = await accesoClub(clubRef, uid, ["anularVenta"]);
   if (!acceso.esStaff) throw new HttpsError("permission-denied", "Solo quien puede anular ventas (o el dueño) devuelve pagos de Mercado Pago");
   const ventaRef = clubRef.collection("ventas").doc(numero);
-  const anulacion = { por: uid, porNombre: acceso.nombre || (await nombreDeUsuario(uid, null)), motivo, en: Timestamp.now(), origen: "mpAnularVenta" };
+  const anulacion = { por: uid, porNombre: acceso.nombre || (await nombreDeUsuario(uid, null)), motivo, en: Timestamp.now(), origen: "mpAnularVenta", sinDevolucion };
   const venta = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ventaRef);
     const v = snap.exists ? snap.data() : null;
@@ -3118,7 +3137,7 @@ exports.mpAnularVenta = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, 
     tx.update(ventaRef, { estado: "anulada", anulacion, actualizadoEn: FieldValue.serverTimestamp() });
     return { ...v, estado: "anulada", anulacion };
   });
-  const r = await revertirVentaDeCuenta(clubId, numero, venta);
-  logger.info(`mpAnularVenta ${clubId}/${numero}: por ${uid} · devolución ${r.devolucion && r.devolucion.ok ? "ok" : "falló"}${r.reabierta ? " · cuenta reabierta" : ""}`);
-  return { ok: true, numero, reabierta: r.reabierta, devolucion: r.devolucion ? { ok: r.devolucion.ok, refundId: r.devolucion.refundId, error: r.devolucion.error, monto: r.devolucion.monto } : null };
+  const r = await revertirVentaDeCuenta(clubId, numero, venta, { sinDevolucion, por: uid, porNombre: anulacion.porNombre });
+  logger.info(`mpAnularVenta ${clubId}/${numero}: por ${uid} · devolución ${sinDevolucion ? "no pedida (sin devolución)" : r.devolucion && r.devolucion.ok ? "ok" : "falló"}${r.reabierta ? " · cuenta reabierta" : ""}`);
+  return { ok: true, numero, reabierta: r.reabierta, devolucion: r.devolucion ? { ok: r.devolucion.ok, refundId: r.devolucion.refundId, error: r.devolucion.error, monto: r.devolucion.monto, sinDevolucion } : null };
 });
