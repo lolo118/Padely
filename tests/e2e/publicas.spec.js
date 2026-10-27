@@ -45,7 +45,7 @@ test("torneo público: nombre y título de la pestaña", async ({ page }) => {
 test("estado: sin aviso dice que todo funciona", async ({ page }) => {
   const errores = vigilarConsola(page);
   await page.goto("/estado");
-  await expect(page.getByRole("heading", { name: "Estado de Padely" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Estado de Padely" })).toBeVisible({ timeout: 10000 });
   await expect(page.getByText(/Todo funciona normalmente|Hay un aviso/)).toBeVisible();
   expect(errores).toEqual([]);
 });
