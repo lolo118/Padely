@@ -178,3 +178,12 @@ describe("privacidad P3-14", () => {
     await assertFails(setDoc(doc(como("dueno"), "clubs", CLUB, "privado", "mpCuenta"), { nickname: "x" }));
   });
 });
+
+describe("inscripciones online P3-14", () => {
+  test("una inscripción no nace pagada; los pagos de inscripción no los escribe nadie", async () => {
+    const db = como("jugador");
+    await assertFails(setDoc(doc(db, "tournaments", "t2", "inscripciones", "i1"), { jugador1Uid: "jugador", status: "esperando_companero", pago: { estado: "pagado" } }));
+    await assertFails(setDoc(doc(db, "tournaments", "t2", "pagosInscripcion", "p1"), { estado: "aprobado" }));
+    await assertFails(updateDoc(doc(como("org2"), "organizers", "ent1"), { "mercadoPago.conectado": true }));
+  });
+});

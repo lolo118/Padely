@@ -6,6 +6,8 @@ import { confirmar } from "../../components/ConfirmDialog";
 import { useAuthStore } from "../../store/authStore";
 import { getAvisosPago, getClubesConPlan, getDatosFacturacion, getTorneosParaCobrar, guardarDatosFacturacion, guardarPlan, marcarAvisoAtendido, marcarCobroTorneo, migrarPrivacidad } from "../../services/planesService";
 import { flag } from "../../services/flagsService";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "../../lib/firebase";
 import { ETIQUETA_PLAN, cambiarPlan, escalonDe, estadoPlan, precioAnual, registrarPago } from "../../utils/planes";
 import { formatPrecio } from "../../utils/format";
 import { formatFechaHora, formatFechaLarga } from "../../utils/formatDate";
@@ -157,8 +159,8 @@ function DatosPagoCard() {
   const [guardando, setGuardando] = useState(false);
   useEffect(() => {
     getDatosFacturacion()
-      .then((d) => setDatos({ alias: "", cbu: "", titular: "", nota: "", ...d }))
-      .catch(() => setDatos({ alias: "", cbu: "", titular: "", nota: "" }));
+      .then((d) => setDatos({ alias: "", cbu: "", titular: "", nota: "", ...d, comisionTorneosPct: d.comisionTorneosPct !== undefined ? String(d.comisionTorneosPct) : "0" }))
+      .catch(() => setDatos({ alias: "", cbu: "", titular: "", nota: "", comisionTorneosPct: "0" }));
   }, []);
   if (!datos) return <div className="pd-skeleton h-40 rounded-lg" aria-busy="true" aria-label="Cargando" />;
   const campo = (k) => ({ value: datos[k] || "", onChange: (e) => setDatos((d) => ({ ...d, [k]: e.target.value })) });
@@ -166,7 +168,8 @@ function DatosPagoCard() {
     e.preventDefault();
     setGuardando(true);
     try {
-      await guardarDatosFacturacion({ alias: datos.alias.trim(), cbu: datos.cbu.trim(), titular: datos.titular.trim(), nota: datos.nota.trim() });
+      const pct = Math.min(10, Math.max(0, Number(String(datos.comisionTorneosPct).replace(",", ".")) || 0));
+      await guardarDatosFacturacion({ alias: datos.alias.trim(), cbu: datos.cbu.trim(), titular: datos.titular.trim(), nota: datos.nota.trim(), comisionTorneosPct: pct });
       toast.success("Datos de pago guardados");
     } catch (err) {
       console.error("Error guardando los datos de pago:", err);
@@ -192,12 +195,47 @@ function DatosPagoCard() {
         <Field label="Nota para los clubes (opcional)">
           <Textarea {...campo("nota")} maxLength={300} rows={2} />
         </Field>
+        <Field label="Comisión sobre inscripciones online (%)" help="P3-14: se descuenta de cada inscripción pagada por Mercado Pago (0 a 10).">
+          <Input {...campo("comisionTorneosPct")} type="number" min="0" max="10" step="0.5" inputMode="decimal" className="pd-tnum" />
+        </Field>
       </div>
       <div className="mt-4">
         <Button type="submit" variant="primary" cargando={guardando ? "Guardando…" : ""}>
           Guardar datos
         </Button>
       </div>
+    </Card>
+  );
+}
+
+// P3-14 C: funciones que se prenden desde acá cuando el backend ya está desplegado (configuracionPadely/flags)
+function FlagsCard() {
+  const [inscripciones, setInscripciones] = useState(flag("inscripcionesOnline"));
+  const [guardando, setGuardando] = useState(false);
+  const cambiar = async (e) => {
+    const valor = e.target.checked;
+    setGuardando(true);
+    try {
+      await setDoc(doc(db, "configuracionPadely", "flags"), { inscripcionesOnline: valor }, { merge: true });
+      setInscripciones(valor);
+      toast.success(valor ? "Inscripciones online habilitadas" : "Inscripciones online ocultas");
+    } catch (err) {
+      console.error("Error guardando el flag:", err);
+      toast.error("No pudimos guardar el cambio.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+  return (
+    <Card>
+      <Card.Title as="h2">Funciones de la plataforma</Card.Title>
+      <label className="mt-3 flex items-start gap-3 body-sm">
+        <input type="checkbox" checked={!!inscripciones} onChange={cambiar} disabled={guardando} className="h-5 w-5 mt-0.5 accent-ink" />
+        <span>
+          Inscripciones online (organizadores con Mercado Pago)
+          <span className="block text-ink-3">Prender después del deploy de las Functions de P3-14.</span>
+        </span>
+      </label>
     </Card>
   );
 }
@@ -423,6 +461,8 @@ export default function Planes() {
       <DatosPagoCard />
 
       <MigracionPrivacidadCard />
+
+      <FlagsCard />
 
       {dialogo?.modo === "plan" && (
         <CambiarPlanDialog

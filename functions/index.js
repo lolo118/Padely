@@ -2400,6 +2400,16 @@ async function tokensDelClub(clubRef, { forzar = false } = {}) {
 
 exports.mpConectarUrl = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, async (request) => {
   const uid = exigirAuth(request);
+  // P3-14 C: una entidad organizadora conecta su cuenta para cobrar inscripciones (state "org-<id>")
+  const organizerId = texto(request.data && request.data.organizerId, 80);
+  if (organizerId) {
+    const orgRef = db.collection("organizers").doc(organizerId);
+    const org = await orgRef.get();
+    if (!org.exists || org.data().ownerUid !== uid) throw new HttpsError("permission-denied", "Solo el dueño de la entidad conecta Mercado Pago");
+    const stateOrg = mp.nuevoState(MP_CLIENT_SECRET.value(), `org-${organizerId}`);
+    await stateMpRef(orgRef).set({ state: stateOrg, uid, creadoEn: FieldValue.serverTimestamp(), creadoEnMs: Date.now() });
+    return { ok: true, url: mp.urlAutorizacion({ clientId: MP_CLIENT_ID.value(), state: stateOrg, redirectUri: MP_REDIRECT_URI }) };
+  }
   const clubId = texto(request.data && request.data.clubId, 80);
   if (!clubId) throw new HttpsError("invalid-argument", "clubId");
   const clubRef = db.collection("clubs").doc(clubId);
@@ -2418,6 +2428,7 @@ exports.mpOAuthCallback = onRequest({ region: REGION, secrets: [MP_CLIENT_SECRET
     if (error) return volver({ mp: "error", motivo: String(error).slice(0, 80) });
     const st = mp.stateValido(state, MP_CLIENT_SECRET.value());
     if (!st.ok || !st.prefijo) return volver({ mp: "error", motivo: "state" });
+    if (st.prefijo.startsWith("org-")) return conectarOrganizador(st.prefijo.slice(4), String(state), code, res);
     const clubRef = db.collection("clubs").doc(st.prefijo);
     const guardado = await stateMpRef(clubRef).get();
     if (!guardado.exists || guardado.data().state !== state || Date.now() - (Number(guardado.data().creadoEnMs) || 0) > MP_STATE_MIN * 60000) return volver({ mp: "error", motivo: "state-vencido" });
@@ -2452,6 +2463,18 @@ exports.mpOAuthCallback = onRequest({ region: REGION, secrets: [MP_CLIENT_SECRET
 
 exports.mpDesconectar = onCall({ region: REGION }, async (request) => {
   const uid = exigirAuth(request);
+  const organizerId = texto(request.data && request.data.organizerId, 80);
+  if (organizerId) {
+    const orgRef = db.collection("organizers").doc(organizerId);
+    const org = await orgRef.get();
+    if (!org.exists || org.data().ownerUid !== uid) throw new HttpsError("permission-denied", "Solo el dueño de la entidad desconecta Mercado Pago");
+    const b = db.batch();
+    b.delete(privadoMpRef(orgRef));
+    b.delete(orgRef.collection("privado").doc("mpCuenta"));
+    b.set(orgRef, { mercadoPago: { conectado: false, desconectadoEn: FieldValue.serverTimestamp() } }, { merge: true });
+    await b.commit();
+    return { ok: true };
+  }
   const clubId = texto(request.data && request.data.clubId, 80);
   if (!clubId) throw new HttpsError("invalid-argument", "clubId");
   const clubRef = db.collection("clubs").doc(clubId);
@@ -2971,6 +2994,28 @@ exports.mpWebhook = onRequest({ region: REGION, secrets: [MP_WEBHOOK_SECRET, MP_
   // (?type=payment&data.id=…) y no firman igual: no son un ataque, se registran como "notificación legacy"
   const legacy = !!(req.query && req.query.topic) && !(req.query && req.query.type);
   const firmaTxt = firma.ok ? "ok" : legacy ? "notificación legacy (sin firma de Webhooks)" : !xSignature ? "ausente" : `inválida (${firma.motivo})`;
+  // P3-14 C: pagos de inscripciones (?org=<organizerId>): mismo criterio (la notificación es una pista; el pago se
+  // relee de la API con el token de la entidad y se aplica una sola vez)
+  const organizerId = texto(req.query && req.query.org, 80);
+  if (organizerId && !clubId) {
+    const orgRef = db.collection("organizers").doc(organizerId);
+    const orgSnap = await orgRef.get();
+    if (!orgSnap.exists) {
+      res.status(401).send("entidad desconocida");
+      return;
+    }
+    try {
+      const tokens = await tokensDelClub(orgRef);
+      const leer = (path) => (tokens && tokens.accessToken ? mpFetch(path, { token: tokens.accessToken }).catch((err) => (err.status === 404 ? null : Promise.reject(err))) : Promise.resolve(null));
+      const r = await mp.procesarNotificacion({ tipo: datos.tipo, dataId: datos.dataId, deps: { leerPago: (id) => leer(`/v1/payments/${encodeURIComponent(id)}`), leerOrden: (id) => leer(`/merchant_orders/${encodeURIComponent(id)}`), aplicar: (pago) => aplicarPagoInscripcionLeido(orgRef, pago) } });
+      logger.info(`mpWebhook org ${organizerId}: firma ${firmaTxt} · ${datos.tipo || "payment"} ${datos.dataId || "?"} → ${r.resultado}: ${r.resumen}`);
+      res.status(200).send(r.resultado);
+    } catch (err) {
+      logger.error(`mpWebhook org ${organizerId}: ${err.message || err}`);
+      res.status(500).send("error");
+    }
+    return;
+  }
   const clubRef = clubId ? db.collection("clubs").doc(clubId) : null;
   const clubSnap = clubRef ? await clubRef.get() : null;
   if (!clubSnap || !clubSnap.exists) {
@@ -3487,3 +3532,143 @@ async function procesarSeñaCancelada(clubId, reservaId, reserva) {
     logger.error(`seña cancelada ${clubId}/${reservaId}`, err);
   }
 }
+
+
+// ============================================================================
+// INSCRIPCIONES ONLINE (P3-14 C): la entidad organizadora conecta su cuenta de MP (organizers/{o}/privado/mercadopago,
+// igual que los clubes) y cada torneo con inscripcion > 0 e inscripcionOnline cobra la inscripción por Checkout Pro.
+// tournaments/{t}/pagosInscripcion/{pagoId} (solo Functions) + pagosInscripcionIndice/{pagoId} → { torneoId,
+// organizerId }; external_reference "ins_<pagoId>". Al aprobarse: inscripciones/{i}.pago = { estado: "pagado",
+// medio, paymentId, monto, pagoId, en }. Comisión de Padely: configuracionPadely/facturacion.comisionTorneosPct.
+// Si la pareja se rechaza o se borra antes de empezar el torneo, se devuelve el pago.
+// ============================================================================
+async function conectarOrganizador(organizerId, state, code, res) {
+  const volver = (q) => res.redirect(302, `${APP_URL}/org/entidad?${new URLSearchParams(q).toString()}`);
+  const orgRef = db.collection("organizers").doc(organizerId);
+  const guardado = await stateMpRef(orgRef).get();
+  if (!guardado.exists || guardado.data().state !== state || Date.now() - (Number(guardado.data().creadoEnMs) || 0) > MP_STATE_MIN * 60000) return volver({ mp: "error", motivo: "state-vencido" });
+  if (!code) return volver({ mp: "error", motivo: "sin-code" });
+  const r = await mpFetch("/oauth/token", { method: "POST", body: mp.cuerpoTokenPorCodigo({ clientId: MP_CLIENT_ID.value(), clientSecret: MP_CLIENT_SECRET.value(), code: String(code), redirectUri: MP_REDIRECT_URI }) });
+  const tokens = mp.tokensDeRespuesta(r);
+  if (!tokens.accessToken) return volver({ mp: "error", motivo: "sin-token" });
+  let nickname = null;
+  let esPrueba = false;
+  try {
+    const me = await mpFetch("/users/me", { token: tokens.accessToken });
+    nickname = (me && me.nickname) || null;
+    esPrueba = mp.esUsuarioDePrueba(me);
+  } catch {
+    nickname = null;
+  }
+  const batch = db.batch();
+  batch.set(privadoMpRef(orgRef), { ...tokens, conectadoEn: FieldValue.serverTimestamp(), conectadoPor: guardado.data().uid || null });
+  batch.set(orgRef, { mercadoPago: { conectado: true, conectadoEn: FieldValue.serverTimestamp(), liveMode: tokens.liveMode } }, { merge: true });
+  batch.set(orgRef.collection("privado").doc("mpCuenta"), { userId: tokens.userId, nickname, esPrueba, liveMode: tokens.liveMode, conectadoEn: FieldValue.serverTimestamp() });
+  batch.delete(stateMpRef(orgRef));
+  await batch.commit();
+  logger.info(`mp: entidad ${organizerId} conectada (user ${tokens.userId}, live ${tokens.liveMode})`);
+  return volver({ mp: "ok" });
+}
+
+// Jugador: paga la inscripción de su pareja → { initPoint, monto }
+exports.mpPagarInscripcion = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, async (request) => {
+  const uid = exigirAuth(request);
+  const torneoId = texto(request.data && request.data.torneoId, 80);
+  const inscripcionId = texto(request.data && request.data.inscripcionId, 80);
+  if (!torneoId || !inscripcionId) throw new HttpsError("invalid-argument", "torneoId e inscripcionId");
+  const torneoRef = db.collection("tournaments").doc(torneoId);
+  const [tSnap, iSnap] = await Promise.all([torneoRef.get(), torneoRef.collection("inscripciones").doc(inscripcionId).get()]);
+  if (!tSnap.exists || !iSnap.exists) throw new HttpsError("not-found", "El torneo o la inscripción no existen");
+  const torneo = tSnap.data();
+  const insc = iSnap.data();
+  if (insc.jugador1Uid !== uid && insc.jugador2Uid !== uid) throw new HttpsError("permission-denied", "La inscripción no es tuya");
+  if (!torneo.inscripcionOnline || !(Number(torneo.inscripcion) > 0)) throw new HttpsError("failed-precondition", "Este torneo no cobra la inscripción online");
+  if (insc.status === "rechazada") throw new HttpsError("failed-precondition", "La inscripción fue rechazada");
+  if (insc.pago && insc.pago.estado === "pagado") throw new HttpsError("failed-precondition", "La inscripción ya está pagada");
+  const orgSnap = await db.collection("organizers").where("ownerUid", "==", torneo.organizerId).limit(1).get();
+  if (orgSnap.empty) throw new HttpsError("failed-precondition", "El organizador no tiene Mercado Pago conectado");
+  const orgRef = orgSnap.docs[0].ref;
+  const tokens = await tokensDelClub(orgRef);
+  if (!tokens || !tokens.accessToken) throw new HttpsError("failed-precondition", "El organizador no tiene Mercado Pago conectado");
+  const facturacion = (await db.collection("configuracionPadely").doc("facturacion").get()).data() || {};
+  const comision = mp.comisionTorneos(facturacion);
+  const monto = Number(torneo.inscripcion);
+  const pagoRef = torneoRef.collection("pagosInscripcion").doc();
+  const nombre = await nombreDeUsuario(uid, "");
+  const pref = mp.cuerpoPreferencia({
+    titulo: `${torneo.nombre || "Torneo"} · Inscripción`,
+    monto,
+    pagoMpId: mp.referenciaInscripcion(pagoRef.id),
+    pagador: { uid, nombre },
+    notificationUrl: `${MP_WEBHOOK_URL}?org=${orgRef.id}`,
+    backUrl: `${APP_URL}/torneos/${torneoId}`,
+    comisionPct: comision,
+  });
+  let r;
+  try {
+    r = await mpFetch("/checkout/preferences", { method: "POST", token: tokens.accessToken, body: pref.body, idempotencia: pagoRef.id });
+  } catch (err) {
+    logger.error(`mpPagarInscripcion ${torneoId}: preferencia rechazada (${err.status || ""}) ${err.message}`);
+    throw new HttpsError("unavailable", "Mercado Pago no aceptó el cobro. Probá de nuevo en un momento.");
+  }
+  const initPoint = r.init_point || r.sandbox_init_point || null;
+  if (!r.id || !initPoint) throw new HttpsError("unavailable", "Mercado Pago no devolvió el link de pago");
+  await Promise.all([
+    pagoRef.set({ estado: "pendiente", inscripcionId, organizerId: orgRef.id, monto, comisionPct: comision, preferenceId: r.id, pagador: { uid, nombre }, creadoEn: FieldValue.serverTimestamp() }),
+    db.collection("pagosInscripcionIndice").doc(pagoRef.id).set({ torneoId, organizerId: orgRef.id, creadoEn: FieldValue.serverTimestamp() }),
+  ]);
+  logger.info(`mpPagarInscripcion ${torneoId}/${inscripcionId}: $${monto} por ${uid}`);
+  return { initPoint, monto };
+});
+
+async function aplicarPagoInscripcionLeido(orgRef, pago) {
+  const paymentId = String(pago.id);
+  const pagoId = mp.pagoIdDeReferencia(pago.external_reference);
+  if (!pagoId) return `pago ${paymentId} sin referencia de inscripción → ignorado`;
+  const indice = await db.collection("pagosInscripcionIndice").doc(pagoId).get();
+  if (!indice.exists || indice.data().organizerId !== orgRef.id) return `pago ${paymentId} no es de esta entidad → ignorado`;
+  const torneoRef = db.collection("tournaments").doc(indice.data().torneoId);
+  const pagoRef = torneoRef.collection("pagosInscripcion").doc(pagoId);
+  if (pago.status === "approved") {
+    const resultado = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(pagoRef);
+      const d = mp.decisionPagoInscripcion(snap.exists ? snap.data() : null, paymentId);
+      if (d.accion === "ignorar") return d.resultado;
+      const p = snap.data();
+      const monto = Number(pago.transaction_amount) || p.monto;
+      tx.update(pagoRef, { estado: "aprobado", paymentId, montoPagado: monto, aprobadoEn: FieldValue.serverTimestamp() });
+      tx.update(torneoRef.collection("inscripciones").doc(p.inscripcionId), { pago: { estado: "pagado", medio: "mercadopago", paymentId, monto, pagoId, en: FieldValue.serverTimestamp() } });
+      return "aplicado";
+    });
+    return `pago ${paymentId}: ${resultado}`;
+  }
+  if (pago.status === "refunded" || pago.status === "charged_back") {
+    await pagoRef.set({ estado: "devuelto", estadoMp: pago.status, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
+    return `pago ${paymentId} ${pago.status}`;
+  }
+  if (pago.status === "rejected" || pago.status === "cancelled") await pagoRef.set({ estado: "rechazado", paymentId, estadoMp: pago.status, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
+  return `pago ${paymentId} ${pago.status}`;
+}
+
+// Pareja rechazada o borrada con la inscripción pagada por MP, antes de que empiece el torneo → devolución
+exports.onInscripcionEscrita = onDocumentWritten("tournaments/{tid}/inscripciones/{iid}", async (event) => {
+  const antes = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
+  const despues = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+  if (!antes || !antes.pago || antes.pago.estado !== "pagado" || antes.pago.medio !== "mercadopago") return;
+  const sale = !despues || (despues.status === "rechazada" && antes.status !== "rechazada");
+  if (!sale || (despues && despues.pago && despues.pago.devolucion)) return;
+  const { tid, iid } = event.params;
+  const torneo = (await db.collection("tournaments").doc(tid).get()).data() || {};
+  if (torneo.status && torneo.status !== "inscripcion") {
+    logger.info(`inscripción ${tid}/${iid}: el torneo ya empezó, sin devolución automática`);
+    return;
+  }
+  const indice = await db.collection("pagosInscripcionIndice").doc(String(antes.pago.pagoId || "")).get();
+  if (!indice.exists) return;
+  const orgRef = db.collection("organizers").doc(indice.data().organizerId);
+  const r = await devolverPagoMp(orgRef, String(antes.pago.paymentId), { idempotencia: `insc_${iid}` });
+  const devolucion = { ...mp.devolucionDe(r, { monto: antes.pago.monto }), en: Timestamp.now() };
+  await db.collection("tournaments").doc(tid).collection("pagosInscripcion").doc(String(antes.pago.pagoId)).set({ estado: r.ok ? "devuelto" : "aprobado", devolucion }, { merge: true });
+  if (despues) await event.data.after.ref.update({ "pago.devolucion": devolucion, ...(r.ok ? { "pago.estado": "devuelto" } : {}) });
+  logger.info(`inscripción ${tid}/${iid}: devolución ${r.ok ? "ok" : `falló (${r.error})`}`);
+});

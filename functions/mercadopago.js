@@ -150,6 +150,25 @@ function decisionPagoAprobado(pm, paymentId, { ventaConEsePago = null } = {}) {
   return { accion: "ignorar", resultado: `ya procesado (${pm.estado || "sin estado"})` };
 }
 
+// ----- Inscripciones a torneos (P3-14 C) -----
+// external_reference de un pago de inscripción: "ins_<pagoId>" (los de clubes son el id del pagoMp, sin prefijo)
+const PREFIJO_INSCRIPCION = "ins_";
+const referenciaInscripcion = (pagoId) => `${PREFIJO_INSCRIPCION}${pagoId}`;
+const pagoIdDeReferencia = (ref) => (typeof ref === "string" && ref.startsWith(PREFIJO_INSCRIPCION) ? ref.slice(PREFIJO_INSCRIPCION.length) || null : null);
+// Qué hacer con un pago aprobado para un pago de inscripción: igual que con los clubes, se aplica una sola vez
+// (pendiente → aprobado); un pago ya aprobado con el mismo paymentId es "ya aplicado"; cualquier otro estado, final.
+function decisionPagoInscripcion(pago, paymentId) {
+  if (!pago) return { accion: "ignorar", resultado: "sin pago de inscripción" };
+  if (pago.estado === "pendiente") return { accion: "aplicar", resultado: null };
+  if (pago.estado === "aprobado" && String(pago.paymentId) === String(paymentId)) return { accion: "ignorar", resultado: "ya aplicado" };
+  return { accion: "ignorar", resultado: `ya procesado (${pago.estado || "sin estado"})` };
+}
+// Comisión de Padely sobre inscripciones: configuracionPadely/facturacion.comisionTorneosPct (0 a 10, defecto 0)
+const comisionTorneos = (facturacion) => {
+  const n = Number(facturacion && facturacion.comisionTorneosPct);
+  return Number.isFinite(n) && n >= 0 && n <= COMISION_MAX_PCT ? n : 0;
+};
+
 // ----- Ventas online (B-P3-8-1) -----
 // Una venta se anula con la callable mpAnularVenta solo si está "ok", es online (cajaId null) y se cobró por Mercado Pago
 function ventaAnulableOnline(venta) {
@@ -233,7 +252,11 @@ module.exports = {
   cuerpoTokenPorCodigo,
   cuerpoTokenPorRefresh,
   datosDeNotificacion,
+  comisionTorneos,
   decisionPagoAprobado,
+  decisionPagoInscripcion,
+  pagoIdDeReferencia,
+  referenciaInscripcion,
   devolucionDe,
   esUsuarioDePrueba,
   fechaMp,

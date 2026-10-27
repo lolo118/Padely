@@ -194,3 +194,21 @@ test("B-P3-8b-1: un pago aprobado solo crea venta una vez (reintentos de MP día
   assert.equal(d({ estado: "vencido", devolucion: { ok: true } }).accion, "ignorar");
   assert.equal(d(null).accion, "ignorar");
 });
+
+test("P3-14 C: pagos de inscripción (referencia, decisión, comisión de torneos)", () => {
+  assert.equal(mp.referenciaInscripcion("abc"), "ins_abc");
+  assert.equal(mp.pagoIdDeReferencia("ins_abc"), "abc");
+  assert.equal(mp.pagoIdDeReferencia("CZls8Cpo642axm6Cq7Kk"), null, "los pagos de clubes no llevan prefijo");
+  assert.equal(mp.pagoIdDeReferencia("ins_"), null);
+  assert.equal(mp.decisionPagoInscripcion({ estado: "pendiente" }, "1").accion, "aplicar");
+  assert.deepEqual(mp.decisionPagoInscripcion({ estado: "aprobado", paymentId: "1" }, "1"), { accion: "ignorar", resultado: "ya aplicado" });
+  assert.deepEqual(mp.decisionPagoInscripcion({ estado: "devuelto", paymentId: "1" }, "1"), { accion: "ignorar", resultado: "ya procesado (devuelto)" });
+  assert.equal(mp.decisionPagoInscripcion(null, "1").accion, "ignorar");
+  assert.equal(mp.comisionTorneos({}), 0);
+  assert.equal(mp.comisionTorneos({ comisionTorneosPct: 3 }), 3);
+  assert.equal(mp.comisionTorneos({ comisionTorneosPct: 50 }), 0);
+  // La preferencia de una inscripción lleva la comisión como marketplace_fee
+  const pref = mp.cuerpoPreferencia({ titulo: "Inscripción", monto: 20000, pagoMpId: mp.referenciaInscripcion("p1"), notificationUrl: "https://x/mpWebhook?org=o1", backUrl: "https://app/torneos/t1", comisionPct: 3 });
+  assert.equal(pref.body.external_reference, "ins_p1");
+  assert.equal(pref.body.marketplace_fee, 600);
+});

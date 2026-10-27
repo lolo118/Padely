@@ -93,6 +93,12 @@ export default function Terminos() {
           la decisión. Los puntos se otorgan una sola vez por partido y la edición posterior de un resultado no
           los vuelve a otorgar.
         </p>
+        <p>
+          Inscripciones online: cuando el organizador lo habilita, la inscripción se puede pagar con Mercado Pago y el
+          dinero va directo a la cuenta del organizador. Si el organizador rechaza o saca a la pareja antes de que empiece
+          el torneo, el pago se devuelve por Mercado Pago. Padely puede cobrarle al organizador una comisión sobre esos
+          pagos, informada de antemano.
+        </p>
       </Seccion>
 
       <Seccion titulo="6. Conducta">

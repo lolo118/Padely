@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import useTituloPagina from "../hooks/useTituloPagina";
+import { cargarFlags } from "../services/flagsService";
+import { mpPagarInscripcion } from "../services/mercadoPagoService";
 import {
   getTorneoById,
   getParejas,
@@ -182,6 +184,21 @@ export default function DetalleTorneoPublico() {
   const [whatsapp2, setWhatsapp2] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [inscripcionEnviada, setInscripcionEnviada] = useState(false);
+  const [pagandoInscripcion, setPagandoInscripcion] = useState(false);
+  const [inscripcionesOnline, setInscripcionesOnline] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    cargarFlags().then((f) => vivo && setInscripcionesOnline(f?.inscripcionesOnline === true));
+    // Vuelta de Mercado Pago (?mp=ok|pendiente|error) después de pagar la inscripción
+    const mp = new URLSearchParams(window.location.search).get("mp");
+    if (mp === "ok") toast.success("Pago recibido. La inscripción figura pagada en cuanto Mercado Pago lo confirma.");
+    else if (mp === "pendiente") toast.info("Mercado Pago dejó el pago pendiente: cuando se acredite, la inscripción figura pagada.");
+    else if (mp === "error") toast.error("El pago no se completó. Podés intentar de nuevo.");
+    if (mp) window.history.replaceState(null, "", window.location.pathname);
+    return () => {
+      vivo = false;
+    };
+  }, []);
   const [linkInvitacion, setLinkInvitacion] = useState("");
   const [restriccionCategoria, setRestriccionCategoria] = useState(null);
   const [categoriaJugador, setCategoriaJugador] = useState("");
@@ -431,6 +448,22 @@ export default function DetalleTorneoPublico() {
         )
       : false);
 
+  // P3-14 C: pago online de la inscripción (flag de la plataforma + torneo con inscripcionOnline)
+  const miInscripcion = user ? inscripciones.find((i) => (i.jugador1Uid === user.uid || i.jugador2Uid === user.uid) && i.status !== "rechazada") || null : null;
+  const puedePagarOnline = inscripcionesOnline && !!torneo?.inscripcionOnline && Number(torneo?.inscripcion) > 0 && !!miInscripcion && miInscripcion.pago?.estado !== "pagado";
+  const pagarInscripcion = async () => {
+    setPagandoInscripcion(true);
+    try {
+      const r = await mpPagarInscripcion({ torneoId: id, inscripcionId: miInscripcion.id });
+      if (!r?.initPoint) throw new Error("Mercado Pago no devolvió el link de pago");
+      window.location.assign(r.initPoint);
+    } catch (err) {
+      console.error("No se pudo abrir el pago de la inscripción:", err);
+      toast.error(err?.message || "No pudimos abrir Mercado Pago. Probá de nuevo.");
+      setPagandoInscripcion(false);
+    }
+  };
+
   const categorias = listaCategorias(torneo);
   const cupoCompleto = !!torneo && parejas.length >= Number(torneo.maxParejas || 0);
   // El CategorySelect muestra solo el nivel: sirve cuando todas las categorías son del mismo género.
@@ -633,6 +666,19 @@ export default function DetalleTorneoPublico() {
           <p className="body-md font-semibold!">
             Ya estás inscripto en este torneo{miPareja?.nombrePareja ? ` · ${miPareja.nombrePareja}` : ""}
           </p>
+        </Card>
+      )}
+      {yaInscripto && miInscripcion?.pago?.estado === "pagado" && Number(torneo.inscripcion) > 0 && (
+        <p className="body-sm text-ink-2 m-0">Inscripción pagada{miInscripcion.pago.medio === "mercadopago" ? " con Mercado Pago" : ""}.</p>
+      )}
+      {yaInscripto && puedePagarOnline && (
+        <Card className="flex flex-wrap items-center justify-between gap-3">
+          <p className="body-md m-0">
+            Inscripción: <strong className="pd-tnum">{formatPrecio(torneo.inscripcion)}</strong> por pareja. Podés pagarla ahora.
+          </p>
+          <Button variant="primary" onClick={pagarInscripcion} cargando={pagandoInscripcion ? "Abriendo Mercado Pago…" : ""}>
+            Pagar inscripción con Mercado Pago
+          </Button>
         </Card>
       )}
 

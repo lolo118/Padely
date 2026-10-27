@@ -13,6 +13,7 @@ import { db } from "../../lib/firebase";
 import { uploadOrgLogo } from "../../services/storageService";
 import { toast } from "../../components/Toast";
 import { Button, Card, Field, Input, Textarea } from "../../components/ui";
+import MpOrganizadorCard from "../../components/pagos/MpOrganizadorCard";
 
 export default function OrgEntidad() {
   const { user } = useAuthStore();
@@ -120,6 +121,8 @@ export default function OrgEntidad() {
           Guardar
         </Button>
       </div>
+
+      <MpOrganizadorCard entidad={entidad} onCambio={() => setEntidad((e) => (e ? { ...e, mercadoPago: { ...(e.mercadoPago || {}), conectado: false } } : e))} />
 
       {mensaje && (
         <p className="flex items-center gap-2 body-sm text-success m-0" role="status">

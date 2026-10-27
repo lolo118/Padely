@@ -285,9 +285,18 @@ service cloud.firestore {
       allow read: if (signedIn() && resource.data.ownerUid == request.auth.uid) || superAdmin();
       allow create: if noAnonimo() && request.resource.data.ownerUid == request.auth.uid && naceActivo();
       // El dueño edita su entidad sin tocar la suspensión; el super-admin solo suspende o reactiva
-      allow update: if (signedIn() && resource.data.ownerUid == request.auth.uid && !tocaSuspension())
+      // P3-14 C: mercadoPago (conexión para cobrar inscripciones) lo escriben solo las Functions
+      allow update: if (signedIn() && resource.data.ownerUid == request.auth.uid && !tocaSuspension()
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['mercadoPago']))
         || (superAdmin() && soloSuspension());
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      // P3-14 C: tokens de MP (privado/mercadopago, privado/mpOauthState) nunca los lee un cliente; la cuenta conectada
+      // (privado/mpCuenta) la ve el dueño de la entidad
+      match /privado/{docId} {
+        allow read: if docId == 'mpCuenta' && signedIn() && get(/databases/$(database)/documents/organizers/$(orgId)).data.ownerUid == request.auth.uid;
+        allow write: if false;
+      }
     }
 
     match /clubs/{clubId} {
@@ -785,11 +794,19 @@ service cloud.firestore {
         allow create, update, delete: if tournamentOrganizer(tid);
       }
 
+      // P3-14 C: pagos de inscripciones por Mercado Pago (solo Functions); los ve el organizador
+      match /pagosInscripcion/{pagoId} {
+        allow read: if tournamentOrganizer(tid);
+        allow write: if false;
+      }
+
       match /inscripciones/{inscId} {
         allow read: if signedIn();
         // Email y WhatsApp de los jugadores van en contactosInscripciones/{inscId}, nunca acá
+        // P3-14 C: el pago de la inscripción lo pone la Function (Mercado Pago) o el organizador (efectivo), nunca quien se inscribe
         allow create: if noAnonimo() && request.resource.data.jugador1Uid == request.auth.uid
           && sinContacto(['email1', 'email2', 'whatsapp1', 'whatsapp2'])
+          && !request.resource.data.keys().hasAny(['pago'])
           && limiteRespetado('inscripciones');
         // The organizer confirms/rejects; the invited partner accepts (must be logged in)
         allow update: if tournamentOrganizer(tid)

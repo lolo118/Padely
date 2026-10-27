@@ -13,6 +13,7 @@ import { CATEGORIAS_TORNEO } from "../../utils/categorias";
 import { canchasDesdeTexto } from "../../utils/torneo";
 import { Button, Card, Field, Input, MarcaCategoria, Pills, SearchInput, Select, Textarea } from "../../components/ui";
 import { provinciasArgentina } from "../../utils/provincias";
+import { cargarFlags } from "../../services/flagsService";
 
 const categoriasGenero = [
   { value: "masculino", label: "Masculino" },
@@ -279,6 +280,7 @@ export default function CrearTorneo() {
     gamesPorSet: 6,
     superTiebreak: false,
     inscripcionAbierta: true,
+    inscripcionOnline: false,
     habilitarReclamos: true,
     plazoReclamosMinutos: 30,
     reglamento: "",
@@ -289,6 +291,15 @@ export default function CrearTorneo() {
     administradores: [{ nombre: "", whatsapp: "" }],
   });
 
+  // P3-14 C: opción de cobro online (flag de la plataforma)
+  const [inscripcionesOnline, setInscripcionesOnline] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    cargarFlags().then((f) => vivo && setInscripcionesOnline(f?.inscripcionesOnline === true));
+    return () => {
+      vivo = false;
+    };
+  }, []);
   const set = (field) => (e) => {
     const val =
       e.target.type === "checkbox" ? e.target.checked : e.target.value;
@@ -758,6 +769,16 @@ export default function CrearTorneo() {
                 />
               </Field>
             </div>
+            {/* P3-14 C: cobro online de la inscripción (visible cuando la plataforma lo habilita y la entidad conectó MP) */}
+            {inscripcionesOnline && Number(form.inscripcion) > 0 && (
+              <label className="flex items-start gap-3 body-sm">
+                <input type="checkbox" checked={!!form.inscripcionOnline} onChange={set("inscripcionOnline")} className="h-5 w-5 mt-0.5 accent-ink" />
+                <span>
+                  Cobrar la inscripción online con Mercado Pago
+                  <span className="block text-ink-3">Las parejas pagan desde la app; necesitás tener Mercado Pago conectado en Mi entidad.</span>
+                </span>
+              </label>
+            )}
             <Field label="¿Qué incluye la inscripción? (opcional)">
               <Textarea
                 placeholder={

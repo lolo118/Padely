@@ -8,6 +8,7 @@ import {
   getContactosParejas,
   getContactosInscripciones,
   actualizarInscripcion,
+  actualizarTorneo,
   actualizarPareja,
   getGrupos,
   getCuadros,
@@ -22,6 +23,7 @@ import {
   parejasSinCuadro,
 } from "../../utils/torneo";
 import { toast } from "../../components/Toast";
+import { cargarFlags } from "../../services/flagsService";
 import { confirmar } from "../../components/ConfirmDialog";
 import { Badge, Button, Card, Field, Input, MarcaCategoria, Pills, Select } from "../../components/ui";
 
@@ -45,9 +47,43 @@ const nombreDePareja = (p) =>
 
 // onParejasChange (opcional): recibe la lista completa de parejas cada vez que cambia, para que el padre
 // actualice sus contadores
+// P3-14 C: estado del pago de la inscripción (si el torneo cobra inscripción). Pagada por Mercado Pago (la marca la
+// Function) o en efectivo (la marca el organizador acá, y la puede desmarcar).
+function PagoInscripcion({ insc, torneo, onMarcar }) {
+  if (!(Number(torneo.inscripcion) > 0)) return null;
+  const pago = insc.pago || null;
+  const pagada = pago?.estado === "pagado";
+  return (
+    <>
+      <Badge tone={pagada ? "success" : pago?.estado === "devuelto" ? "neutral" : "warning"}>
+        {pagada ? `Pagó · ${pago.medio === "mercadopago" ? "Mercado Pago" : "efectivo"}` : pago?.estado === "devuelto" ? "Inscripción devuelta" : "Inscripción sin pagar"}
+      </Badge>
+      {!pagada && pago?.estado !== "devuelto" && (
+        <Button size="sm" variant="ghost" onClick={() => onMarcar(insc, true)}>
+          Marcar pagada
+        </Button>
+      )}
+      {pagada && pago.medio === "efectivo" && (
+        <Button size="sm" variant="ghost" onClick={() => onMarcar(insc, false)}>
+          Desmarcar
+        </Button>
+      )}
+    </>
+  );
+}
+
 export default function TabParejas({ torneoId, torneo, onParejasChange }) {
   const [parejas, setParejas] = useState([]);
   const [inscripciones, setInscripciones] = useState([]);
+  const [cobroOnline, setCobroOnline] = useState(!!torneo.inscripcionOnline);
+  const [inscripcionesOnline, setInscripcionesOnline] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    cargarFlags().then((f) => vivo && setInscripcionesOnline(f?.inscripcionesOnline === true));
+    return () => {
+      vivo = false;
+    };
+  }, []);
   // Grupos y documentos de bracket del torneo: sirven para saber qué cuadros ya se generaron
   const [grupos, setGrupos] = useState([]);
   const [cuadrosDocs, setCuadrosDocs] = useState({});
@@ -414,8 +450,43 @@ export default function TabParejas({ torneoId, torneo, onParejasChange }) {
     );
   };
 
+  // P3-14 C: pago de inscripciones en efectivo (organizador) y cobro online por torneo (flag de la plataforma)
+  const marcarPagoInscripcion = async (insc, pagada) => {
+    const pago = pagada ? { estado: "pagado", medio: "efectivo", monto: Number(torneo.inscripcion) || 0, en: new Date() } : null;
+    try {
+      await actualizarInscripcion(torneoId, insc.id, { pago });
+      setInscripciones((prev) => prev.map((i) => (i.id === insc.id ? { ...i, pago } : i)));
+      toast.success(pagada ? "Inscripción marcada como pagada" : "Pago desmarcado");
+    } catch (err) {
+      console.error("Error marcando el pago de la inscripción:", err);
+      toast.error("No pudimos guardar el pago. Intentá de nuevo.");
+    }
+  };
+  const alternarCobroOnline = async (e) => {
+    const valor = e.target.checked;
+    try {
+      await actualizarTorneo(torneoId, { inscripcionOnline: valor });
+      setCobroOnline(valor);
+      toast.success(valor ? "Las parejas ya pueden pagar la inscripción desde la app" : "Cobro online desactivado");
+    } catch (err) {
+      console.error("Error cambiando el cobro online:", err);
+      toast.error("No pudimos guardar el cambio.");
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4 md:gap-6">
+      {inscripcionesOnline && Number(torneo.inscripcion) > 0 && (
+        <Card as="section">
+          <label className="flex items-start gap-3 body-sm">
+            <input type="checkbox" checked={!!cobroOnline} onChange={alternarCobroOnline} className="h-5 w-5 mt-0.5 accent-ink" />
+            <span>
+              Cobrar la inscripción online con Mercado Pago
+              <span className="block text-ink-3">Las parejas pagan desde la app (necesitás Mercado Pago conectado en Mi entidad). Si rechazás o sacás una pareja que pagó, se le devuelve.</span>
+            </span>
+          </label>
+        </Card>
+      )}
       {/* Contador */}
       <Card as="section">
         <Card.Row>
@@ -475,7 +546,10 @@ export default function TabParejas({ torneoId, torneo, onParejasChange }) {
                         {insc.whatsapp1 && <p>WA: {insc.whatsapp1}</p>}
                       </td>
                       <td className="align-top">
-                        <Badge tone="success">Pareja completa</Badge>
+                        <span className="pd-badge-group">
+                          <Badge tone="success">Pareja completa</Badge>
+                          <PagoInscripcion insc={insc} torneo={torneo} onMarcar={marcarPagoInscripcion} />
+                        </span>
                       </td>
                       <td className="num align-top">
                         {rechazandoId !== insc.id && (
@@ -604,9 +678,12 @@ export default function TabParejas({ torneoId, torneo, onParejasChange }) {
                       )}
                     </td>
                     <td className="num">
-                      <Badge tone={inscripcionTone[insc.status]} dot>
-                        {inscripcionLabel[insc.status]}
-                      </Badge>
+                      <span className="pd-badge-group justify-end">
+                        <Badge tone={inscripcionTone[insc.status]} dot>
+                          {inscripcionLabel[insc.status]}
+                        </Badge>
+                        {insc.status === "confirmada" && <PagoInscripcion insc={insc} torneo={torneo} onMarcar={marcarPagoInscripcion} />}
+                      </span>
                     </td>
                   </tr>
                 ))}

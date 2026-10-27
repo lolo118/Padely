@@ -17,6 +17,8 @@ export const mpSetComision = llamar("mpSetComision");
 // { clubId, tipo: "parte"|"seña"|"mostrador", grupoId?, participanteId?, participanteIds?, lineaIds?, reservaId? }
 //   → { pagoMpId, initPoint, monto, venceEn, reutilizado }
 export const mpCrearPago = llamar("mpCrearPago");
+// Jugador (P3-14 C): { torneoId, inscripcionId } → { initPoint, monto } (inscripción del torneo por Checkout Pro)
+export const mpPagarInscripcion = llamar("mpPagarInscripcion");
 // Staff: { clubId, pagoMpId } → devuelve el excedente de un pago aprobado de más
 export const mpDevolverExcedente = llamar("mpDevolverExcedente");
 // Staff con anularVenta (o dueño): { clubId, numero, motivo } → anula una venta online de MP, saca el pago de la cuenta y
