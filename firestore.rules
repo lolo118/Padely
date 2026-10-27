@@ -334,6 +334,8 @@ service cloud.firestore {
         // lee quien configura el club y el super-admin; plan lo escribe el super-admin, mpCuenta solo las Functions.
         allow read: if docId in ['plan', 'mpCuenta'] && (esStaff(clubId, 'configurarClub') || superAdmin());
         allow write: if docId == 'plan' && superAdmin();
+        // P3-15: "Ver como" del super-admin (solo lectura) también lee los datos privados y los teléfonos de turnos fijos
+        allow read: if docId in ['datos', 'turnosFijos'] && superAdmin();
       }
 
       match /canchas/{canchaId} {
@@ -515,6 +517,7 @@ service cloud.firestore {
       // bloques de 100 números de cada dispositivo. Las transacciones las corre el cliente que vende.
       match /contadoresDispositivos/{codigo} {
         allow read, write: if esStaff(clubId, 'vender');
+        allow read: if superAdmin();
       }
 
       // ----- Bar: cuenta del turno (id = grupoId de la reserva; una reserva, a lo sumo una cuenta) -----
@@ -680,7 +683,7 @@ service cloud.firestore {
       }
 
       match /invitaciones/{invId} {
-        allow read: if esStaff(clubId, 'gestionarStaff') || invitadoPorEmail(resource.data);
+        allow read: if esStaff(clubId, 'gestionarStaff') || invitadoPorEmail(resource.data) || superAdmin();
         allow create: if esStaff(clubId, 'gestionarStaff')
           && planPro(clubId)
           && request.resource.data.estado == 'pendiente'
@@ -733,6 +736,7 @@ service cloud.firestore {
       // el club, o el jugador en la misma transacción que crea su reserva (getAfter ve la reserva tal como queda).
       match /contactosReservas/{reservaId} {
         allow read, delete: if esStaff(clubId, 'gestionarReservas');
+        allow read: if superAdmin();
         allow create, update: if esStaff(clubId, 'gestionarReservas')
           || (noAnonimo()
               && request.resource.data.jugadorUid == request.auth.uid

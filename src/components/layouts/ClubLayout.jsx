@@ -1,9 +1,10 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { BadgeCheck, BarChart3, ChefHat, LayoutDashboard, LayoutGrid, Package, ReceiptText, Settings, ShoppingCart, TrendingUp, Trophy, Wallet } from "lucide-react";
 import PanelLayout from "./PanelLayout";
 import { useEffect } from "react";
 import { useAuthStore } from "../../store/authStore";
 import Alert from "../ui/Alert";
+import Button from "../ui/Button";
 import { armarAudioConGesto } from "../pos/sonido";
 import { estadoPlan } from "../../utils/planes";
 import { formatFechaLarga } from "../../utils/formatDate";
@@ -31,6 +32,9 @@ export default function ClubLayout() {
   const suspendido = useAuthStore((s) => s.clubActual?.suspendido === true);
   const club = useAuthStore((s) => s.clubActual);
   const puede = useAuthStore((s) => s.puede);
+  const verComo = useAuthStore((s) => s.verComo);
+  const salirVerComo = useAuthStore((s) => s.salirVerComo);
+  const navigate = useNavigate();
   const plan = club ? estadoPlan(club) : null;
   const items = navItems.map((item) => (item.pro && plan && !plan.pro ? { ...item, bloqueado: true } : item));
   // El aviso sonoro de la Barra necesita un gesto del usuario: el primer clic en el panel lo arma
@@ -62,5 +66,24 @@ export default function ClubLayout() {
         </Alert>
       ) : null
     ) : null;
-  return <PanelLayout rol="Club" inicio="/admin" items={items} aviso={aviso || avisoPlan} />;
+  // P3-15: el super-admin mirando el panel de un club (solo lectura)
+  const avisoVerComo = verComo ? (
+    <Alert tone="info">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span>
+          <strong>Estás viendo como {verComo.nombre}.</strong> Solo lectura: no se guarda ningún cambio.
+        </span>
+        <Button
+          size="sm"
+          onClick={async () => {
+            navigate("/superadmin/clubes");
+            await salirVerComo();
+          }}
+        >
+          Salir
+        </Button>
+      </div>
+    </Alert>
+  ) : null;
+  return <PanelLayout rol="Club" inicio="/admin" items={items} aviso={avisoVerComo || aviso || avisoPlan} />;
 }

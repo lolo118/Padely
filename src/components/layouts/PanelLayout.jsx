@@ -11,6 +11,7 @@ import Sidebar from "../ui/Sidebar";
 import VerificarEmailAviso from "../VerificarEmailAviso";
 import EstadoBanner from "../EstadoBanner";
 import { cargarFlags } from "../../services/flagsService";
+import { toast } from "../Toast";
 import { Wordmark } from "../ui/AppBar";
 import { rolLabel } from "../../utils/staff";
 
@@ -37,6 +38,18 @@ export default function PanelLayout({ rol, inicio, items, aviso = null }) {
   const recargarStaff = useAuthStore((s) => s.recargarStaff);
   const puede = useAuthStore((s) => s.puede);
   const esPanelClub = rol === "Club";
+  // P3-15 "Ver como": ningún formulario del panel (ni de sus diálogos) se envía en solo lectura
+  const soloLectura = esPanelClub && clubActual?.soloLectura === true;
+  useEffect(() => {
+    if (!soloLectura) return undefined;
+    const frenar = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toast.info("Solo lectura: estás viendo el panel como el club");
+    };
+    document.addEventListener("submit", frenar, true);
+    return () => document.removeEventListener("submit", frenar, true);
+  }, [soloLectura]);
   // Sin club cargado, el rol sale de la cuenta: dueño si es una cuenta de club, si no el de su primera membresía
   const rolStaff = esPanelClub ? clubActual?.rolStaff || (rolCuenta === "club" ? "dueño" : staffDe[0]?.rol || "encargado") : null;
   const etiquetaRol = esPanelClub ? rolLabel(rolStaff) : rol;

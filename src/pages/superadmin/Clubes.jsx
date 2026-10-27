@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Alert, Badge, Button, Card, Field, Input, SearchInput } from "../../components/ui";
 import Dialogo from "../../components/Dialogo";
 import { toast } from "../../components/Toast";
@@ -119,6 +120,9 @@ function Acciones({ club, onAccion, className = "" }) {
       <Button size="sm" as="link" to={`/club/${club.id}`}>
         Ver página pública
       </Button>
+      <Button size="sm" variant="ghost" onClick={() => onAccion("verComo", club)}>
+        Ver como
+      </Button>
       <Button size="sm" variant="ghost" onClick={() => onAccion("comision", club)}>
         {`Comisión MP ${comisionPct(club).toLocaleString("es-AR")} %${tieneOverride(club) ? " (fija)" : ""}`}
       </Button>
@@ -137,6 +141,8 @@ function Acciones({ club, onAccion, className = "" }) {
 
 export default function Clubes() {
   const user = useAuthStore((s) => s.user);
+  const entrarVerComo = useAuthStore((s) => s.entrarVerComo);
+  const navigate = useNavigate();
   const [clubes, setClubes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(false);
@@ -184,7 +190,13 @@ export default function Clubes() {
     );
   }, [ordenados, busqueda]);
 
-  const abrirDialogo = (modo, club) => (modo === "comision" ? setComisionDe(club) : setDialogo({ modo, club }));
+  // P3-15: "Ver como" abre el panel del club en solo lectura (banner con Salir)
+  const verComo = async (club) => {
+    const ok = await entrarVerComo(club.id);
+    if (ok) navigate("/admin");
+    else toast.error("No pudimos abrir el panel de ese club.");
+  };
+  const abrirDialogo = (modo, club) => (modo === "verComo" ? verComo(club) : modo === "comision" ? setComisionDe(club) : setDialogo({ modo, club }));
   const [comisionDe, setComisionDe] = useState(null); // club con el diálogo de comisión abierto
   const cerrarDialogo = () => {
     if (!procesando) setDialogo(null);

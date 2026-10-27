@@ -50,6 +50,8 @@ export const useAuthStore = create((set, get) => ({
   clubCargado: false, // true cuando ya se resolvió clubActual para el usuario actual (aunque sea null)
   // Super-admin de la plataforma (superadmins/{uid}); false ante cualquier error
   esSuperAdmin: false,
+  // P3-15: "Ver como" del super-admin: { clubId, nombre } mientras mira el panel de un club en solo lectura
+  verComo: null,
   // Entidad organizadora suspendida por el super-admin (la carga OrgLayout)
   entidadSuspendida: false,
   setEntidadSuspendida: (v) => set({ entidadSuspendida: !!v }),
@@ -98,8 +100,33 @@ export const useAuthStore = create((set, get) => ({
       console.error("Error cargando el club del panel:", err);
     }
     const esSuperAdmin = await superAdminP;
-    set({ staffDe, clubActual, clubCargado: true, esSuperAdmin });
+    // P3-15: si el super-admin estaba en "Ver como" (esta pestaña), se retoma después de recargar. Se resuelve antes
+    // de marcar clubCargado para que RoleRoute no redirija en el medio.
+    const pendiente = esSuperAdmin ? leerVerComo() : null;
+    if (pendiente) {
+      set({ staffDe, esSuperAdmin });
+      const visto = await get().entrarVerComo(pendiente);
+      if (visto) return visto;
+      guardarVerComo(null);
+    }
+    set({ staffDe, clubActual, clubCargado: true, esSuperAdmin, verComo: null });
     return clubActual;
+  },
+  // P3-15: el super-admin mira el panel de un club en SOLO LECTURA (no es impersonación: sigue con su sesión; las
+  // reglas no le dejan escribir datos del club y la UI bloquea formularios y confirmaciones)
+  entrarVerComo: async (clubId) => {
+    if (!get().esSuperAdmin || !clubId) return null;
+    const club = await getClubConfig(clubId).catch(() => null);
+    if (!club) return null;
+    const clubActual = { ...club, id: club.id || clubId, rolStaff: "dueño", soloLectura: true };
+    guardarVerComo(clubId);
+    set({ clubActual, clubCargado: true, verComo: { clubId, nombre: club.nombre || "el club" } });
+    return clubActual;
+  },
+  salirVerComo: async () => {
+    guardarVerComo(null);
+    set({ verComo: null });
+    return get().recargarStaff();
   },
   // Vuelve a leer el documento del club (después de guardar la configuración), conservando rol y permisos
   recargarClub: async () => {
@@ -125,7 +152,25 @@ export const useAuthStore = create((set, get) => ({
   },
 }));
 
+// "Ver como" vive por pestaña (sessionStorage): se pierde al cerrarla
+const CLAVE_VER_COMO = "padely-ver-como";
+function leerVerComo() {
+  try {
+    return sessionStorage.getItem(CLAVE_VER_COMO) || null;
+  } catch {
+    return null;
+  }
+}
+function guardarVerComo(clubId) {
+  try {
+    if (clubId) sessionStorage.setItem(CLAVE_VER_COMO, clubId);
+    else sessionStorage.removeItem(CLAVE_VER_COMO);
+  } catch {
+    // sin almacenamiento: dura hasta recargar
+  }
+}
+
 // Selectores derivados (no cambian la API del store): staff (no dueño) y acceso al panel del club
 export const esStaffDeAlgunClub = (s) => s.staffDe.length > 0;
-export const accesoPanelClub = (s) => s.rol === "club" || s.staffDe.length > 0;
+export const accesoPanelClub = (s) => s.rol === "club" || s.staffDe.length > 0 || !!s.verComo;
 export const esAnonimo = (s) => s.user?.isAnonymous === true;

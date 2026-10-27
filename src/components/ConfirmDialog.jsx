@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef } from "react";
 import { create } from "zustand";
 import Button from "./ui/Button";
+import { toast } from "./Toast";
+import { useAuthStore } from "../store/authStore";
 
 // Diálogo de confirmación: `await confirmar({ titulo, mensaje })` devuelve true/false
 const useConfirmStore = create((set, get) => ({
@@ -28,6 +30,11 @@ export function confirmar({
   cancelText = "Cancelar",
   danger = false,
 } = {}) {
+  // P3-15: en "Ver como" (super-admin, solo lectura) ninguna acción confirmable sigue
+  if (useAuthStore.getState().clubActual?.soloLectura) {
+    toast.info("Solo lectura: estás viendo el panel como el club");
+    return Promise.resolve(false);
+  }
   return useConfirmStore.getState().abrir({ titulo, mensaje, confirmText, cancelText, danger });
 }
 
