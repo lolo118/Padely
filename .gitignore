@@ -26,3 +26,7 @@ dist-ssr
 PADELY_PROMPTS*.md
 .phase*-logs/*
 !.phase3-logs/*.cmd
+
+# Playwright
+test-results/
+playwright-report/
