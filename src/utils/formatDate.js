@@ -85,3 +85,10 @@ export function formatFechaHoraArg(valor) {
   if (!d) return "—";
   return new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(d).replace(",", "");
 }
+
+// → "lunes 26 de octubre de 2026" en hora argentina ("—" sin fecha). P3-9: vencimientos de los planes.
+export function formatFechaLarga(valor) {
+  const d = aDate(valor);
+  if (!d) return "—";
+  return d.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "America/Argentina/Buenos_Aires" });
+}

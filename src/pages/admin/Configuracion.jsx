@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { AlertTriangle, Check, ChevronDown, ChevronUp, Copy, ImagePlus, Upload } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { clubConectadoMp, mpConectarUrl, mpDesconectar } from "../../services/mercadoPagoService";
@@ -16,6 +16,7 @@ import {
 } from "../../services/staffService";
 import { uploadClubLogo } from "../../services/storageService";
 import { formatPrecio } from "../../utils/format";
+import { comisionPct, estadoPlan } from "../../utils/planes";
 import { formatFecha, formatFechaHoraArg } from "../../utils/formatDate";
 import { MAX_TURNOS_POR_RESERVA, maxTurnosDelClub } from "../../utils/tarifas";
 import {
@@ -243,6 +244,7 @@ export default function Configuracion() {
     }
   };
   const equipoVisible = tabActiva === "equipo" && !!clubId;
+  const planConPro = !clubActual || estadoPlan(clubActual).pro;
   const equipoCargado = equipoDeClub === clubId;
 
   // El club viene del store; acá solo se lee el documento privado (CBU, CUIT...) y se arma el formulario
@@ -1115,8 +1117,8 @@ export default function Configuracion() {
                 </div>
                 <div className="min-w-0">
                   <dt className="pd-eyebrow m-0">Comisión Padely</dt>
-                  <dd className="m-0 mt-1 font-semibold pd-tnum">{Number(clubActual.mercadoPago.comisionPadelyPct) || 0} %</dd>
-                  <dd className="m-0 body-sm text-ink-3">sobre cada pago</dd>
+                  <dd className="m-0 mt-1 font-semibold pd-tnum">{comisionPct(clubActual).toLocaleString("es-AR")} %</dd>
+                  <dd className="m-0 body-sm text-ink-3">sobre cada pago · según tu plan</dd>
                 </div>
               </dl>
               {(clubActual?.mercadoPago?.esPrueba || clubActual?.mercadoPago?.liveMode === false) && <Alert className="mt-4">Cuenta de prueba de Mercado Pago{clubActual?.mercadoPago?.esPrueba ? " (usuario de prueba)" : ""}: los pagos son de prueba. Para cobrar de verdad, conectá la cuenta real del club.</Alert>}
@@ -1154,7 +1156,15 @@ export default function Configuracion() {
             </div>
           ) : (
             <>
-              {/* Invitar */}
+              {/* Invitar (P3-9: las cuentas del equipo son PRO) */}
+              {!planConPro ? (
+                <Alert tone="warning">
+                  <strong>Las cuentas para tu equipo son parte del plan PRO.</strong> Las personas que ya están siguen viéndose acá, pero no podés invitar a nadie nuevo.{" "}
+                  <Link to="/admin/plan" className="underline font-semibold">
+                    Ver Mi plan
+                  </Link>
+                </Alert>
+              ) : (
               <Card as="form" onSubmit={handleCrearInvitacion} noValidate>
                 <Card.Title className="mb-4!">Invitar a alguien</Card.Title>
                 <div className="grid gap-4">
@@ -1219,6 +1229,7 @@ export default function Configuracion() {
                   </div>
                 </div>
               </Card>
+              )}
 
               {/* La invitación recién creada: el enlace para compartir */}
               {invitacionCreada && (

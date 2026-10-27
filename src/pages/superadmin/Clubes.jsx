@@ -6,6 +6,7 @@ import { getClubesAdmin, reactivarEntidad, suspenderEntidad } from "../../servic
 import { mpSetComision } from "../../services/mercadoPagoService";
 import { useAuthStore } from "../../store/authStore";
 import { ubicacionCorta } from "../../utils/format";
+import { comisionPct } from "../../utils/planes";
 import SuspensionDialog from "./SuspensionDialog";
 
 // Fecha de alta (Timestamp de Firestore, Date, millis o string) → "DD/MM/YY" local; "—" sin dato
@@ -41,11 +42,25 @@ function Estado({ club }) {
   );
 }
 
-// Comisión de Padely por pago de Mercado Pago (marketplace_fee): 0 a 10 % en pasos de 0,5
+// Comisión de Padely por pago de Mercado Pago (marketplace_fee). P3-9: la normal sale del plan (FREE 2,5 %, el resto 0);
+// acá se guarda un override explícito de 0 a 10 % en pasos de 0,5, o se vuelve a la del plan
+const tieneOverride = (club) => club?.mercadoPago?.comisionOverridePct !== undefined && club?.mercadoPago?.comisionOverridePct !== null;
 function ComisionDialog({ club, onCerrar, onGuardado }) {
-  const [pct, setPct] = useState(String(Number(club?.mercadoPago?.comisionPadelyPct) || 0));
+  const [pct, setPct] = useState(String(comisionPct(club)));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  const volverAlPlan = async () => {
+    setGuardando(true);
+    try {
+      await mpSetComision({ clubId: club.id, pct: null });
+      toast.success(`${club.nombre || "El club"} vuelve a la comisión de su plan`);
+      onGuardado(null);
+    } catch (err) {
+      console.error("Error quitando el override de comisión:", err);
+      setError(err?.message || "No pudimos guardar la comisión.");
+      setGuardando(false);
+    }
+  };
   const guardar = async () => {
     const n = Number(String(pct).replace(",", "."));
     if (!Number.isFinite(n) || n < 0 || n > 10 || Math.round(n * 2) !== n * 2) {
@@ -72,6 +87,11 @@ function ComisionDialog({ club, onCerrar, onGuardado }) {
       acciones={
         <>
           <Button onClick={onCerrar}>Cancelar</Button>
+          {tieneOverride(club) && (
+            <Button variant="ghost" onClick={volverAlPlan} disabled={guardando}>
+              Usar la del plan
+            </Button>
+          )}
           <Button type="submit" variant="primary" cargando={guardando ? "Guardando…" : ""}>
             Guardar
           </Button>
@@ -79,7 +99,7 @@ function ComisionDialog({ club, onCerrar, onGuardado }) {
       }
     >
       <div className="mt-4">
-        <Field label="Comisión (%)" help="0 = Padely no retiene nada. Cambia los pagos nuevos, no los ya creados." error={error}>
+        <Field label="Comisión (%)" help={`Sin override, sale del plan (FREE 2,5 %, prueba y PRO 0 %). ${tieneOverride(club) ? "Este club tiene un override." : "Guardar crea un override."} Cambia los pagos nuevos, no los ya creados.`} error={error}>
           <Input type="number" min="0" max="10" step="0.5" inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} data-autofocus className="pd-tnum" />
         </Field>
       </div>
@@ -94,7 +114,7 @@ function Acciones({ club, onAccion, className = "" }) {
         Ver página pública
       </Button>
       <Button size="sm" variant="ghost" onClick={() => onAccion("comision", club)}>
-        {`Comisión MP ${Number(club?.mercadoPago?.comisionPadelyPct) || 0} %`}
+        {`Comisión MP ${comisionPct(club).toLocaleString("es-AR")} %${tieneOverride(club) ? " (fija)" : ""}`}
       </Button>
       {club.suspendido ? (
         <Button size="sm" onClick={() => onAccion("reactivar", club)}>
@@ -320,7 +340,7 @@ export default function Clubes() {
           club={comisionDe}
           onCerrar={() => setComisionDe(null)}
           onGuardado={(pct) => {
-            setClubes((prev) => prev.map((c) => (c.id === comisionDe.id ? { ...c, mercadoPago: { ...(c.mercadoPago || {}), comisionPadelyPct: pct } } : c)));
+            setClubes((prev) => prev.map((c) => (c.id === comisionDe.id ? { ...c, mercadoPago: { ...(c.mercadoPago || {}), comisionOverridePct: pct } } : c)));
             setComisionDe(null);
           }}
         />

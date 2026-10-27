@@ -28,3 +28,10 @@ test("la copia se importa desde CommonJS y calcula saldos", async () => {
   assert.equal(cobro.total, 5000);
   assert.equal(cobro.lineas.length, cobro.piezas.length); // 1:1 — el webhook aplica piezas por índice
 });
+
+test("functions/lib/planes.mjs está al día con src/utils/planes.js (P3-9)", () => {
+  const cab = "// GENERADO por functions/sync-utils.mjs desde src/utils/planes.js — NO EDITAR ACÁ (editá el original y volvé a correr el sync).\n";
+  const original = lf(readFileSync(path.join(__dirname, "..", "src", "utils", "planes.js"), "utf8"));
+  const copia = lf(readFileSync(path.join(__dirname, "lib", "planes.mjs"), "utf8"));
+  assert.equal(copia, cab + original, "la copia difiere del original: node functions/sync-utils.mjs");
+});

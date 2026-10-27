@@ -1,8 +1,8 @@
-import { ArrowLeft, Building2, LayoutDashboard, Trophy, Users } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Building2, LayoutDashboard, Trophy, Users } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import PanelLayout from "./PanelLayout";
 
-// Panel del super-admin: Resumen, Clubes, Organizadores, Usuarios y "Volver a la app" (el inicio de la cuenta)
+// Panel del super-admin: Resumen, Clubes, Planes (P3-9), Organizadores, Usuarios y "Volver a la app" (el inicio de la cuenta)
 export default function SuperAdminLayout() {
   const rol = useAuthStore((s) => s.rol);
   const staffDe = useAuthStore((s) => s.staffDe);
@@ -10,6 +10,7 @@ export default function SuperAdminLayout() {
   const items = [
     { to: "/superadmin", label: "Resumen", icon: LayoutDashboard, end: true },
     { to: "/superadmin/clubes", label: "Clubes", icon: Building2 },
+    { to: "/superadmin/planes", label: "Planes", icon: BadgeCheck },
     { to: "/superadmin/organizadores", label: "Organizadores", icon: Trophy },
     { to: "/superadmin/usuarios", label: "Usuarios", icon: Users },
     { to: inicioApp, label: "Volver a la app", icon: ArrowLeft },

@@ -64,9 +64,20 @@ export default function Terminos() {
           vence y se cancela automáticamente.
         </p>
         <p>
-          Por ahora Padely no cobra ni reembolsa: el precio mostrado es informativo y se abona directamente al
-          club según lo que el club disponga. Cualquier reclamo por cobros o devoluciones debe hacerse ante el
-          club.
+          Los pagos online (seña, tu parte del turno o el QR del mostrador) se hacen con Mercado Pago y van
+          directo a la cuenta de Mercado Pago del club: Padely no guarda el dinero ni los datos de tu tarjeta. El
+          resto se abona en el club según lo que el club disponga. Cualquier reclamo por cobros o devoluciones debe
+          hacerse ante el club.
+        </p>
+      </Seccion>
+
+      <Seccion titulo="4 bis. Planes para clubes">
+        <p>
+          Los clubes empiezan con una prueba gratuita de 30 días desde su primera reserva confirmada. Después
+          eligen el plan FREE (sin abono mensual, con una comisión sobre cada pago online) o el plan PRO (abono
+          mensual según la cantidad de canchas, sin comisión). Los torneos se cobran por torneo. Los precios y lo
+          que incluye cada plan están publicados en la página principal y pueden cambiar: los cambios se avisan
+          con al menos 30 días de anticipación y no afectan períodos ya pagados.
         </p>
       </Seccion>
 

@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { Check, CircleDot, LayoutGrid, MessageCircle, Trophy } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
+import { COMISION_FREE_PCT, DIAS_PRUEBA, ESCALONES_PRO } from "../utils/planes";
+import { formatPrecio } from "../utils/format";
 import useThemeStore from "../store/themeStore";
 import { Button, Card, Wordmark } from "../components/ui";
 
@@ -143,6 +145,40 @@ export default function Landing() {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* Precios para clubes (P3-9) */}
+      <section id="precios" className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14 w-full">
+        <h2 className="heading-lg mb-2">Precios para clubes</h2>
+        <p className="body-sm text-ink-2 mb-5">Para jugadores, Padely es gratis. Los clubes empiezan con {DIAS_PRUEBA} días de prueba con todo incluido, desde su primera reserva.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <p className="pd-eyebrow m-0">Prueba</p>
+            <Card.Title as="h3" className="mt-1!">{DIAS_PRUEBA} días gratis</Card.Title>
+            <p className="body-sm text-ink-2 mt-2">Todo PRO: canchas, reservas, seña online, bar, caja, cuentas del turno y equipo. Sin tarjeta.</p>
+          </Card>
+          <Card>
+            <p className="pd-eyebrow m-0">FREE</p>
+            <Card.Title as="h3" className="mt-1!">$ 0 por mes</Card.Title>
+            <p className="body-sm text-ink-2 mt-2">
+              Canchas, reservas, turnos fijos, seña online con Mercado Pago, página del club y torneos. Padely retiene {COMISION_FREE_PCT.toLocaleString("es-AR")} % de cada pago online.
+            </p>
+          </Card>
+          <Card>
+            <p className="pd-eyebrow m-0">PRO</p>
+            <Card.Title as="h3" className="mt-1!">Desde {formatPrecio(ESCALONES_PRO[0].precio)} por mes</Card.Title>
+            <ul className="mt-2 flex flex-col gap-1">
+              {ESCALONES_PRO.map((e) => (
+                <li key={e.id} className="flex items-baseline justify-between gap-3 body-sm">
+                  <span className="text-ink-2">{e.hasta ? `${e.desde} a ${e.hasta} canchas` : `${e.desde} o más canchas`}</span>
+                  <span className="font-semibold pd-tnum">{formatPrecio(e.precio)}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="body-sm text-ink-2 mt-2">Todo FREE más bar, caja, cuentas del turno, pedidos a la barra, reportes y cuentas para tu equipo. Sin comisión en los pagos online. Pagando el año, 2 meses gratis.</p>
+          </Card>
+        </div>
+        <p className="caption text-ink-3 mt-3">Torneos: se cobran por torneo, según el tamaño. Precios finales en pesos argentinos.</p>
       </section>
 
       {/* Footer */}

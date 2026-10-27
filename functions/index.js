@@ -1122,6 +1122,8 @@ exports.onReservaUpdated = onDocumentUpdated("clubs/{clubId}/reservas/{reservaId
   const antes = event.data && event.data.before ? event.data.before.data() : null;
   const despues = event.data && event.data.after ? event.data.after.data() : null;
   if (!antes || !despues) return;
+  // P3-9: la prueba de 30 días empieza con la primera reserva confirmada del club
+  if (despues.status === "confirmada" && antes.status !== "confirmada") await iniciarPruebaDelClub(clubId, despues);
   if (!!antes.señaPagada === !!despues.señaPagada && Number(antes.seña || 0) === Number(despues.seña || 0)) return;
   const grupoId = despues.grupoId || reservaId;
   if (grupoId !== reservaId) return; // solo la cabeza del grupo (los demás slots repiten los mismos campos)
@@ -2457,10 +2459,18 @@ exports.mpSetComision = onCall({ region: REGION }, async (request) => {
   const admin = await db.collection("superadmins").doc(uid).get();
   if (!admin.exists) throw new HttpsError("permission-denied", "Solo el super-admin");
   const clubId = texto(request.data && request.data.clubId, 80);
-  const pct = Number(request.data && request.data.pct);
+  // P3-9: la comisión normal sale del plan; esto guarda un override explícito (pct null = volver a la del plan)
+  const crudo = request.data ? request.data.pct : undefined;
+  if (crudo === null) {
+    if (!clubId) throw new HttpsError("invalid-argument", "clubId");
+    await db.collection("clubs").doc(clubId).update({ "mercadoPago.comisionOverridePct": FieldValue.delete() });
+    logger.info(`mp: comisión de ${clubId} vuelve a la del plan por ${uid}`);
+    return { ok: true, pct: null };
+  }
+  const pct = Number(crudo);
   if (!clubId || !Number.isFinite(pct) || pct < 0 || pct > mp.COMISION_MAX_PCT || Math.round(pct * 2) !== pct * 2) throw new HttpsError("invalid-argument", "clubId y pct entre 0 y 10 en pasos de 0,5");
-  await db.collection("clubs").doc(clubId).set({ mercadoPago: { comisionPadelyPct: pct } }, { merge: true });
-  logger.info(`mp: comisión de ${clubId} = ${pct} % por ${uid}`);
+  await db.collection("clubs").doc(clubId).set({ mercadoPago: { comisionOverridePct: pct } }, { merge: true });
+  logger.info(`mp: comisión override de ${clubId} = ${pct} % por ${uid}`);
   return { ok: true, pct };
 });
 
@@ -2481,6 +2491,8 @@ exports.mpRefrescarTokens = onSchedule({ schedule: "every day 05:00", timeZone: 
 // src/utils/cuentas.js (functions/sync-utils.mjs; el test cuentasCopia.test.js falla si quedó vieja).
 let cuentasUtilPromesa = null;
 const cuentasUtil = () => (cuentasUtilPromesa ||= import("./lib/cuentas.mjs"));
+let planesUtilPromesa = null;
+const planesUtil = () => (planesUtilPromesa ||= import("./lib/planes.mjs"));
 const MP_WEBHOOK_URL = `${FUNCTIONS_URL}/mpWebhook`;
 const PERMISOS_COBRO = ["cobrarTurnos", "vender"];
 const horaCorta = (c) => `${fechaCortaArgentina(c.fecha)} ${c.horaInicio || ""}`.trim();
@@ -2529,7 +2541,8 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
   const tokens = await tokensDelClub(clubRef);
   if (!tokens || !tokens.accessToken) throw new HttpsError("failed-precondition", "El club no tiene Mercado Pago conectado");
   const util = await cuentasUtil();
-  const comisionPct = Number(club.mercadoPago.comisionPadelyPct) || 0;
+  // P3-9: la comisión sale del plan (FREE 2,5 %, prueba/PRO/sin plan 0 %) salvo un override del super-admin
+  const comisionPct = (await planesUtil()).comisionPct(club);
 
   let destino; // { monto, titulo, backUrl, pagador, participanteIds, lineas, piezas, grupoId, reservaId, filtro }
   if (tipo === "seña") {
@@ -3156,4 +3169,110 @@ exports.mpAnularVenta = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, 
   const r = await revertirVentaDeCuenta(clubId, numero, venta, { sinDevolucion, por: uid, porNombre: anulacion.porNombre });
   logger.info(`mpAnularVenta ${clubId}/${numero}: por ${uid} · devolución ${sinDevolucion ? "no pedida (sin devolución)" : r.devolucion && r.devolucion.ok ? "ok" : "falló"}${r.reabierta ? " · cuenta reabierta" : ""}`);
   return { ok: true, numero, reabierta: r.reabierta, devolucion: r.devolucion ? { ok: r.devolucion.ok, refundId: r.devolucion.refundId, error: r.devolucion.error, monto: r.devolucion.monto, sinDevolucion } : null };
+});
+
+// ============================================================================
+// PLANES (P3-9): clubs/{c}.plan = { tipo: prueba | free | pro, inicio, vence, escalon?, historial } lo escriben solo
+// estas Functions y el super-admin (las reglas no dejan que el club lo toque). La lógica es src/utils/planes.js
+// (copiada a functions/lib/planes.mjs). Un club sin plan es "legacy" = PRO sin bloqueos.
+// ============================================================================
+
+// ms → Timestamp en inicio, vence y en las fechas del historial
+function planAFirestore(plan) {
+  const ts = (v) => (v === null || v === undefined ? null : typeof v === "number" ? Timestamp.fromMillis(v) : v);
+  return {
+    ...plan,
+    inicio: ts(plan.inicio),
+    vence: ts(plan.vence),
+    historial: (plan.historial || []).map((h) => ({ ...h, desde: ts(h.desde), hasta: ts(h.hasta) })),
+  };
+}
+
+// Un club nuevo arranca en "prueba" sin fecha: los 30 días empiezan con su primera reserva confirmada
+exports.onClubCreated = onDocumentCreated("clubs/{clubId}", async (event) => {
+  const club = event.data && event.data.data();
+  if (!club || club.plan) return;
+  const planes = await planesUtil();
+  await event.data.ref.update({ plan: planAFirestore(planes.planInicial()) });
+  logger.info(`plan: club ${event.params.clubId} en prueba (sin empezar)`);
+});
+
+// La primera reserva confirmada (no de torneo) arranca la prueba. Lectura barata primero; transacción solo si toca.
+async function iniciarPruebaDelClub(clubId, reserva) {
+  if (!reserva || reserva.tipo === "torneo") return;
+  try {
+    const clubRef = db.collection("clubs").doc(clubId);
+    const snap = await clubRef.get();
+    const plan = snap.exists ? snap.data().plan : null;
+    if (!plan || plan.tipo !== "prueba" || plan.inicio) return;
+    const planes = await planesUtil();
+    const empezo = await db.runTransaction(async (tx) => {
+      const s = await tx.get(clubRef);
+      const nuevo = planes.iniciarPrueba(s.exists ? s.data().plan : null, Date.now());
+      if (!nuevo) return false;
+      tx.update(clubRef, { "plan.inicio": Timestamp.fromMillis(nuevo.inicio), "plan.vence": Timestamp.fromMillis(nuevo.vence) });
+      return true;
+    });
+    if (empezo) logger.info(`plan: empezó la prueba de ${clubId}`);
+  } catch (err) {
+    logger.error(`plan: no se pudo iniciar la prueba de ${clubId}`, err);
+  }
+}
+
+exports.onReservaCreated = onDocumentCreated("clubs/{clubId}/reservas/{reservaId}", async (event) => {
+  const reserva = event.data && event.data.data();
+  if (reserva && reserva.status === "confirmada") await iniciarPruebaDelClub(event.params.clubId, reserva);
+});
+
+// Todos los días 03:30: prueba vencida → FREE; PRO vencido hace más de 7 días → FREE. Aviso al dueño.
+exports.planesVencidos = onSchedule({ schedule: "every day 03:30", timeZone: ZONA_HORARIA }, async () => {
+  const planes = await planesUtil();
+  const snap = await db.collection("clubs").where("plan.tipo", "in", ["prueba", "pro"]).get();
+  const ahora = Date.now();
+  let pasados = 0;
+  for (const d of snap.docs) {
+    try {
+      const club = d.data();
+      const nuevo = planes.transicionVencida(club.plan, ahora);
+      if (!nuevo) continue;
+      await d.ref.update({ plan: planAFirestore(nuevo) });
+      pasados += 1;
+      if (club.ownerUid) {
+        const eraPrueba = club.plan.tipo === "prueba";
+        await nuevaNotificacionRef(club.ownerUid).set({
+          tipo: "plan_vencido",
+          titulo: eraPrueba ? "Terminó tu prueba de Padely" : "Tu plan PRO venció",
+          mensaje: `${club.nombre || "Tu club"} pasó al plan FREE: las canchas, las reservas y la seña online siguen andando, con una comisión de ${planes.COMISION_FREE_PCT.toLocaleString("es-AR")} % por pago online. El bar, la caja y las cuentas del equipo quedan bloqueados hasta que pases a PRO.`,
+          link: "/admin/plan",
+          icono: "📋",
+          leida: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (err) {
+      logger.error(`planesVencidos: ${d.id}`, err);
+    }
+  }
+  logger.info(`planesVencidos: ${pasados} pasaron a FREE (${snap.size} con prueba o PRO)`);
+});
+
+// "Ya pagué, avisar" desde Mi plan: avisosPago/{id} lo crea el dueño; acá se avisa a cada super-admin
+exports.onAvisoPagoCreated = onDocumentCreated("avisosPago/{avisoId}", async (event) => {
+  const aviso = event.data && event.data.data();
+  if (!aviso) return;
+  const admins = await db.collection("superadmins").get();
+  const batch = db.batch();
+  admins.docs.forEach((a) =>
+    batch.set(nuevaNotificacionRef(a.id), {
+      tipo: "plan_aviso_pago",
+      titulo: "Un club avisó que pagó",
+      mensaje: `${aviso.clubNombre || "Un club"} avisó un pago${aviso.monto ? ` de $ ${Math.round(Number(aviso.monto)).toLocaleString("es-AR")}` : ""}${aviso.nota ? `: ${String(aviso.nota).slice(0, 120)}` : ""}.`,
+      link: "/superadmin/planes",
+      icono: "💳",
+      leida: false,
+      createdAt: FieldValue.serverTimestamp(),
+    }),
+  );
+  await batch.commit();
+  logger.info(`plan: aviso de pago de ${aviso.clubId} → ${admins.size} super-admins`);
 });

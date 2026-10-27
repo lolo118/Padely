@@ -12,6 +12,7 @@ import PublicLayout from "./components/layouts/PublicLayout";
 import SuperAdminLayout from "./components/layouts/SuperAdminLayout";
 import { Toaster } from "./components/Toast";
 import { ConfirmHost } from "./components/ConfirmDialog";
+import { RequierePro } from "./components/PlanBloqueado";
 
 // Auth
 const Login = lazy(() => import("./pages/auth/Login"));
@@ -38,6 +39,7 @@ const DetalleTorneo = lazy(() => import("./pages/admin/DetalleTorneo"));
 const AdminCanchas = lazy(() => import("./pages/admin/Canchas"));
 const AdminEstadisticas = lazy(() => import("./pages/admin/Estadisticas"));
 const AdminConfiguracion = lazy(() => import("./pages/admin/Configuracion"));
+const AdminMiPlan = lazy(() => import("./pages/admin/MiPlan"));
 const BarProductos = lazy(() => import("./pages/admin/bar/Productos"));
 const BarCaja = lazy(() => import("./pages/admin/bar/Caja"));
 const BarVender = lazy(() => import("./pages/admin/bar/Vender"));
@@ -64,6 +66,7 @@ const SuperResumen = lazy(() => import("./pages/superadmin/Resumen"));
 const SuperClubes = lazy(() => import("./pages/superadmin/Clubes"));
 const SuperOrganizadores = lazy(() => import("./pages/superadmin/Organizadores"));
 const SuperUsuarios = lazy(() => import("./pages/superadmin/Usuarios"));
+const SuperPlanes = lazy(() => import("./pages/superadmin/Planes"));
 
 // Landing pública en /
 const Landing = lazy(() => import("./pages/Landing"));
@@ -276,15 +279,17 @@ export default function App() {
             <Route path="canchas" element={<AdminCanchas />} />
             <Route path="estadisticas" element={<AdminEstadisticas />} />
             <Route path="configuracion" element={<AdminConfiguracion />} />
-            <Route path="bar/vender" element={<BarVender />} />
-            <Route path="bar/kiosk" element={<BarKiosk />} />
-            <Route path="bar/cuentas" element={<BarCuentas />} />
-            <Route path="bar/cuentas/:id" element={<BarCuentaDetalle />} />
-            <Route path="bar/barra" element={<BarBarra />} />
-            <Route path="bar/qr" element={<BarQr />} />
-            <Route path="bar/reportes" element={<BarReportes />} />
-            <Route path="bar/caja" element={<BarCaja />} />
-            <Route path="bar/productos" element={<BarProductos />} />
+            <Route path="plan" element={<AdminMiPlan />} />
+            {/* Bar: secciones del plan PRO (P3-9); en FREE muestran "Disponible en PRO" */}
+            <Route path="bar/vender" element={<RequierePro titulo="Vender"><BarVender /></RequierePro>} />
+            <Route path="bar/kiosk" element={<RequierePro titulo="El kiosco"><BarKiosk /></RequierePro>} />
+            <Route path="bar/cuentas" element={<RequierePro titulo="Cuentas"><BarCuentas /></RequierePro>} />
+            <Route path="bar/cuentas/:id" element={<RequierePro titulo="La cuenta del turno"><BarCuentaDetalle /></RequierePro>} />
+            <Route path="bar/barra" element={<RequierePro titulo="La barra"><BarBarra /></RequierePro>} />
+            <Route path="bar/qr" element={<RequierePro titulo="Los QR de las canchas"><BarQr /></RequierePro>} />
+            <Route path="bar/reportes" element={<RequierePro titulo="Reportes"><BarReportes /></RequierePro>} />
+            <Route path="bar/caja" element={<RequierePro titulo="La caja"><BarCaja /></RequierePro>} />
+            <Route path="bar/productos" element={<RequierePro titulo="Productos"><BarProductos /></RequierePro>} />
           </Route>
 
           {/* Rutas del organizador - solo organizadores */}
@@ -318,6 +323,7 @@ export default function App() {
             <Route path="clubes" element={<SuperClubes />} />
             <Route path="organizadores" element={<SuperOrganizadores />} />
             <Route path="usuarios" element={<SuperUsuarios />} />
+            <Route path="planes" element={<SuperPlanes />} />
           </Route>
 
           <Route path="*" element={<NoEncontrado />} />

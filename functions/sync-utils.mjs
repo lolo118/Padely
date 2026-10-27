@@ -1,16 +1,20 @@
-// functions/sync-utils.mjs — copia src/utils/cuentas.js (puro, sin imports) a functions/lib/cuentas.mjs para que las
-// Functions calculen los saldos de una cuenta con EXACTAMENTE el mismo código que el cliente (mpCrearPago, mpWebhook).
-// Corre como predeploy de functions (firebase.json), en el .cmd de deploy y antes de los tests; la copia se versiona y
-// functions/cuentasCopia.test.js falla si quedó vieja.
+// functions/sync-utils.mjs — copia los utils puros del cliente (sin imports) a functions/lib/*.mjs para que las
+// Functions usen EXACTAMENTE el mismo código que el panel: src/utils/cuentas.js (saldos de una cuenta: mpCrearPago,
+// mpWebhook, barrido) y src/utils/planes.js (planes de los clubes, P3-9). Corre como predeploy de functions
+// (firebase.json), en el .cmd de deploy y antes de los tests; functions/cuentasCopia.test.js falla si quedó vieja.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const aqui = dirname(fileURLToPath(import.meta.url));
-const origen = resolve(aqui, "..", "src", "utils", "cuentas.js");
-const destino = resolve(aqui, "lib", "cuentas.mjs");
-export const CABECERA = "// GENERADO por functions/sync-utils.mjs desde src/utils/cuentas.js — NO EDITAR ACÁ (editá el original y volvé a correr el sync).\n";
-const fuente = readFileSync(origen, "utf8").replace(/\r\n/g, "\n");
-mkdirSync(dirname(destino), { recursive: true });
-writeFileSync(destino, CABECERA + fuente);
-console.log(`sync-utils: ${destino} (${fuente.length} bytes)`);
+const cabecera = (nombre) => `// GENERADO por functions/sync-utils.mjs desde src/utils/${nombre}.js — NO EDITAR ACÁ (editá el original y volvé a correr el sync).\n`;
+export const CABECERA = cabecera("cuentas");
+
+for (const nombre of ["cuentas", "planes"]) {
+  const origen = resolve(aqui, "..", "src", "utils", `${nombre}.js`);
+  const destino = resolve(aqui, "lib", `${nombre}.mjs`);
+  const fuente = readFileSync(origen, "utf8").replace(/\r\n/g, "\n");
+  mkdirSync(dirname(destino), { recursive: true });
+  writeFileSync(destino, cabecera(nombre) + fuente);
+  console.log(`sync-utils: ${destino} (${fuente.length} bytes)`);
+}

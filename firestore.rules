@@ -105,6 +105,12 @@ service cloud.firestore {
     function clubActivo(clubId) {
       return get(/databases/$(database)/documents/clubs/$(clubId)).data.get('suspendido', false) == false;
     }
+    // P3-9: el club tiene las funciones PRO (bar, caja, cuentas, pedidos, staff). Sin plan = club de antes = PRO; el
+    // vencimiento lo aplica la Function planesVencidos (pasa a "free"), así que acá alcanza con el tipo.
+    function planPro(clubId) {
+      let plan = get(/databases/$(database)/documents/clubs/$(clubId)).data.get('plan', null);
+      return plan == null || plan.get('tipo', 'pro') in ['prueba', 'pro'];
+    }
     // El vínculo con un club que escribe un organizador: sin club, pendiente, o aceptado solo si el club es suyo.
     // Así "aceptado" solo lo pone el dueño del club (acá o respondiendo el pedido) y la Function puede confiar en él.
     function clubVinculoValido() {
@@ -150,6 +156,23 @@ service cloud.firestore {
     // Al entrar, cada persona busca los clubes donde es staff (la consulta lleva where("uid", "==", auth.uid))
     match /{path=**}/staff/{uid} {
       allow read: if (signedIn() && resource.data.uid == request.auth.uid) || superAdmin();
+    }
+
+    // P3-9: datos de pago de Padely (alias, CBU, WhatsApp) que ven los clubes en Mi plan; los edita el super-admin
+    match /configuracionPadely/{docId} {
+      allow read: if signedIn();
+      allow write: if superAdmin();
+    }
+
+    // P3-9: "Ya pagué, avisar" desde Mi plan: lo crea el dueño del club; lo leen y marcan los super-admins
+    match /avisosPago/{avisoId} {
+      allow read: if superAdmin() || (signedIn() && resource.data.creadoPor == request.auth.uid);
+      allow create: if signedIn() && clubOwner(request.resource.data.clubId)
+        && request.resource.data.creadoPor == request.auth.uid
+        && request.resource.data.estado == 'nuevo'
+        && request.resource.data.keys().hasOnly(['clubId', 'clubNombre', 'creadoPor', 'creadoPorNombre', 'monto', 'nota', 'estado', 'creadoEn']);
+      allow update: if superAdmin() && changedOnly(['estado', 'atendidoPor', 'atendidoEn']);
+      allow delete: if false;
     }
 
     // Quién es super-admin: lo lee solo la propia cuenta; nadie lo escribe desde un cliente
@@ -208,16 +231,19 @@ service cloud.firestore {
 
     match /clubs/{clubId} {
       allow read: if true;
-      allow create: if noAnonimo() && request.resource.data.ownerUid == request.auth.uid && naceActivo();
+      // El plan lo pone la Function onClubCreated (prueba): el club no lo trae
+      allow create: if noAnonimo() && request.resource.data.ownerUid == request.auth.uid && naceActivo()
+        && !request.resource.data.keys().hasAny(['plan']);
       // Configura el dueño o el staff con 'configurarClub' (que nunca cambia el dueño ni la fecha de alta); ninguno
       // de los dos toca la suspensión, que es del super-admin (y él solo toca esos campos). Borrar: solo el dueño.
-      // mercadoPago (conexión y comisión) lo escriben solo las Functions.
+      // mercadoPago (conexión y comisión) lo escriben solo las Functions; plan (P3-9), las Functions y el super-admin.
       allow update: if (clubOwner(clubId) && !tocaSuspension()
-            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['mercadoPago']))
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['mercadoPago', 'plan']))
         || (signedIn() && staffCon(clubId, 'configurarClub')
-            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ownerUid', 'createdAt', 'mercadoPago'])
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ownerUid', 'createdAt', 'mercadoPago', 'plan'])
             && !tocaSuspension())
-        || (superAdmin() && soloSuspension());
+        || (superAdmin() && soloSuspension())
+        || (superAdmin() && changedOnly(['plan']));
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
 
       // Datos privados del club (CBU, alias, CUIT, razón social): quien configura; los teléfonos de los turnos
@@ -246,7 +272,7 @@ service cloud.firestore {
       // Los jugadores y el QR leen la proyección pública `catalogo` (sin costo ni stock), nunca esto.
       match /productos/{productoId} {
         allow read: if esStaffBar(clubId) || superAdmin();
-        allow create: if esStaff(clubId, 'editarProductos') && request.resource.data.stock == 0;
+        allow create: if esStaff(clubId, 'editarProductos') && planPro(clubId) && request.resource.data.stock == 0;
         allow update: if esStaff(clubId, 'editarProductos')
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['stock']);
         allow delete: if esStaff(clubId, 'editarProductos');
@@ -269,6 +295,7 @@ service cloud.firestore {
       match /movimientosStock/{movimientoId} {
         allow read: if esStaffBar(clubId) || superAdmin();
         allow create: if request.resource.data.creadoPor == request.auth.uid
+          && planPro(clubId)
           && request.resource.data.aplicado == false
           && request.resource.data.cantidad is number
           && request.resource.data.cantidad != 0
@@ -285,6 +312,7 @@ service cloud.firestore {
       match /cajas/{cajaId} {
         allow read: if esStaffCaja(clubId) || superAdmin();
         allow create: if esStaff(clubId, 'abrirCaja')
+          && planPro(clubId)
           && request.resource.data.estado == 'abierta'
           && request.resource.data.abiertaPor == request.auth.uid
           && request.resource.data.fondoInicial is number
@@ -362,6 +390,7 @@ service cloud.firestore {
       match /ventas/{ventaId} {
         allow read: if esStaffCaja(clubId) || esStaff(clubId, 'vender') || superAdmin();
         allow create: if esStaff(clubId, 'vender')
+          && planPro(clubId)
           && request.resource.data.numero == ventaId
           && request.resource.data.estado == 'ok'
           && request.resource.data.aplicado == false
@@ -419,6 +448,7 @@ service cloud.firestore {
           || (signedIn() && request.auth.uid in resource.data.get('participantesUids', []))
           || superAdmin();
         allow create: if (esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender') || esStaff(clubId, 'pedidos'))
+          && planPro(clubId)
           && request.resource.data.estado == 'abierta'
           && request.resource.data.abiertaPor == request.auth.uid
           && request.resource.data.reservaGrupoId == cuentaId
@@ -490,6 +520,7 @@ service cloud.firestore {
           || (signedIn() && resource.data.jugadorUid == request.auth.uid)
           || superAdmin();
         allow create: if signedIn()
+          && planPro(clubId)
           && request.resource.data.jugadorUid == request.auth.uid
           && request.resource.data.estado == 'pendiente'
           && request.resource.data.items is list
@@ -544,6 +575,7 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['uid', 'nombre', 'email', 'rol', 'permisos', 'descuentoMax',
                                                    'activo', 'invitacionId', 'invitadoPor', 'creadoEn', 'actualizadoEn'])
           && rolDeStaffValido(request.resource.data.rol)
+          && planPro(clubId)
           && invitacionValidaPara(clubId, request.resource.data);
         // El dueño edita a cualquiera; quien gestiona el equipo, a los demás (nunca su propio rol, permisos o acceso)
         allow update: if (clubOwner(clubId) || (signedIn() && staffCon(clubId, 'gestionarStaff') && uid != request.auth.uid))
@@ -557,6 +589,7 @@ service cloud.firestore {
       match /invitaciones/{invId} {
         allow read: if esStaff(clubId, 'gestionarStaff') || invitadoPorEmail(resource.data);
         allow create: if esStaff(clubId, 'gestionarStaff')
+          && planPro(clubId)
           && request.resource.data.estado == 'pendiente'
           && rolDeStaffValido(request.resource.data.rol);
         // El club la cancela; el invitado la acepta (mismo batch que crea su doc de staff)
@@ -633,6 +666,8 @@ service cloud.firestore {
             && request.resource.data.club.diff(resource.data.club).affectedKeys().hasOnly(['estado'])
             && request.resource.data.club.estado in ['aceptado', 'rechazado']);
       allow delete: if signedIn() && resource.data.organizerId == request.auth.uid;
+      // P3-9: el cobro del torneo (monto, estado, en) lo marca solo el super-admin
+      allow update: if superAdmin() && changedOnly(['cobro']);
 
       match /pairs/{pairId} {
         allow read: if true;
