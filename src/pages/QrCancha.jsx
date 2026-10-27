@@ -7,6 +7,7 @@ import { useAuthStore } from "../store/authStore";
 import { getClubConfig } from "../services/canchaService";
 import { getCancha, getReservasEnJuego, guardarNombreAnonimo, nombreAnonimoGuardado } from "../services/pedidosService";
 import { textoTurno } from "../utils/cuentas";
+import { tienePro } from "../utils/planes";
 import { toast } from "../components/Toast";
 import { Alert, Button, Card, Field, Input } from "../components/ui";
 import PedirUI from "../components/pedidos/PedirUI";
@@ -121,6 +122,17 @@ export default function QrCancha() {
           <p className="heading-sm">Este QR no corresponde a ninguna cancha</p>
           <p className="body-sm text-ink-2 mt-1">Pedí en la barra que te den el QR actualizado.</p>
         </Card>
+      </div>
+    );
+  }
+  // P3-9: los pedidos desde la cancha son del plan PRO; un club en FREE (con QR impresos durante la prueba) no los toma
+  if (!tienePro(club)) {
+    return (
+      <div className="max-w-2xl mx-auto flex flex-col gap-4">
+        {encabezado}
+        <Alert>
+          <strong>Este club no toma pedidos desde la cancha por ahora.</strong> Pedí directamente en la barra.
+        </Alert>
       </div>
     );
   }

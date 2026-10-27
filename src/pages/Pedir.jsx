@@ -8,6 +8,7 @@ import { getClubConfig } from "../services/canchaService";
 import { getCuenta } from "../services/cuentasService";
 import { normalizarReserva } from "../utils/reservas";
 import { puedePedir } from "../utils/pedidos";
+import { tienePro } from "../utils/planes";
 import { Button, Card } from "../components/ui";
 import PedirUI from "../components/pedidos/PedirUI";
 
@@ -54,9 +55,11 @@ export default function Pedir() {
   const { reserva, club } = estado;
   const propia = reserva && (reserva.jugadorUid === user?.uid || estado.participante);
   const enVentana = reserva && puedePedir(reserva);
-  if (estado.error || !reserva || !propia || !enVentana) {
-    const titulo = estado.error ? "No pudimos abrir el turno" : !reserva ? "Esta reserva no existe" : !propia ? "No estás en este turno" : "Todavía no se puede pedir";
-    const texto = !estado.error && reserva && propia && !enVentana ? `Se puede pedir desde 15 minutos antes de las ${reserva.horaInicio} hasta las ${reserva.horaFin || "el final del turno"}, el día del turno.` : "Si estás en la cancha, escaneá el QR que tiene cada una.";
+  // P3-9: los pedidos a la barra son del plan PRO
+  const sinPedidos = !!club && !tienePro(club);
+  if (estado.error || !reserva || !propia || !enVentana || sinPedidos) {
+    const titulo = estado.error ? "No pudimos abrir el turno" : !reserva ? "Esta reserva no existe" : !propia ? "No estás en este turno" : sinPedidos ? "Este club no toma pedidos desde la app" : "Todavía no se puede pedir";
+    const texto = sinPedidos && !estado.error && reserva && propia ? "Pedí directamente en la barra." : !estado.error && reserva && propia && !enVentana ? `Se puede pedir desde 15 minutos antes de las ${reserva.horaInicio} hasta las ${reserva.horaFin || "el final del turno"}, el día del turno.` : "Si estás en la cancha, escaneá el QR que tiene cada una.";
     return (
       <div className="max-w-2xl mx-auto flex flex-col gap-4">
         {volver}

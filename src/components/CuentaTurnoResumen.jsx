@@ -4,6 +4,7 @@ import { formatPrecio } from "../utils/format";
 import { etiquetaEstado, puedePedir, resumenItems, tonoEstado } from "../utils/pedidos";
 import { participantePorUid, saldosDeCuenta } from "../utils/cuentas";
 import { getTodayLocal } from "../utils/formatDate";
+import useClubConPro from "../hooks/useClubConPro";
 
 // Debajo de una reserva del jugador: "Pedir a la barra" mientras el turno está en juego, el último pedido y su
 // estado, y la cuenta del turno (abierta: total; cerrada: "Cuenta cerrada · $ X"). Todo lleva a /pedir o /mi-cuenta.
@@ -13,10 +14,12 @@ import { getTodayLocal } from "../utils/formatDate";
 export default function CuentaTurnoResumen({ reserva, cuenta = null, pedidos = [], compacto = false, ahora = new Date(), uid = null, onInvitar = null }) {
   const grupoId = reserva?.grupoId || reserva?.id;
   const clubId = reserva?.clubId;
+  // P3-9: un club en FREE no toma pedidos a la barra
+  const clubConPro = useClubConPro(clubId);
   if (!clubId || !grupoId) return null;
   const abierta = cuenta && cuenta.estado === "abierta";
   const cerrada = !abierta && reserva?.cuentaCerrada === true;
-  const enVentana = puedePedir(reserva, ahora);
+  const enVentana = clubConPro && puedePedir(reserva, ahora);
   const ultimo = pedidos[0] || null;
   const esTitular = !!uid && reserva?.jugadorUid === uid;
   const puedeInvitar = !!onInvitar && esTitular && reserva?.status === "confirmada" && (abierta || reserva?.fecha === getTodayLocal());
