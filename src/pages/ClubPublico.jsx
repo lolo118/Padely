@@ -17,6 +17,7 @@ import {
   Star,
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
+import PartidosAbiertos from "../components/PartidosAbiertos";
 import useTituloPagina from "../hooks/useTituloPagina";
 import { getCreditoEnClub } from "../services/creditosService";
 import { formatFecha, getTodayLocal, addDaysLocal, horaActualStr } from "../utils/formatDate";
@@ -649,6 +650,9 @@ export default function ClubPublico() {
           )}
         </div>
       </div>
+
+      {/* P3-15: partidos abiertos de este club (oculto hasta habilitarlo) */}
+      <PartidosAbiertos clubId={club.id} titulo="Partidos que buscan jugadores" className="mb-4" />
 
       {/* Tabs */}
       <Tabs items={tabs} value={tab} onChange={setTab} ariaLabel="Secciones del club" className="mb-4" />

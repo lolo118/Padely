@@ -209,33 +209,38 @@ function DatosPagoCard() {
 }
 
 // P3-14 C: funciones que se prenden desde acá cuando el backend ya está desplegado (configuracionPadely/flags)
+const FLAGS_PLATAFORMA = [
+  { id: "inscripcionesOnline", label: "Inscripciones online (organizadores con Mercado Pago)", ayuda: "Prender después del deploy de las Functions de P3-14." },
+  { id: "partidosAbiertos", label: "Partidos abiertos (los jugadores buscan compañeros)", ayuda: "Prender después del deploy de las Functions de P3-15." },
+];
 function FlagsCard() {
-  const [inscripciones, setInscripciones] = useState(flag("inscripcionesOnline"));
-  const [guardando, setGuardando] = useState(false);
-  const cambiar = async (e) => {
-    const valor = e.target.checked;
-    setGuardando(true);
+  const [valores, setValores] = useState(() => Object.fromEntries(FLAGS_PLATAFORMA.map((f) => [f.id, flag(f.id)])));
+  const [guardando, setGuardando] = useState("");
+  const cambiar = async (id, valor) => {
+    setGuardando(id);
     try {
-      await setDoc(doc(db, "configuracionPadely", "flags"), { inscripcionesOnline: valor }, { merge: true });
-      setInscripciones(valor);
-      toast.success(valor ? "Inscripciones online habilitadas" : "Inscripciones online ocultas");
+      await setDoc(doc(db, "configuracionPadely", "flags"), { [id]: valor }, { merge: true });
+      setValores((v) => ({ ...v, [id]: valor }));
+      toast.success(valor ? "Función habilitada" : "Función oculta");
     } catch (err) {
       console.error("Error guardando el flag:", err);
       toast.error("No pudimos guardar el cambio.");
     } finally {
-      setGuardando(false);
+      setGuardando("");
     }
   };
   return (
     <Card>
       <Card.Title as="h2">Funciones de la plataforma</Card.Title>
-      <label className="mt-3 flex items-start gap-3 body-sm">
-        <input type="checkbox" checked={!!inscripciones} onChange={cambiar} disabled={guardando} className="h-5 w-5 mt-0.5 accent-ink" />
-        <span>
-          Inscripciones online (organizadores con Mercado Pago)
-          <span className="block text-ink-3">Prender después del deploy de las Functions de P3-14.</span>
-        </span>
-      </label>
+      {FLAGS_PLATAFORMA.map((f) => (
+        <label key={f.id} className="mt-3 flex items-start gap-3 body-sm">
+          <input type="checkbox" checked={!!valores[f.id]} onChange={(e) => cambiar(f.id, e.target.checked)} disabled={guardando === f.id} className="h-5 w-5 mt-0.5 accent-ink" />
+          <span>
+            {f.label}
+            <span className="block text-ink-3">{f.ayuda}</span>
+          </span>
+        </label>
+      ))}
     </Card>
   );
 }

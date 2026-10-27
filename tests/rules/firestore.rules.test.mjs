@@ -187,3 +187,12 @@ describe("inscripciones online P3-14", () => {
     await assertFails(updateDoc(doc(como("org2"), "organizers", "ent1"), { "mercadoPago.conectado": true }));
   });
 });
+
+describe("partidos abiertos P3-15", () => {
+  test("el índice público se lee sin sesión y no lo escribe nadie; flags se lee sin sesión", async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "partidosAbiertos", "r1"), { clubId: CLUB, libres: 1 }));
+    await assertSucceeds(getDoc(doc(anonimo(), "partidosAbiertos", "r1")));
+    await assertFails(setDoc(doc(como("jugador"), "partidosAbiertos", "r2"), { clubId: CLUB, libres: 3 }));
+    await assertSucceeds(getDoc(doc(anonimo(), "configuracionPadely", "flags")));
+  });
+});

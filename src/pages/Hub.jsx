@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { CircleDot, MapPin, Star } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
+import PartidosAbiertos from "../components/PartidosAbiertos";
 import {
   getClubesConCanchas,
   getReservas,
@@ -288,6 +289,9 @@ export default function Hub() {
   return (
     <div>
       {encabezado}
+
+      {/* P3-15: partidos abiertos (oculto hasta habilitarlo); con ciudad del jugador, solo los de su ciudad */}
+      <PartidosAbiertos ciudad={ciudadJugador && !verTodasCiudades ? ciudadJugador : ""} className="mb-5" />
 
       {/* Filtros principales */}
       <div className="flex flex-col gap-3 mb-5">

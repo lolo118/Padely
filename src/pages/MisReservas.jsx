@@ -14,6 +14,7 @@ import { toast } from "../components/Toast";
 import { confirmar } from "../components/ConfirmDialog";
 import { Badge, Button, Card } from "../components/ui";
 import CuentaTurnoResumen from "../components/CuentaTurnoResumen";
+import PartidoDeReserva from "../components/PartidoDeReserva";
 import SumarJugadorDialog from "../components/cuenta/SumarJugadorDialog";
 import { escucharCuentasDondeParticipo, escucharMisCuentasAbiertas } from "../services/cuentasService";
 import { escucharMisPedidos } from "../services/pedidosService";
@@ -306,6 +307,8 @@ export default function MisReservas() {
         </p>
         {r.precioTotal > 0 && <p className="body-sm text-ink-2 pd-tnum">{formatPrecio(r.precioTotal)}</p>}
         {r.status !== "cancelada" && <CuentaTurnoResumen reserva={r} cuenta={cuentaDe(r)} pedidos={pedidosDe(r)} uid={user?.uid} onInvitar={(reserva, cuenta) => setInvitando({ reserva, cuenta })} />}
+        {/* P3-15: buscar jugadores para este turno (oculto hasta habilitarlo) */}
+        {!pasada && <PartidoDeReserva reserva={r} uid={user?.uid} onCambio={(nueva) => setReservas((prev) => prev.map((x) => (x.id === r.id ? { ...x, partidoAbierto: nueva.partidoAbierto } : x)))} />}
         {!pasada && r.status !== "cancelada" && (
           <Card.Foot>
             {puedePagarSeñaMp(r) && (

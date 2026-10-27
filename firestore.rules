@@ -191,7 +191,8 @@ service cloud.firestore {
     // P3-9: datos de pago de Padely (alias, CBU, WhatsApp) que ven los clubes en Mi plan; los edita el super-admin.
     // P3-12: "estado" (aviso de la plataforma, /estado y el banner) lo lee cualquiera, aun sin sesión.
     match /configuracionPadely/{docId} {
-      allow read: if signedIn() || docId == 'estado';
+      // P3-15: "flags" también se lee sin sesión (solo booleanos; las páginas públicas muestran o no partidos abiertos)
+      allow read: if signedIn() || docId in ['estado', 'flags'];
       allow write: if superAdmin();
     }
 
@@ -210,6 +211,13 @@ service cloud.firestore {
     // P3-14 B: Reportes del club → créditos dados en ese club (consulta de grupo por clubId)
     match /{path=**}/creditos/{creditoId} {
       allow read: if signedIn() && (esStaff(resource.data.clubId, 'verReportes') || superAdmin());
+    }
+
+    // P3-15: índice público de partidos abiertos (club, cancha, hora, lugares, nivel; sin nombres ni contacto).
+    // Lo escriben solo las Functions (onReservaUpdated y el barrido horario).
+    match /partidosAbiertos/{reservaId} {
+      allow read: if true;
+      allow write: if false;
     }
 
     match /superadmins/{uid} {

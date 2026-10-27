@@ -1130,6 +1130,10 @@ exports.onReservaUpdated = onDocumentUpdated("clubs/{clubId}/reservas/{reservaId
   if (despues.status === "confirmada" && antes.status !== "confirmada") await iniciarPruebaDelClub(clubId, despues);
   // P3-14 B: la seña pagada de una reserva cancelada se devuelve, queda como crédito o queda para el club
   if (despues.status === "cancelada" && antes.status !== "cancelada" && (despues.grupoId || reservaId) === reservaId) await procesarSeñaCancelada(clubId, reservaId, despues);
+  // P3-15: el índice público de partidos abiertos sigue al partido y al estado de la reserva
+  if ((antes.partidoAbierto || despues.partidoAbierto) && (JSON.stringify(antes.partidoAbierto || null) !== JSON.stringify(despues.partidoAbierto || null) || antes.status !== despues.status)) {
+    await sincronizarIndicePartido(clubId, reservaId, despues).catch((err) => logger.error(`partido abierto ${clubId}/${reservaId}`, err));
+  }
   if (!!antes.señaPagada === !!despues.señaPagada && Number(antes.seña || 0) === Number(despues.seña || 0)) return;
   const grupoId = despues.grupoId || reservaId;
   if (grupoId !== reservaId) return; // solo la cabeza del grupo (los demás slots repiten los mismos campos)
@@ -3671,4 +3675,140 @@ exports.onInscripcionEscrita = onDocumentWritten("tournaments/{tid}/inscripcione
   await db.collection("tournaments").doc(tid).collection("pagosInscripcion").doc(String(antes.pago.pagoId)).set({ estado: r.ok ? "devuelto" : "aprobado", devolucion }, { merge: true });
   if (despues) await event.data.after.ref.update({ "pago.devolucion": devolucion, ...(r.ok ? { "pago.estado": "devuelto" } : {}) });
   logger.info(`inscripción ${tid}/${iid}: devolución ${r.ok ? "ok" : `falló (${r.error})`}`);
+});
+
+
+// ============================================================================
+// PARTIDOS ABIERTOS (P3-15): el titular de una reserva confirmada publica "me faltan N jugadores"; otros se suman
+// desde el Hub o la página del club y quedan como participantes de la cuenta del turno (pagan su parte). Lógica en
+// src/utils/partidos.js (copiada a functions/lib/partidos.mjs). Índice público partidosAbiertos/{reservaId} (sin
+// nombres ni contacto) que mantiene onReservaUpdated; el barrido horario saca los que ya empezaron.
+// ============================================================================
+let partidosUtilPromesa = null;
+const partidosUtil = () => (partidosUtilPromesa ||= import("./lib/partidos.mjs"));
+
+async function sincronizarIndicePartido(clubId, reservaId, reserva) {
+  const P = await partidosUtil();
+  const ref = db.collection("partidosAbiertos").doc(reservaId);
+  if (!P.partidoVigente(reserva)) {
+    await ref.delete().catch(() => {});
+    return;
+  }
+  const club = (await db.collection("clubs").doc(clubId).get()).data() || {};
+  await ref.set({ ...P.indicePublico(reservaId, reserva, club, clubId), actualizadoEn: FieldValue.serverTimestamp() });
+}
+
+// Titular: publica o actualiza el partido abierto de su reserva
+exports.abrirPartido = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  const d = request.data || {};
+  const clubId = texto(d.clubId, 80);
+  const reservaId = texto(d.reservaId, 120);
+  if (!clubId || !reservaId) throw new HttpsError("invalid-argument", "clubId y reservaId");
+  const P = await partidosUtil();
+  const datos = P.normalizarPartido(d);
+  if (datos.error) throw new HttpsError("invalid-argument", datos.error);
+  const ref = db.collection("clubs").doc(clubId).collection("reservas").doc(reservaId);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "La reserva no existe");
+    const r = snap.data();
+    if (r.jugadorUid !== uid) throw new HttpsError("permission-denied", "Solo quien reservó puede buscar jugadores");
+    if (r.status !== "confirmada") throw new HttpsError("failed-precondition", "La reserva no está confirmada");
+    const inicio = P.inicioMs(r.fecha, r.horaInicio || r.hora);
+    if (inicio === null || inicio <= Date.now()) throw new HttpsError("failed-precondition", "El turno ya empezó");
+    const jugadores = P.jugadoresDe(r.partidoAbierto);
+    if (datos.faltan < jugadores.length) throw new HttpsError("failed-precondition", `Ya se sumaron ${jugadores.length}: no podés pedir menos`);
+    tx.update(ref, { partidoAbierto: { ...datos, jugadores, creadoEn: (r.partidoAbierto && r.partidoAbierto.creadoEn) || FieldValue.serverTimestamp() } });
+  });
+  logger.info(`abrirPartido ${clubId}/${reservaId} por ${uid}: faltan ${datos.faltan}`);
+  return { ok: true };
+});
+
+// Titular: deja de buscar jugadores (los que ya se sumaron siguen en la cuenta)
+exports.cerrarPartido = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  const clubId = texto(request.data && request.data.clubId, 80);
+  const reservaId = texto(request.data && request.data.reservaId, 120);
+  if (!clubId || !reservaId) throw new HttpsError("invalid-argument", "clubId y reservaId");
+  const ref = db.collection("clubs").doc(clubId).collection("reservas").doc(reservaId);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data().jugadorUid !== uid) throw new HttpsError("permission-denied", "Solo quien reservó");
+  await ref.update({ partidoAbierto: null });
+  return { ok: true };
+});
+
+// Jugador: se suma → participante de la cuenta del turno (la crea si no existe) y aviso al titular
+exports.sumarmePartido = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  const clubId = texto(request.data && request.data.clubId, 80);
+  const reservaId = texto(request.data && request.data.reservaId, 120);
+  if (!clubId || !reservaId) throw new HttpsError("invalid-argument", "clubId y reservaId");
+  const P = await partidosUtil();
+  const clubRef = db.collection("clubs").doc(clubId);
+  const ref = clubRef.collection("reservas").doc(reservaId);
+  const nombre = await nombreDeUsuario(uid, "Jugador");
+  const r = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "El partido ya no existe");
+    const reserva = snap.data();
+    const chequeo = P.puedeSumarse(reserva, uid);
+    if (!chequeo.ok) throw new HttpsError("failed-precondition", chequeo.motivo);
+    const { cuenta, guardar } = await cuentaDelTurnoEnTx(tx, clubRef, reservaId, { uid: reserva.jugadorUid, nombre: reserva.nombreJugador || "" });
+    const participantes = cc.participantesDe(cuenta);
+    const ya = cc.participantesActivos({ participantes }).some((p) => p.uid === uid);
+    const nuevos = ya ? participantes : [...participantes, cc.nuevoParticipante({ uid, nombre, tipo: "jugador", origen: "partidoAbierto", agregadoPor: uid, ahora: Timestamp.now() })];
+    guardar({ participantes: nuevos, participantesUids: cc.uidsDe(nuevos) });
+    tx.update(ref, { partidoAbierto: P.conJugador(reserva.partidoAbierto, { uid, nombre }) });
+    return reserva;
+  });
+  if (r.jugadorUid) {
+    await avisoA(r.jugadorUid, { tipo: "partido_sumado", titulo: "Se sumó un jugador a tu partido", mensaje: `${nombre} se sumó a tu turno del ${fechaCortaArgentina(r.fecha)} a las ${r.horaInicio || r.hora || ""}.`, link: "/mis-reservas", icono: "🎾" }).catch(() => {});
+  }
+  await avisoA(uid, { tipo: "partido_sumado", titulo: "Te sumaste al partido", mensaje: `Estás en el turno del ${fechaCortaArgentina(r.fecha)} a las ${r.horaInicio || r.hora || ""}. Tu parte se paga en el club o desde la cuenta del turno.`, link: `/mi-cuenta/${clubId}/${reservaId}`, icono: "🎾" }).catch(() => {});
+  logger.info(`sumarmePartido ${clubId}/${reservaId}: ${uid}`);
+  return { ok: true, grupoId: reservaId };
+});
+
+// Titular (saca a alguien) o el propio jugador (se baja): sale del partido y de la cuenta si no pagó nada
+exports.quitarDePartido = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  const clubId = texto(request.data && request.data.clubId, 80);
+  const reservaId = texto(request.data && request.data.reservaId, 120);
+  const quien = texto(request.data && request.data.uid, 128) || uid;
+  if (!clubId || !reservaId) throw new HttpsError("invalid-argument", "clubId y reservaId");
+  const P = await partidosUtil();
+  const clubRef = db.collection("clubs").doc(clubId);
+  const ref = clubRef.collection("reservas").doc(reservaId);
+  const cuentaRef = clubRef.collection("cuentas").doc(reservaId);
+  const r = await db.runTransaction(async (tx) => {
+    const [snap, cSnap] = await Promise.all([tx.get(ref), tx.get(cuentaRef)]);
+    if (!snap.exists) throw new HttpsError("not-found", "La reserva no existe");
+    const reserva = snap.data();
+    if (uid !== reserva.jugadorUid && uid !== quien) throw new HttpsError("permission-denied", "Solo quien reservó o el propio jugador");
+    if (cSnap.exists && cSnap.data().estado === "abierta") {
+      const cuenta = cSnap.data();
+      const participantes = cc.participantesDe(cuenta);
+      const p = participantes.find((x) => x.uid === quien && x.estado !== "quitado");
+      if (p && cc.algoPagadoDe(cuenta, p.id)) throw new HttpsError("failed-precondition", "Ya pagó su parte: sacalo desde la cuenta del turno");
+      if (p) {
+        // Igual que quitarParticipante: queda en la lista como "quitado" (sus líneas sin asignar vuelven a la cuenta)
+        const nuevos = participantes.map((x) => (x.id === p.id ? { ...x, estado: "quitado", quitadoEn: Timestamp.now(), quitadoPor: uid } : x));
+        tx.update(cuentaRef, { participantes: nuevos, participantesUids: cc.uidsDe(nuevos), actualizadoEn: FieldValue.serverTimestamp() });
+      }
+    }
+    tx.update(ref, { partidoAbierto: reserva.partidoAbierto ? P.sinJugador(reserva.partidoAbierto, quien) : null });
+    return reserva;
+  });
+  if (quien !== uid) await avisoA(quien, { tipo: "partido_quitado", titulo: "Ya no estás en un partido", mensaje: `El titular te sacó del turno del ${fechaCortaArgentina(r.fecha)} a las ${r.horaInicio || r.hora || ""}.`, link: "/mis-reservas", icono: "🎾" }).catch(() => {});
+  else if (r.jugadorUid) await avisoA(r.jugadorUid, { tipo: "partido_quitado", titulo: "Un jugador se bajó de tu partido", mensaje: `Se liberó un lugar en tu turno del ${fechaCortaArgentina(r.fecha)} a las ${r.horaInicio || r.hora || ""}.`, link: "/mis-reservas", icono: "🎾" }).catch(() => {});
+  return { ok: true };
+});
+
+// Cada hora: los partidos cuyo turno ya empezó salen del índice público
+exports.partidosAbiertosVencidos = onSchedule({ schedule: "every 60 minutes", timeZone: ZONA_HORARIA }, async () => {
+  const snap = await db.collection("partidosAbiertos").where("inicioMs", "<=", Date.now()).get();
+  if (snap.empty) return;
+  await escribirEnLotes(snap.docs.map((d) => (b) => b.delete(d.ref)));
+  logger.info(`partidosAbiertosVencidos: ${snap.size} fuera de la lista`);
 });
