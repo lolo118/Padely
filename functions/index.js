@@ -48,6 +48,8 @@ async function otorgarPartido(tid, markerId, partido, torneo) {
   if (!p1 || !p2 || !partido.resultado) return false;
 
   const { setsP1, setsP2 } = puntos.contarSets(partido.resultado);
+  // P3-11: sin ganador (sets empatados, carga a medias) no se puntúa todavía (antes ganaba la pareja 2)
+  if (setsP1 === setsP2) return false;
   const ganoP1 = setsP1 > setsP2;
   const fallback = puntos.categoriaFallbackDeTorneo(torneo);
 
@@ -178,6 +180,7 @@ async function otorgarFinal(tid, cid, partido, torneo) {
   const p2 = partido && partido.pareja2;
   if (!p1 || !p2 || !partido.resultado) return [];
   const { setsP1, setsP2 } = puntos.contarSets(partido.resultado);
+  if (setsP1 === setsP2) return []; // P3-11: final sin ganador todavía → sin campeón
   const ganoP1 = setsP1 > setsP2;
   return otorgarBonus(
     tid,
