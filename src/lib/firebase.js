@@ -1,9 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
-import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
-import { getAnalytics, logEvent } from 'firebase/analytics';
 
 const measurementId = import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '';
 
@@ -41,28 +39,32 @@ export const entrarAnonimo = async () => {
   const { user } = await signInAnonymously(auth);
   return user;
 };
-export const storage = getStorage(app);
+// Storage (subir fotos y logos) y Analytics se cargan recién cuando se usan (P3-13: fuera del bundle inicial)
+let storagePromesa = null;
+export const getStorageLazy = () => (storagePromesa ||= import('firebase/storage').then(({ getStorage }) => getStorage(app)));
 // Callables (us-central1): recalcularReporte
 export const functions = getFunctions(app, 'us-central1');
 
-// Analytics es opcional: solo si VITE_FIREBASE_MEASUREMENT_ID está definida (y el navegador lo soporta)
-let analytics = null;
-if (measurementId) {
-  try {
-    analytics = getAnalytics(app);
-  } catch (err) {
-    console.error('No se pudo iniciar Analytics:', err);
-    analytics = null;
-  }
-}
+// Analytics es opcional: solo si VITE_FIREBASE_MEASUREMENT_ID está definida (y el navegador lo soporta). Se carga
+// aparte (import dinámico) para no sumar al bundle inicial.
+const analyticsPromesa = measurementId
+  ? import('firebase/analytics')
+      .then(({ getAnalytics, logEvent }) => ({ analytics: getAnalytics(app), logEvent }))
+      .catch((err) => {
+        console.error('No se pudo iniciar Analytics:', err);
+        return null;
+      })
+  : Promise.resolve(null);
 
 // Registra un evento si Analytics está activo; si no, no hace nada.
 // Solo se usan tres: reserva_creada, inscripcion_creada, torneo_creado.
 export const logEvento = (nombre, params) => {
-  if (!analytics) return;
-  try {
-    logEvent(analytics, nombre, params);
-  } catch (err) {
-    console.error('No se pudo registrar el evento', nombre, err);
-  }
+  analyticsPromesa.then((a) => {
+    if (!a) return;
+    try {
+      a.logEvent(a.analytics, nombre, params);
+    } catch (err) {
+      console.error('No se pudo registrar el evento', nombre, err);
+    }
+  });
 };

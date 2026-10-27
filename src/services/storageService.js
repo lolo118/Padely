@@ -1,7 +1,8 @@
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "../lib/firebase";
+import { getStorageLazy } from "../lib/firebase";
 
+// Storage se carga recién al subir una imagen (P3-13: fuera del bundle inicial)
 export const uploadImage = async (path, file) => {
+  const [{ ref, uploadBytes, getDownloadURL }, storage] = await Promise.all([import("firebase/storage"), getStorageLazy()]);
   const storageRef = ref(storage, path);
   const snapshot = await uploadBytes(storageRef, file);
   const url = await getDownloadURL(snapshot.ref);
