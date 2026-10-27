@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Badge, Button, Card, SearchInput } from "../../components/ui";
 import { toast } from "../../components/Toast";
-import { getOrganizadoresAdmin, reactivarEntidad, suspenderEntidad } from "../../services/superadminService";
+import { getOrganizadoresAdmin, reactivarEntidad, suspenderEntidad, vincularOrganizadores } from "../../services/superadminService";
 import { useAuthStore } from "../../store/authStore";
 import SuspensionDialog from "./SuspensionDialog";
 
@@ -51,6 +51,7 @@ function Accion({ org, onAccion }) {
 }
 
 export default function Organizadores() {
+  const [vinculando, setVinculando] = useState(false);
   const user = useAuthStore((s) => s.user);
   const [organizadores, setOrganizadores] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -139,6 +140,20 @@ export default function Organizadores() {
   const vacio =
     organizadores.length === 0 ? "Todavía no hay organizadores." : "Ningún organizador coincide con la búsqueda.";
 
+  // P3-10: la suspensión de una entidad bloquea sus torneos en las reglas vía users/{uid}.organizerId
+  const vincular = async () => {
+    setVinculando(true);
+    try {
+      const r = await vincularOrganizadores();
+      toast.success(`Listo: ${r.vinculadas} ${r.vinculadas === 1 ? "cuenta vinculada" : "cuentas vinculadas"}`);
+    } catch (err) {
+      console.error("Error vinculando organizadores:", err);
+      toast.error("No pudimos vincular las cuentas.");
+    } finally {
+      setVinculando(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -146,6 +161,10 @@ export default function Organizadores() {
           Organizadores
           {!cargando && !error && <span className="pd-count">{organizadores.length}</span>}
         </h1>
+        <div className="flex flex-col gap-2 md:flex-row md:items-center">
+        <Button size="sm" variant="ghost" onClick={vincular} cargando={vinculando ? "Vinculando…" : ""} title="Completa la entidad de cada cuenta para que la suspensión bloquee sus torneos">
+          Vincular cuentas
+        </Button>
         <SearchInput
           wrapperClassName="w-full md:max-w-sm"
           value={busqueda}
@@ -153,6 +172,7 @@ export default function Organizadores() {
           placeholder="Buscar por nombre o email"
           aria-label="Buscar organizadores por nombre o email del dueño"
         />
+        </div>
       </header>
 
       {cargando ? (

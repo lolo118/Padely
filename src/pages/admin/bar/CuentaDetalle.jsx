@@ -699,7 +699,8 @@ export default function CuentaDetalle() {
                           <td>{it.agregadoPor === uid ? "Vos" : it.agregadoPorNombre || "—"}</td>
                           {abierta && (!legacy || editable) && (
                             <td className="num">
-                              {!pagada && <Button variant="ghost" size="sm" iconOnly aria-label={`Quitar ${it.nombre}`} icon={<X className="pd-icon" size={20} aria-hidden="true" />} onClick={() => quitar(it)} />}
+                              {/* P3-10: con pagos en la cuenta, sacar consumos queda para quien anula ventas (lo exigen las reglas) */}
+                              {!pagada && (!hayPagos || puedeAnular) && <Button variant="ghost" size="sm" iconOnly aria-label={`Quitar ${it.nombre}`} icon={<X className="pd-icon" size={20} aria-hidden="true" />} onClick={() => quitar(it)} />}
                             </td>
                           )}
                         </tr>

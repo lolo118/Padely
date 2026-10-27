@@ -7,6 +7,8 @@ import { useAuthStore } from "../store/authStore";
 import { getClubConfig } from "../services/canchaService";
 import { aceptarInvitacion, estadoDeInvitacion, getInvitacion } from "../services/staffService";
 import { ROLES, rolLabel } from "../utils/staff";
+import { necesitaVerificar } from "../services/authService";
+import VerificarEmailAviso from "../components/VerificarEmailAviso";
 import { toast } from "../components/Toast";
 import { Alert, Button, Card } from "../components/ui";
 
@@ -258,9 +260,14 @@ export default function AceptarInvitacionStaff() {
           <h2 className="heading-md">Te invitan como {rolLabel(inv.rol)}</h2>
           {descripcionRol && <p className="body-sm text-ink-2 mt-1">{descripcionRol}</p>}
         </div>
-        <Button variant="primary" block onClick={aceptar} cargando={aceptando ? "Aceptando…" : ""}>
-          Aceptar invitación
-        </Button>
+        {/* P3-10: las reglas exigen el email verificado para aceptar (Google ya viene verificado) */}
+        {necesitaVerificar(user) ? (
+          <VerificarEmailAviso />
+        ) : (
+          <Button variant="primary" block onClick={aceptar} cargando={aceptando ? "Aceptando…" : ""}>
+            Aceptar invitación
+          </Button>
+        )}
         <p className="body-sm text-ink-3">Ingresaste como {user.email}.</p>
       </>
     );

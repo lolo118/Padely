@@ -3276,3 +3276,26 @@ exports.onAvisoPagoCreated = onDocumentCreated("avisosPago/{avisoId}", async (ev
   await batch.commit();
   logger.info(`plan: aviso de pago de ${aviso.clubId} → ${admins.size} super-admins`);
 });
+
+// ============================================================================
+// ORGANIZADORES (P3-10): users/{uid}.organizerId vincula la cuenta con su entidad para que las reglas bloqueen
+// los torneos de una entidad suspendida. Lo escriben solo estas Functions (las reglas no dejan que el usuario lo toque).
+// ============================================================================
+exports.onOrganizerCreated = onDocumentCreated("organizers/{orgId}", async (event) => {
+  const org = event.data && event.data.data();
+  if (!org || !org.ownerUid) return;
+  await userRef(org.ownerUid).set({ organizerId: event.params.orgId }, { merge: true });
+  logger.info(`organizador ${event.params.orgId} vinculado a ${org.ownerUid}`);
+});
+
+// Super-admin: completa organizerId en las cuentas de las entidades que ya existían
+exports.vincularOrganizadores = onCall({ region: REGION, timeoutSeconds: 120 }, async (request) => {
+  const uid = exigirAuth(request);
+  const admin = await db.collection("superadmins").doc(uid).get();
+  if (!admin.exists) throw new HttpsError("permission-denied", "Solo el super-admin");
+  const snap = await db.collection("organizers").get();
+  const ops = snap.docs.filter((d) => d.data().ownerUid).map((d) => (b) => b.set(userRef(d.data().ownerUid), { organizerId: d.id }, { merge: true }));
+  await escribirEnLotes(ops);
+  logger.info(`vincularOrganizadores: ${ops.length} cuentas por ${uid}`);
+  return { ok: true, vinculadas: ops.length };
+});

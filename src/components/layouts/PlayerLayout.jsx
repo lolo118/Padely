@@ -6,6 +6,7 @@ import useThemeStore from "../../store/themeStore";
 import ThemeToggle from "../ThemeToggle";
 import NotificationBell from "../NotificationBell";
 import InstallBanner from "../InstallBanner";
+import VerificarEmailAviso from "../VerificarEmailAviso";
 import AppBar from "../ui/AppBar";
 import BottomNav from "../ui/BottomNav";
 import Button from "../ui/Button";
@@ -128,6 +129,7 @@ export default function PlayerLayout() {
 
       {/* Main */}
       <main className="flex-1 w-full max-w-[960px] mx-auto px-4 sm:px-6 pt-5 pb-24 md:pb-10">
+        <VerificarEmailAviso className="mb-4" />
         <Outlet />
       </main>
 

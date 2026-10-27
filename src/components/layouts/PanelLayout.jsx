@@ -8,6 +8,7 @@ import NotificationBell from "../NotificationBell";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 import Sidebar from "../ui/Sidebar";
+import VerificarEmailAviso from "../VerificarEmailAviso";
 import { Wordmark } from "../ui/AppBar";
 import { rolLabel } from "../../utils/staff";
 
@@ -125,6 +126,7 @@ export default function PanelLayout({ rol, inicio, items, aviso = null }) {
 
       <main className="flex-1 min-w-0 w-full max-w-[1200px] p-4 md:p-6">
         {aviso && <div className="mb-4">{aviso}</div>}
+        <VerificarEmailAviso className="mb-4" />
         <Outlet />
       </main>
     </div>

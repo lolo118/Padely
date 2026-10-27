@@ -826,7 +826,8 @@ export default function Configuracion() {
                   </span>
                 )}
                 <div className="grid gap-1">
-                  {esDueño ? (
+                  {/* P3-10: el dueño o el staff con 'configurarClub' (las reglas de Storage lo permiten) */}
+                  {esDueño || puedeConfigurar ? (
                     <>
                       <label className="pd-btn cursor-pointer! has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus" aria-disabled={subiendoLogo || undefined}>
                         <Upload className="pd-icon" size={20} aria-hidden="true" />
@@ -836,8 +837,7 @@ export default function Configuracion() {
                       <span className="pd-help">PNG, JPG o SVG (máx. 5MB)</span>
                     </>
                   ) : (
-                    // El archivo va a Storage, cuyas reglas solo dejan escribir al dueño del club
-                    <span className="pd-help">El logo lo cambia el dueño del club.</span>
+                    <span className="pd-help">El logo lo cambia quien configura el club.</span>
                   )}
                 </div>
               </div>

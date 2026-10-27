@@ -1,5 +1,6 @@
 import {
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
@@ -124,4 +125,14 @@ export const getUserData = async (uid) => {
   const snap = await getDoc(doc(db, "users", uid));
   if (!snap.exists()) return null;
   return snap.data();
+};
+
+// P3-10: cuenta con email y contraseña sin verificar (Google ya viene verificado; las anónimas no aplican)
+export const necesitaVerificar = (user) =>
+  !!user && !user.isAnonymous && user.emailVerified === false && (user.providerData || []).some((p) => p && p.providerId === "password");
+
+export const reenviarVerificacion = async () => {
+  if (!auth.currentUser) return;
+  auth.languageCode = "es";
+  await sendEmailVerification(auth.currentUser);
 };

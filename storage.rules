@@ -9,10 +9,16 @@ service firebase.storage {
       allow read: if signedIn();
       allow write: if signedIn() && request.auth.uid == userId && isImage();
     }
+    // El logo del club lo sube el dueño o el staff activo con 'configurarClub' (P3-10)
+    function staffConfigura(clubId) {
+      let ref = /databases/(default)/documents/clubs/$(clubId)/staff/$(request.auth.uid);
+      return firestore.exists(ref) && firestore.get(ref).data.activo == true && 'configurarClub' in firestore.get(ref).data.permisos;
+    }
     match /club-logos/{clubId}/{file} {
       allow read: if signedIn();
       allow write: if signedIn() && isImage()
-        && firestore.get(/databases/(default)/documents/clubs/$(clubId)).data.ownerUid == request.auth.uid;
+        && (firestore.get(/databases/(default)/documents/clubs/$(clubId)).data.ownerUid == request.auth.uid
+            || staffConfigura(clubId));
     }
     match /org-logos/{orgId}/{file} {
       allow read: if signedIn();

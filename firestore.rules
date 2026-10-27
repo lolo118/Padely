@@ -65,11 +65,16 @@ service cloud.firestore {
     function invitacionValidaPara(clubId, data) {
       let inv = get(/databases/$(database)/documents/clubs/$(clubId)/invitaciones/$(data.invitacionId)).data;
       return invitadoPorEmail(inv)
+        && emailVerificado()
         && inv.estado == 'pendiente'
         && inv.vence > request.time
         && data.rol == inv.rol
         && data.permisos == inv.permisos
         && data.descuentoMax == inv.descuentoMax;
+    }
+    // P3-10: para aceptar una invitación al equipo hace falta el email verificado (Google ya lo trae verificado)
+    function emailVerificado() {
+      return request.auth.token.get('email_verified', false) == true;
     }
     function rolDeStaffValido(rol) {
       return rol in ['encargado', 'cajero', 'barra'];
@@ -79,7 +84,15 @@ service cloud.firestore {
     }
     function tournamentOrganizer(tid) {
       return signedIn()
-        && get(/databases/$(database)/documents/tournaments/$(tid)).data.organizerId == request.auth.uid;
+        && get(/databases/$(database)/documents/tournaments/$(tid)).data.organizerId == request.auth.uid
+        && !organizadorSuspendido();
+    }
+    // P3-10: la entidad organizadora de la cuenta (users/{uid}.organizerId, lo escriben solo las Functions) está
+    // suspendida → no escribe torneos. Sin entidad vinculada, no aplica.
+    function organizadorSuspendido() {
+      let orgId = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('organizerId', null);
+      return orgId != null
+        && get(/databases/$(database)/documents/organizers/$(orgId)).data.get('suspendido', false) == true;
     }
     function changedOnly(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
@@ -185,12 +198,13 @@ service cloud.firestore {
     // nombre a mostrar; un ranking público se publicaría como proyección desde una Cloud Function.
     match /users/{userId} {
       allow read: if isSelf(userId) || superAdmin();
-      allow create: if isSelf(userId) && noAnonimo();
+      allow create: if isSelf(userId) && noAnonimo() && !request.resource.data.keys().hasAny(['organizerId']);
       allow delete: if isSelf(userId);
-      // Own profile: anything except role and ranking fields. The super-admin only fixes the role (one of three).
+      // Own profile: anything except role, ranking fields and organizerId (P3-10, Functions only). The super-admin
+      // only fixes the role (one of three).
       allow update: if (isSelf(userId)
         && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['role', 'puntos', 'nivel', 'partidosGanados', 'partidosPerdidos', 'partidosJugados',
+            .hasAny(['role', 'organizerId', 'puntos', 'nivel', 'partidosGanados', 'partidosPerdidos', 'partidosJugados',
                      'torneosJugados', 'torneosGanados', 'torneosGanadosEnCategoria', 'ascensos']))
         || (superAdmin()
             && changedOnly(['role'])
@@ -443,6 +457,11 @@ service cloud.firestore {
       // los jugadores nunca la escriben directo (sumarse, asignar, invitar van por Functions). Los pagos solo los
       // escribe quien cobra; la barra ('pedidos') suma participantes solo al aceptar un pedido (el autor).
       match /cuentas/{cuentaId} {
+        function itemsNoBajanConPagos(clubId) {
+          return resource.data.get('pagos', []).size() == 0
+            || request.resource.data.get('items', []).size() >= resource.data.get('items', []).size()
+            || esStaff(clubId, 'anularVenta');
+        }
         allow read: if esStaffCaja(clubId) || esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender') || esStaff(clubId, 'pedidos')
           || (signedIn() && resource.data.jugadorUid == request.auth.uid)
           || (signedIn() && request.auth.uid in resource.data.get('participantesUids', []))
@@ -460,13 +479,17 @@ service cloud.firestore {
         // solo suma consumos (al aceptar un pedido). Una cuenta anulada se puede reabrir (vuelve vacía, con lo
         // anterior en historial) por quien cobra o atiende la barra. Campos de la Function: cuentaAplicada,
         // avisoVencidaEnviado, cierreAutomatico, pedidosPendientes.
+        // P3-10: con algún pago en la cuenta, sacar consumos (la lista se achica) queda para quien puede anular ventas
+        // (dueño o encargado); sumar consumos sigue abierto para quien vende o atiende la barra.
         allow update: if (resource.data.estado == 'abierta'
             && (((esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender'))
                  && changedOnly(['items', 'totales', 'division', 'cancha', 'ventas', 'pagos', 'participantes', 'participantesUids', 'alertas', 'actualizadoEn', 'nombreJugador'])
-                 && request.resource.data.estado == 'abierta')
+                 && request.resource.data.estado == 'abierta'
+                 && itemsNoBajanConPagos(clubId))
                 || (esStaff(clubId, 'pedidos')
                     && changedOnly(['items', 'totales', 'division', 'participantes', 'participantesUids', 'actualizadoEn'])
-                    && request.resource.data.estado == 'abierta')
+                    && request.resource.data.estado == 'abierta'
+                    && itemsNoBajanConPagos(clubId))
                 || ((esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender'))
                     && changedOnly(['estado', 'cerradaPor', 'cerradaEn', 'ventas', 'division', 'totales', 'pagos', 'participantes', 'participantesUids', 'anulacion', 'actualizadoEn'])
                     && request.resource.data.estado in ['cerrada', 'anulada']
@@ -597,6 +620,7 @@ service cloud.firestore {
               && changedOnly(['estado'])
               && request.resource.data.estado == 'cancelada')
           || (invitadoPorEmail(resource.data)
+              && emailVerificado()
               && resource.data.estado == 'pendiente'
               && resource.data.vence > request.time
               && changedOnly(['estado', 'uid', 'aceptadaEn'])
@@ -653,10 +677,12 @@ service cloud.firestore {
 
     match /tournaments/{tid} {
       allow read: if true;
-      allow create: if noAnonimo() && request.resource.data.organizerId == request.auth.uid && clubVinculoValido();
+      allow create: if noAnonimo() && request.resource.data.organizerId == request.auth.uid && clubVinculoValido()
+        && !organizadorSuspendido();
       // El organizador edita todo salvo poner "aceptado" en un club ajeno; el club sede (dueño o staff con
       // 'gestionarTorneos') solo responde el pedido (club.estado) sin cambiar el club
       allow update: if (signedIn() && resource.data.organizerId == request.auth.uid
+            && !organizadorSuspendido()
             && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['club'])
                 || clubSinCambios()
                 || clubVinculoValido()))

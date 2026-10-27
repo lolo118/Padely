@@ -13,7 +13,8 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "../lib/firebase";
 import { getTodayLocal } from "../utils/formatDate";
 
 // Panel de super-admin (Sebastián). Quién es super-admin lo dice superadmins/{uid}, que se crea a mano en la
@@ -190,3 +191,7 @@ export const reactivarEntidad = async (coleccion, id, { uid }) => {
     suspendidoPor: uid,
   });
 };
+
+// P3-10: completa users/{uid}.organizerId en las cuentas de las entidades existentes (para bloquear torneos de una
+// entidad suspendida) → { vinculadas }
+export const vincularOrganizadores = async () => (await httpsCallable(functions, "vincularOrganizadores")({})).data;
