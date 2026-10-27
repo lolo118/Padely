@@ -40,6 +40,7 @@ const AdminCanchas = lazy(() => import("./pages/admin/Canchas"));
 const AdminEstadisticas = lazy(() => import("./pages/admin/Estadisticas"));
 const AdminConfiguracion = lazy(() => import("./pages/admin/Configuracion"));
 const AdminMiPlan = lazy(() => import("./pages/admin/MiPlan"));
+const AdminEmpezar = lazy(() => import("./pages/admin/Empezar"));
 const BarProductos = lazy(() => import("./pages/admin/bar/Productos"));
 const BarCaja = lazy(() => import("./pages/admin/bar/Caja"));
 const BarVender = lazy(() => import("./pages/admin/bar/Vender"));
@@ -280,6 +281,7 @@ export default function App() {
             <Route path="estadisticas" element={<AdminEstadisticas />} />
             <Route path="configuracion" element={<AdminConfiguracion />} />
             <Route path="plan" element={<AdminMiPlan />} />
+            <Route path="empezar" element={<AdminEmpezar />} />
             {/* Bar: secciones del plan PRO (P3-9); en FREE muestran "Disponible en PRO" */}
             <Route path="bar/vender" element={<RequierePro titulo="Vender"><BarVender /></RequierePro>} />
             <Route path="bar/kiosk" element={<RequierePro titulo="El kiosco"><BarKiosk /></RequierePro>} />

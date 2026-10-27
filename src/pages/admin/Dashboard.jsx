@@ -324,6 +324,23 @@ export default function Dashboard() {
         </p>
       </div>
 
+      {/* P3-12: club sin canchas → el asistente de 3 pasos */}
+      {!loading && club && canchas.length === 0 && (puede("tarifas") || puede("configurarClub")) && (
+        <Card className="mb-4">
+          <p className="pd-eyebrow m-0">Empezá en 3 pasos</p>
+          <Card.Title as="h2" className="mt-1!">Dejá tu club listo para recibir reservas</Card.Title>
+          <Card.Meta className="mt-1!">Creá tu primera cancha con su horario y precio, elegí la seña y compartí el link de tu club.</Card.Meta>
+          <div className="mt-4 pd-btn-group">
+            <Button variant="primary" onClick={() => navigate("/admin/empezar")}>
+              Empezar
+            </Button>
+            <Button variant="ghost" onClick={() => navigate("/admin/canchas")}>
+              Prefiero hacerlo yo
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* P3-9: el plan del club para quien lo configura (los clubes de antes, sin plan, no ven nada) */}
       {plan && plan.tipo !== "legacy" && puede("configurarClub") && (
         <Card variant="hover" as="div" className="mb-4 flex items-center justify-between gap-3 flex-wrap py-3!" {...linkProps("/admin/plan")}>
