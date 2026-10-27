@@ -4,6 +4,7 @@ import { Check, MessageCircle, ReceiptText, ShoppingBag, X } from "lucide-react"
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { useAuthStore } from "../../store/authStore";
+import { tienePro } from "../../utils/planes";
 import { Alert, Badge, Button, Card } from "../ui";
 import { toast } from "../Toast";
 import { confirmar } from "../ConfirmDialog";
@@ -36,7 +37,9 @@ export default function FichaTurno({ clubId, club, reserva: reservaProp = null, 
   const user = useAuthStore((s) => s.user);
   const perfil = useAuthStore((s) => s.perfil);
   const puedeReservas = puede("gestionarReservas");
-  const puedeCuentas = puede("cobrarTurnos") || puede("vender");
+  // P3-9: las cuentas del turno son del plan PRO (las reglas niegan crearlas en FREE)
+  const clubActual = useAuthStore((s) => s.clubActual);
+  const puedeCuentas = (puede("cobrarTurnos") || puede("vender")) && tienePro(club || clubActual);
   const puedePedidos = puede("pedidos") || puedeCuentas;
   const uid = user?.uid || null;
   const nombre = perfil?.nombre || user?.displayName || user?.email || "";

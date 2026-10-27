@@ -14,6 +14,13 @@ import { auth, db } from "../lib/firebase";
 
 export const registerUser = async (email, password, datos) => {
   const { user } = await createUserWithEmailAndPassword(auth, email, password);
+  // P3-10: mail de verificación en castellano (hace falta para aceptar invitaciones al equipo de un club)
+  try {
+    auth.languageCode = "es";
+    await sendEmailVerification(user);
+  } catch (err) {
+    console.error("No se pudo mandar el mail de verificación:", err);
+  }
 
   await setDoc(doc(db, "users", user.uid), {
     uid: user.uid,

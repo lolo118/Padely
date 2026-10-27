@@ -46,7 +46,8 @@ function Estado({ club }) {
 // acá se guarda un override explícito de 0 a 10 % en pasos de 0,5, o se vuelve a la del plan
 const tieneOverride = (club) => club?.mercadoPago?.comisionOverridePct !== undefined && club?.mercadoPago?.comisionOverridePct !== null;
 function ComisionDialog({ club, onCerrar, onGuardado }) {
-  const [pct, setPct] = useState(String(comisionPct(club)));
+  // Vacío = sin override (usa la del plan); así abrir y guardar sin cambios no fija la comisión para siempre
+  const [pct, setPct] = useState(tieneOverride(club) ? String(club.mercadoPago.comisionOverridePct) : "");
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
   const volverAlPlan = async () => {
@@ -62,6 +63,11 @@ function ComisionDialog({ club, onCerrar, onGuardado }) {
     }
   };
   const guardar = async () => {
+    if (String(pct).trim() === "") {
+      if (tieneOverride(club)) await volverAlPlan();
+      else onCerrar();
+      return;
+    }
     const n = Number(String(pct).replace(",", "."));
     if (!Number.isFinite(n) || n < 0 || n > 10 || Math.round(n * 2) !== n * 2) {
       setError("Entre 0 y 10, en pasos de 0,5.");
@@ -99,8 +105,8 @@ function ComisionDialog({ club, onCerrar, onGuardado }) {
       }
     >
       <div className="mt-4">
-        <Field label="Comisión (%)" help={`Sin override, sale del plan (FREE 2,5 %, prueba y PRO 0 %). ${tieneOverride(club) ? "Este club tiene un override." : "Guardar crea un override."} Cambia los pagos nuevos, no los ya creados.`} error={error}>
-          <Input type="number" min="0" max="10" step="0.5" inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} data-autofocus className="pd-tnum" />
+        <Field label="Comisión (%)" help={`Vacío = la del plan (FREE 2,5 %, prueba y PRO 0 %). Un número la fija para este club${tieneOverride(club) ? " (hoy tiene una fija)" : ""}. Cambia los pagos nuevos, no los ya creados.`} error={error}>
+          <Input type="number" min="0" max="10" step="0.5" inputMode="decimal" value={pct} placeholder={`${comisionPct(club).toLocaleString("es-AR")} (según el plan)`} onChange={(e) => setPct(e.target.value)} data-autofocus className="pd-tnum" />
         </Field>
       </div>
     </Dialogo>

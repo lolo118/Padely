@@ -87,12 +87,13 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/tournaments/$(tid)).data.organizerId == request.auth.uid
         && !organizadorSuspendido();
     }
-    // P3-10: la entidad organizadora de la cuenta (users/{uid}.organizerId, lo escriben solo las Functions) está
-    // suspendida → no escribe torneos. Sin entidad vinculada, no aplica.
+    // P3-10: la entidad organizadora de la cuenta está suspendida → no escribe torneos. El vínculo vive en
+    // organizadoresPorUid/{uid} (lo escriben solo las Functions; el usuario no puede borrarlo como su perfil).
+    // Sin entidad vinculada, no aplica.
     function organizadorSuspendido() {
-      let orgId = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('organizerId', null);
-      return orgId != null
-        && get(/databases/$(database)/documents/organizers/$(orgId)).data.get('suspendido', false) == true;
+      let ref = /databases/$(database)/documents/organizadoresPorUid/$(request.auth.uid);
+      return exists(ref)
+        && get(/databases/$(database)/documents/organizers/$(get(ref).data.orgId)).data.get('suspendido', false) == true;
     }
     function changedOnly(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
@@ -169,6 +170,12 @@ service cloud.firestore {
     // Al entrar, cada persona busca los clubes donde es staff (la consulta lleva where("uid", "==", auth.uid))
     match /{path=**}/staff/{uid} {
       allow read: if (signedIn() && resource.data.uid == request.auth.uid) || superAdmin();
+    }
+
+    // P3-10: cuenta → entidad organizadora (lo escriben onOrganizerCreated y vincularOrganizadores)
+    match /organizadoresPorUid/{uid} {
+      allow read: if isSelf(uid) || superAdmin();
+      allow write: if false;
     }
 
     // P3-9: datos de pago de Padely (alias, CBU, WhatsApp) que ven los clubes en Mi plan; los edita el super-admin

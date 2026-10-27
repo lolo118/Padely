@@ -3287,7 +3287,10 @@ exports.onAvisoPagoCreated = onDocumentCreated("avisosPago/{avisoId}", async (ev
 exports.onOrganizerCreated = onDocumentCreated("organizers/{orgId}", async (event) => {
   const org = event.data && event.data.data();
   if (!org || !org.ownerUid) return;
-  await userRef(org.ownerUid).set({ organizerId: event.params.orgId }, { merge: true });
+  await Promise.all([
+    userRef(org.ownerUid).set({ organizerId: event.params.orgId }, { merge: true }),
+    db.collection("organizadoresPorUid").doc(org.ownerUid).set({ orgId: event.params.orgId, actualizadoEn: FieldValue.serverTimestamp() }),
+  ]);
   logger.info(`organizador ${event.params.orgId} vinculado a ${org.ownerUid}`);
 });
 
@@ -3297,8 +3300,12 @@ exports.vincularOrganizadores = onCall({ region: REGION, timeoutSeconds: 120 }, 
   const admin = await db.collection("superadmins").doc(uid).get();
   if (!admin.exists) throw new HttpsError("permission-denied", "Solo el super-admin");
   const snap = await db.collection("organizers").get();
-  const ops = snap.docs.filter((d) => d.data().ownerUid).map((d) => (b) => b.set(userRef(d.data().ownerUid), { organizerId: d.id }, { merge: true }));
+  const conDueño = snap.docs.filter((d) => d.data().ownerUid);
+  const ops = conDueño.flatMap((d) => [
+    (b) => b.set(userRef(d.data().ownerUid), { organizerId: d.id }, { merge: true }),
+    (b) => b.set(db.collection("organizadoresPorUid").doc(d.data().ownerUid), { orgId: d.id, actualizadoEn: FieldValue.serverTimestamp() }),
+  ]);
   await escribirEnLotes(ops);
-  logger.info(`vincularOrganizadores: ${ops.length} cuentas por ${uid}`);
-  return { ok: true, vinculadas: ops.length };
+  logger.info(`vincularOrganizadores: ${conDueño.length} cuentas por ${uid}`);
+  return { ok: true, vinculadas: conDueño.length };
 });

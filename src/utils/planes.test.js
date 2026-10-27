@@ -64,6 +64,9 @@ test("FREE: bar y staff bloqueados, comisión 2,5 % salvo override del super-adm
   assert.equal(comisionPct({ ...club, mercadoPago: { comisionOverridePct: 1 } }, T0), 1);
   assert.equal(comisionPct({ plan: { tipo: "pro", vence: T0 + DIA } }, T0), 0);
   assert.equal(comisionPct({ plan: planInicial() }, T0), 0);
+  // Una comisión puesta antes de los planes (comisionPadelyPct > 0) se respeta aunque el club sea "de antes"
+  assert.equal(comisionPct({ mercadoPago: { comisionPadelyPct: 5 } }, T0), 5);
+  assert.equal(comisionPct({ plan: { tipo: "free" }, mercadoPago: { comisionPadelyPct: 0 } }, T0), COMISION_FREE_PCT);
 });
 
 test("pago recibido: +1 mes desde el vencimiento vigente o desde hoy; anual = 12 meses a precio de 10", () => {
@@ -84,8 +87,12 @@ test("pago recibido: +1 mes desde el vencimiento vigente o desde hoy; anual = 12
 });
 
 test("sumarMeses respeta fin de mes y aMs entiende Timestamps", () => {
-  assert.equal(new Date(sumarMeses(Date.UTC(2026, 0, 31), 1)).getUTCDate(), 28);
-  assert.equal(new Date(sumarMeses(Date.UTC(2028, 0, 31), 1)).getUTCDate(), 29);
+  assert.equal(new Date(sumarMeses(Date.UTC(2026, 0, 31, 15), 1)).getUTCDate(), 28);
+  assert.equal(new Date(sumarMeses(Date.UTC(2028, 0, 31, 15), 1)).getUTCDate(), 29);
+  // 30/01 22:00 en Argentina (31/01 01:00 UTC) + 1 mes = 28/02 22:00 en Argentina, no el 27
+  const r = sumarMeses(Date.UTC(2026, 0, 31, 1), 1);
+  assert.equal(new Date(r - 3 * 3600000).getUTCDate(), 28);
+  assert.equal(new Date(r - 3 * 3600000).getUTCHours(), 22);
   assert.equal(aMs({ toMillis: () => 5 }), 5);
   assert.equal(aMs({ seconds: 2, nanoseconds: 0 }), 2000);
   assert.equal(aMs(null), null);

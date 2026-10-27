@@ -42,15 +42,16 @@ export function aMs(v) {
   return Number.isFinite(d) ? d : null;
 }
 
-// Mismo día calendario + n meses (31/01 + 1 → 28/02 o 29/02)
+// Mismo día calendario (en hora argentina, UTC−3) + n meses (31/01 + 1 → 28/02 o 29/02)
+const ART_MS = 3 * 60 * 60 * 1000;
 export function sumarMeses(ms, meses) {
-  const d = new Date(ms);
+  const d = new Date(ms - ART_MS);
   const dia = d.getUTCDate();
   d.setUTCDate(1);
   d.setUTCMonth(d.getUTCMonth() + meses);
   const ultimo = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
   d.setUTCDate(Math.min(dia, ultimo));
-  return d.getTime();
+  return d.getTime() + ART_MS;
 }
 
 // Estado efectivo del plan en un instante. `pro` = las funciones PRO están habilitadas.
@@ -82,10 +83,14 @@ export const tienePro = (club, ahora = Date.now()) => estadoPlan(club, ahora).pr
 export const FUNCIONES_PRO = ["bar", "staff"];
 export const puedeUsar = (club, funcion, ahora = Date.now()) => !FUNCIONES_PRO.includes(funcion) || tienePro(club, ahora);
 
-// Comisión de Padely sobre cada pago online: un override explícito del super-admin gana; si no, FREE 2,5 % y el resto 0
+// Comisión de Padely sobre cada pago online: un override explícito del super-admin gana; después, una comisión > 0
+// puesta antes de los planes (mercadoPago.comisionPadelyPct, se respeta igual); si no, FREE 2,5 % y el resto 0
 export function comisionPct(club, ahora = Date.now()) {
-  const override = club && club.mercadoPago ? club.mercadoPago.comisionOverridePct : undefined;
+  const mp = (club && club.mercadoPago) || {};
+  const override = mp.comisionOverridePct;
   if (override !== undefined && override !== null && Number.isFinite(Number(override))) return Number(override);
+  const anterior = Number(mp.comisionPadelyPct);
+  if (Number.isFinite(anterior) && anterior > 0) return anterior;
   return estadoPlan(club, ahora).pro ? 0 : COMISION_FREE_PCT;
 }
 
