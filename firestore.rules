@@ -162,6 +162,12 @@ service cloud.firestore {
     function sinContacto(campos) {
       return !request.resource.data.keys().hasAny(campos);
     }
+    // P3-15 (revisión): una reserva que crea o re-reserva el jugador nace con la seña SIN pagar. La marca de pagada
+    // la ponen el club o las Functions (MP, crédito); si no, se podría inventar crédito cancelando una seña "pagada".
+    function senaSinPagar() {
+      return request.resource.data.get('señaPagada', false) == false
+        && !request.resource.data.keys().hasAny(['señaMedio', 'señaPagoMpId', 'señaResultado', 'canceladaPor']);
+    }
 
     // "Mis reservas": a player reads his reservations across clubs (collection group query)
     match /{path=**}/reservas/{reservaId} {
@@ -714,6 +720,7 @@ service cloud.firestore {
               || (noAnonimo()
                   && request.resource.data.jugadorUid == request.auth.uid
                   && clubActivo(clubId)
+                  && senaSinPagar()
                   && limiteRespetado('reservas')
                   && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
                       || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente'))));
@@ -726,6 +733,7 @@ service cloud.firestore {
                   && sinContacto(['email', 'telefono'])
                   && request.resource.data.jugadorUid == request.auth.uid
                   && clubActivo(clubId)
+                  && senaSinPagar()
                   && limiteRespetado('reservas')
                   && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
                       || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente'))));

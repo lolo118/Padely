@@ -190,6 +190,9 @@ export default function TabParejas({ torneoId, torneo, onParejasChange }) {
     if (!ok) return;
     try {
       await eliminarPareja(torneoId, parejaId);
+      // P3-15 (revisión): la inscripción de esa pareja queda rechazada; si la pagó por MP, onInscripcionEscrita la devuelve
+      const inscId = parejas.find((p) => p.id === parejaId)?.inscripcionId;
+      if (inscId) await actualizarInscripcion(torneoId, inscId, { status: "rechazada" }).catch((err) => console.error("No se pudo marcar la inscripción:", err));
       const nuevas = parejas.filter((p) => p.id !== parejaId);
       setParejas(nuevas);
       toast.success("Pareja eliminada");

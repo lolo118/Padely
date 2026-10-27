@@ -133,6 +133,13 @@ describe("límites de frecuencia", () => {
     b.set(doc(db, "clubs", CLUB, "reservas", "nueva2"), reservaJugador("jugador", "nueva2"));
     await assertSucceeds(b.commit());
   });
+  test("el jugador no crea una reserva con la seña ya pagada (P3-15)", async () => {
+    const db = como("jugador");
+    const b = writeBatch(db);
+    b.set(doc(db, "users", "jugador", "limites", "reservas"), { ventanaInicio: serverTimestamp(), cuenta: 1, actualizadoEn: serverTimestamp() });
+    b.set(doc(db, "clubs", CLUB, "reservas", "nueva3"), { ...reservaJugador("jugador", "nueva3"), seña: 999999, señaPagada: true });
+    await assertFails(b.commit());
+  });
   test("el contador no pasa de 5 en la ventana ni se borra", async () => {
     await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "users", "jugador", "limites", "reservas"), { ventanaInicio: Timestamp.now(), cuenta: 5, actualizadoEn: Timestamp.now() }));
     const db = como("jugador");

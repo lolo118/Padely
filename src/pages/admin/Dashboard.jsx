@@ -254,7 +254,7 @@ export default function Dashboard() {
     const ok = await confirmar({ titulo: "Rechazar reserva", mensaje: "¿Rechazar esta reserva? Se le avisará al jugador.", confirmText: "Rechazar", danger: true });
     if (!ok) return;
     try {
-      await actualizarReservaGrupo(club.id, grupoId, { status: "cancelada" });
+      await actualizarReservaGrupo(club.id, grupoId, { status: "cancelada", canceladaPor: "club" });
       const reserva = reservasPendientes.find((r) => r.id === grupoId);
       if (reserva?.jugadorUid) {
         notificarReservaRechazada(reserva.jugadorUid, club.nombre, reserva.canchaName || "", reserva.fecha, rangoHoras(reserva.horaInicio, reserva.horaFin));

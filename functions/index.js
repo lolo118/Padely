@@ -2609,7 +2609,7 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
       return { cubiertoPorCredito: true, monto: 0, creditoAplicado: seña };
     }
     const creditoAplicado = credito > 0 ? credito : 0;
-    destino = { monto: seña - creditoAplicado, creditoAplicado, creditoIds: creditos.map((c) => c.id), titulo: `${club.nombre || "Club"} · ${r.canchaName || "Cancha"} · ${fechaCortaArgentina(r.fecha)} ${r.horaInicio || r.hora || ""} · Seña`, backUrl: `${APP_URL}/mis-reservas`, pagador: { uid, nombre }, participanteIds: [], lineas: [], piezas: [], grupoId: null, reservaId, filtro: { reservaId, monto: seña, participanteIds: [] } };
+    destino = { monto: seña - creditoAplicado, creditoAplicado, creditoIds: creditos.map((c) => c.id), titulo: `${club.nombre || "Club"} · ${r.canchaName || "Cancha"} · ${fechaCortaArgentina(r.fecha)} ${r.horaInicio || r.hora || ""} · Seña`, backUrl: `${APP_URL}/mis-reservas`, pagador: { uid, nombre }, participanteIds: [], lineas: [], piezas: [], grupoId: null, reservaId, filtro: { reservaId, monto: seña - creditoAplicado, participanteIds: [] } };
   } else {
     const grupoId = texto(d.grupoId, 120);
     if (!grupoId) throw new HttpsError("invalid-argument", "grupoId");
@@ -2776,16 +2776,20 @@ async function aplicarPagoAprobado(clubRef, pagoMpRef, pago) {
     if (pm.tipo === "seña") {
       const cabezaRef = clubRef.collection("reservas").doc(pm.reservaId);
       const contadorRef = clubRef.collection("contadoresDispositivos").doc("MP");
-      const [cabeza, slots, contSnap] = await Promise.all([tx.get(cabezaRef), tx.get(clubRef.collection("reservas").where("grupoId", "==", pm.reservaId)), tx.get(contadorRef)]);
+      // P3-15 (revisión): el crédito descontado al crear la preferencia se relee acá; si otro pago ya lo usó, solo se
+      // marca el que sigue disponible y la diferencia queda anotada (señaFaltante) para que el club la cobre
+      const creditoRefs = Number(pm.creditoAplicado) > 0 && pm.pagador && pm.pagador.uid ? (pm.creditoIds || []).map((id) => userRef(pm.pagador.uid).collection("creditos").doc(String(id))) : [];
+      const [cabeza, slots, contSnap, ...creditoSnaps] = await Promise.all([tx.get(cabezaRef), tx.get(clubRef.collection("reservas").where("grupoId", "==", pm.reservaId)), tx.get(contadorRef), ...creditoRefs.map((ref) => tx.get(ref))]);
+      const creditosLibres = creditoSnaps.filter((c) => c.exists && c.data().estado === "disponible");
+      const creditoCubierto = Math.min(Number(pm.creditoAplicado) || 0, creditosLibres.reduce((acc, c) => acc + (Number(c.data().monto) || 0), 0));
+      const señaFaltante = Math.max(0, (Number(pm.creditoAplicado) || 0) - creditoCubierto);
       const docs = slots.docs.length ? slots.docs : cabeza.exists ? [cabeza] : [];
       const reserva = cabeza.exists ? cabeza.data() : docs[0] ? docs[0].data() : null;
-      const cambios = { señaPagada: true, señaMedio: "mercadopago", señaPagoMpId: pagoMpRef.id, señaPagadaEn: FieldValue.serverTimestamp() };
+      const cambios = { señaPagada: true, señaMedio: "mercadopago", señaPagoMpId: pagoMpRef.id, señaPagadaEn: FieldValue.serverTimestamp(), ...(señaFaltante > 0 ? { señaFaltante } : {}) };
       if (reserva && reserva.status === "pendiente" && club.reservaDirecta !== false) cambios.status = "confirmada";
       docs.forEach((s) => tx.update(s.ref, cambios));
       // P3-14 B: el crédito que se descontó de esta seña queda usado
-      if (Number(pm.creditoAplicado) > 0 && pm.pagador && pm.pagador.uid) {
-        (pm.creditoIds || []).forEach((id) => tx.update(userRef(pm.pagador.uid).collection("creditos").doc(String(id)), { estado: "usado", usadoEn: FieldValue.serverTimestamp(), usadoEnReserva: pm.reservaId }));
-      }
+      creditosLibres.forEach((c) => tx.update(c.ref, { estado: "usado", usadoEn: FieldValue.serverTimestamp(), usadoEnReserva: pm.reservaId }));
       // M3: la seña cobrada online es plata que entró: una venta online con UNA línea "seña" (positiva) para que
       // Reportes y el cierre la vean. La venta de la cuenta trae después su "Seña pagada" en negativo y el día cierra.
       const n = (Number(contSnap.exists ? contSnap.data().usado : 0) || 0) + 1;
@@ -3277,8 +3281,12 @@ const planPublico = (plan) => {
 };
 async function historialDelPlan(clubRef, club) {
   const priv = await clubRef.collection("privado").doc("plan").get();
-  if (priv.exists && Array.isArray(priv.data().historial)) return priv.data().historial;
-  return (club && club.plan && Array.isArray(club.plan.historial) && club.plan.historial) || [];
+  const privado = priv.exists && Array.isArray(priv.data().historial) ? priv.data().historial : [];
+  const publico = (club && club.plan && Array.isArray(club.plan.historial) && club.plan.historial) || [];
+  // P3-15 (revisión): entre el deploy y la migración puede haber entradas en los dos lados: se unen sin repetir
+  const clave = (h) => JSON.stringify([h && h.tipo, h && h.desde && (h.desde.seconds ?? h.desde), h && h.hasta && (h.hasta.seconds ?? h.hasta), h && h.monto, h && h.nota]);
+  const vistos = new Set(privado.map(clave));
+  return [...privado, ...publico.filter((h) => !vistos.has(clave(h)))];
 }
 async function guardarPlanServidor(clubRef, plan) {
   const p = planAFirestore(plan);
@@ -3505,6 +3513,23 @@ async function procesarSeñaCancelada(clubId, reservaId, reserva) {
     });
     if (r.accion === "nada") return;
     const resultado = { accion: r.accion, motivo: r.motivo, monto, en: FieldValue.serverTimestamp() };
+    const reservaRef = clubRef.collection("reservas").doc(reservaId);
+    // Idempotente aunque el trigger llegue dos veces: señaResultado se reclama en una transacción que relee la reserva,
+    // y el crédito tiene id fijo por reserva (club + reserva + creación: un turno re-reservado da otro id). Una seña pagada en parte con crédito y en parte por MP devuelve el crédito como crédito.
+    const pagoSnap = r.accion === "reembolso_mp" && reserva.señaPagoMpId ? await clubRef.collection("pagosMp").doc(String(reserva.señaPagoMpId)).get().catch(() => null) : null;
+    const creditoUsado = pagoSnap && pagoSnap.exists ? Number(pagoSnap.data().creditoAplicado) || 0 : 0;
+    const montoCredito = r.accion === "credito" ? monto : creditoUsado;
+    const reclamado = await db.runTransaction(async (tx) => {
+      const actual = await tx.get(reservaRef);
+      if (!actual.exists || actual.data().señaResultado) return false;
+      if (montoCredito > 0 && reserva.jugadorUid) {
+        tx.set(userRef(reserva.jugadorUid).collection("creditos").doc(`seña_${clubId}_${reservaId}_${(reserva.createdAt && reserva.createdAt.seconds) || 0}`), { clubId, clubNombre: club.nombre || null, monto: montoCredito, estado: "disponible", origen: { tipo: "seña", reservaId, fecha: reserva.fecha || null, motivo: r.motivo, ...(r.accion === "reembolso_mp" ? { parteCredito: true } : {}) }, creadoEn: FieldValue.serverTimestamp() });
+      }
+      tx.update(reservaRef, { señaResultado: { ...resultado, ...(creditoUsado > 0 ? { creditoDevuelto: creditoUsado } : {}), ...(r.accion === "credito" && !reserva.jugadorUid ? { sinCuenta: true } : {}) } });
+      return true;
+    });
+    if (!reclamado) return;
+    if (r.accion === "credito" && !reserva.jugadorUid) resultado.sinCuenta = true;
     const nombreClub = club.nombre || "el club";
     const montoTxt = `$ ${Math.round(monto).toLocaleString("es-AR")}`;
     let mensajeJugador = null;
@@ -3513,17 +3538,16 @@ async function procesarSeñaCancelada(clubId, reservaId, reserva) {
       // si MP no la acepta, avisa al dueño para que la haga a mano (como cualquier devolución)
       const ventas = await clubRef.collection("ventas").where("reservaId", "==", reservaId).where("estado", "==", "ok").limit(1).get();
       if (!ventas.empty) await ventas.docs[0].ref.update({ estado: "anulada", anulacion: { por: "sistema", porNombre: "Padely", motivo: `Reserva cancelada: ${r.motivo}`, en: Timestamp.now(), origen: "señaCancelada" }, actualizadoEn: FieldValue.serverTimestamp() });
-      else resultado.sinVenta = true;
-      mensajeJugador = `Tu reserva en ${nombreClub} se canceló y te devolvemos la seña (${montoTxt}) por Mercado Pago.`;
+      else await reservaRef.update({ "señaResultado.sinVenta": true });
+      const mpTxt = `$ ${Math.round(monto - creditoUsado).toLocaleString("es-AR")}`;
+      mensajeJugador = creditoUsado > 0
+        ? `Tu reserva en ${nombreClub} se canceló: te devolvemos ${mpTxt} por Mercado Pago y $ ${Math.round(creditoUsado).toLocaleString("es-AR")} te quedan como crédito ahí.`
+        : `Tu reserva en ${nombreClub} se canceló y te devolvemos la seña (${montoTxt}) por Mercado Pago.`;
     } else if (r.accion === "credito") {
-      if (reserva.jugadorUid) {
-        await userRef(reserva.jugadorUid).collection("creditos").add({ clubId, clubNombre: club.nombre || null, monto, estado: "disponible", origen: { tipo: "seña", reservaId, fecha: reserva.fecha || null, motivo: r.motivo }, creadoEn: FieldValue.serverTimestamp() });
-        mensajeJugador = `Tu reserva en ${nombreClub} se canceló: la seña (${montoTxt}) te queda como crédito para tu próxima reserva ahí.`;
-      } else resultado.sinCuenta = true;
+      if (reserva.jugadorUid) mensajeJugador = `Tu reserva en ${nombreClub} se canceló: la seña (${montoTxt}) te queda como crédito para tu próxima reserva ahí.`;
     } else if (r.accion === "queda_club") {
       mensajeJugador = `Tu reserva en ${nombreClub} se canceló. Según la política del club, la seña (${montoTxt}) no se devuelve (${r.motivo}).`;
     }
-    await clubRef.collection("reservas").doc(reservaId).update({ señaResultado: resultado });
     if (mensajeJugador && reserva.jugadorUid) {
       await avisoA(reserva.jugadorUid, { tipo: "seña_cancelada", titulo: "Seña de tu reserva cancelada", mensaje: mensajeJugador, link: "/mis-reservas", icono: "💳" }).catch(() => {});
     }
@@ -3640,10 +3664,24 @@ async function aplicarPagoInscripcionLeido(orgRef, pago) {
       if (d.accion === "ignorar") return d.resultado;
       const p = snap.data();
       const monto = Number(pago.transaction_amount) || p.monto;
+      // P3-15 (revisión): la inscripción se relee. Si ya está pagada (el compañero pagó, o el organizador la marcó en
+      // efectivo) o ya no existe, este pago es duplicado: se registra y se devuelve entero.
+      const inscRef = torneoRef.collection("inscripciones").doc(p.inscripcionId);
+      const iSnap = await tx.get(inscRef);
+      const yaPagada = iSnap.exists && iSnap.data().pago && iSnap.data().pago.estado === "pagado" && iSnap.data().pago.paymentId !== paymentId;
+      if (!iSnap.exists || yaPagada) {
+        tx.update(pagoRef, { estado: "duplicado", paymentId, montoPagado: monto, motivo: iSnap.exists ? "ya pagada" : "inscripción borrada", aprobadoEn: FieldValue.serverTimestamp() });
+        return "duplicado";
+      }
       tx.update(pagoRef, { estado: "aprobado", paymentId, montoPagado: monto, aprobadoEn: FieldValue.serverTimestamp() });
-      tx.update(torneoRef.collection("inscripciones").doc(p.inscripcionId), { pago: { estado: "pagado", medio: "mercadopago", paymentId, monto, pagoId, en: FieldValue.serverTimestamp() } });
+      tx.update(inscRef, { pago: { estado: "pagado", medio: "mercadopago", paymentId, monto, pagoId, en: FieldValue.serverTimestamp() } });
       return "aplicado";
     });
+    if (resultado === "duplicado") {
+      const r = await devolverPagoMp(orgRef, paymentId, { idempotencia: `insc_dup_${pagoId}` });
+      await pagoRef.set({ devolucion: { ...mp.devolucionDe(r, { monto: Number(pago.transaction_amount) || 0 }), en: Timestamp.now() }, ...(r.ok ? { estado: "devuelto" } : {}) }, { merge: true });
+      logger.warn(`inscripción: pago duplicado ${paymentId} → devolución ${r.ok ? "ok" : `falló (${r.error})`}`);
+    }
     return `pago ${paymentId}: ${resultado}`;
   }
   if (pago.status === "refunded" || pago.status === "charged_back") {
