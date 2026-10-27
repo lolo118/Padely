@@ -16,6 +16,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
+import useTituloPagina from "../hooks/useTituloPagina";
 import {
   getTorneoById,
   getParejas,
@@ -157,6 +158,7 @@ export default function DetalleTorneoPublico() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [torneo, setTorneo] = useState(null);
+  useTituloPagina(torneo?.nombre);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("Info");
   const [parejas, setParejas] = useState([]);

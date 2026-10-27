@@ -17,6 +17,7 @@ import {
   Star,
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
+import useTituloPagina from "../hooks/useTituloPagina";
 import { formatFecha, getTodayLocal, addDaysLocal, horaActualStr } from "../utils/formatDate";
 import { formatPrecio, ubicacionCorta } from "../utils/format";
 import {
@@ -178,6 +179,7 @@ export default function ClubPublico() {
   const navigate = useNavigate();
   const location = useLocation();
   const [club, setClub] = useState(null);
+  useTituloPagina(club?.nombre);
   const [canchas, setCanchas] = useState([]);
   const [reservas, setReservas] = useState([]);
   const [turnosFijos, setTurnosFijos] = useState([]);
