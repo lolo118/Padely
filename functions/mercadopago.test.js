@@ -172,3 +172,25 @@ test("M1: usuario de prueba por tags o nickname", () => {
   assert.equal(mp.esUsuarioDePrueba({ nickname: "CLUBPADEL", tags: ["normal"] }), false);
   assert.equal(mp.esUsuarioDePrueba(null), false);
 });
+
+test("B-P3-8b-1: un pago aprobado solo crea venta una vez (reintentos de MP días después)", () => {
+  const d = (pm, id = "185063480463", opts) => mp.decisionPagoAprobado(pm, id, opts);
+  // Caso real C-P3-8b: devuelto a mano (la API no aceptó) y MP reintenta la notificación con el pago aún "approved"
+  assert.deepEqual(d({ estado: "devuelto", paymentId: "185063480463", ventaNumero: "MP-000002", devolucion: { manual: true } }), { accion: "ignorar", resultado: "ya procesado (devuelto)" });
+  assert.equal(d({ estado: "anulado", ventaNumero: "MP-000002" }).accion, "ignorar");
+  // Una venta con ese paymentId (aunque esté anulada) corta todo, aunque el pagoMp se haya pisado
+  assert.deepEqual(d({ estado: "pendiente" }, "185063480463", { ventaConEsePago: "MP-000002" }), { accion: "ignorar", resultado: "ya procesado (venta MP-000002)" });
+  // Idempotente: mismo pago otra vez
+  assert.deepEqual(d({ estado: "aprobado", paymentId: "185063480463", ventaNumero: "MP-000002" }), { accion: "ignorar", resultado: "ya aplicado" });
+  // Otro pago para un pagoMp ya aprobado → no se aplica dos veces
+  assert.deepEqual(d({ estado: "aprobado", paymentId: "1", ventaNumero: "MP-000009" }, "2"), { accion: "ignorar", resultado: "ya procesado (aprobado)" });
+  // Pendiente (con o sin paymentId de un "in_process") → se aplica
+  assert.equal(d({ estado: "pendiente" }).accion, "aplicar");
+  assert.equal(d({ estado: "pendiente", paymentId: "185063480463" }).accion, "aplicar");
+  // Rechazado y reintento aprobado en el mismo checkout → se aplica
+  assert.equal(d({ estado: "rechazado", paymentId: "1" }, "2").accion, "aplicar");
+  // Vencido sin venta: la plata entró tarde → excedente para devolver, no se aplica en silencio
+  assert.deepEqual(d({ estado: "vencido" }), { accion: "tardio", resultado: "pago tardío (vencido) → excedente" });
+  assert.equal(d({ estado: "vencido", devolucion: { ok: true } }).accion, "ignorar");
+  assert.equal(d(null).accion, "ignorar");
+});

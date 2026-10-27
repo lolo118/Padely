@@ -131,6 +131,25 @@ async function procesarNotificacion({ tipo = null, dataId = null, deps }) {
   return { resultado: aplicados ? "ok" : "ignorado", resumen: partes.join(" · ") };
 }
 
+// ----- Pagos ya procesados (B-P3-8b-1) -----
+// Qué hacer con un pago APROBADO leído de la API para su pagoMp. MP reintenta notificaciones viejas durante días, así
+// que un pago solo crea venta una vez: si ya hay una venta con ese paymentId (aunque esté anulada) o el pagoMp ya no
+// está pendiente, se ignora ("ya procesado"). Excepciones:
+// - "rechazado": un intento anterior fue rechazado y la persona reintentó en el mismo checkout → se aplica.
+// - "vencido" sin venta: la plata entró tarde → no se aplica a la cuenta; queda como excedente para que el club la
+//   devuelva o la marque (alerta "Pago de más por Mercado Pago"), nunca en silencio.
+// Devuelve { accion: "aplicar" | "tardio" | "ignorar", resultado }.
+function decisionPagoAprobado(pm, paymentId, { ventaConEsePago = null } = {}) {
+  const id = String(paymentId);
+  if (ventaConEsePago) return { accion: "ignorar", resultado: `ya procesado (venta ${ventaConEsePago})` };
+  if (!pm) return { accion: "ignorar", resultado: "sin pagoMp" };
+  const conVenta = !!pm.ventaNumero;
+  if (!conVenta && (pm.estado === "pendiente" || pm.estado === "rechazado")) return { accion: "aplicar", resultado: null };
+  if (!conVenta && pm.estado === "vencido" && !pm.devolucion) return { accion: "tardio", resultado: "pago tardío (vencido) → excedente" };
+  if (pm.estado === "aprobado" && String(pm.paymentId) === id) return { accion: "ignorar", resultado: "ya aplicado" };
+  return { accion: "ignorar", resultado: `ya procesado (${pm.estado || "sin estado"})` };
+}
+
 // ----- Ventas online (B-P3-8-1) -----
 // Una venta se anula con la callable mpAnularVenta solo si está "ok", es online (cajaId null) y se cobró por Mercado Pago
 function ventaAnulableOnline(venta) {
@@ -214,6 +233,7 @@ module.exports = {
   cuerpoTokenPorCodigo,
   cuerpoTokenPorRefresh,
   datosDeNotificacion,
+  decisionPagoAprobado,
   devolucionDe,
   esUsuarioDePrueba,
   fechaMp,

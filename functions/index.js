@@ -2678,7 +2678,19 @@ async function aplicarPagoAprobado(clubRef, pagoMpRef, pago) {
     const pmSnap = await tx.get(pagoMpRef);
     if (!pmSnap.exists) return { resultado: "sin pagoMp" };
     const pm = pmSnap.data();
-    if (pm.estado === "aprobado") return { resultado: pm.paymentId === paymentId ? "ya aplicado" : "ya aprobado con otro pago", pm };
+    // B-P3-8b-1: un pago crea venta UNA vez. MP reintenta notificaciones viejas: un pagoMp devuelto/anulado/aprobado
+    // o una venta previa con este paymentId (aunque esté anulada) → "ya procesado"
+    const previas = await tx.get(clubRef.collection("ventas").where("mpPaymentId", "==", paymentId).limit(1));
+    const decision = mp.decisionPagoAprobado(pm, paymentId, { ventaConEsePago: previas.empty ? null : previas.docs[0].id });
+    if (decision.accion === "ignorar") return { resultado: decision.resultado, pm };
+    if (decision.accion === "tardio") {
+      // El link había vencido: la plata no se aplica a la cuenta; queda como excedente (alerta + "Devolver" / "Ya lo devolví")
+      const cuentaRef = pm.grupoId ? clubRef.collection("cuentas").doc(pm.grupoId) : null;
+      const cSnap = cuentaRef ? await tx.get(cuentaRef) : null;
+      if (cSnap && cSnap.exists) tx.update(cuentaRef, { alertas: FieldValue.arrayUnion("mp-excedente"), actualizadoEn: FieldValue.serverTimestamp() });
+      tx.update(pagoMpRef, { estado: "aprobado", paymentId, aprobadoEn: FieldValue.serverTimestamp(), ventaNumero: null, montoPagado, montoAplicado: 0, excedente: montoPagado, excedenteDevuelto: null, pagoTardio: true, estadoMp: pago.status, actualizadoEn: FieldValue.serverTimestamp() });
+      return { resultado: decision.resultado, pm, excedente: montoPagado, tardio: true };
+    }
     if (pm.tipo === "seña") {
       const cabezaRef = clubRef.collection("reservas").doc(pm.reservaId);
       const contadorRef = clubRef.collection("contadoresDispositivos").doc("MP");
@@ -2814,6 +2826,17 @@ async function aplicarPagoLeido(clubRef, pago) {
   if (estado === "approved") {
     const r = await aplicarPagoAprobado(clubRef, pagoMpRef, pago);
     logger.info(`mpWebhook ${clubId}/${pagoMpId}: ${r.resultado}${r.numero ? ` → ${r.numero} $${r.total}` : ""}${r.excedente ? ` excedente $${r.excedente}` : ""}${r.saldada ? " · cuenta cerrada" : ""}`);
+    if (r.tardio) {
+      const pm = r.pm;
+      const quien = (pm.pagador && pm.pagador.nombre) || "Un jugador";
+      const monto = Math.round(r.excedente).toLocaleString("es-AR");
+      try {
+        await avisarStaff(clubRef, PERMISOS_COBRO, { tipo: "mp_excedente", titulo: "Pago tardío por Mercado Pago", mensaje: `${quien} pagó $ ${monto} con un link que ya había vencido: no se aplicó a la cuenta. Devolvelo desde la cuenta o marcalo como devuelto.`, link: pm.grupoId ? `/admin/bar/cuentas/${pm.grupoId}` : "/admin/canchas", icono: "💳" });
+      } catch (err) {
+        logger.error(`mpWebhook ${clubId}/${pagoMpId}: aviso de pago tardío`, err);
+      }
+      return `pago ${paymentId}: ${r.resultado}`;
+    }
     if (r.resultado !== "aplicado" && r.resultado !== "seña aplicada") return `pago ${paymentId}: ${r.resultado}`;
     const pm = r.pm;
     const club = (await clubRef.get()).data() || {};
@@ -2883,7 +2906,10 @@ exports.mpWebhook = onRequest({ region: REGION, secrets: [MP_WEBHOOK_SECRET, MP_
   const datos = mp.datosDeNotificacion(req.query || {}, req.body || {});
   const xSignature = req.get("x-signature");
   const firma = xSignature ? mp.firmaValida({ xSignature, xRequestId: req.get("x-request-id"), dataId: datos.dataId, secreto: MP_WEBHOOK_SECRET.value() }) : { ok: false, motivo: "ausente" };
-  const firmaTxt = !xSignature ? "ausente" : firma.ok ? "ok" : `inválida (${firma.motivo})`;
+  // Las notificaciones legacy (IPN: ?topic=payment|merchant_order&id=…) llegan duplicadas junto a las de Webhooks
+  // (?type=payment&data.id=…) y no firman igual: no son un ataque, se registran como "notificación legacy"
+  const legacy = !!(req.query && req.query.topic) && !(req.query && req.query.type);
+  const firmaTxt = firma.ok ? "ok" : legacy ? "notificación legacy (sin firma de Webhooks)" : !xSignature ? "ausente" : `inválida (${firma.motivo})`;
   const clubRef = clubId ? db.collection("clubs").doc(clubId) : null;
   const clubSnap = clubRef ? await clubRef.get() : null;
   if (!clubSnap || !clubSnap.exists) {
