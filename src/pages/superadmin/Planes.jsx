@@ -248,7 +248,7 @@ function FlagsCard() {
 // P3-14: migración única de privacidad (después del deploy de 16-p3-14). Idempotente: se puede repetir.
 function MigracionPrivacidadCard() {
   const [estado, setEstado] = useState({ corriendo: false, resultado: null });
-  const hecha = flag("privacidadMigrada");
+  const hecha = flag("privacidadMigrada") || !!estado.resultado;
   const correr = async () => {
     const ok = await confirmar({
       titulo: "Migrar privacidad",
