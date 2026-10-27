@@ -1061,7 +1061,8 @@ exports.onVentaCreated = onDocumentCreated("clubs/{clubId}/ventas/{numero}", asy
       const n = await escribirMovimientosDeVenta(tx, clubId, numero, venta, { etiqueta: "venta", signo: 1 });
       const cuenta = cuentaSnap && cuentaSnap.exists ? cuentaSnap.data() : null;
       sumarAlReporte(tx, clubRef, fechaDe(venta.creadoEn), aporteDeVenta(venta, { categorias, cuenta, signo: 1 }));
-      tx.set(clubRef.collection("ticketsPublicos").doc(numero), ticketPublicoDe(venta, clubSnap.exists ? clubSnap.data() : {}, clubId, numero));
+      // P3-14: el ticket público va con el id aleatorio de la venta (publicId); las ventas viejas, con el número
+      tx.set(clubRef.collection("ticketsPublicos").doc(idTicketPublicoDe(venta, numero)), ticketPublicoDe(venta, clubSnap.exists ? clubSnap.data() : {}, clubId, numero));
       tx.update(refs.venta, { aplicado: true, aplicadoEn: FieldValue.serverTimestamp(), rollupAplicado: true });
       return `aplicada (${n} movimientos)`;
     });
@@ -1095,7 +1096,7 @@ exports.onVentaUpdated = onDocumentUpdated("clubs/{clubId}/ventas/{numero}", asy
         const cuenta = cuentaSnap && cuentaSnap.exists ? cuentaSnap.data() : null;
         sumarAlReporte(tx, clubRef, fechaDe(venta.creadoEn), aporteDeVenta(venta, { categorias, cuenta, signo: -1 }));
       }
-      tx.set(clubRef.collection("ticketsPublicos").doc(numero), { estado: "anulada", anulacion: { motivo: (venta.anulacion && venta.anulacion.motivo) || null }, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
+      tx.set(clubRef.collection("ticketsPublicos").doc(idTicketPublicoDe(venta, numero)), { estado: "anulada", anulacion: { motivo: (venta.anulacion && venta.anulacion.motivo) || null }, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
       tx.update(refs.venta, { anulacionAplicada: true, anulacionAplicadaEn: FieldValue.serverTimestamp(), rollupAnulacionAplicado: venta.rollupAplicado === true });
       return `anulación aplicada (${n} movimientos)`;
     });
@@ -1595,6 +1596,9 @@ exports.onPedidoUpdated = onDocumentUpdated("clubs/{clubId}/pedidos/{pedidoId}",
 // Nunca se recorre `ventas` al abrir Reportes. `recalcularReporte` (callable) reconstruye un día desde cero.
 // catalogo/{productoId} es la proyección pública (sin costo ni stock) que leen jugadores y sesiones anónimas.
 // alertasStock/{productoId} vive mientras el stock esté en o bajo el mínimo; avisosStockDiario avisa a las 8:30.
+// P3-14: id del documento público = venta.publicId (aleatorio, lo pone el cliente o la Function que crea la venta);
+// las ventas anteriores sin publicId usan el número (las reglas ya no dejan leer esos: hay que migrar)
+const idTicketPublicoDe = (venta, numero) => (venta && typeof venta.publicId === "string" && /^[a-z0-9]{12,32}$/.test(venta.publicId) ? venta.publicId : numero);
 // ticketsPublicos/{numero} es lo que muestra /t/v/{clubId}/{numero}: sin creadoPor, cajaId, descuentos por línea
 // ni referencias de pago.
 // ============================================================================
@@ -2430,7 +2434,10 @@ exports.mpOAuthCallback = onRequest({ region: REGION, secrets: [MP_CLIENT_SECRET
     }
     const batch = db.batch();
     batch.set(privadoMpRef(clubRef), { ...tokens, conectadoEn: FieldValue.serverTimestamp(), conectadoPor: guardado.data().uid || null });
-    batch.set(clubRef, { mercadoPago: { conectado: true, userId: tokens.userId, nickname, esPrueba, conectadoEn: FieldValue.serverTimestamp(), liveMode: tokens.liveMode, comisionPadelyPct: (await clubRef.get()).get("mercadoPago.comisionPadelyPct") || 0 } }, { merge: true });
+    // P3-14: el documento público del club solo dice si está conectado (y la comisión); la cuenta (userId, nickname,
+    // esPrueba) va a clubs/{c}/privado/mpCuenta, que leen quien configura el club y el super-admin
+    batch.set(clubRef, { mercadoPago: { conectado: true, conectadoEn: FieldValue.serverTimestamp(), liveMode: tokens.liveMode, comisionPadelyPct: (await clubRef.get()).get("mercadoPago.comisionPadelyPct") || 0, userId: FieldValue.delete(), nickname: FieldValue.delete(), esPrueba: FieldValue.delete() } }, { merge: true });
+    batch.set(clubRef.collection("privado").doc("mpCuenta"), { userId: tokens.userId, nickname, esPrueba, liveMode: tokens.liveMode, conectadoEn: FieldValue.serverTimestamp() });
     batch.delete(stateMpRef(clubRef));
     await batch.commit();
     logger.info(`mp: club ${st.prefijo} conectado (user ${tokens.userId}, live ${tokens.liveMode})`);
@@ -2450,7 +2457,8 @@ exports.mpDesconectar = onCall({ region: REGION }, async (request) => {
   if (!acceso.esDueño) throw new HttpsError("permission-denied", "Solo el dueño del club desconecta Mercado Pago");
   const batch = db.batch();
   batch.delete(privadoMpRef(clubRef));
-  batch.set(clubRef, { mercadoPago: { conectado: false, userId: null, nickname: null, liveMode: null, desconectadoEn: FieldValue.serverTimestamp() } }, { merge: true });
+  batch.set(clubRef, { mercadoPago: { conectado: false, userId: FieldValue.delete(), nickname: FieldValue.delete(), esPrueba: FieldValue.delete(), liveMode: null, desconectadoEn: FieldValue.serverTimestamp() } }, { merge: true });
+  batch.delete(clubRef.collection("privado").doc("mpCuenta"));
   await batch.commit();
   logger.info(`mp: club ${clubId} desconectado por ${uid}`);
   return { ok: true };
@@ -2740,6 +2748,7 @@ async function aplicarPagoAprobado(clubRef, pagoMpRef, pago) {
       const nombreLinea = `Seña · ${(reserva && reserva.canchaName) || "Cancha"} · ${fechaCortaArgentina(reserva && reserva.fecha)} ${(reserva && (reserva.horaInicio || reserva.hora)) || ""}`.trim();
       tx.set(clubRef.collection("ventas").doc(numero), {
         numero,
+        publicId: cc.generarToken(16),
         dispositivo: "Online",
         codigoDispositivo: "MP",
         secuencia: n,
@@ -2788,6 +2797,7 @@ async function aplicarPagoAprobado(clubRef, pagoMpRef, pago) {
     if (total > 0) {
       tx.set(clubRef.collection("ventas").doc(numero), {
         numero,
+        publicId: cc.generarToken(16),
         dispositivo: "Online",
         codigoDispositivo: "MP",
         secuencia: n,
@@ -3191,12 +3201,31 @@ function planAFirestore(plan) {
   };
 }
 
+// P3-14: el plan público lleva solo { tipo, inicio, vence, escalon } (lo que necesita la app para habilitar o no);
+// el historial (con montos) vive en clubs/{c}/privado/plan, que leen quien configura el club y el super-admin
+const planPublico = (plan) => {
+  const { historial: _historial, ...resto } = plan;
+  return resto;
+};
+async function historialDelPlan(clubRef, club) {
+  const priv = await clubRef.collection("privado").doc("plan").get();
+  if (priv.exists && Array.isArray(priv.data().historial)) return priv.data().historial;
+  return (club && club.plan && Array.isArray(club.plan.historial) && club.plan.historial) || [];
+}
+async function guardarPlanServidor(clubRef, plan) {
+  const p = planAFirestore(plan);
+  const batch = db.batch();
+  batch.update(clubRef, { plan: planPublico(p) });
+  batch.set(clubRef.collection("privado").doc("plan"), { historial: p.historial || [], actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
+  await batch.commit();
+}
+
 // Un club nuevo arranca en "prueba" sin fecha: los 30 días empiezan con su primera reserva confirmada
 exports.onClubCreated = onDocumentCreated("clubs/{clubId}", async (event) => {
   const club = event.data && event.data.data();
   if (!club || club.plan) return;
   const planes = await planesUtil();
-  await event.data.ref.update({ plan: planAFirestore(planes.planInicial()) });
+  await guardarPlanServidor(event.data.ref, planes.planInicial());
   logger.info(`plan: club ${event.params.clubId} en prueba (sin empezar)`);
 });
 
@@ -3236,9 +3265,10 @@ exports.planesVencidos = onSchedule({ schedule: "every day 03:30", timeZone: ZON
   for (const d of snap.docs) {
     try {
       const club = d.data();
-      const nuevo = planes.transicionVencida(club.plan, ahora);
+      const historial = await historialDelPlan(d.ref, club);
+      const nuevo = planes.transicionVencida({ ...club.plan, historial }, ahora);
       if (!nuevo) continue;
-      await d.ref.update({ plan: planAFirestore(nuevo) });
+      await guardarPlanServidor(d.ref, nuevo);
       pasados += 1;
       if (club.ownerUid) {
         const eraPrueba = club.plan.tipo === "prueba";
@@ -3308,4 +3338,50 @@ exports.vincularOrganizadores = onCall({ region: REGION, timeoutSeconds: 120 }, 
   await escribirEnLotes(ops);
   logger.info(`vincularOrganizadores: ${conDueño.length} cuentas por ${uid}`);
   return { ok: true, vinculadas: conDueño.length };
+});
+
+// ============================================================================
+// PRIVACIDAD (P3-14): migración única e idempotente (super-admin). 1) Ventas sin publicId → publicId aleatorio y
+// copia del ticket público a ticketsPublicos/{publicId} (el documento numerado queda, pero las reglas ya no dejan
+// leerlo). 2) plan.historial → clubs/{c}/privado/plan. 3) mercadoPago.userId/nickname/esPrueba → privado/mpCuenta.
+// Al final prende configuracionPadely/flags { ticketsPublicId, privacidadMigrada }.
+// ============================================================================
+exports.migrarPrivacidad = onCall({ region: REGION, timeoutSeconds: 540, memory: "512MiB" }, async (request) => {
+  const uid = exigirAuth(request);
+  const admin = await db.collection("superadmins").doc(uid).get();
+  if (!admin.exists) throw new HttpsError("permission-denied", "Solo el super-admin");
+  const clubs = await db.collection("clubs").get();
+  const r = { clubes: clubs.size, tickets: 0, planes: 0, cuentasMp: 0 };
+  for (const c of clubs.docs) {
+    const club = c.data() || {};
+    const ref = c.ref;
+    const ops = [];
+    if (club.plan && Array.isArray(club.plan.historial)) {
+      const historial = await historialDelPlan(ref, club);
+      ops.push((b) => b.set(ref.collection("privado").doc("plan"), { historial, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true }));
+      ops.push((b) => b.update(ref, { plan: planPublico(club.plan) }));
+      r.planes += 1;
+    }
+    const mpc = club.mercadoPago || {};
+    if (["userId", "nickname", "esPrueba"].some((k) => k in mpc)) {
+      ops.push((b) =>
+        b.set(ref.collection("privado").doc("mpCuenta"), { userId: mpc.userId ?? null, nickname: mpc.nickname ?? null, esPrueba: mpc.esPrueba ?? null, liveMode: mpc.liveMode ?? null, conectadoEn: mpc.conectadoEn ?? null }, { merge: true }),
+      );
+      ops.push((b) => b.update(ref, { "mercadoPago.userId": FieldValue.delete(), "mercadoPago.nickname": FieldValue.delete(), "mercadoPago.esPrueba": FieldValue.delete() }));
+      r.cuentasMp += 1;
+    }
+    const ventas = await ref.collection("ventas").get();
+    for (const v of ventas.docs) {
+      if (typeof v.data().publicId === "string" && v.data().publicId) continue;
+      const publicId = cc.generarToken(16);
+      const ticket = await ref.collection("ticketsPublicos").doc(v.id).get();
+      ops.push((b) => b.update(v.ref, { publicId }));
+      if (ticket.exists) ops.push((b) => b.set(ref.collection("ticketsPublicos").doc(publicId), ticket.data()));
+      r.tickets += 1;
+    }
+    await escribirEnLotes(ops);
+  }
+  await db.collection("configuracionPadely").doc("flags").set({ ticketsPublicId: true, privacidadMigrada: true, migradoEn: FieldValue.serverTimestamp(), migradoPor: uid }, { merge: true });
+  logger.info(`migrarPrivacidad por ${uid}: ${JSON.stringify(r)}`);
+  return { ok: true, ...r };
 });

@@ -5,6 +5,7 @@ import { formatPrecio } from "../utils/format";
 import { formatDiaCorto, formatFechaHora } from "../utils/formatDate";
 import { calcularTotalesCuenta, esLegacyDividida, lineasDeVentaParaParte, participantesDe, saldosDeCuenta } from "../utils/cuentas";
 import { bloqueQrTicket } from "./ticketVenta";
+import { flag } from "../services/flagsService";
 
 const cant = (n) => (Number(n) || 0).toLocaleString("es-AR", { maximumFractionDigits: 3 });
 const fila = (label, valor, clase = "") => `<p class="ticket-row${clase ? ` ${clase}` : ""}"><span>${escapar(label)}</span><span>${escapar(valor)}</span></p>`;
@@ -83,7 +84,8 @@ export function htmlTicketCuenta({ club = {}, cuenta = {}, clubId = "" }) {
   partes_.push(linea(t.pie || "Gracias por venir", "ticket-center ticket-strong"));
   partes_.push(linea("Comprobante no válido como factura", "ticket-center ticket-muted"));
   // El ticket digital de la cuenta es el de su primera venta (o la de "Cobrar todo")
-  if (clubId && (cuenta.ventas || []).length) partes_.push(bloqueQrTicket(clubId, cuenta.ventas[0]));
+  // P3-14: con los ids públicos activos la cuenta no conoce el id de su venta: sin QR (el ticket de cada venta lo lleva)
+  if (clubId && (cuenta.ventas || []).length && !flag("ticketsPublicId")) partes_.push(bloqueQrTicket(clubId, cuenta.ventas[0]));
   partes_.push(linea(`Impreso ${formatFechaHora(new Date())}`, "ticket-center ticket-muted"));
   return partes_.join("");
 }

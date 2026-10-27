@@ -1,5 +1,7 @@
-import { addDoc, collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, Timestamp, updateDoc, where } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { addDoc, arrayUnion, collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "../lib/firebase";
+import { flag } from "./flagsService";
 import { canchasActivas } from "../utils/planes";
 
 // Planes (P3-9). clubs/{c}.plan lo escriben solo las Functions y el super-admin (las reglas no dejan que el club lo
@@ -43,7 +45,22 @@ export const getClubesConPlan = async () => {
   return clubes.map((c, i) => ({ ...c, canchasActivas: canchas[i] ? canchasActivas(canchas[i].docs.map((d) => d.data())) : 0 }));
 };
 
-export const guardarPlan = (clubId, plan) => updateDoc(doc(db, "clubs", clubId), { plan: planAFirestore(plan) });
+// P3-14: con la privacidad migrada (flag privacidadMigrada) el plan público lleva solo { tipo, inicio, vence, escalon }
+// y las entradas nuevas del historial (con montos) se suman a clubs/{c}/privado/plan; antes, todo junto como siempre.
+export const guardarPlan = async (clubId, plan, planAnterior = null) => {
+  const p = planAFirestore(plan);
+  if (!flag("privacidadMigrada")) return updateDoc(doc(db, "clubs", clubId), { plan: p });
+  const { historial = [], ...publico } = p;
+  const previas = Array.isArray(planAnterior?.historial) ? planAnterior.historial.length : 0;
+  const nuevas = historial.slice(previas);
+  const batch = writeBatch(db);
+  batch.update(doc(db, "clubs", clubId), { plan: publico });
+  if (nuevas.length) batch.set(doc(db, "clubs", clubId, "privado", "plan"), { historial: arrayUnion(...nuevas), actualizadoEn: serverTimestamp() }, { merge: true });
+  return batch.commit();
+};
+
+// Super-admin (P3-14): migración única de privacidad (tickets con id aleatorio, plan e info de MP a privado/*)
+export const migrarPrivacidad = async () => (await httpsCallable(functions, "migrarPrivacidad")({})).data;
 
 export const getAvisosPago = async () => {
   const snap = await getDocs(query(collection(db, "avisosPago"), orderBy("creadoEn", "desc"), limit(50)));
@@ -62,4 +79,13 @@ export const marcarCobroTorneo = (id, { monto, estado }) => updateDoc(doc(db, "t
 export const getTorneosDeClub = async (clubId) => {
   const snap = await getDocs(query(collection(db, "tournaments"), where("club.id", "==", clubId), limit(20))).catch(() => null);
   return snap ? snap.docs.map((d) => ({ id: d.id, ...d.data() })) : [];
+};
+
+// Cuenta de Mercado Pago conectada (P3-14): clubs/{c}/privado/mpCuenta; antes de la migración (o sin permiso), lo que
+// todavía esté en el documento público
+export const getCuentaMp = async (club) => {
+  if (!club?.id) return null;
+  const snap = await getDoc(doc(db, "clubs", club.id, "privado", "mpCuenta")).catch(() => null);
+  const mp = club.mercadoPago || {};
+  return snap && snap.exists() ? { ...snap.data() } : { userId: mp.userId ?? null, nickname: mp.nickname ?? null, esPrueba: mp.esPrueba ?? null, liveMode: mp.liveMode ?? null, conectadoEn: mp.conectadoEn ?? null };
 };

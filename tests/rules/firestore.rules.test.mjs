@@ -154,3 +154,27 @@ describe("estado de la plataforma", () => {
     await assertSucceeds(setDoc(doc(como("sa"), "configuracionPadely", "estado"), { activo: true, mensaje: "x" }));
   });
 });
+
+describe("privacidad P3-14", () => {
+  test("ticket público: con id aleatorio se lee; con número de ticket no", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "clubs", CLUB, "ticketsPublicos", "D1-000018"), { numero: "D1-000018" });
+      await setDoc(doc(ctx.firestore(), "clubs", CLUB, "ticketsPublicos", "k3m9x2p7q4r8t6w5"), { numero: "D1-000019" });
+    });
+    await assertFails(getDoc(doc(anonimo(), "clubs", CLUB, "ticketsPublicos", "D1-000018")));
+    await assertSucceeds(getDoc(doc(anonimo(), "clubs", CLUB, "ticketsPublicos", "k3m9x2p7q4r8t6w5")));
+  });
+  test("privado/plan y privado/mpCuenta: quien configura y el super-admin; mpCuenta no la escribe nadie", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "clubs", CLUB, "privado", "plan"), { historial: [] });
+      await setDoc(doc(ctx.firestore(), "clubs", CLUB, "privado", "mpCuenta"), { nickname: "TESTUSER" });
+    });
+    await assertSucceeds(getDoc(doc(como("encargado"), "clubs", CLUB, "privado", "plan")));
+    await assertSucceeds(getDoc(doc(como("sa"), "clubs", CLUB, "privado", "mpCuenta")));
+    await assertFails(getDoc(doc(como("cajero"), "clubs", CLUB, "privado", "plan")));
+    await assertFails(getDoc(doc(como("jugador"), "clubs", CLUB, "privado", "mpCuenta")));
+    await assertFails(setDoc(doc(como("dueno"), "clubs", CLUB, "privado", "plan"), { historial: [] }));
+    await assertSucceeds(setDoc(doc(como("sa"), "clubs", CLUB, "privado", "plan"), { historial: [] }));
+    await assertFails(setDoc(doc(como("dueno"), "clubs", CLUB, "privado", "mpCuenta"), { nickname: "x" }));
+  });
+});

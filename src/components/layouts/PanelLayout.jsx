@@ -10,6 +10,7 @@ import Button from "../ui/Button";
 import Sidebar from "../ui/Sidebar";
 import VerificarEmailAviso from "../VerificarEmailAviso";
 import EstadoBanner from "../EstadoBanner";
+import { cargarFlags } from "../../services/flagsService";
 import { Wordmark } from "../ui/AppBar";
 import { rolLabel } from "../../utils/staff";
 
@@ -51,6 +52,10 @@ export default function PanelLayout({ rol, inicio, items, aviso = null }) {
     esSuperAdmin && rol !== "Super-admin" ? [...conApp, { to: "/superadmin", label: "Super-admin", icon: ShieldCheck }] : conApp;
   // Si el club no se resolvió (por ejemplo un club recién registrado, o una lectura que falló al arrancar), se
   // reintenta una vez al entrar al panel en vez de dejar la sesión sin club
+  // P3-14: los flags de la plataforma (id público de tickets, privacidad migrada, …) quedan cargados para usarlos sin esperar
+  useEffect(() => {
+    cargarFlags();
+  }, []);
   const reintentado = useRef(false);
   useEffect(() => {
     if (!esPanelClub || !clubCargado || clubActual || reintentado.current) return;

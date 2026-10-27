@@ -1,5 +1,6 @@
 // Ticket de venta (HTML plano, sin React): lo arma Vender al cobrar y al reimprimir desde "Ventas".
-// Comprobante de consumo, no fiscal. Al pie va el QR del ticket digital público (/t/v/{clubId}/{numero}).
+// Comprobante de consumo, no fiscal. Al pie va el QR del ticket digital público (/t/v/{clubId}/{id}).
+import { flag } from "../services/flagsService";
 import { escapar } from "./imprimir";
 import { formatPrecio } from "../utils/format";
 import { formatFechaHora } from "../utils/formatDate";
@@ -7,6 +8,9 @@ import { ETIQUETA_MEDIO } from "../utils/caja";
 import { svgQr } from "../utils/qr";
 
 // QR del ticket digital (25 mm en el papel) con la URL corta debajo; sin ventana → se omite el QR
+// P3-14: el QR usa el id público aleatorio cuando la plataforma ya lo activó (flag ticketsPublicId); antes, el número
+export const idTicketPublico = (venta) => (flag("ticketsPublicId") && venta.publicId ? venta.publicId : venta.numero);
+
 export function bloqueQrTicket(clubId, numero) {
   if (!clubId || !numero) return "";
   const origen = typeof window !== "undefined" && window.location?.origin ? window.location.origin : "https://padely.netlify.app";
@@ -82,6 +86,6 @@ export function htmlTicketVenta({ club = {}, venta = {}, clubId = "" }) {
   partes.push(sep());
   partes.push(linea(t.pie || "Gracias por venir", "ticket-center ticket-strong"));
   partes.push(linea("Comprobante no válido como factura", "ticket-center ticket-muted"));
-  if (venta.numero) partes.push(bloqueQrTicket(clubId, venta.numero));
+  if (venta.numero) partes.push(bloqueQrTicket(clubId, idTicketPublico(venta)));
   return partes.join("");
 }

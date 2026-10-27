@@ -169,8 +169,17 @@ export const crearVentaEsperando = async (clubId, venta) => {
   return numero;
 };
 
+// P3-14: id público aleatorio del ticket digital (/t/v/{club}/{publicId}); el número sigue siendo el id de la venta
+const ALFABETO_PUBLICO = "abcdefghijkmnpqrstuvwxyz23456789";
+export const nuevoPublicId = (largo = 16) => {
+  const bytes = crypto.getRandomValues(new Uint8Array(largo));
+  return Array.from(bytes, (b) => ALFABETO_PUBLICO[b % ALFABETO_PUBLICO.length]).join("");
+};
+
 const escribirVenta = (clubId, venta) => {
   const numero = venta.numero;
+  // Se anota en el objeto de quien llama, así el ticket que imprime lleva el mismo id público
+  if (!venta.publicId) venta.publicId = nuevoPublicId();
   const datos = {
     ...venta,
     cuentaId: venta.cuentaId ?? null,

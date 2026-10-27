@@ -302,6 +302,10 @@ service cloud.firestore {
       match /privado/{docId} {
         allow read, write: if (docId == 'datos' && esStaff(clubId, 'configurarClub'))
           || (docId == 'turnosFijos' && esStaff(clubId, 'gestionarReservas'));
+        // P3-14: plan (historial con montos) y mpCuenta (userId/nickname de MP), fuera del documento público. Los
+        // lee quien configura el club y el super-admin; plan lo escribe el super-admin, mpCuenta solo las Functions.
+        allow read: if docId in ['plan', 'mpCuenta'] && (esStaff(clubId, 'configurarClub') || superAdmin());
+        allow write: if docId == 'plan' && superAdmin();
       }
 
       match /canchas/{canchaId} {
@@ -428,8 +432,10 @@ service cloud.firestore {
       }
       // ticketsPublicos/{numero}: el ticket digital (/t/v/{clubId}/{numero}). Público: nombre del club, ítems,
       // totales, medios y montos. Nunca creadoPor, cajaId ni referencias de pago.
+      // P3-14: el id es el publicId aleatorio de la venta; los documentos con id de número de ticket (D1-000018,
+      // MP-000004) ya no se leen, así nadie recorre los tickets de un club por número
       match /ticketsPublicos/{numero} {
-        allow read: if true;
+        allow read: if !numero.matches('^[A-Za-z0-9]+-[0-9]+$');
         allow write: if false;
       }
 

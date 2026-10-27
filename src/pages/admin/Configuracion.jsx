@@ -17,6 +17,7 @@ import {
 import { uploadClubLogo } from "../../services/storageService";
 import { formatPrecio } from "../../utils/format";
 import { comisionPct, estadoPlan } from "../../utils/planes";
+import { getCuentaMp } from "../../services/planesService";
 import { formatFecha, formatFechaHoraArg } from "../../utils/formatDate";
 import { MAX_TURNOS_POR_RESERVA, maxTurnosDelClub } from "../../utils/tarifas";
 import {
@@ -245,6 +246,15 @@ export default function Configuracion() {
   };
   const equipoVisible = tabActiva === "equipo" && !!clubId;
   const planConPro = !clubActual || estadoPlan(clubActual).pro;
+  // P3-14: la cuenta de MP conectada vive en privado/mpCuenta (con respaldo en el documento público hasta migrar)
+  const [cuentaMp, setCuentaMp] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    if (clubActual?.mercadoPago?.conectado) getCuentaMp(clubActual).then((c) => vivo && setCuentaMp(c));
+    return () => {
+      vivo = false;
+    };
+  }, [clubActual]);
   const equipoCargado = equipoDeClub === clubId;
 
   // El club viene del store; acá solo se lee el documento privado (CBU, CUIT...) y se arma el formulario
@@ -1095,7 +1105,7 @@ export default function Configuracion() {
                 <Badge tone="success" dot>
                   Conectado
                 </Badge>
-                {(clubActual?.mercadoPago?.esPrueba || clubActual?.mercadoPago?.liveMode === false) && <Badge tone="warning">Modo prueba</Badge>}
+                {(cuentaMp?.esPrueba || clubActual?.mercadoPago?.liveMode === false) && <Badge tone="warning">Modo prueba</Badge>}
               </span>
             ) : (
               <Badge>Sin conectar</Badge>
@@ -1107,12 +1117,12 @@ export default function Configuracion() {
               <dl className="m-0 mt-4 grid gap-4 sm:grid-cols-3">
                 <div className="min-w-0">
                   <dt className="pd-eyebrow m-0">Cuenta</dt>
-                  <dd className="m-0 mt-1 font-semibold break-all">{clubActual.mercadoPago.nickname || clubActual.mercadoPago.userId || "—"}</dd>
-                  {clubActual.mercadoPago.nickname && clubActual.mercadoPago.userId && <dd className="m-0 body-sm text-ink-3 pd-tnum">ID {clubActual.mercadoPago.userId}</dd>}
+                  <dd className="m-0 mt-1 font-semibold break-all">{cuentaMp?.nickname || cuentaMp?.userId || "—"}</dd>
+                  {cuentaMp?.nickname && cuentaMp?.userId && <dd className="m-0 body-sm text-ink-3 pd-tnum">ID {cuentaMp.userId}</dd>}
                 </div>
                 <div className="min-w-0">
                   <dt className="pd-eyebrow m-0">Conectada</dt>
-                  <dd className="m-0 mt-1 font-semibold pd-tnum">{clubActual.mercadoPago.conectadoEn ? formatFechaHoraArg(clubActual.mercadoPago.conectadoEn) : "—"}</dd>
+                  <dd className="m-0 mt-1 font-semibold pd-tnum">{(cuentaMp?.conectadoEn || clubActual.mercadoPago.conectadoEn) ? formatFechaHoraArg(cuentaMp?.conectadoEn || clubActual.mercadoPago.conectadoEn) : "—"}</dd>
                   <dd className="m-0 body-sm text-ink-3">hora argentina</dd>
                 </div>
                 <div className="min-w-0">
@@ -1121,7 +1131,7 @@ export default function Configuracion() {
                   <dd className="m-0 body-sm text-ink-3">sobre cada pago · según tu plan</dd>
                 </div>
               </dl>
-              {(clubActual?.mercadoPago?.esPrueba || clubActual?.mercadoPago?.liveMode === false) && <Alert className="mt-4">Cuenta de prueba de Mercado Pago{clubActual?.mercadoPago?.esPrueba ? " (usuario de prueba)" : ""}: los pagos son de prueba. Para cobrar de verdad, conectá la cuenta real del club.</Alert>}
+              {(cuentaMp?.esPrueba || clubActual?.mercadoPago?.liveMode === false) && <Alert className="mt-4">Cuenta de prueba de Mercado Pago{cuentaMp?.esPrueba ? " (usuario de prueba)" : ""}: los pagos son de prueba. Para cobrar de verdad, conectá la cuenta real del club.</Alert>}
               {esDueño ? (
                 <div className="pd-btn-group mt-4">
                   <Button variant="ghost" onClick={desconectarMp} cargando={mpOcupado ? "Desconectando…" : ""}>

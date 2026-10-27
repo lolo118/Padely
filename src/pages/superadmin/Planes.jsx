@@ -4,7 +4,8 @@ import Dialogo from "../../components/Dialogo";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
 import { useAuthStore } from "../../store/authStore";
-import { getAvisosPago, getClubesConPlan, getDatosFacturacion, getTorneosParaCobrar, guardarDatosFacturacion, guardarPlan, marcarAvisoAtendido, marcarCobroTorneo } from "../../services/planesService";
+import { getAvisosPago, getClubesConPlan, getDatosFacturacion, getTorneosParaCobrar, guardarDatosFacturacion, guardarPlan, marcarAvisoAtendido, marcarCobroTorneo, migrarPrivacidad } from "../../services/planesService";
+import { flag } from "../../services/flagsService";
 import { ETIQUETA_PLAN, cambiarPlan, escalonDe, estadoPlan, precioAnual, registrarPago } from "../../utils/planes";
 import { formatPrecio } from "../../utils/format";
 import { formatFechaHora, formatFechaLarga } from "../../utils/formatDate";
@@ -58,7 +59,7 @@ function CambiarPlanDialog({ club, uid, onCerrar, onGuardado }) {
     setGuardando(true);
     try {
       const nuevo = cambiarPlan(club.plan, { tipo, vence: tipo === "free" ? null : venceMs, por: uid, nota: nota.trim() || null });
-      await guardarPlan(club.id, nuevo);
+      await guardarPlan(club.id, nuevo, club.plan);
       toast.success(`${club.nombre || "El club"}: ${ETIQUETA_PLAN[tipo]}`);
       onGuardado(nuevo);
     } catch (err) {
@@ -201,6 +202,41 @@ function DatosPagoCard() {
   );
 }
 
+// P3-14: migración única de privacidad (después del deploy de 16-p3-14). Idempotente: se puede repetir.
+function MigracionPrivacidadCard() {
+  const [estado, setEstado] = useState({ corriendo: false, resultado: null });
+  const hecha = flag("privacidadMigrada");
+  const correr = async () => {
+    const ok = await confirmar({
+      titulo: "Migrar privacidad",
+      mensaje: "Da un id aleatorio a los tickets digitales viejos y mueve el historial de planes y los datos de la cuenta de Mercado Pago a documentos privados. Se puede repetir sin problema.",
+      confirmText: "Migrar",
+    });
+    if (!ok) return;
+    setEstado({ corriendo: true, resultado: null });
+    try {
+      const r = await migrarPrivacidad();
+      setEstado({ corriendo: false, resultado: r });
+      toast.success(`Listo: ${r.tickets} tickets, ${r.planes} planes, ${r.cuentasMp} cuentas de MP`);
+    } catch (err) {
+      console.error("Error migrando la privacidad:", err);
+      setEstado({ corriendo: false, resultado: null });
+      toast.error("No pudimos migrar. ¿Ya se desplegaron las Functions de P3-14?");
+    }
+  };
+  return (
+    <Card>
+      <Card.Title as="h2">Privacidad de tickets y planes</Card.Title>
+      <Card.Meta className="mt-1!">{hecha ? "Ya migrada: los tickets nuevos usan un id aleatorio y el historial de planes es privado." : "Pendiente: correr una vez, después del deploy de P3-14."}</Card.Meta>
+      <div className="mt-4">
+        <Button onClick={correr} cargando={estado.corriendo ? "Migrando…" : ""}>
+          {hecha ? "Volver a migrar" : "Migrar privacidad"}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 export default function Planes() {
   const user = useAuthStore((s) => s.user);
   const [clubes, setClubes] = useState(null);
@@ -260,7 +296,7 @@ export default function Planes() {
     setOcupado(`${club.id}-${anual ? "a" : "m"}`);
     try {
       const nuevo = registrarPago(club.plan, { escalon, anual, por: user.uid });
-      await guardarPlan(club.id, nuevo);
+      await guardarPlan(club.id, nuevo, club.plan);
       actualizarClub(club.id, nuevo);
       toast.success(`${club.nombre || "El club"}: PRO hasta el ${formatFechaLarga(nuevo.vence)}`);
     } catch (err) {
@@ -385,6 +421,8 @@ export default function Planes() {
       </Card>
 
       <DatosPagoCard />
+
+      <MigracionPrivacidadCard />
 
       {dialogo?.modo === "plan" && (
         <CambiarPlanDialog
