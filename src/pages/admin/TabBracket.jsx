@@ -19,7 +19,6 @@ import {
 } from "../../services/torneoService";
 import { notificarPartidoListo, notificarResultadoCargado } from "../../services/notificationService";
 import {
-  calcularTabla,
   getGanador,
   getNombrePareja,
   cuadrosDeTorneo,
@@ -28,6 +27,7 @@ import {
   etiquetaProgramacion,
   partidoProgramado,
 } from "../../utils/torneo";
+import { avanzarGanadores, emparejarConByes, esBye, generarRondas, nuevoPartido, obtenerCampeonYSub, seedsDesdeGrupos, siguientePotenciaDe2, validarSets } from "../../utils/fixture";
 import { formatDiaCorto } from "../../utils/formatDate";
 import { toast } from "../../components/Toast";
 import { confirmar } from "../../components/ConfirmDialog";
@@ -112,142 +112,8 @@ function textoTiebreak(sets) {
   return tbs.length ? `TB ${tbs.join(" · ")}` : "";
 }
 
-// Menor potencia de 2 >= n (n parejas -> tamaño del cuadro)
-function siguientePotenciaDe2(n) {
-  let p = 1;
-  while (p < n) p *= 2;
-  return p;
-}
-
-function nuevoPartido(pareja1, pareja2) {
-  return {
-    pareja1: pareja1 || null,
-    pareja2: pareja2 || null,
-    resultado: null,
-    dia: "",
-    hora: "",
-    cancha: "",
-    canchaId: null,
-  };
-}
-
-function mismoGrupo(a, b) {
-  return !!(a && b && a.grupo && b.grupo && a.grupo === b.grupo);
-}
-
-// Completa las semillas con null hasta la próxima potencia de 2 y cruza la semilla i con la n-1-i
-// (las mejores semillas reciben los byes). Después intenta evitar cruces entre parejas del mismo grupo.
-function emparejarConByes(seeds) {
-  const n = siguientePotenciaDe2(seeds.length);
-  const rellenas = [...seeds];
-  while (rellenas.length < n) rellenas.push(null);
-  const partidos = [];
-  for (let i = 0; i < n / 2; i++) {
-    partidos.push(nuevoPartido(rellenas[i], rellenas[n - 1 - i]));
-  }
-
-  // Fix-up: mientras haya un cruce del mismo grupo, intercambiamos su pareja2 con la de otro partido
-  // siempre que el cambio no genere un nuevo cruce del mismo grupo. Máximo dos pasadas.
-  for (let pasada = 0; pasada < 2; pasada++) {
-    let huboClash = false;
-    for (let i = 0; i < partidos.length; i++) {
-      const m = partidos[i];
-      if (!mismoGrupo(m.pareja1, m.pareja2)) continue;
-      huboClash = true;
-      for (let j = 0; j < partidos.length; j++) {
-        if (j === i) continue;
-        const o = partidos[j];
-        if (!o.pareja2) continue;
-        if (mismoGrupo(m.pareja1, o.pareja2) || mismoGrupo(o.pareja1, m.pareja2)) continue;
-        const tmp = m.pareja2;
-        m.pareja2 = o.pareja2;
-        o.pareja2 = tmp;
-        break;
-      }
-    }
-    if (!huboClash) break;
-  }
-  return partidos;
-}
-
-// Semillas desde los grupos: todos los 1° (en orden de nombre de grupo), después todos los 2°, etc.
-function seedsDesdeGrupos(grupos, parejasQueAvanzan) {
-  const tablas = grupos
-    .map((g) => ({ nombre: g.nombre, tabla: calcularTabla(g) }))
-    .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
-  const seeds = [];
-  for (let pos = 0; pos < parejasQueAvanzan; pos++) {
-    tablas.forEach((g) => {
-      if (g.tabla[pos]) seeds.push({ ...g.tabla[pos], posGrupo: pos + 1, grupo: g.nombre });
-    });
-  }
-  return seeds;
-}
-
 function generarCrucesAutomaticos(grupos, parejasQueAvanzan) {
   return emparejarConByes(seedsDesdeGrupos(grupos, parejasQueAvanzan));
-}
-
-// Primera ronda = los cruces recibidos (cantidad potencia de 2); cada ronda siguiente tiene la mitad
-function generarRondas(partidosIniciales) {
-  const rondas = [partidosIniciales];
-  let cantSiguiente = partidosIniciales.length / 2;
-  while (cantSiguiente >= 1) {
-    rondas.push(Array.from({ length: cantSiguiente }, () => nuevoPartido(null, null)));
-    cantSiguiente = cantSiguiente / 2;
-  }
-  return rondas;
-}
-
-// Un partido es "bye" si tiene exactamente una pareja, no tiene resultado y el lugar vacío
-// no puede llenarse (primera ronda, o el partido que lo alimenta está vacío).
-function esBye(rondas, rondaIdx, partidoIdx) {
-  const partido = rondas[rondaIdx]?.[partidoIdx];
-  if (!partido || partido.resultado) return false;
-  const tieneUna = (partido.pareja1 && !partido.pareja2) || (!partido.pareja1 && partido.pareja2);
-  if (!tieneUna) return false;
-  if (rondaIdx === 0) return true;
-  const feederIdx = partido.pareja1 ? partidoIdx * 2 + 1 : partidoIdx * 2;
-  const feeder = rondas[rondaIdx - 1]?.[feederIdx];
-  return !feeder || (!feeder.pareja1 && !feeder.pareja2);
-}
-
-function avanzarGanadores(rondas) {
-  const nuevasRondas = rondas.map((r) => r.map((p) => ({ ...p })));
-  for (let ri = 0; ri < nuevasRondas.length - 1; ri++) {
-    for (let pi = 0; pi < nuevasRondas[ri].length; pi++) {
-      const partido = nuevasRondas[ri][pi];
-      let ganador = null;
-      if (partido.resultado) {
-        const g = getGanador(partido.resultado);
-        ganador = g === 1 ? partido.pareja1 : partido.pareja2;
-      } else if (esBye(nuevasRondas, ri, pi)) {
-        ganador = partido.pareja1 || partido.pareja2;
-      }
-      if (!ganador) continue;
-      const siguienteIdx = Math.floor(pi / 2);
-      const posicion = pi % 2 === 0 ? "pareja1" : "pareja2";
-      if (nuevasRondas[ri + 1][siguienteIdx]) {
-        nuevasRondas[ri + 1][siguienteIdx] = {
-          ...nuevasRondas[ri + 1][siguienteIdx],
-          [posicion]: ganador,
-        };
-      }
-    }
-  }
-  return nuevasRondas;
-}
-
-function obtenerCampeonYSub(rondas) {
-  if (!rondas || rondas.length === 0) return null;
-  const final = rondas[rondas.length - 1][0];
-  if (!final || !final.resultado || !final.pareja1 || !final.pareja2)
-    return null;
-  const g = getGanador(final.resultado);
-  return {
-    campeon: g === 1 ? final.pareja1 : final.pareja2,
-    subcampeon: g === 1 ? final.pareja2 : final.pareja1,
-  };
 }
 
 function ManualBracketBuilder({ clasificados, onConfirm }) {
@@ -505,50 +371,9 @@ export default function TabBracket({ torneoId, torneo, cuadro, onBracketChange }
     setEditandoResultado({ rondaIdx, partidoIdx });
   };
 
-  const validarResultado = () => {
-    const gamesPorSet = Number(torneo.gamesPorSet) || 6;
-    const cantSets = Number(torneo.sets) || 1;
-    const setsParaGanar = Math.ceil(cantSets / 2);
-    let setsP1 = 0, setsP2 = 0;
-
-    for (let i = 0; i < setsInput.length; i++) {
-      if (setsP1 >= setsParaGanar || setsP2 >= setsParaGanar) break;
-      const s = setsInput[i];
-      const max = Math.max(s.g1, s.g2);
-      const min = Math.min(s.g1, s.g2);
-
-      if (max < gamesPorSet) {
-        return `Set ${i + 1}: al menos un equipo debe alcanzar ${gamesPorSet} games`;
-      }
-
-      // Validar diferencia de 2 games
-      if (max === gamesPorSet && min === gamesPorSet - 1) {
-        return `Set ${i + 1}: no puede terminar ${max}-${min}. Si igualan ${gamesPorSet - 1}-${gamesPorSet - 1}, se juega a ${gamesPorSet + 1}. Si igualan ${gamesPorSet}-${gamesPorSet}, van a tiebreak.`;
-      }
-
-      // Si ambos tienen 6 o más, debe haber tiebreak
-      if (s.g1 >= gamesPorSet && s.g2 >= gamesPorSet && Math.abs(s.g1 - s.g2) <= 1) {
-        if (!tiebreakInput[i]?.activo) {
-          return `Set ${i + 1}: con ${s.g1}-${s.g2} necesitás activar el tiebreak`;
-        }
-      }
-
-      // Si la diferencia es mayor a 2 y ambos superan gamesPorSet, no es válido (excepto 7-5)
-      if (max > gamesPorSet + 1 && min >= gamesPorSet) {
-        return `Set ${i + 1}: resultado ${s.g1}-${s.g2} no es válido`;
-      }
-
-      let g1 = s.g1, g2 = s.g2;
-      if (tiebreakInput[i]?.activo) {
-        if ((tiebreakInput[i].tb1 ?? 0) > (tiebreakInput[i].tb2 ?? 0)) g1 += 1;
-        else if ((tiebreakInput[i].tb2 ?? 0) > (tiebreakInput[i].tb1 ?? 0)) g2 += 1;
-      }
-      if (g1 > g2) setsP1++; else if (g2 > g1) setsP2++;
-    }
-
-    if (setsP1 === 0 && setsP2 === 0) return "Cargá al menos un set";
-    return null;
-  };
+  // P3-11: la validación vive en utils/fixture (validarSets, con tests): además exige que alguien gane el partido
+  const validarResultado = () =>
+    validarSets(setsInput, tiebreakInput, { gamesPorSet: Number(torneo.gamesPorSet) || 6, cantSets: Number(torneo.sets) || 1 });
 
   const setsVisibles = () => {
     const cantSets = Number(torneo.sets) || 1;

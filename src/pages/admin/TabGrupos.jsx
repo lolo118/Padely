@@ -6,6 +6,7 @@ import {
   guardarGrupos,
   actualizarGrupo,
 } from "../../services/torneoService";
+import { generarFixtureRoundRobin, generarPartidos, validarSets } from "../../utils/fixture";
 import { notificarPartidoListo, notificarResultadoCargado } from "../../services/notificationService";
 import {
   calcularTabla,
@@ -95,24 +96,6 @@ const icono = (componente) => {
   const Icono = componente;
   return <Icono className="pd-icon" size={20} aria-hidden="true" />;
 };
-
-function generarPartidos(parejas) {
-  const partidos = [];
-  for (let i = 0; i < parejas.length; i++) {
-    for (let j = i + 1; j < parejas.length; j++) {
-      partidos.push({
-        pareja1: parejas[i],
-        pareja2: parejas[j],
-        resultado: null,
-        dia: "",
-        hora: "",
-        cancha: "",
-        canchaId: null,
-      });
-    }
-  }
-  return partidos;
-}
 
 // principal: el botón de confirmar es el primary de la pantalla mientras no haya una vista previa
 function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm, principal = true }) {
@@ -218,37 +201,6 @@ function ManualGroupBuilder({ parejas, parejasXGrupo, onConfirm, principal = tru
       </div>
     </div>
   );
-}
-
-// Round-robin scheduling (circle method)
-function generarFixtureRoundRobin(parejas) {
-  const teams = [...parejas];
-  const hasBye = teams.length % 2 !== 0;
-  if (hasBye) teams.push({ id: "BYE", jugador1: "Descansa", jugador2: "", nombrePareja: "Descansa" });
-  const totalTeams = teams.length;
-  const totalFechas = totalTeams - 1;
-  const matchesPerFecha = totalTeams / 2;
-  const fechas = [];
-  const fixed = teams[0];
-  const rotating = teams.slice(1);
-
-  for (let round = 0; round < totalFechas; round++) {
-    const matches = [];
-    const opp = rotating[0];
-    if (fixed.id !== "BYE" && opp.id !== "BYE") {
-      matches.push({ pareja1: fixed, pareja2: opp, resultado: null, dia: "", hora: "", cancha: "", canchaId: null, fecha: round + 1 });
-    }
-    for (let i = 1; i < matchesPerFecha; i++) {
-      const home = rotating[i];
-      const away = rotating[totalTeams - 2 - i];
-      if (home && away && home.id !== "BYE" && away.id !== "BYE") {
-        matches.push({ pareja1: home, pareja2: away, resultado: null, dia: "", hora: "", cancha: "", canchaId: null, fecha: round + 1 });
-      }
-    }
-    fechas.push(matches);
-    rotating.unshift(rotating.pop());
-  }
-  return fechas;
 }
 
 // `cuadro` ({ id, label }): el cuadro (categoría) de esta pestaña. Todo lo que pasa acá (generar, guardar,
@@ -417,50 +369,9 @@ export default function TabGrupos({ torneoId, torneo, modoLiga = false, cuadro, 
     setErrorModal("");
   };
 
-  const validarResultado = () => {
-    const gamesPorSet = Number(torneo.gamesPorSet) || 6;
-    const cantSets = Number(torneo.sets) || 1;
-    const setsParaGanar = Math.ceil(cantSets / 2);
-    let setsP1 = 0, setsP2 = 0;
-
-    for (let i = 0; i < setsInput.length; i++) {
-      if (setsP1 >= setsParaGanar || setsP2 >= setsParaGanar) break;
-      const s = setsInput[i];
-      const max = Math.max(s.g1, s.g2);
-      const min = Math.min(s.g1, s.g2);
-
-      if (max < gamesPorSet) {
-        return `Set ${i + 1}: al menos un equipo debe alcanzar ${gamesPorSet} games`;
-      }
-
-      // Validar diferencia de 2 games
-      if (max === gamesPorSet && min === gamesPorSet - 1) {
-        return `Set ${i + 1}: no puede terminar ${max}-${min}. Si igualan ${gamesPorSet - 1}-${gamesPorSet - 1}, se juega a ${gamesPorSet + 1}. Si igualan ${gamesPorSet}-${gamesPorSet}, van a tiebreak.`;
-      }
-
-      // Si ambos tienen 6 o más, debe haber tiebreak
-      if (s.g1 >= gamesPorSet && s.g2 >= gamesPorSet && Math.abs(s.g1 - s.g2) <= 1) {
-        if (!tiebreakInput[i]?.activo) {
-          return `Set ${i + 1}: con ${s.g1}-${s.g2} necesitás activar el tiebreak`;
-        }
-      }
-
-      // Si la diferencia es mayor a 2 y ambos superan gamesPorSet, no es válido (excepto 7-5)
-      if (max > gamesPorSet + 1 && min >= gamesPorSet) {
-        return `Set ${i + 1}: resultado ${s.g1}-${s.g2} no es válido`;
-      }
-
-      let g1 = s.g1, g2 = s.g2;
-      if (tiebreakInput[i]?.activo) {
-        if ((tiebreakInput[i].tb1 ?? 0) > (tiebreakInput[i].tb2 ?? 0)) g1 += 1;
-        else if ((tiebreakInput[i].tb2 ?? 0) > (tiebreakInput[i].tb1 ?? 0)) g2 += 1;
-      }
-      if (g1 > g2) setsP1++; else if (g2 > g1) setsP2++;
-    }
-
-    if (setsP1 === 0 && setsP2 === 0) return "Cargá al menos un set";
-    return null;
-  };
+  // P3-11: la validación vive en utils/fixture (validarSets, con tests): además exige que alguien gane el partido
+  const validarResultado = () =>
+    validarSets(setsInput, tiebreakInput, { gamesPorSet: Number(torneo.gamesPorSet) || 6, cantSets: Number(torneo.sets) || 1 });
 
   const guardarResultado = async (keepOpen = false) => {
     const err = validarResultado();

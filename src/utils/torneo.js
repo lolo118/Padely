@@ -64,6 +64,8 @@ export function calcularTabla(grupo) {
       else if (g2 > g1) setsP2++;
     });
 
+    // P3-11: un resultado sin ganador (sets empatados, carga a medias) no cuenta (antes sumaba la victoria a la pareja 2)
+    if (setsP1 === setsP2) return;
     s1.pj++;
     s2.pj++;
     s1.sf += setsP1;
