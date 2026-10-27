@@ -94,7 +94,7 @@ function ProtectedRoute({ children }) {
   if (loading)
     return (
       <div className="min-h-screen flex items-center justify-center body-md text-ink-3">
-        Cargando...
+        Cargando…
       </div>
     );
   if (!user || user.isAnonymous) return <Navigate to="/login" />;
@@ -107,10 +107,10 @@ function RoleRoute({ allowedRoles, children }) {
   const { user, loading, rol, staffDe, clubCargado, perfilCargado } = useAuthStore();
   const esStaff = staffDe.length > 0;
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando…</div>;
   if (!user || user.isAnonymous) return <Navigate to="/login" />;
   // Nunca se redirige por rol hasta tener el perfil (rol) y el club del panel resueltos
-  if (!perfilCargado || !rol || !clubCargado) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
+  if (!perfilCargado || !rol || !clubCargado) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando…</div>;
   const permitido = allowedRoles.includes(rol) || (allowedRoles.includes("club") && esStaff);
   if (!permitido) {
     if (rol === "club") return <Navigate to="/admin" />;
@@ -126,7 +126,7 @@ function RoleRoute({ allowedRoles, children }) {
 function SuperAdminRoute({ children }) {
   const { user, loading, rol, clubCargado, esSuperAdmin } = useAuthStore();
   if (loading || (user && (!rol || !clubCargado))) {
-    return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
+    return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando…</div>;
   }
   if (!user || !esSuperAdmin) return <NoEncontrado />;
   return children;
@@ -136,7 +136,7 @@ function RedirigirPorRol() {
   const { user, rol, clubCargado, perfilCargado } = useAuthStore();
 
   if (user?.isAnonymous) return <Navigate to="/login" />;
-  if (user && (!perfilCargado || !rol || !clubCargado)) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
+  if (user && (!perfilCargado || !rol || !clubCargado)) return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando…</div>;
   if (rol === "club") return <Navigate to="/admin" />;
   if (rol === "organizador") return <Navigate to="/org" />;
   return <Inicio />;
@@ -149,7 +149,7 @@ function RedirigirTorneo() {
   const { user, loading, rol, staffDe, clubCargado, puede } = useAuthStore();
 
   if (loading || (user && (!rol || !clubCargado))) {
-    return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando...</div>;
+    return <div className="min-h-screen flex items-center justify-center body-md text-ink-3">Cargando…</div>;
   }
   if (!user || user.isAnonymous) {
     // Después del login volvemos a este mismo link

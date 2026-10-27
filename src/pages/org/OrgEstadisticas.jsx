@@ -26,7 +26,7 @@ export default function OrgEstadisticas() {
   if (loading) {
     return (
       <div aria-busy="true">
-        <span className="sr-only">Cargando...</span>
+        <span className="sr-only">Cargando…</span>
         <div className="pd-skeleton h-8 w-48 mb-6" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[0, 1, 2, 3].map((i) => (

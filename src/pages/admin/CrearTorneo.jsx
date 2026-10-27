@@ -12,33 +12,7 @@ import SinPermiso from "../../components/SinPermiso";
 import { CATEGORIAS_TORNEO } from "../../utils/categorias";
 import { canchasDesdeTexto } from "../../utils/torneo";
 import { Button, Card, Field, Input, MarcaCategoria, Pills, SearchInput, Select, Textarea } from "../../components/ui";
-
-const provinciasArgentina = [
-  "Buenos Aires",
-  "CABA",
-  "Catamarca",
-  "Chaco",
-  "Chubut",
-  "Córdoba",
-  "Corrientes",
-  "Entre Ríos",
-  "Formosa",
-  "Jujuy",
-  "La Pampa",
-  "La Rioja",
-  "Mendoza",
-  "Misiones",
-  "Neuquén",
-  "Río Negro",
-  "Salta",
-  "San Juan",
-  "San Luis",
-  "Santa Cruz",
-  "Santa Fe",
-  "Santiago del Estero",
-  "Tierra del Fuego",
-  "Tucumán",
-];
+import { provinciasArgentina } from "../../utils/provincias";
 
 const categoriasGenero = [
   { value: "masculino", label: "Masculino" },
@@ -595,7 +569,7 @@ export default function CrearTorneo() {
             </Field>
             <Field label="Descripción (opcional)">
               <Textarea
-                placeholder="Información adicional del torneo..."
+                placeholder="Información adicional del torneo…"
                 value={form.descripcion}
                 onChange={set("descripcion")}
                 rows={3}

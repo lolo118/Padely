@@ -1282,7 +1282,7 @@ export default function DetalleTorneoPublico() {
                           <Textarea
                             value={descargoTexto}
                             onChange={(e) => setDescargoTexto(e.target.value)}
-                            placeholder="Escribí tu descargo..."
+                            placeholder="Escribí tu descargo…"
                             rows={2}
                           />
                         </Field>

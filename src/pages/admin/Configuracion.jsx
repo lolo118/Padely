@@ -552,7 +552,7 @@ export default function Configuracion() {
   if (loading) {
     return (
       <div aria-busy="true">
-        <span className="sr-only">Cargando...</span>
+        <span className="sr-only">Cargando…</span>
         <div className="flex items-center justify-between mb-4">
           <div className="pd-skeleton h-8 w-48" />
           <div className="pd-skeleton h-11 w-40 rounded-md" />
@@ -582,10 +582,10 @@ export default function Configuracion() {
 
   const textoLogo = logoUrl
     ? subiendoLogo
-      ? "Subiendo..."
+      ? "Subiendo…"
       : "Cambiar logo"
     : subiendoLogo
-      ? "Subiendo logo..."
+      ? "Subiendo logo…"
       : "Subir logo del club";
 
   // Fila del dueño: su cuenta si es quien mira; si lo mira alguien del staff, el email de contacto del club
@@ -1150,7 +1150,7 @@ export default function Configuracion() {
         <div className="flex flex-col gap-4">
           {!equipoCargado ? (
             <div aria-busy="true">
-              <span className="sr-only">Cargando...</span>
+              <span className="sr-only">Cargando…</span>
               <div className="pd-skeleton h-64 rounded-lg mb-4" />
               <div className="pd-skeleton h-40 rounded-lg" />
             </div>

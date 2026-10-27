@@ -71,7 +71,7 @@ export default function OrgDashboard() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="heading-lg m-0">Dashboard</h1>
+          <h1 className="heading-lg m-0">Resumen</h1>
           <p className="body-sm text-ink-2 mt-1 mb-0">Resumen de tu actividad como organizador</p>
         </div>
         {/* Con la entidad suspendida no se crean torneos (el aviso del panel explica por qué) */}

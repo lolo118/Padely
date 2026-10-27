@@ -353,7 +353,7 @@ export default function TabTurnosFijos({ clubId }) {
             <div className="flex flex-col gap-2">
               <Field label="Descripción del pack/combo (opcional)">
                 <Textarea
-                  placeholder="Ej: 2hs + 4 bebidas al 10% off + 15% off en comida..."
+                  placeholder="Ej: 2hs + 4 bebidas al 10% off + 15% off en comida…"
                   value={form.packDescripcion}
                   onChange={(e) =>
                     setForm({ ...form, packDescripcion: e.target.value })

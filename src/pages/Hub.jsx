@@ -331,7 +331,7 @@ export default function Hub() {
 
         <SearchInput
           wrapperClassName="block"
-          placeholder="Buscar club..."
+          placeholder="Buscar club…"
           aria-label="Buscar club"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}

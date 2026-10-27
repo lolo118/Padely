@@ -162,7 +162,7 @@ export default function TabReclamos({ torneoId, torneo }) {
                       <Textarea
                         value={motivoDecision}
                         onChange={(e) => setMotivoDecision(e.target.value)}
-                        placeholder="Explicá brevemente tu decisión..."
+                        placeholder="Explicá brevemente tu decisión…"
                         rows={2}
                       />
                     </Field>

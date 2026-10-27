@@ -155,7 +155,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div aria-busy="true">
-        <span className="sr-only">Cargando...</span>
+        <span className="sr-only">Cargando…</span>
         <div className="pd-skeleton h-8 w-64 mb-2" />
         <div className="pd-skeleton h-4 w-80 max-w-full mb-6" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

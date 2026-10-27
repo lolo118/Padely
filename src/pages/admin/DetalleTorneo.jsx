@@ -57,6 +57,7 @@ import {
   Tabs,
   Textarea,
 } from "../../components/ui";
+import { provinciasArgentina } from "../../utils/provincias";
 
 // Tono del badge de estado del torneo
 const estadoTone = {
@@ -97,32 +98,6 @@ const tonoEstadoCuadro = {
   Grupos: "lime",
 };
 
-const provinciasArgentina = [
-  "Buenos Aires",
-  "CABA",
-  "Catamarca",
-  "Chaco",
-  "Chubut",
-  "Córdoba",
-  "Corrientes",
-  "Entre Ríos",
-  "Formosa",
-  "Jujuy",
-  "La Pampa",
-  "La Rioja",
-  "Mendoza",
-  "Misiones",
-  "Neuquén",
-  "Río Negro",
-  "Salta",
-  "San Juan",
-  "San Luis",
-  "Santa Cruz",
-  "Santa Fe",
-  "Santiago del Estero",
-  "Tierra del Fuego",
-  "Tucumán",
-];
 
 // Dónde se juega: en un club de Padely (vínculo + canchas reales del club) o en otra sede (texto libre)
 const tiposSede = [
