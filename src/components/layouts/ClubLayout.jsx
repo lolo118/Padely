@@ -1,7 +1,8 @@
 import { Link, useNavigate } from "react-router-dom";
-import { BadgeCheck, BarChart3, ChefHat, LayoutDashboard, LayoutGrid, Package, ReceiptText, Settings, ShoppingCart, TrendingUp, Trophy, Wallet } from "lucide-react";
+import { BadgeCheck, BarChart3, ChefHat, IdCard, LayoutDashboard, LayoutGrid, Package, ReceiptText, Settings, ShoppingCart, TrendingUp, Trophy, Wallet } from "lucide-react";
 import PanelLayout from "./PanelLayout";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { cargarFlags } from "../../services/flagsService";
 import { useAuthStore } from "../../store/authStore";
 import Alert from "../ui/Alert";
 import Button from "../ui/Button";
@@ -15,6 +16,8 @@ const navItems = [
   { to: "/admin", label: "Hoy", icon: LayoutDashboard, end: true },
   { to: "/admin/torneos", label: "Torneos", icon: Trophy, permisos: ["gestionarTorneos"] },
   { to: "/admin/canchas", label: "Canchas", icon: LayoutGrid, permisos: ["gestionarReservas", "tarifas"] },
+  // P3-16: socios y membresías (oculto hasta configuracionPadely/flags.membresias)
+  { to: "/admin/socios", label: "Socios", icon: IdCard, permisos: ["gestionarReservas", "configurarClub"], pro: true, flag: "membresias" },
   { to: "/admin/estadisticas", label: "Estadísticas", icon: BarChart3, permisos: ["verReportes"] },
   { to: "/admin/configuracion", label: "Configuración", icon: Settings, permisos: ["configurarClub", "gestionarStaff"] },
   { to: "/admin/plan", label: "Mi plan", icon: BadgeCheck, permisos: ["configurarClub"] },
@@ -36,7 +39,17 @@ export default function ClubLayout() {
   const salirVerComo = useAuthStore((s) => s.salirVerComo);
   const navigate = useNavigate();
   const plan = club ? estadoPlan(club) : null;
-  const items = navItems.map((item) => (item.pro && plan && !plan.pro ? { ...item, bloqueado: true } : item));
+  const [flags, setFlags] = useState({});
+  useEffect(() => {
+    let vivo = true;
+    cargarFlags().then((f) => vivo && setFlags(f || {}));
+    return () => {
+      vivo = false;
+    };
+  }, []);
+  const items = navItems
+    .filter((item) => !item.flag || flags[item.flag] === true)
+    .map((item) => (item.pro && plan && !plan.pro ? { ...item, bloqueado: true } : item));
   // El aviso sonoro de la Barra necesita un gesto del usuario: el primer clic en el panel lo arma
   useEffect(() => {
     armarAudioConGesto();

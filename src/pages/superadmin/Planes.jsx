@@ -212,6 +212,7 @@ function DatosPagoCard() {
 const FLAGS_PLATAFORMA = [
   { id: "inscripcionesOnline", label: "Inscripciones online (organizadores con Mercado Pago)", ayuda: "Prender después del deploy de las Functions de P3-14." },
   { id: "partidosAbiertos", label: "Partidos abiertos (los jugadores buscan compañeros)", ayuda: "Prender después del deploy de las Functions de P3-15." },
+  { id: "membresias", label: "Socios y membresías (planes de socio de cada club)", ayuda: "Prender después del deploy de P3-16 (reglas, índices y Functions)." },
 ];
 function FlagsCard() {
   const [valores, setValores] = useState(() => Object.fromEntries(FLAGS_PLATAFORMA.map((f) => [f.id, flag(f.id)])));

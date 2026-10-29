@@ -69,6 +69,9 @@ const SuperClubes = lazy(() => import("./pages/superadmin/Clubes"));
 const SuperOrganizadores = lazy(() => import("./pages/superadmin/Organizadores"));
 const SuperUsuarios = lazy(() => import("./pages/superadmin/Usuarios"));
 const SuperPlanes = lazy(() => import("./pages/superadmin/Planes"));
+const AdminSocios = lazy(() => import("./pages/admin/Socios"));
+const MisMembresias = lazy(() => import("./pages/MisMembresias"));
+const VerificarSocio = lazy(() => import("./pages/VerificarSocio"));
 
 // Landing pública en /
 const Landing = lazy(() => import("./pages/Landing"));
@@ -237,6 +240,8 @@ export default function App() {
             <Route path="/c/:clubId/:canchaId" element={<QrCancha />} />
             {/* Ticket digital: el QR del ticket térmico */}
             <Route path="/t/v/:clubId/:numero" element={<TicketPublico />} />
+            {/* P3-16: el QR del carnet de socio (verificación en la puerta del club) */}
+            <Route path="/s/:token" element={<VerificarSocio />} />
             {/* Cuenta compartida: el link de invitación al turno y la vista del turno (también para anónimos) */}
             <Route path="/t/unirse/:clubId/:token" element={<UnirseTurno />} />
             <Route path="/turno/:clubId/:grupoId" element={<MiCuenta />} />
@@ -259,6 +264,7 @@ export default function App() {
           >
             <Route path="/inicio" element={<RedirigirPorRol />} />
             <Route path="/mis-reservas" element={<MisReservas />} />
+            <Route path="/membresias" element={<MisMembresias />} />
             <Route path="/mi-cuenta/:clubId/:grupoId" element={<MiCuenta />} />
             <Route path="/pedir/:clubId/:grupoId" element={<Pedir />} />
             <Route path="/noticias" element={<Noticias />} />
@@ -283,6 +289,7 @@ export default function App() {
             <Route path="estadisticas" element={<AdminEstadisticas />} />
             <Route path="configuracion" element={<AdminConfiguracion />} />
             <Route path="plan" element={<AdminMiPlan />} />
+            <Route path="socios" element={<RequierePro titulo="Socios"><AdminSocios /></RequierePro>} />
             <Route path="empezar" element={<AdminEmpezar />} />
             {/* Bar: secciones del plan PRO (P3-9); en FREE muestran "Disponible en PRO" */}
             <Route path="bar/vender" element={<RequierePro titulo="Vender"><BarVender /></RequierePro>} />

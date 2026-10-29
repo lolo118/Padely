@@ -20,13 +20,16 @@ import { useAuthStore } from "../store/authStore";
 import PartidosAbiertos from "../components/PartidosAbiertos";
 import useTituloPagina from "../hooks/useTituloPagina";
 import { getCreditoEnClub } from "../services/creditosService";
+import { cargarFlags } from "../services/flagsService";
+import { getMiSocio, getPlanesSocio } from "../services/membresiasService";
+import { beneficiosVigentes, diasAnticipacionCon, preciosConSocio, señaConSocio } from "../utils/membresias";
+import SociosClub from "../components/SociosClub";
 import { formatFecha, getTodayLocal, addDaysLocal, horaActualStr } from "../utils/formatDate";
 import { formatPrecio, ubicacionCorta } from "../utils/format";
 import {
   calcularSeña,
   horasDeReserva,
   maxTurnosDelClub,
-  precioDeReserva,
   precioDeSlot,
   precioMinimo,
   preciosDeReserva,
@@ -177,7 +180,7 @@ function ListaCanchas({ canchas }) {
 
 export default function ClubPublico() {
   const { id } = useParams();
-  const { user } = useAuthStore();
+  const { user, perfil } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [club, setClub] = useState(null);
@@ -191,6 +194,25 @@ export default function ClubPublico() {
       vivo = false;
     };
   }, [user?.uid, club?.id]);
+  // P3-16: planes de socio del club y la membresía del jugador (oculto hasta flags.membresias)
+  const [planesSocio, setPlanesSocio] = useState([]);
+  const [miSocio, setMiSocio] = useState(null);
+  const [versionSocio, setVersionSocio] = useState(0);
+  useEffect(() => {
+    let vivo = true;
+    if (!club?.id) return undefined;
+    cargarFlags().then((f) => {
+      if (!vivo || f?.membresias !== true) return;
+      getPlanesSocio(club.id, { soloVisibles: true })
+        .then((l) => vivo && setPlanesSocio(l))
+        .catch(() => {});
+      if (user?.uid && !user.isAnonymous) getMiSocio(club.id, user.uid).then((m) => vivo && setMiSocio(m));
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [club?.id, user?.uid, user?.isAnonymous, versionSocio]);
+  const beneficiosSocio = beneficiosVigentes(miSocio);
   const [canchas, setCanchas] = useState([]);
   const [reservas, setReservas] = useState([]);
   const [turnosFijos, setTurnosFijos] = useState([]);
@@ -370,10 +392,12 @@ export default function ClubPublico() {
   const turnosElegidos = duraciones.some((d) => d.value === turnos && !d.motivo) ? turnos : 1;
   const horasElegidas = modalData ? horasDeReserva(modalData.hora, turnosElegidos) : [];
   const horaFinElegida = modalData ? sumarHoras(modalData.hora, turnosElegidos) : "";
-  const precioTotal = modalData
-    ? precioDeReserva(modalData.cancha, fechaSeleccionada, modalData.hora, turnosElegidos)
-    : 0;
-  const señaReserva = calcularSeña(club, precioTotal);
+  // P3-16: precio de socio (descuento por turno según su franja) y seña sin cargo si el plan lo incluye
+  const conSocio = modalData
+    ? preciosConSocio(preciosDeReserva(modalData.cancha, fechaSeleccionada, modalData.hora, turnosElegidos), beneficiosSocio, fechaSeleccionada, horasElegidas)
+    : { precios: [], descuento: 0, pct: 0 };
+  const precioTotal = conSocio.precios.reduce((a, b) => a + b, 0);
+  const señaReserva = señaConSocio(calcularSeña(club, precioTotal), beneficiosSocio);
   const ayudaDuracion = duraciones.find((d) => d.motivo)?.motivo || "";
 
   const abrirModal = async (cancha, hora) => {
@@ -442,8 +466,9 @@ export default function ClubPublico() {
         fecha: fechaSeleccionada,
         hora: modalData.hora,
         turnos: turnosElegidos,
-        precios: preciosDeReserva(modalData.cancha, fechaSeleccionada, modalData.hora, turnosElegidos),
+        precios: conSocio.precios,
         seña: señaReserva,
+        socio: beneficiosSocio && (conSocio.pct > 0 || beneficiosSocio.sinSeña) ? { id: miSocio.id, planId: miSocio.planId || null, descuentoPct: conSocio.pct, descuento: conSocio.descuento, sinSeña: beneficiosSocio.sinSeña } : null,
         jugadorUid: user?.uid || null,
         nombreJugador: formReserva.nombreJugador,
         email: formReserva.email,
@@ -523,7 +548,7 @@ export default function ClubPublico() {
 
   // Ventana de reserva: desde hoy hasta hoy + diasAnticipacion (7 por defecto)
   const fechaMin = getTodayLocal();
-  const fechaMax = addDaysLocal(fechaMin, club?.diasAnticipacion ?? 7);
+  const fechaMax = addDaysLocal(fechaMin, diasAnticipacionCon(club, beneficiosSocio));
   const cambiarFecha = (valor) => {
     if (!valor) return;
     if (valor < fechaMin) return setFechaSeleccionada(fechaMin);
@@ -593,6 +618,7 @@ export default function ClubPublico() {
     { value: "canchas", label: "Canchas" },
     { value: "torneos", label: "Torneos", count: torneosClub ? torneosVisibles.length : 0 },
     { value: "info", label: "Info" },
+    ...(planesSocio.length ? [{ value: "socios", label: "Socios" }] : []),
     { value: "reviews", label: "Reviews", count: reviews.length },
   ];
 
@@ -852,6 +878,10 @@ export default function ClubPublico() {
       )}
 
       {/* Tab: Info */}
+      {tab === "socios" && planesSocio.length > 0 && (
+        <SociosClub club={club} planes={planesSocio} miSocio={miSocio} user={user} perfil={perfil} onCambio={() => setVersionSocio((v) => v + 1)} />
+      )}
+
       {tab === "info" && (
         <div className="flex flex-col gap-4">
           {/* Datos generales */}
@@ -1151,10 +1181,15 @@ export default function ClubPublico() {
                 <span className="body-sm text-ink-2">Precio</span>
                 <span className="numeral-lg pd-tnum text-ink">{formatPrecio(precioTotal)}</span>
               </div>
-              {señaReserva > 0 && (
+              {conSocio.descuento > 0 && (
+                <p className="body-sm text-success mt-1">Precio de socio: {conSocio.pct} % off ({formatPrecio(conSocio.descuento)} menos)</p>
+              )}
+              {señaReserva > 0 ? (
                 <p className="body-sm text-ink-2 mt-1">
                   Seña {formatPrecio(señaReserva)} · el resto lo pagás en el club
                 </p>
+              ) : (
+                beneficiosSocio?.sinSeña && calcularSeña(club, precioTotal) > 0 && <p className="body-sm text-success mt-1">Como socio, reservás sin seña</p>
               )}
             </div>
             <form onSubmit={handleReservar} className="flex flex-col gap-4 mt-4">

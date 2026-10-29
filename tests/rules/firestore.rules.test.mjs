@@ -203,3 +203,37 @@ describe("partidos abiertos P3-15", () => {
     await assertSucceeds(getDoc(doc(anonimo(), "configuracionPadely", "flags")));
   });
 });
+
+describe("socios y membresías (P3-16)", () => {
+  const plan = { nombre: "Socio", precio: 15000, periodo: "mensual", visible: true, beneficios: { descuentoBarPct: 10 } };
+  const pedido = (uid, planId = "p1") => ({ uid, nombre: "Jugador", planId, planNombre: "Socio", estado: "pendiente", solicitadoEn: serverTimestamp() });
+  test("planes: lectura pública; los escribe quien configura (PRO), no el cajero ni un club FREE", async () => {
+    await assertSucceeds(setDoc(doc(como("encargado"), "clubs", CLUB, "planesSocio", "p1"), plan));
+    await assertFails(setDoc(doc(como("cajero"), "clubs", CLUB, "planesSocio", "p2"), plan));
+    await assertFails(setDoc(doc(como("duenoFree"), "clubs", CLUB_FREE, "planesSocio", "p1"), plan));
+    await assertSucceeds(getDoc(doc(anonimo(), "clubs", CLUB, "planesSocio", "p1")));
+  });
+  test("el jugador pide (pendiente, plan visible) pero no se activa solo ni pide por otro", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "clubs", CLUB, "planesSocio", "p1"), plan);
+      await setDoc(doc(ctx.firestore(), "clubs", CLUB, "planesSocio", "oculto"), { ...plan, visible: false });
+    });
+    const db = como("jugador");
+    await assertFails(setDoc(doc(db, "clubs", CLUB, "socios", "jugador"), { ...pedido("jugador"), estado: "activa" }));
+    await assertFails(setDoc(doc(db, "clubs", CLUB, "socios", "otro"), pedido("otro")));
+    await assertFails(setDoc(doc(db, "clubs", CLUB, "socios", "jugador"), pedido("jugador", "oculto")));
+    await assertSucceeds(setDoc(doc(db, "clubs", CLUB, "socios", "jugador"), pedido("jugador")));
+    await assertFails(updateDoc(doc(db, "clubs", CLUB, "socios", "jugador"), { estado: "activa" }));
+    await assertSucceeds(updateDoc(doc(db, "clubs", CLUB, "socios", "jugador"), { estado: "cancelada", bajaEn: serverTimestamp() }));
+  });
+  test("el club activa; nadie toca token ni número; el cajero lee pero no escribe", async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "clubs", CLUB, "socios", "jugador"), { ...pedido("jugador"), token: "abc", solicitadoEn: Timestamp.now() }));
+    await assertSucceeds(updateDoc(doc(como("dueno"), "clubs", CLUB, "socios", "jugador"), { estado: "activa", vence: Timestamp.fromMillis(Date.now() + 86400000) }));
+    await assertFails(updateDoc(doc(como("dueno"), "clubs", CLUB, "socios", "jugador"), { token: "xyz" }));
+    await assertSucceeds(getDoc(doc(como("cajero"), "clubs", CLUB, "socios", "jugador")));
+    await assertFails(updateDoc(doc(como("cajero"), "clubs", CLUB, "socios", "jugador"), { estado: "cancelada" }));
+    await assertFails(getDoc(doc(como("otro"), "clubs", CLUB, "socios", "jugador")));
+    await assertSucceeds(getDoc(doc(anonimo(), "sociosPublicos", "abc")));
+    await assertFails(setDoc(doc(como("jugador"), "sociosPublicos", "abc"), { estado: "activa" }));
+  });
+});

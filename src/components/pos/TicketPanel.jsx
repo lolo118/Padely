@@ -1,4 +1,4 @@
-import { Minus, Plus, Tag, Trash2, X } from "lucide-react";
+import { IdCard, Minus, Plus, Tag, Trash2, X } from "lucide-react";
 import { Badge, Button, Field, Input, Select } from "../ui";
 import { formatPrecio } from "../../utils/format";
 
@@ -26,6 +26,8 @@ export default function TicketPanel({
   cuenta = null,
   onSalirCuenta,
   onAgregarACuenta,
+  // P3-16: { elegido: { nombre, pct } | null, onElegir, onQuitar } — venta a un socio (descuento de su plan)
+  socio = null,
 }) {
   const { lineas, subtotal, descuento, descuentoTotal, total, excedido } = totales;
   const vacio = lineas.length === 0;
@@ -115,6 +117,23 @@ export default function TicketPanel({
           </Button>
           <span className="pd-tnum text-ink-2">{cuenta ? "al cerrar" : descuento ? `−${formatPrecio(descuento.monto)}` : "—"}</span>
         </div>
+        {socio && !cuenta && (
+          <div className="flex items-center justify-between gap-2 body-sm">
+            {socio.elegido ? (
+              <>
+                <Badge tone="court">
+                  Socio: {socio.elegido.nombre}
+                  {socio.elegido.pct ? ` · ${socio.elegido.pct} %` : ""}
+                </Badge>
+                <Button variant="ghost" size="sm" iconOnly aria-label="Quitar socio" icon={icono(X)} onClick={socio.onQuitar} />
+              </>
+            ) : (
+              <Button variant="ghost" size="sm" icon={icono(IdCard)} onClick={socio.onElegir} disabled={vacio}>
+                Socio
+              </Button>
+            )}
+          </div>
+        )}
         {excedido && (
           <p className="pd-error m-0">
             Los descuentos ({formatPrecio(descuentoTotal)}) superan tu tope de {maxPct} %.

@@ -8,6 +8,7 @@ import NotificationBell from "../NotificationBell";
 import InstallBanner from "../InstallBanner";
 import VerificarEmailAviso from "../VerificarEmailAviso";
 import EstadoBanner from "../EstadoBanner";
+import { cargarFlags } from "../../services/flagsService";
 import AppBar from "../ui/AppBar";
 import BottomNav from "../ui/BottomNav";
 import Button from "../ui/Button";
@@ -20,11 +21,13 @@ const navItems = [
   { to: "/perfil", label: "Perfil", icon: User },
 ];
 
-// El menú completo (las siete secciones), en todos los anchos
+// El menú completo (las siete secciones, más las que prende un flag), en todos los anchos
 const menuItems = [
   { to: "/inicio", label: "Inicio" },
   { to: "/clubes", label: "Canchas disponibles" },
   { to: "/mis-reservas", label: "Mis reservas" },
+  // P3-16: oculto hasta configuracionPadely/flags.membresias
+  { to: "/membresias", label: "Mis membresías", flag: "membresias" },
   { to: "/torneos", label: "Torneos" },
   { to: "/noticias", label: "Noticias" },
   { to: "/marketplace", label: "Tienda" },
@@ -46,6 +49,14 @@ export default function PlayerLayout() {
   const esStaff = rol !== "club" && staffDe.length > 0;
   const esSuperAdmin = useAuthStore((s) => s.esSuperAdmin);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [flags, setFlags] = useState({});
+  useEffect(() => {
+    let vivo = true;
+    cargarFlags().then((f) => vivo && setFlags(f || {}));
+    return () => {
+      vivo = false;
+    };
+  }, []);
   // Los jugadores abren en Noche; una elección explícita del toggle siempre gana
   const setDefaultTheme = useThemeStore((s) => s.setDefaultTheme);
   const explicit = useThemeStore((s) => s.explicit);
@@ -101,7 +112,7 @@ export default function PlayerLayout() {
             id="menu-jugador"
             className="fixed top-16 right-4 z-30 w-[min(320px,calc(100vw-2rem))] pd-card p-2! flex flex-col gap-1"
           >
-            {menuItems.map((item) => (
+            {menuItems.filter((item) => !item.flag || flags[item.flag] === true).map((item) => (
               <NavLink key={item.to} to={item.to} onClick={() => setMenuOpen(false)} className="pd-sidebar-item">
                 {item.label}
               </NavLink>

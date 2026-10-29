@@ -3850,3 +3850,96 @@ exports.partidosAbiertosVencidos = onSchedule({ schedule: "every 60 minutes", ti
   await escribirEnLotes(snap.docs.map((d) => (b) => b.delete(d.ref)));
   logger.info(`partidosAbiertosVencidos: ${snap.size} fuera de la lista`);
 });
+
+
+// ============================================================================
+// SOCIOS Y MEMBRESÍAS (P3-16): cada club arma sus planes (clubs/{c}/planesSocio) con beneficios que aplica Padely
+// (descuento en la cancha y el bar, sin seña, reservar antes) y extras de texto libre (estacionamiento, lugar en
+// exhibiciones…). clubs/{c}/socios/{id}: el jugador pide, el club aprueba y cobra (a mano en esta versión).
+// onSocioEscrito pone el token del QR y el número de socio, publica sociosPublicos/{token} y avisa; el barrido diario
+// marca vencidas y avisa 5 días antes. Lógica en src/utils/membresias.js (copiada a functions/lib/membresias.mjs).
+// ============================================================================
+let membresiasUtilPromesa = null;
+const membresiasUtil = () => (membresiasUtilPromesa ||= import("./lib/membresias.mjs"));
+const msDe = (v) => (v == null ? null : typeof v.toMillis === "function" ? v.toMillis() : Number(v));
+
+exports.onSocioEscrito = onDocumentWritten("clubs/{clubId}/socios/{socioId}", async (event) => {
+  const { clubId, socioId } = event.params;
+  const antes = event.data.before.exists ? event.data.before.data() : null;
+  const despues = event.data.after.exists ? event.data.after.data() : null;
+  if (!despues) {
+    if (antes && antes.token) await db.collection("sociosPublicos").doc(antes.token).delete().catch(() => {});
+    return;
+  }
+  const ref = event.data.after.ref;
+  const clubRef = db.collection("clubs").doc(clubId);
+  // 1) Token del QR y nombre del club (una vez) y número de socio (al activarse por primera vez). Esa escritura
+  //    vuelve a disparar el trigger (sin cambio de estado: no repite avisos) y ahí se publica la verificación.
+  if (!despues.token || !despues.clubNombre || (despues.estado === "activa" && !despues.numero)) {
+    const clubSnap = await clubRef.get();
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const s = snap.data();
+      const cambios = {};
+      if (!s.token) cambios.token = cc.generarToken(16);
+      if (!s.clubNombre) cambios.clubNombre = (clubSnap.exists && clubSnap.data().nombre) || "Club";
+      let contadorRef = null;
+      let n = null;
+      if (s.estado === "activa" && !s.numero) {
+        contadorRef = clubRef.collection("contadoresDispositivos").doc("SOCIOS");
+        const cSnap = await tx.get(contadorRef);
+        n = (Number(cSnap.exists ? cSnap.data().usado : 0) || 0) + 1;
+        cambios.numero = n;
+      }
+      if (contadorRef) tx.set(contadorRef, { usado: n, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
+      if (Object.keys(cambios).length) tx.update(ref, cambios);
+    });
+  }
+  const M = await membresiasUtil();
+  const club = (await clubRef.get()).data() || {};
+  // 2) Verificación pública del carnet (cuando ya hay token: si recién se creó, la escribe el próximo disparo)
+  if (despues.token) await db.collection("sociosPublicos").doc(despues.token).set({ ...M.verificacionPublica(clubId, club, { ...despues, vence: msDe(despues.vence) }), actualizadoEn: FieldValue.serverTimestamp() });
+  // 3) Avisos según el cambio de estado
+  const estAntes = antes ? antes.estado : null;
+  const estDespues = despues.estado;
+  const nombreClub = club.nombre || "el club";
+  if (estDespues === "pendiente" && estAntes !== "pendiente" && club.ownerUid) {
+    await avisoA(club.ownerUid, { tipo: "socio_pedido", titulo: "Nuevo pedido de socio", mensaje: `${despues.nombre || "Un jugador"} quiere ser socio (${despues.planNombre || "plan"}).`, link: "/admin/socios", icono: "🪪" }).catch(() => {});
+  }
+  if (despues.uid) {
+    const venceTxt = despues.vence ? fechaCortaArgentina(new Date(msDe(despues.vence) - 3 * 3600 * 1000).toISOString().slice(0, 10)) : "";
+    if (estDespues === "activa" && estAntes !== "activa") {
+      await avisoA(despues.uid, { tipo: "socio_activo", titulo: `Ya sos socio de ${nombreClub}`, mensaje: `${despues.planNombre || "Tu membresía"} activa hasta el ${venceTxt}. Tu carnet está en Mis membresías.`, link: "/membresias", icono: "🪪" }).catch(() => {});
+    } else if (estDespues === "activa" && antes && msDe(despues.vence) > msDe(antes.vence)) {
+      await avisoA(despues.uid, { tipo: "socio_renovado", titulo: "Membresía renovada", mensaje: `Tu membresía en ${nombreClub} sigue activa hasta el ${venceTxt}.`, link: "/membresias", icono: "🪪" }).catch(() => {});
+    } else if (estDespues === "rechazada" && estAntes === "pendiente") {
+      await avisoA(despues.uid, { tipo: "socio_rechazado", titulo: "Pedido de socio no aceptado", mensaje: `${nombreClub} no aceptó tu pedido${despues.motivo ? `: ${despues.motivo}` : "."}`, link: `/club/${clubId}`, icono: "🪪" }).catch(() => {});
+    } else if (estDespues === "cancelada" && estAntes === "activa") {
+      await avisoA(despues.uid, { tipo: "socio_baja", titulo: "Membresía dada de baja", mensaje: `${nombreClub} dio de baja tu membresía.`, link: `/club/${clubId}`, icono: "🪪" }).catch(() => {});
+    }
+  }
+  logger.info(`socio ${clubId}/${socioId}: ${estAntes || "nuevo"} → ${estDespues}`);
+});
+
+// Todos los días: membresías vencidas → "vencida" (y aviso); las que vencen en 5 días → aviso al socio (una vez)
+exports.sociosVencidos = onSchedule({ schedule: "40 4 * * *", timeZone: ZONA_HORARIA }, async () => {
+  const ahora = Date.now();
+  const vencidas = await db.collectionGroup("socios").where("estado", "==", "activa").where("vence", "<", Timestamp.fromMillis(ahora)).get();
+  await escribirEnLotes(vencidas.docs.map((d) => (b) => b.update(d.ref, { estado: "vencida", vencidaEn: FieldValue.serverTimestamp() })));
+  for (const d of vencidas.docs) {
+    const s = d.data();
+    if (s.uid) await avisoA(s.uid, { tipo: "socio_vencido", titulo: "Tu membresía venció", mensaje: `${s.planNombre || "Tu membresía"} venció. Renovala en el club para seguir con tus beneficios.`, link: "/membresias", icono: "🪪" }).catch(() => {});
+  }
+  const pronto = await db.collectionGroup("socios").where("estado", "==", "activa").where("vence", "<", Timestamp.fromMillis(ahora + 5 * 86400000)).get();
+  let avisados = 0;
+  for (const d of pronto.docs) {
+    const s = d.data();
+    const vence = msDe(s.vence);
+    if (!s.uid || s.avisoVencimiento === vence) continue;
+    await avisoA(s.uid, { tipo: "socio_por_vencer", titulo: "Tu membresía vence pronto", mensaje: `${s.planNombre || "Tu membresía"} vence el ${fechaCortaArgentina(new Date(vence - 3 * 3600 * 1000).toISOString().slice(0, 10))}. Renovala en el club.`, link: "/membresias", icono: "🪪" }).catch(() => {});
+    await d.ref.update({ avisoVencimiento: vence });
+    avisados += 1;
+  }
+  logger.info(`sociosVencidos: ${vencidas.size} vencidas, ${avisados} avisos de vencimiento`);
+});

@@ -10,7 +10,7 @@ const aqui = dirname(fileURLToPath(import.meta.url));
 const cabecera = (nombre) => `// GENERADO por functions/sync-utils.mjs desde src/utils/${nombre}.js — NO EDITAR ACÁ (editá el original y volvé a correr el sync).\n`;
 export const CABECERA = cabecera("cuentas");
 
-for (const nombre of ["cuentas", "planes", "senas", "partidos"]) {
+for (const nombre of ["cuentas", "planes", "senas", "partidos", "membresias"]) {
   const origen = resolve(aqui, "..", "src", "utils", `${nombre}.js`);
   const destino = resolve(aqui, "lib", `${nombre}.mjs`);
   const fuente = readFileSync(origen, "utf8").replace(/\r\n/g, "\n");

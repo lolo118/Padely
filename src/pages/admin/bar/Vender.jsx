@@ -11,6 +11,8 @@ import GrillaProductos from "../../../components/pos/GrillaProductos";
 import TicketPanel from "../../../components/pos/TicketPanel";
 import CantidadDialog from "../../../components/pos/CantidadDialog";
 import DescuentoDialog from "../../../components/pos/DescuentoDialog";
+import SocioDialog from "../../../components/pos/SocioDialog";
+import { cargarFlags } from "../../../services/flagsService";
 import CobrarDialog from "../../../components/pos/CobrarDialog";
 import VentasDeHoy from "../../../components/pos/VentasDeHoy";
 import PostVentaDialog from "../../../components/pos/PostVentaDialog";
@@ -47,7 +49,18 @@ export default function Vender() {
   const nombre = perfil?.nombre || user?.displayName || user?.email || "";
   const puedeVender = !!clubActual && puede("vender");
   const puedeAnular = !!clubActual && puede("anularVenta");
-  const maxPct = clubActual?.rolStaff === "dueño" ? 100 : Number.isFinite(Number(clubActual?.descuentoMax)) ? Number(clubActual.descuentoMax) : 0;
+  const maxPctStaff = clubActual?.rolStaff === "dueño" ? 100 : Number.isFinite(Number(clubActual?.descuentoMax)) ? Number(clubActual.descuentoMax) : 0;
+  // P3-16: venta a un socio activo → su % en el bar se suma al tope del cajero (las reglas hacen la misma cuenta)
+  const [socioVenta, setSocioVenta] = useState(null);
+  const [conSocios, setConSocios] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    cargarFlags().then((f) => vivo && setConSocios(f?.membresias === true));
+    return () => {
+      vivo = false;
+    };
+  }, []);
+  const maxPct = Math.min(100, maxPctStaff + (socioVenta ? Number(socioVenta.pct) || 0 : 0));
 
   const online = useOnline();
   const pendientes = usePendientes();
@@ -173,6 +186,7 @@ export default function Vender() {
   const limpiar = () => {
     setItems([]);
     setDescuentoGeneral(null);
+    setSocioVenta(null);
     setCliente({ nombre: "", telefono: "" });
   };
   const vaciar = async () => {
@@ -250,6 +264,7 @@ export default function Vender() {
       pagado: calculo.pagado,
       vuelto: calculo.vuelto,
       cuentaId: null,
+      socio: socioVenta ? { id: socioVenta.id, nombre: socioVenta.nombre || null, numero: socioVenta.numero || null, pct: Number(socioVenta.pct) || 0 } : null,
       cliente: cliente.nombre.trim() || cliente.telefono.trim() ? { nombre: cliente.nombre.trim() || null, telefono: cliente.telefono.trim() || null } : null,
       creadoPor: uid,
       creadoPorNombre: nombre || null,
@@ -402,6 +417,18 @@ export default function Vender() {
           cuenta={cuentaSel ? { texto: textoCuenta, participantes: participantesSel, paraId, onPara: setParaId } : null}
           onSalirCuenta={() => seleccionarCuenta(null)}
           onAgregarACuenta={agregarACuenta}
+          socio={
+            conSocios
+              ? {
+                  elegido: socioVenta,
+                  onElegir: () => setDialogo({ tipo: "socio" }),
+                  onQuitar: () => {
+                    setSocioVenta(null);
+                    setDescuentoGeneral(null);
+                  },
+                }
+              : null
+          }
         />
       </div>
 
@@ -451,6 +478,18 @@ export default function Vender() {
           onGuardar={({ tipo, valor }) => {
             const monto = tipo === "monto" ? valor : (lineaDescuento.bruto * valor) / 100;
             setItems((lista) => lista.map((l) => (l.key === lineaDescuento.key ? { ...l, descuento: Math.round(monto * 100) / 100 } : l)));
+            cerrarDialogo();
+          }}
+        />
+      )}
+      {dialogo?.tipo === "socio" && (
+        <SocioDialog
+          clubId={clubId}
+          onCerrar={cerrarDialogo}
+          onElegir={(s) => {
+            setSocioVenta(s);
+            setDescuentoGeneral(s.pct > 0 ? { tipo: "porcentaje", valor: s.pct } : null);
+            if (!cliente.nombre.trim()) setCliente((c) => ({ ...c, nombre: s.nombre || "" }));
             cerrarDialogo();
           }}
         />

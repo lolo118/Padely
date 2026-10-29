@@ -44,7 +44,21 @@ service cloud.firestore {
         || request.resource.data.descuentoTotal == 0
         || request.resource.data.descuentoTotal * 100
            <= request.resource.data.subtotal
-              * get(/databases/$(database)/documents/clubs/$(clubId)/staff/$(request.auth.uid)).data.descuentoMax;
+              * (get(/databases/$(database)/documents/clubs/$(clubId)/staff/$(request.auth.uid)).data.descuentoMax
+                 + descuentoSocioPct(clubId));
+    }
+    // P3-16: venta a un socio activo (venta.socio.id) → su % de descuento en el bar se suma al tope del staff
+    function descuentoSocioPct(clubId) {
+      return request.resource.data.get('socio', null) == null ? 0
+        : pctBarSocio(get(/databases/$(database)/documents/clubs/$(clubId)/socios/$(request.resource.data.socio.id)).data);
+    }
+    function pctBarSocio(s) {
+      return s.get('estado', '') == 'activa' && s.get('vence', request.time) > request.time
+        ? s.get('beneficios', {}).get('descuentoBarPct', 0) : 0;
+    }
+    function planSocioVisible(clubId, planId) {
+      return planId is string
+        && get(/databases/$(database)/documents/clubs/$(clubId)/planesSocio/$(planId)).data.get('visible', true) == true;
     }
     function cajaAbierta(clubId, cajaId) {
       return get(/databases/$(database)/documents/clubs/$(clubId)/cajas/$(cajaId)).data.estado == 'abierta';
@@ -224,6 +238,15 @@ service cloud.firestore {
     match /partidosAbiertos/{reservaId} {
       allow read: if true;
       allow write: if false;
+    }
+    // P3-16: membresías. Verificación pública del carnet (nombre corto, plan, estado, vence, beneficios); la escribe
+    // solo la Function onSocioEscrito. Y "Mis membresías": cada jugador lee las suyas en todos los clubes.
+    match /sociosPublicos/{token} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /{path=**}/socios/{socioId} {
+      allow read: if signedIn() && resource.data.get('uid', null) == request.auth.uid;
     }
 
     match /superadmins/{uid} {
@@ -742,6 +765,37 @@ service cloud.firestore {
 
       // Contacto (email/teléfono) de quien reservó, con el id de la reserva: lo lee solo el club. Lo escribe
       // el club, o el jugador en la misma transacción que crea su reserva (getAfter ve la reserva tal como queda).
+      // P3-16: planes de socio del club (lectura pública; los arma quien configura el club, plan PRO)
+      match /planesSocio/{planId} {
+        allow read: if true;
+        allow write: if esStaff(clubId, 'configurarClub') && planPro(clubId);
+      }
+      // P3-16: socios. Los ve el staff que reserva o vende (descuento en el bar) y el propio jugador. El jugador solo
+      // pide (pendiente, con un plan visible), retira su pedido o vuelve a pedir; activar, renovar, rechazar y dar de
+      // baja es del club. token y numero los pone la Function onSocioEscrito.
+      match /socios/{socioId} {
+        allow read: if esStaff(clubId, 'gestionarReservas') || esStaff(clubId, 'vender') || superAdmin()
+          || (signedIn() && resource.data.get('uid', null) == request.auth.uid);
+        allow create: if (esStaff(clubId, 'gestionarReservas') && planPro(clubId)
+              && !request.resource.data.keys().hasAny(['token', 'numero']))
+          || (noAnonimo() && socioId == request.auth.uid
+              && request.resource.data.uid == request.auth.uid
+              && request.resource.data.estado == 'pendiente'
+              && request.resource.data.keys().hasOnly(['uid', 'nombre', 'planId', 'planNombre', 'estado', 'solicitadoEn'])
+              && planSocioVisible(clubId, request.resource.data.planId)
+              && planPro(clubId) && clubActivo(clubId));
+        allow update: if (esStaff(clubId, 'gestionarReservas')
+              && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['token', 'numero', 'uid']))
+          || (noAnonimo() && resource.data.get('uid', null) == request.auth.uid
+              && ((resource.data.estado == 'pendiente' && request.resource.data.estado == 'cancelada'
+                   && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'bajaEn']))
+                  || (resource.data.estado in ['cancelada', 'rechazada', 'vencida'] && request.resource.data.estado == 'pendiente'
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['planId', 'planNombre', 'estado', 'solicitadoEn'])
+                      && planSocioVisible(clubId, request.resource.data.planId)
+                      && planPro(clubId))));
+        allow delete: if false;
+      }
+
       match /contactosReservas/{reservaId} {
         allow read, delete: if esStaff(clubId, 'gestionarReservas');
         allow read: if superAdmin();
