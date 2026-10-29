@@ -10,6 +10,8 @@
 //   suscripcion: { preapprovalId, estado }, equipo, puntosResetEn, numero, token, historial }
 //   estado: pendiente (falta autorizar el débito) · activa · vencida · cancelada
 //   Al darse de baja, los beneficios se cortan en el acto; puntos y nivel se guardan 90 días y después vuelven a 0.
+//   Los puntos cuentan los últimos 12 meses (el barrido diario los recalcula desde socios/{uid}/puntos).
+// Sponsors del club: pase.sponsors = [{ nombre, detalle, pct: { bronce, plata, oro } }] → "15 % off en <sponsor>".
 
 export const PASE_ID = "pase";
 export const NIVELES = ["bronce", "plata", "oro"];
@@ -20,6 +22,8 @@ export const UMBRALES_DEFECTO = { plata: 150, oro: 400 };
 export const PESOS_POR_PUNTO = 1000;
 export const DIAS_CONSERVA_PUNTOS = 90;
 export const MESES_PASE = [1, 3, 6, 12];
+export const DIAS_PUNTOS = 365;
+export const MAX_SPONSORS = 10;
 export const ESTADOS_SOCIO = { pendiente: "Pendiente", activa: "Activo", vencida: "Vencido", cancelada: "Dado de baja", rechazada: "Rechazado" };
 export const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 export const MAX_EXTRAS = 8;
@@ -71,12 +75,28 @@ export function normalizarBeneficios(b = {}) {
     diasExtraReserva: entero(b && b.diasExtraReserva, 0, 60),
     sinSeña: !!(b && b.sinSeña === true),
     extras,
+    sponsors: (Array.isArray(b && b.sponsors) ? b.sponsors : [])
+      .map((x) => ({ nombre: String((x && x.nombre) || "").trim().slice(0, 40), detalle: String((x && x.detalle) || "").trim().slice(0, 80), pct: entero(x && x.pct, 0, 100) }))
+      .filter((x) => x.nombre && x.pct > 0)
+      .slice(0, MAX_SPONSORS),
   };
 }
-export const tieneBeneficios = (b) => !!b && (b.descuentoCanchaPct > 0 || b.descuentoBarPct > 0 || b.descuentoTorneoPct > 0 || b.torneoGratis || b.diasExtraReserva > 0 || b.sinSeña === true || (b.extras || []).length > 0);
+
+// Sponsors del club (lista con el % de cada nivel) → normalizados
+export function normalizarSponsors(lista = []) {
+  return (Array.isArray(lista) ? lista : [])
+    .map((x) => ({
+      nombre: String((x && x.nombre) || "").trim().slice(0, 40),
+      detalle: String((x && x.detalle) || "").trim().slice(0, 80),
+      pct: Object.fromEntries(["bronce", "plata", "oro"].map((n) => [n, entero(x && x.pct && x.pct[n], 0, 100)])),
+    }))
+    .filter((x) => x.nombre)
+    .slice(0, MAX_SPONSORS);
+}
+export const tieneBeneficios = (b) => !!b && (b.descuentoCanchaPct > 0 || b.descuentoBarPct > 0 || b.descuentoTorneoPct > 0 || b.torneoGratis || b.diasExtraReserva > 0 || b.sinSeña === true || (b.extras || []).length > 0 || (b.sponsors || []).length > 0);
 
 // Configuración del Pase del club → válida, o { error }
-export function normalizarPase({ precio, meses = 1, visible = true, umbrales = {}, beneficios = {} } = {}) {
+export function normalizarPase({ precio, meses = 1, visible = true, umbrales = {}, beneficios = {}, sponsors = [] } = {}) {
   const p = Number(precio);
   if (!Number.isFinite(p) || p < 100) return { error: "Poné el precio del Pase (mínimo $ 100)" };
   const m = Number(meses);
@@ -84,9 +104,10 @@ export function normalizarPase({ precio, meses = 1, visible = true, umbrales = {
   const plata = entero(umbrales.plata ?? UMBRALES_DEFECTO.plata, 1, 100000);
   const oro = entero(umbrales.oro ?? UMBRALES_DEFECTO.oro, 2, 100000);
   if (oro <= plata) return { error: "Los puntos de Oro tienen que ser más que los de Plata" };
-  const ben = Object.fromEntries(NIVELES.map((n) => [n, normalizarBeneficios(beneficios[n] || {})]));
-  if (!NIVELES.some((n) => tieneBeneficios(ben[n]))) return { error: "Elegí al menos un beneficio" };
-  return { precio: Math.round(p), meses: m, visible: visible !== false, umbrales: { plata, oro }, beneficios: ben };
+  const ben = Object.fromEntries(NIVELES.map((n) => [n, normalizarBeneficios({ ...(beneficios[n] || {}), sponsors: [] })]));
+  const sp = normalizarSponsors(sponsors);
+  if (!NIVELES.some((n) => tieneBeneficios(ben[n])) && !sp.some((x) => NIVELES.some((n) => x.pct[n] > 0))) return { error: "Elegí al menos un beneficio" };
+  return { precio: Math.round(p), meses: m, visible: visible !== false, umbrales: { plata, oro }, beneficios: ben, sponsors: sp };
 }
 
 // Puntos → nivel
@@ -104,7 +125,17 @@ export function proximoNivel(puntos, umbrales = UMBRALES_DEFECTO) {
   return null;
 }
 export const puntosPorGasto = (monto) => Math.max(0, Math.floor((Number(monto) || 0) / PESOS_POR_PUNTO));
-export const beneficiosDeNivel = (pase, nivel) => normalizarBeneficios((pase && pase.beneficios && pase.beneficios[nivel]) || {});
+// Beneficios del nivel, con los sponsors que dan descuento en ese nivel (lo que se guarda en el socio)
+export const beneficiosDeNivel = (pase, nivel) =>
+  normalizarBeneficios({
+    ...((pase && pase.beneficios && pase.beneficios[nivel]) || {}),
+    sponsors: normalizarSponsors(pase && pase.sponsors).map((x) => ({ nombre: x.nombre, detalle: x.detalle, pct: x.pct[nivel] })),
+  });
+// Puntos de los últimos 12 meses a partir de los movimientos ({ cantidad, en })
+export function puntosVigentes(movimientos = [], ahora = Date.now()) {
+  const desde = ahora - DIAS_PUNTOS * 86400000;
+  return movimientos.reduce((acc, m) => acc + ((aMs(m && m.en) ?? 0) >= desde ? Number(m.cantidad) || 0 : 0), 0);
+}
 export const nombrePase = (club) => `Pase Club ${(club && club.nombre) || ""}`.trim();
 
 // "Martes y jueves de 08:00 a 17:00" · "Lun a vie de 08:00 a 17:00"
@@ -126,6 +157,7 @@ export function textosBeneficios(b) {
   if (b.descuentoBarPct > 0) out.push(`${b.descuentoBarPct} % off en el bar`);
   if (b.torneoGratis) out.push("Inscripción gratis a los torneos del club");
   else if (b.descuentoTorneoPct > 0) out.push(`${b.descuentoTorneoPct} % off en la inscripción a los torneos del club`);
+  (b.sponsors || []).forEach((x) => out.push(`${x.pct} % off en ${x.nombre}${x.detalle ? ` (${x.detalle})` : ""}`));
   (b.extras || []).forEach((t) => out.push(t));
   return out;
 }
@@ -172,6 +204,8 @@ export function registrarCobroPase(socio, pase, { ahora = Date.now(), monto = nu
     beneficios: beneficiosDeNivel(pase, nivel),
     planNombre: ETIQUETA_NIVEL[nivel],
     puntosResetEn: null,
+    // Si se resetearon, los movimientos viejos ya no cuentan (el recálculo de 12 meses arranca acá)
+    ...(resetear ? { puntosDesde: ahora } : {}),
     historial: [...(Array.isArray(socio && socio.historial) ? socio.historial : []), entrada].slice(-50),
   };
 }

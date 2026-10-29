@@ -3924,6 +3924,7 @@ const aTsCampos = (c) => ({
   ...(c.desde !== undefined ? { desde: c.desde == null ? null : Timestamp.fromMillis(c.desde) } : {}),
   ...(c.vence !== undefined ? { vence: c.vence == null ? null : Timestamp.fromMillis(c.vence) } : {}),
   ...(c.puntosResetEn !== undefined ? { puntosResetEn: c.puntosResetEn == null ? null : Timestamp.fromMillis(c.puntosResetEn) } : {}),
+  ...(typeof c.puntosDesde === "number" ? { puntosDesde: Timestamp.fromMillis(c.puntosDesde) } : {}),
   ...(Array.isArray(c.historial) ? { historial: c.historial.map((h) => ({ ...h, en: typeof h.en === "number" ? Timestamp.fromMillis(h.en) : h.en })) } : {}),
 });
 const socioPlano = (d) => (d ? { ...d, desde: msDe(d.desde), vence: msDe(d.vence), puntosResetEn: msDe(d.puntosResetEn) } : null);
@@ -4142,7 +4143,8 @@ async function procesarNotificacionPase(clubRef, tipo, dataId, tokens) {
     const paymentId = String(ap.payment.id || ap.id);
     const socioRef = clubRef.collection("socios").doc(idx.data().uid);
     const facturacion = (await db.collection("configuracionPadely").doc("facturacion").get()).data() || {};
-    const pct = Math.min(30, Math.max(0, Number(facturacion.comisionPasesPct) || 0));
+    // Comisión de Padely sobre el Pase: 5 % salvo que el super-admin cargue otra (0 a 30)
+    const pct = Math.min(30, Math.max(0, facturacion.comisionPasesPct === undefined || facturacion.comisionPasesPct === null || facturacion.comisionPasesPct === "" ? 5 : Number(facturacion.comisionPasesPct) || 0));
     const resultado = await db.runTransaction(async (tx) => {
       const comRef = db.collection("comisionesPase").doc(paymentId);
       const [sSnap, pSnap, cSnap] = await Promise.all([tx.get(socioRef), tx.get(paseRef(clubRef)), tx.get(comRef)]);
@@ -4197,8 +4199,25 @@ exports.sociosVencidos = onSchedule({ schedule: "40 4 * * *", timeZone: ZONA_HOR
     const hecho = await sumarPuntosPase(clubRef, r.jugadorUid, r.precioTotal || r.precio, `reserva_${d.id}`, { tipo: "reserva", fecha: r.fecha }).catch(() => null);
     if (hecho) conPuntos += 1;
   }
+  // Puntos de los últimos 12 meses: cada socio activo se recalcula desde sus movimientos (los viejos dejan de contar)
+  const activos = await db.collectionGroup("socios").where("estado", "==", "activa").get();
+  const pasePorClub = new Map();
+  let recalculados = 0;
+  for (const d of activos.docs) {
+    const clubRef = d.ref.parent.parent;
+    if (!pasePorClub.has(clubRef.id)) pasePorClub.set(clubRef.id, ((await paseRef(clubRef).get()).data()) || {});
+    const pase = pasePorClub.get(clubRef.id);
+    const desde = Math.max(ahora - M.DIAS_PUNTOS * 86400000, msDe(d.data().puntosDesde) || 0);
+    const movs = await d.ref.collection("puntos").where("en", ">=", Timestamp.fromMillis(desde)).get();
+    const puntos = M.puntosVigentes(movs.docs.map((m) => ({ cantidad: m.data().cantidad, en: msDe(m.data().en) })), ahora);
+    const nivel = M.nivelPorPuntos(puntos, pase.umbrales);
+    if (puntos !== (Number(d.data().puntos) || 0) || nivel !== d.data().nivel) {
+      await d.ref.update({ puntos, nivel, planNombre: M.ETIQUETA_NIVEL[nivel], beneficios: M.beneficiosDeNivel(pase, nivel), actualizadoEn: FieldValue.serverTimestamp() });
+      recalculados += 1;
+    }
+  }
   // 90 días después de la baja o el vencimiento: puntos y nivel en 0
   const reset = await db.collectionGroup("socios").where("puntosResetEn", "<=", Timestamp.fromMillis(ahora)).get();
-  await escribirEnLotes(reset.docs.filter((d) => d.data().estado !== "activa").map((d) => (b) => b.update(d.ref, { puntos: 0, nivel: "bronce", puntosResetEn: null, actualizadoEn: FieldValue.serverTimestamp() })));
-  logger.info(`sociosVencidos: ${vencidas.size} vencidos, ${conPuntos} reservas con puntos, ${reset.size} reseteados`);
+  await escribirEnLotes(reset.docs.filter((d) => d.data().estado !== "activa").map((d) => (b) => b.update(d.ref, { puntos: 0, nivel: "bronce", puntosResetEn: null, puntosDesde: Timestamp.fromMillis(ahora), actualizadoEn: FieldValue.serverTimestamp() })));
+  logger.info(`sociosVencidos: ${vencidas.size} vencidos, ${conPuntos} reservas con puntos, ${recalculados} con puntos recalculados (12 meses), ${reset.size} reseteados`);
 });

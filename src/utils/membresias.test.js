@@ -95,3 +95,13 @@ test("descuentos: cancha por franja, seña, anticipación, torneo", () => {
   assert.deepEqual(textosBeneficios(PASE.beneficios.oro), ["15 % off en el bar", "Inscripción gratis a los torneos del club", "Prioridad de estacionamiento"]);
   assert.equal(nombreCorto("Juan Carlos Pérez"), "Juan P.");
 });
+
+test("sponsors por nivel y puntos de los últimos 12 meses", async () => {
+  const { normalizarPase: np, beneficiosDeNivel, puntosVigentes, textosBeneficios: tb } = await import("./membresias.js");
+  const p = np({ precio: 15000, sponsors: [{ nombre: "Deportes Norte", detalle: "paletas y ropa", pct: { bronce: 0, plata: 10, oro: 15 } }, { nombre: "", pct: { oro: 5 } }] });
+  assert.equal(p.sponsors.length, 1);
+  assert.deepEqual(beneficiosDeNivel(p, "bronce").sponsors, []);
+  assert.deepEqual(tb(beneficiosDeNivel(p, "oro")), ["15 % off en Deportes Norte (paletas y ropa)"]);
+  const ahora = AR("2026-10-29T12:00:00");
+  assert.equal(puntosVigentes([{ cantidad: 100, en: AR("2026-01-10T10:00:00") }, { cantidad: 50, en: AR("2025-10-01T10:00:00") }], ahora), 100);
+});

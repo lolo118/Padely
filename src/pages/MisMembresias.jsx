@@ -2,25 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Crown } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
-import { cancelarPase, getMisMembresias, getPase, postularEquipo } from "../services/membresiasService";
+import { cancelarPase, getMisMembresias, getPase } from "../services/membresiasService";
 import { toast } from "../components/Toast";
 import { confirmar } from "../components/ConfirmDialog";
 import { DIAS_CONSERVA_PUNTOS, ESTADOS_SOCIO, ETIQUETA_NIVEL, TONO_NIVEL, estadoSocio, proximoNivel, textosBeneficios } from "../utils/membresias";
 import { svgQr } from "../utils/qr";
 import { formatFechaLarga } from "../utils/formatDate";
 import useTituloPagina from "../hooks/useTituloPagina";
-import { Badge, Button, Card, Field, Select } from "../components/ui";
+import { Badge, Button, Card } from "../components/ui";
 
 // /membresias (P3-16): los Pases Club del jugador: nivel (Bronce / Plata / Oro), puntos y cuánto falta para el
-// próximo, el QR (→ /s/:token) para mostrar en el club, los beneficios del nivel, la postulación al equipo del club
-// y la baja (corta el débito de Mercado Pago; los beneficios terminan ya, los puntos se guardan 90 días).
+// próximo, el QR (→ /s/:token) para mostrar en el club, los beneficios del nivel (con los sponsors) y la baja (corta el débito de Mercado Pago; los beneficios terminan ya, los puntos se guardan 90 días).
 const TONO = { pendiente: "warning", activa: "success", vencida: "danger", cancelada: "neutral", rechazada: "neutral" };
-const CATEGORIAS = ["8va", "7ma", "6ta", "5ta", "4ta", "3era", "2da", "1era"];
-const POSICIONES = [
-  { value: "drive", label: "Drive" },
-  { value: "reves", label: "Revés" },
-  { value: "indistinto", label: "Indistinto" },
-];
 
 export default function MisMembresias() {
   useTituloPagina("Mis pases");
@@ -70,8 +63,6 @@ export default function MisMembresias() {
 function PaseCard({ socio, onCambio }) {
   const { est } = socio;
   const [pase, setPase] = useState(null);
-  const [equipo, setEquipo] = useState({ categoria: socio.equipo?.categoria || "", posicion: socio.equipo?.posicion || "indistinto" });
-  const [guardando, setGuardando] = useState(false);
   useEffect(() => {
     let vivo = true;
     getPase(socio.clubId)
@@ -102,19 +93,6 @@ function PaseCard({ socio, onCambio }) {
     } catch (err) {
       console.error(err);
       toast.error(err?.message || "No pudimos dar de baja el Pase.");
-    }
-  };
-  const guardarEquipo = async (quiere) => {
-    setGuardando(true);
-    try {
-      await postularEquipo(socio.clubId, socio.uid, { quiere, ...equipo });
-      toast.success(quiere ? "Listo: el club ve que querés estar en el equipo" : "Saliste de la lista del equipo");
-      onCambio();
-    } catch (err) {
-      console.error(err);
-      toast.error("No pudimos guardar.");
-    } finally {
-      setGuardando(false);
     }
   };
 
@@ -165,43 +143,7 @@ function PaseCard({ socio, onCambio }) {
       )}
       {est.activa && (
         <div className="mt-4 pt-3 border-t border-line">
-          <p className="pd-eyebrow m-0">Equipo del club (interclubes)</p>
-          {socio.equipo?.quiere ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
-              <span className="body-sm">
-                {socio.equipo.seleccionado ? "¡Estás en el equipo del club!" : "Te postulaste: el club arma el equipo."} {[socio.equipo.categoria, POSICIONES.find((p) => p.value === socio.equipo.posicion)?.label].filter(Boolean).join(" · ")}
-              </span>
-              <Button size="sm" variant="ghost" onClick={() => guardarEquipo(false)} cargando={guardando ? "Guardando…" : ""}>
-                Salir de la lista
-              </Button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-end gap-2 mt-2">
-              <Field label="Categoría">
-                <Select value={equipo.categoria} onChange={(e) => setEquipo({ ...equipo, categoria: e.target.value })}>
-                  <option value="">Elegí</option>
-                  {CATEGORIAS.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Posición">
-                <Select value={equipo.posicion} onChange={(e) => setEquipo({ ...equipo, posicion: e.target.value })}>
-                  {POSICIONES.map((p) => (
-                    <option key={p.value} value={p.value}>
-                      {p.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Button onClick={() => guardarEquipo(true)} disabled={!equipo.categoria} cargando={guardando ? "Guardando…" : ""}>
-                Quiero estar en el equipo
-              </Button>
-            </div>
-          )}
-          <div className="mt-4">
+          <div>
             <Button size="sm" variant="ghost" onClick={darDeBaja}>
               Dar de baja mi Pase
             </Button>

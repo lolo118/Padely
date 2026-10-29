@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
-import { cancelarPase, getPase, getSocios, guardarPase, marcarSeleccionado } from "../../services/membresiasService";
-import { DIAS_SEMANA, ESTADOS_SOCIO, ETIQUETA_NIVEL, MAX_EXTRAS, MESES_PASE, NIVELES, PESOS_POR_PUNTO, SUGERENCIAS_EXTRAS, TONO_NIVEL, UMBRALES_DEFECTO, estadoSocio, nombrePase, normalizarPase, textoCada, textosBeneficios } from "../../utils/membresias";
+import { cancelarPase, getPase, getSocios, guardarPase } from "../../services/membresiasService";
+import { DIAS_SEMANA, ESTADOS_SOCIO, ETIQUETA_NIVEL, MAX_EXTRAS, MAX_SPONSORS, MESES_PASE, NIVELES, PESOS_POR_PUNTO, SUGERENCIAS_EXTRAS, TONO_NIVEL, UMBRALES_DEFECTO, estadoSocio, nombrePase, normalizarPase, textoCada, textosBeneficios } from "../../utils/membresias";
 import { formatPrecio } from "../../utils/format";
 import { formatFechaLarga } from "../../utils/formatDate";
 import SinPermiso from "../../components/SinPermiso";
@@ -10,13 +10,12 @@ import { confirmar } from "../../components/ConfirmDialog";
 import { toast } from "../../components/Toast";
 import { Alert, Badge, Button, Card, Field, Input, Pills, SearchInput, Select, Tabs } from "../../components/ui";
 
-// /admin/socios (P3-16): el Pase Club del club. Socios (nivel, puntos, estado), el equipo del club (los socios que
-// se postulan para los interclubes; el club marca a quién elige) y la configuración: precio, cada cuánto se cobra
-// (débito automático por Mercado Pago), puntos para Plata y Oro, y los beneficios de cada nivel (los que aplica
-// Padely y los propios del club, de texto libre).
+// /admin/socios (P3-16): el Pase Club del club. Socios (nivel, puntos, estado) y la configuración: precio, cada
+// cuánto se cobra (débito automático por Mercado Pago), puntos para Plata y Oro (últimos 12 meses), los beneficios de
+// cada nivel (los que aplica Padely y los propios del club, de texto libre) y los sponsors con su % por nivel.
+// (El equipo del club para interclubes queda para después: el modelo ya guarda la postulación.)
 const TONO = { pendiente: "warning", activa: "success", vencida: "danger", cancelada: "neutral" };
 const HORAS = Array.from({ length: 18 }, (_, i) => `${String(i + 7).padStart(2, "0")}:00`);
-const POSICION = { drive: "Drive", reves: "Revés", indistinto: "Indistinto" };
 
 export default function Socios() {
   const club = useAuthStore((s) => s.clubActual);
@@ -55,7 +54,6 @@ export default function Socios() {
 
   if (!club) return <div className="pd-skeleton h-40 rounded-lg" aria-busy="true" aria-label="Cargando" />;
   if (!puedeSocios && !puedeConfigurar) return <SinPermiso />;
-  const postulados = (socios || []).filter((s) => s.equipo?.quiere && estadoSocio(s).activa).length;
 
   return (
     <div className="flex flex-col gap-4">
@@ -68,7 +66,6 @@ export default function Socios() {
       <Tabs
         items={[
           ...(puedeSocios ? [{ value: "socios", label: "Socios", count: (socios || []).filter((s) => estadoSocio(s).activa).length || undefined }] : []),
-          ...(puedeSocios ? [{ value: "equipo", label: "Equipo", count: postulados || undefined }] : []),
           ...(puedeConfigurar ? [{ value: "config", label: "Configurar" }] : []),
         ]}
         value={tab}
@@ -76,7 +73,6 @@ export default function Socios() {
         ariaLabel="Secciones del Pase"
       />
       {tab === "socios" && <ListaSocios club={club} socios={socios} onCambio={recargar} />}
-      {tab === "equipo" && <ListaEquipo club={club} socios={socios} onCambio={recargar} />}
       {tab === "config" && pase !== undefined && <ConfigPase club={club} pase={pase} onGuardado={recargar} />}
     </div>
   );
@@ -146,7 +142,7 @@ function ListaSocios({ club, socios, onCambio }) {
                 </span>
               </Card.Row>
               <Card.Meta className="mt-1!">
-                {[`${s.puntos || 0} puntos`, s.est.vence ? `${s.est.activa ? "Se renueva" : "Venció"} el ${formatFechaLarga(s.est.vence)}` : null, s.equipo?.quiere ? "Quiere estar en el equipo" : null].filter(Boolean).join(" · ")}
+                {[`${s.puntos || 0} puntos`, s.est.vence ? `${s.est.activa ? "Se renueva" : "Venció"} el ${formatFechaLarga(s.est.vence)}` : null].filter(Boolean).join(" · ")}
               </Card.Meta>
               {s.est.activa && (
                 <div className="mt-3">
@@ -163,48 +159,6 @@ function ListaSocios({ club, socios, onCambio }) {
   );
 }
 
-// ---- Equipo del club ---------------------------------------------------------------------------------------------
-function ListaEquipo({ club, socios, onCambio }) {
-  if (!socios) return <div className="pd-skeleton h-32 rounded-lg" aria-busy="true" aria-label="Cargando" />;
-  const lista = socios.filter((s) => s.equipo?.quiere && estadoSocio(s).activa).sort((a, b) => String(a.equipo.categoria).localeCompare(String(b.equipo.categoria)) || String(a.nombre).localeCompare(String(b.nombre), "es"));
-  const alternar = async (s) => {
-    try {
-      await marcarSeleccionado(club.id, s, !s.equipo.seleccionado);
-      onCambio();
-    } catch (err) {
-      console.error(err);
-      toast.error("No pudimos guardar.");
-    }
-  };
-  if (!lista.length) {
-    return (
-      <Card>
-        <Card.Meta>Todavía nadie se postuló. Los socios se anotan desde su Pase ("Quiero estar en el equipo") con categoría y posición.</Card.Meta>
-      </Card>
-    );
-  }
-  return (
-    <div className="grid gap-3 md:grid-cols-2">
-      {lista.map((s) => (
-        <Card key={s.id}>
-          <Card.Row>
-            <Card.Title as="h3" className="m-0">
-              {s.nombre}
-            </Card.Title>
-            {s.equipo.seleccionado && <Badge tone="success">En el equipo</Badge>}
-          </Card.Row>
-          <Card.Meta className="mt-1!">{[s.equipo.categoria, POSICION[s.equipo.posicion], ETIQUETA_NIVEL[s.nivel || "bronce"]].filter(Boolean).join(" · ")}</Card.Meta>
-          <div className="mt-3">
-            <Button size="sm" variant={s.equipo.seleccionado ? "ghost" : "primary"} onClick={() => alternar(s)}>
-              {s.equipo.seleccionado ? "Sacar del equipo" : "Sumar al equipo"}
-            </Button>
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
 // ---- Configuración del Pase ---------------------------------------------------------------------------------------
 const VACIO = { descuentoCanchaPct: 0, franja: null, descuentoBarPct: 0, descuentoTorneoPct: 0, torneoGratis: false, diasExtraReserva: 0, sinSeña: false, extras: [] };
 
@@ -215,7 +169,9 @@ function ConfigPase({ club, pase, onGuardado }) {
     visible: pase ? pase.visible !== false : true,
     umbrales: { ...UMBRALES_DEFECTO, ...(pase?.umbrales || {}) },
     beneficios: Object.fromEntries(NIVELES.map((n) => [n, { ...VACIO, ...(pase?.beneficios?.[n] || {}) }])),
+    sponsors: (pase?.sponsors || []).map((x) => ({ ...x, pct: { bronce: 0, plata: 0, oro: 0, ...(x.pct || {}) } })),
   }));
+  const setSponsor = (i, cambios) => setForm((f) => ({ ...f, sponsors: f.sponsors.map((x, j) => (j === i ? { ...x, ...cambios } : x)) }));
   const [nivel, setNivel] = useState("bronce");
   const [extra, setExtra] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -272,7 +228,7 @@ function ConfigPase({ club, pase, onGuardado }) {
           </Field>
         </div>
         <p className="pd-help mt-2 mb-0">
-          1 punto cada {formatPrecio(PESOS_POR_PUNTO)} que el socio gasta en el club (canchas jugadas, bar con su Pase, torneos que organiza el club). Plata = {formatPrecio((Number(form.umbrales.plata) || 0) * PESOS_POR_PUNTO)} gastados; Oro = {formatPrecio((Number(form.umbrales.oro) || 0) * PESOS_POR_PUNTO)}.
+          1 punto cada {formatPrecio(PESOS_POR_PUNTO)} que el socio gasta en el club (canchas jugadas, bar con su Pase, torneos que organiza el club); cuentan los últimos 12 meses. Plata = {formatPrecio((Number(form.umbrales.plata) || 0) * PESOS_POR_PUNTO)} gastados; Oro = {formatPrecio((Number(form.umbrales.oro) || 0) * PESOS_POR_PUNTO)}.
         </p>
         <label className="flex items-center gap-2 body-sm mt-3">
           <input type="checkbox" checked={form.visible} onChange={(e) => setForm({ ...form, visible: e.target.checked })} />
@@ -394,6 +350,34 @@ function ConfigPase({ club, pase, onGuardado }) {
               </Button>
             ))}
           </div>
+        </div>
+      </Card>
+
+      <Card>
+        <Card.Title as="h2">Sponsors</Card.Title>
+        <Card.Meta className="mt-1!">Las marcas que acompañan al club y el descuento que dan a cada nivel. Se muestran en el Pase del socio y al escanear su QR (el sponsor lo verifica ahí).</Card.Meta>
+        <div className="mt-3 grid gap-3">
+          {form.sponsors.map((x, i) => (
+            <div key={i} className="grid gap-3 sm:grid-cols-[2fr_2fr_repeat(3,1fr)_auto] items-end border-b border-line pb-3">
+              <Field label="Sponsor">
+                <Input value={x.nombre} onChange={(e) => setSponsor(i, { nombre: e.target.value })} maxLength={40} placeholder="Ej.: Deportes Norte" />
+              </Field>
+              <Field label="Detalle (opcional)">
+                <Input value={x.detalle || ""} onChange={(e) => setSponsor(i, { detalle: e.target.value })} maxLength={80} placeholder="Ej.: paletas y ropa" />
+              </Field>
+              {NIVELES.map((n) => (
+                <Field key={n} label={`${ETIQUETA_NIVEL[n]} %`}>
+                  <Input type="number" min="0" max="100" inputMode="numeric" value={x.pct[n] || ""} onChange={(e) => setSponsor(i, { pct: { ...x.pct, [n]: e.target.value } })} placeholder="0" />
+                </Field>
+              ))}
+              <Button variant="ghost" iconOnly aria-label={`Quitar ${x.nombre || "sponsor"}`} icon={<X className="pd-icon" size={16} aria-hidden="true" />} onClick={() => setForm((f) => ({ ...f, sponsors: f.sponsors.filter((_, j) => j !== i) }))} />
+            </div>
+          ))}
+          {form.sponsors.length < MAX_SPONSORS && (
+            <div>
+              <Button onClick={() => setForm((f) => ({ ...f, sponsors: [...f.sponsors, { nombre: "", detalle: "", pct: { bronce: 0, plata: 0, oro: 0 } }] }))}>Agregar sponsor</Button>
+            </div>
+          )}
         </div>
       </Card>
 
