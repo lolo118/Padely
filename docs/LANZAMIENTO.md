@@ -49,3 +49,7 @@ Se prenden en Super-admin → Planes → Flags, cuando el backend está deployad
 - [ ] Club piloto con tus datos (canchas, tarifas, horarios) y una semana de uso real.
 - [ ] Guía corta para el dueño (cómo cargar canchas, cobrar seña, abrir caja) y un WhatsApp de soporte.
 - [ ] Recién después, invitar a los siguientes 3–5 clubes.
+
+## 8. Lessons from deploys
+- If a deploy gets cut off (Ctrl+C, a closed window), run it again until it says "Fin". Then check the **callables** created in that run: a 403 to an anonymous POST means they have no public invoker. Fix it in Cloud Run → service → Security → "Allow public access" (it happened with cerrarPartido/quitarDePartido on 28/10).
+- Flags turned on so far: `partidosAbiertos` (28/10). Pending: `inscripcionesOnline`, `membresias` (after deploy 18 and C-P3-16).
