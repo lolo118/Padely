@@ -3,11 +3,13 @@ import { Link } from "react-router-dom";
 import { IdCard } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { getMisMembresias } from "../services/membresiasService";
+import { pagarConMercadoPago } from "../services/mercadoPagoService";
+import { toast } from "../components/Toast";
 import { ESTADOS_SOCIO, estadoSocio, textosBeneficios } from "../utils/membresias";
 import { svgQr } from "../utils/qr";
 import { formatFechaLarga } from "../utils/formatDate";
 import useTituloPagina from "../hooks/useTituloPagina";
-import { Badge, Card } from "../components/ui";
+import { Badge, Button, Card } from "../components/ui";
 
 // /membresias (P3-16): las membresías del jugador en todos los clubes, con el carnet digital (QR → /s/:token) para
 // mostrar en el club (estacionamiento, exhibiciones, descuentos en el bar).
@@ -59,6 +61,18 @@ export default function MisMembresias() {
 
 function Carnet({ socio }) {
   const { est } = socio;
+  const [abriendo, setAbriendo] = useState(false);
+  // Renovar online: el club tiene que tener Mercado Pago conectado (si no, la callable lo dice)
+  const renovar = async () => {
+    setAbriendo(true);
+    try {
+      await pagarConMercadoPago({ clubId: socio.clubId, tipo: "membresia", planId: socio.planId });
+    } catch (err) {
+      console.error("No se pudo abrir Mercado Pago:", err);
+      toast.error(err?.message || "No pudimos abrir Mercado Pago: renovala en el club.");
+      setAbriendo(false);
+    }
+  };
   const link = socio.token ? `${window.location.origin}/s/${socio.token}` : "";
   const qr = useMemo(() => (link && est.activa ? svgQr(link, { titulo: "QR de socio" }) : ""), [link, est.activa]);
   const beneficios = textosBeneficios(socio.beneficios);
@@ -79,7 +93,14 @@ function Carnet({ socio }) {
         {[socio.planNombre, socio.numero ? `Socio Nº ${socio.numero}` : null, est.vence ? `${est.activa ? "Vence" : "Venció"} el ${formatFechaLarga(est.vence)}` : null].filter(Boolean).join(" · ")}
       </Card.Meta>
       {est.estado === "pendiente" && <p className="body-sm text-ink-2 mt-2 mb-0">El club tiene que aprobar tu pedido y cobrarte la cuota. Te avisamos cuando estés activo.</p>}
-      {est.porVencer && <p className="body-sm text-warning mt-2 mb-0">Vence en {est.diasRestantes} {est.diasRestantes === 1 ? "día" : "días"}: renovala en el club.</p>}
+      {est.porVencer && <p className="body-sm text-warning mt-2 mb-0">Vence en {est.diasRestantes} {est.diasRestantes === 1 ? "día" : "días"}.</p>}
+      {(est.activa || est.estado === "vencida") && socio.planId && (
+        <div className="mt-3">
+          <Button size="sm" variant={est.porVencer || est.estado === "vencida" ? "primary" : "ghost"} onClick={renovar} cargando={abriendo ? "Abriendo Mercado Pago…" : ""}>
+            Renovar con Mercado Pago
+          </Button>
+        </div>
+      )}
       {est.activa && (
         <div className="mt-3 flex flex-col sm:flex-row gap-4 items-start">
           {qr ? (

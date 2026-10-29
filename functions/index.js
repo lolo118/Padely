@@ -2558,7 +2558,7 @@ async function avisarStaff(clubRef, permisos, datos) {
 // Una preferencia pendiente y vigente para el mismo destino (mismos participantes / misma reserva) se reutiliza
 async function pagoMpPendiente(clubRef, filtro) {
   let q = clubRef.collection("pagosMp").where("estado", "==", "pendiente");
-  q = filtro.grupoId ? q.where("grupoId", "==", filtro.grupoId) : q.where("reservaId", "==", filtro.reservaId);
+  q = filtro.membresiaDe ? q.where("membresiaDe", "==", filtro.membresiaDe) : filtro.grupoId ? q.where("grupoId", "==", filtro.grupoId) : q.where("reservaId", "==", filtro.reservaId);
   const snap = await q.get();
   const ahora = Date.now();
   return (
@@ -2574,7 +2574,7 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
   const d = request.data || {};
   const clubId = texto(d.clubId, 80);
   const tipo = texto(d.tipo, 20);
-  if (!clubId || !["parte", "seña", "mostrador"].includes(tipo)) throw new HttpsError("invalid-argument", "clubId y tipo (parte | seña | mostrador)");
+  if (!clubId || !["parte", "seña", "mostrador", "membresia"].includes(tipo)) throw new HttpsError("invalid-argument", "clubId y tipo (parte | seña | mostrador | membresia)");
   const clubRef = db.collection("clubs").doc(clubId);
   const clubSnap = await clubRef.get();
   if (!clubSnap.exists) throw new HttpsError("not-found", "El club no existe");
@@ -2587,7 +2587,28 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
   const comisionPct = (await planesUtil()).comisionPct(club);
 
   let destino; // { monto, titulo, backUrl, pagador, participanteIds, lineas, piezas, grupoId, reservaId, filtro }
-  if (tipo === "seña") {
+  if (tipo === "membresia") {
+    // P3-16: pagar el alta o la renovación de una membresía; al aprobarse queda activa (sin aprobación del club)
+    if (anonimo) throw new HttpsError("permission-denied", "Entrá con tu cuenta de Padely");
+    const planId = texto(d.planId, 80);
+    if (!planId) throw new HttpsError("invalid-argument", "planId");
+    if (!(await planesUtil()).estadoPlan(club).pro) throw new HttpsError("failed-precondition", "El club no tiene membresías habilitadas");
+    const [planSnap, socioSnap] = await Promise.all([clubRef.collection("planesSocio").doc(planId).get(), clubRef.collection("socios").doc(uid).get()]);
+    if (!planSnap.exists || planSnap.data().visible === false) throw new HttpsError("not-found", "Ese plan ya no está disponible");
+    const plan = planSnap.data();
+    const socio = socioSnap.exists ? socioSnap.data() : null;
+    const M = await membresiasUtil();
+    const yaEsDelPlan = socio && M.estadoSocio({ ...socio, vence: msDe(socio.vence) }).activa && socio.planId === planId;
+    if (plan.cupo != null && !yaEsDelPlan) {
+      const ocupados = await clubRef.collection("socios").where("planId", "==", planId).where("estado", "in", ["activa", "pendiente"]).count().get();
+      const propio = socio && socio.planId === planId && ["activa", "pendiente"].includes(socio.estado) ? 1 : 0;
+      if (ocupados.data().count - propio >= plan.cupo) throw new HttpsError("failed-precondition", "Este plan no tiene más cupo");
+    }
+    const monto = Math.round(Number(plan.precio) || 0);
+    if (monto <= 0) throw new HttpsError("failed-precondition", "Este plan no se paga online: pedilo y el club te confirma");
+    const nombre = await nombreDeUsuario(uid, "Jugador");
+    destino = { monto, titulo: `${club.nombre || "Club"} · ${plan.nombre} (${M.etiquetaPeriodo(plan.periodo).toLowerCase()})`, backUrl: `${APP_URL}/membresias`, pagador: { uid, nombre }, participanteIds: [], lineas: [], piezas: [], grupoId: null, reservaId: null, planId, membresiaDe: `${uid}_${planId}`, filtro: { membresiaDe: `${uid}_${planId}`, monto, participanteIds: [] } };
+  } else if (tipo === "seña") {
     if (anonimo) throw new HttpsError("permission-denied", "Entrá con tu cuenta de Padely");
     const reservaId = texto(d.reservaId, 120);
     if (!reservaId) throw new HttpsError("invalid-argument", "reservaId");
@@ -2707,6 +2728,8 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
     initPoint,
     linkCorto,
     pedido: destino.pedido || null,
+    planId: destino.planId || null,
+    membresiaDe: destino.membresiaDe || null,
     sandboxInitPoint: r.sandbox_init_point || null,
     paymentId: null,
     pagador: destino.pagador,
@@ -2752,6 +2775,7 @@ exports.mpIr = onRequest({ region: REGION }, async (req, res) => {
 // cierra si ya nadie debe. Idempotente por paymentId.
 async function aplicarPagoAprobado(clubRef, pagoMpRef, pago) {
   const util = await cuentasUtil();
+  const M = await membresiasUtil();
   const clubSnap = await clubRef.get();
   const club = clubSnap.exists ? clubSnap.data() : {};
   const paymentId = String(pago.id);
@@ -2772,6 +2796,30 @@ async function aplicarPagoAprobado(clubRef, pagoMpRef, pago) {
       if (cSnap && cSnap.exists) tx.update(cuentaRef, { alertas: FieldValue.arrayUnion("mp-excedente"), actualizadoEn: FieldValue.serverTimestamp() });
       tx.update(pagoMpRef, { estado: "aprobado", paymentId, aprobadoEn: FieldValue.serverTimestamp(), ventaNumero: null, montoPagado, montoAplicado: 0, excedente: montoPagado, excedenteDevuelto: null, pagoTardio: true, estadoMp: pago.status, actualizadoEn: FieldValue.serverTimestamp() });
       return { resultado: decision.resultado, pm, excedente: montoPagado, tardio: true };
+    }
+    if (pm.tipo === "membresia") {
+      // P3-16: alta o renovación pagada → la membresía queda activa (desde hoy, o desde su vencimiento si sigue vigente)
+      const socioRef = clubRef.collection("socios").doc(pm.pagador.uid);
+      const [sSnap, pSnap] = await Promise.all([tx.get(socioRef), tx.get(clubRef.collection("planesSocio").doc(pm.planId))]);
+      const plan = pSnap.exists ? { id: pSnap.id, ...pSnap.data() } : { id: pm.planId, nombre: "Membresía", periodo: "mensual", beneficios: {} };
+      const previo = sSnap.exists ? sSnap.data() : null;
+      const socio = previo ? { ...previo, desde: msDe(previo.desde), vence: msDe(previo.vence) } : { historial: [] };
+      const c = M.registrarPagoSocio(socio, plan, { ahora: Date.now(), monto: montoPagado, medio: "mercadopago", por: pm.pagador.uid, porNombre: "Mercado Pago" });
+      tx.set(
+        socioRef,
+        {
+          ...(previo ? {} : { uid: pm.pagador.uid, nombre: pm.pagador.nombre || "Jugador", creadoEn: FieldValue.serverTimestamp() }),
+          ...c,
+          desde: Timestamp.fromMillis(c.desde),
+          vence: Timestamp.fromMillis(c.vence),
+          historial: c.historial.map((h, i) => ({ ...h, en: typeof h.en === "number" ? Timestamp.fromMillis(h.en) : h.en, ...(i === c.historial.length - 1 ? { pagoMpId: pagoMpRef.id } : {}) })),
+          ultimoPagoMpId: pagoMpRef.id,
+          actualizadoEn: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      tx.update(pagoMpRef, { estado: "aprobado", paymentId, aprobadoEn: FieldValue.serverTimestamp(), montoPagado, montoAplicado: montoPagado, excedente: 0, estadoMp: pago.status, actualizadoEn: FieldValue.serverTimestamp() });
+      return { resultado: "membresía aplicada", pm, renovacion: !!(previo && previo.estado === "activa") };
     }
     if (pm.tipo === "seña") {
       const cabezaRef = clubRef.collection("reservas").doc(pm.reservaId);
@@ -2927,6 +2975,12 @@ async function aplicarPagoLeido(clubRef, pago) {
       } catch (err) {
         logger.error(`mpWebhook ${clubId}/${pagoMpId}: aviso de pago tardío`, err);
       }
+      return `pago ${paymentId}: ${r.resultado}`;
+    }
+    if (r.resultado === "membresía aplicada") {
+      const quien = (r.pm.pagador && r.pm.pagador.nombre) || "Un jugador";
+      const monto = Math.round(Number(pago.transaction_amount) || r.pm.monto).toLocaleString("es-AR");
+      await avisarStaff(clubRef, ["gestionarReservas"], { tipo: "socio_pago_mp", titulo: r.renovacion ? "Membresía renovada por Mercado Pago" : "Nuevo socio por Mercado Pago", mensaje: `${quien} pagó $ ${monto} por Mercado Pago: su membresía quedó activa.`, link: "/admin/socios", icono: "🪪" }).catch((err) => logger.error(`mpWebhook ${clubId}/${pagoMpId}: aviso de membresía`, err));
       return `pago ${paymentId}: ${r.resultado}`;
     }
     if (r.resultado !== "aplicado" && r.resultado !== "seña aplicada") return `pago ${paymentId}: ${r.resultado}`;

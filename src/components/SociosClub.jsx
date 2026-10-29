@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { pedirMembresia, retirarPedido } from "../services/membresiasService";
+import { pagarConMercadoPago } from "../services/mercadoPagoService";
 import { ESTADOS_SOCIO, estadoSocio, etiquetaPeriodo, textosBeneficios } from "../utils/membresias";
 import { formatPrecio } from "../utils/format";
 import { formatFechaLarga } from "../utils/formatDate";
@@ -8,13 +9,30 @@ import { confirmar } from "./ConfirmDialog";
 import { toast } from "./Toast";
 import { Alert, Badge, Button, Card } from "./ui";
 
-// Pestaña "Socios" de la página del club (P3-16): los planes visibles con sus beneficios, el estado del jugador y el
-// pedido ("Quiero ser socio"). El club aprueba y cobra desde Admin → Socios.
+// Pestaña "Socios" de la página del club (P3-16): los planes visibles con sus beneficios y el estado del jugador.
+// Con Mercado Pago conectado se paga online y la membresía queda activa al aprobarse el pago (sin aprobación del
+// club); si no, o si el jugador prefiere, pide y el club aprueba y cobra en el club (Admin → Socios).
 export default function SociosClub({ club, planes, miSocio, user, perfil, onCambio }) {
   const navigate = useNavigate();
   const [enviando, setEnviando] = useState("");
   const est = estadoSocio(miSocio);
   const puedePedir = !miSocio || ["cancelada", "rechazada", "vencida"].includes(est.estado);
+  const conMp = club.mercadoPago?.conectado === true;
+  // Pagar online: alta, cambio de plan o renovación (si sigue vigente, el período se suma desde el vencimiento)
+  const pagarOnline = async (plan) => {
+    if (!user || user.isAnonymous) {
+      navigate(`/login?next=${encodeURIComponent(window.location.pathname)}`);
+      return;
+    }
+    setEnviando(`mp-${plan.id}`);
+    try {
+      await pagarConMercadoPago({ clubId: club.id, tipo: "membresia", planId: plan.id });
+    } catch (err) {
+      console.error("No se pudo abrir Mercado Pago:", err);
+      toast.error(err?.message || "No pudimos abrir Mercado Pago. Probá de nuevo o pedilo y pagás en el club.");
+      setEnviando("");
+    }
+  };
 
   const pedir = async (plan) => {
     if (!user || user.isAnonymous) {
@@ -94,12 +112,25 @@ export default function SociosClub({ club, planes, miSocio, user, perfil, onCamb
                   <li key={t}>{t}</li>
                 ))}
               </ul>
-              {puedePedir && (
-                <div className="mt-3">
-                  <Button variant="primary" size="sm" onClick={() => pedir(p)} cargando={enviando === p.id ? "Enviando…" : ""}>
-                    Quiero ser socio
+              {conMp && p.precio > 0 && (puedePedir || (est.activa && miSocio?.planId === p.id)) ? (
+                <div className="pd-btn-group mt-3">
+                  <Button variant="primary" size="sm" onClick={() => pagarOnline(p)} cargando={enviando === `mp-${p.id}` ? "Abriendo Mercado Pago…" : ""}>
+                    {est.activa ? "Renovar con Mercado Pago" : "Pagar con Mercado Pago"}
                   </Button>
+                  {puedePedir && (
+                    <Button variant="ghost" size="sm" onClick={() => pedir(p)} cargando={enviando === p.id ? "Enviando…" : ""}>
+                      Prefiero pagar en el club
+                    </Button>
+                  )}
                 </div>
+              ) : (
+                puedePedir && (
+                  <div className="mt-3">
+                    <Button variant="primary" size="sm" onClick={() => pedir(p)} cargando={enviando === p.id ? "Enviando…" : ""}>
+                      Quiero ser socio
+                    </Button>
+                  </div>
+                )
               )}
             </Card>
           );
