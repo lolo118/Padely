@@ -16,8 +16,8 @@ const navItems = [
   { to: "/admin", label: "Hoy", icon: LayoutDashboard, end: true },
   { to: "/admin/torneos", label: "Torneos", icon: Trophy, permisos: ["gestionarTorneos"] },
   { to: "/admin/canchas", label: "Canchas", icon: LayoutGrid, permisos: ["gestionarReservas", "tarifas"] },
-  // P3-16: socios y membresías (oculto hasta configuracionPadely/flags.membresias)
-  { to: "/admin/socios", label: "Socios", icon: IdCard, permisos: ["gestionarReservas", "configurarClub"], pro: true, flag: "membresias" },
+  // P3-16: Pases (membresías del club; oculto hasta configuracionPadely/flags.membresias)
+  { to: "/admin/socios", label: "Pases", icon: IdCard, permisos: ["gestionarReservas", "configurarClub"], pro: true, flag: "membresias" },
   { to: "/admin/estadisticas", label: "Estadísticas", icon: BarChart3, permisos: ["verReportes"] },
   { to: "/admin/configuracion", label: "Configuración", icon: Settings, permisos: ["configurarClub", "gestionarStaff"] },
   { to: "/admin/plan", label: "Mi plan", icon: BadgeCheck, permisos: ["configurarClub"] },

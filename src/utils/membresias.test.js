@@ -93,3 +93,18 @@ test("anticipación, seña y textos", () => {
   assert.equal(nombreCorto("Juan Carlos Pérez"), "Juan P.");
   assert.equal(nombreCorto(""), "Socio");
 });
+
+test("pase familiar: integrantes, lugares y copia para el integrante", async () => {
+  const { normalizarPlan: np, lugaresFamilia, copiaParaIntegrante, textoIntegrantes } = await import("./membresias.js");
+  const p = np({ nombre: "Familia", precio: 30000, integrantes: 9, beneficios: { sinSeña: true } });
+  assert.equal(p.integrantes, 6);
+  assert.equal(np({ nombre: "Uno", precio: 1, beneficios: { sinSeña: true } }).integrantes, 1);
+  assert.equal(textoIntegrantes({ integrantes: 4 }), "Pase familiar · hasta 4 personas");
+  assert.equal(textoIntegrantes({ integrantes: 1 }), null);
+  assert.equal(lugaresFamilia({ familia: [{ uid: "a" }] }, { integrantes: 4 }), 2);
+  assert.equal(lugaresFamilia({}, { integrantes: 1 }), 0);
+  const c = copiaParaIntegrante({ uid: "t1", nombre: "Ana López", estado: "activa", planId: "p", planNombre: "Familia", periodo: "mensual", beneficios: { descuentoBarPct: 10 }, desde: 1, vence: 2 });
+  assert.equal(c.titularId, "t1");
+  assert.equal(c.beneficios.descuentoBarPct, 10);
+  assert.equal(c.estado, "activa");
+});

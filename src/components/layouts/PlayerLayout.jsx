@@ -27,7 +27,7 @@ const menuItems = [
   { to: "/clubes", label: "Canchas disponibles" },
   { to: "/mis-reservas", label: "Mis reservas" },
   // P3-16: oculto hasta configuracionPadely/flags.membresias
-  { to: "/membresias", label: "Mis membresías", flag: "membresias" },
+  { to: "/membresias", label: "Mis pases", flag: "membresias" },
   { to: "/torneos", label: "Torneos" },
   { to: "/noticias", label: "Noticias" },
   { to: "/marketplace", label: "Tienda" },

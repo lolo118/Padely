@@ -122,14 +122,14 @@ export default function TicketPanel({
             {socio.elegido ? (
               <>
                 <Badge tone="court">
-                  Socio: {socio.elegido.nombre}
+                  Pase: {socio.elegido.nombre}
                   {socio.elegido.pct ? ` · ${socio.elegido.pct} %` : ""}
                 </Badge>
-                <Button variant="ghost" size="sm" iconOnly aria-label="Quitar socio" icon={icono(X)} onClick={socio.onQuitar} />
+                <Button variant="ghost" size="sm" iconOnly aria-label="Quitar Pase" icon={icono(X)} onClick={socio.onQuitar} />
               </>
             ) : (
               <Button variant="ghost" size="sm" icon={icono(IdCard)} onClick={socio.onElegir} disabled={vacio}>
-                Socio
+                Pase
               </Button>
             )}
           </div>

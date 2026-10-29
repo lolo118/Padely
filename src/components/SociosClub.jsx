@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { pedirMembresia, retirarPedido } from "../services/membresiasService";
 import { pagarConMercadoPago } from "../services/mercadoPagoService";
-import { ESTADOS_SOCIO, estadoSocio, etiquetaPeriodo, textosBeneficios } from "../utils/membresias";
+import { estadoSocio, etiquetaPeriodo, textoIntegrantes, textosBeneficios } from "../utils/membresias";
 import { formatPrecio } from "../utils/format";
 import { formatFechaLarga } from "../utils/formatDate";
 import { confirmar } from "./ConfirmDialog";
@@ -12,11 +12,15 @@ import { Alert, Badge, Button, Card } from "./ui";
 // Pestaña "Socios" de la página del club (P3-16): los planes visibles con sus beneficios y el estado del jugador.
 // Con Mercado Pago conectado se paga online y la membresía queda activa al aprobarse el pago (sin aprobación del
 // club); si no, o si el jugador prefiere, pide y el club aprueba y cobra en el club (Admin → Socios).
+const ESTADO_PASE = { vencida: "vencido", cancelada: "dado de baja", rechazada: "rechazado" };
+
 export default function SociosClub({ club, planes, miSocio, user, perfil, onCambio }) {
   const navigate = useNavigate();
   const [enviando, setEnviando] = useState("");
   const est = estadoSocio(miSocio);
+  // El integrante de un Pase familiar no pide ni paga: lo renueva el titular
   const puedePedir = !miSocio || ["cancelada", "rechazada", "vencida"].includes(est.estado);
+  const esIntegrante = !!miSocio?.titularId && est.activa;
   const conMp = club.mercadoPago?.conectado === true;
   // Pagar online: alta, cambio de plan o renovación (si sigue vigente, el período se suma desde el vencimiento)
   const pagarOnline = async (plan) => {
@@ -39,7 +43,7 @@ export default function SociosClub({ club, planes, miSocio, user, perfil, onCamb
       navigate(`/login?next=${encodeURIComponent(window.location.pathname)}`);
       return;
     }
-    const ok = await confirmar({ titulo: `¿Querés ser socio (${plan.nombre})?`, mensaje: `${club.nombre} recibe tu pedido, te confirma y te cobra ${formatPrecio(plan.precio)} (${etiquetaPeriodo(plan.periodo).toLowerCase()}) en el club.`, confirmText: "Enviar pedido" });
+    const ok = await confirmar({ titulo: `¿Pedir el ${plan.nombre}?`, mensaje: `${club.nombre} recibe tu pedido, te confirma y te cobra ${formatPrecio(plan.precio)} (${etiquetaPeriodo(plan.periodo).toLowerCase()}) en el club.`, confirmText: "Enviar pedido" });
     if (!ok) return;
     setEnviando(plan.id);
     try {
@@ -72,9 +76,9 @@ export default function SociosClub({ club, planes, miSocio, user, perfil, onCamb
         <Alert tone={est.activa ? "success" : est.estado === "pendiente" ? "warning" : "neutral"}>
           {est.activa ? (
             <>
-              <strong>Sos socio · {miSocio.planNombre}.</strong> Vence el {formatFechaLarga(est.vence)}. Tu carnet está en{" "}
+              <strong>Tenés el {miSocio.planNombre}{miSocio.titularId ? ` de ${miSocio.titularNombre || "tu grupo"}` : ""}.</strong> Vence el {formatFechaLarga(est.vence)}. Tu QR está en{" "}
               <Link to="/membresias" className="underline font-semibold">
-                Mis membresías
+                Mis pases
               </Link>
               .
             </>
@@ -87,7 +91,7 @@ export default function SociosClub({ club, planes, miSocio, user, perfil, onCamb
             </>
           ) : (
             <>
-              <strong>Tu membresía está {ESTADOS_SOCIO[est.estado]?.toLowerCase() || est.estado}.</strong> Podés pedirla de nuevo.
+              <strong>Tu Pase está {ESTADO_PASE[est.estado] || est.estado}.</strong> Podés sacarlo de nuevo.
             </>
           )}
         </Alert>
@@ -101,18 +105,19 @@ export default function SociosClub({ club, planes, miSocio, user, perfil, onCamb
                 <Card.Title as="h3" className="m-0">
                   {p.nombre}
                 </Card.Title>
-                {esMio && <Badge tone={est.activa ? "success" : "warning"}>{est.activa ? "Tu plan" : "Pedido"}</Badge>}
+                {esMio && <Badge tone={est.activa ? "success" : "warning"}>{est.activa ? "Tu Pase" : "Pedido"}</Badge>}
               </Card.Row>
               <p className="numeral-md pd-tnum mt-1 mb-0">
                 {formatPrecio(p.precio)} <span className="body-sm text-ink-3">/ {etiquetaPeriodo(p.periodo).toLowerCase()}</span>
               </p>
               {p.descripcion && <p className="body-sm text-ink-2 mt-1 mb-0">{p.descripcion}</p>}
+              {textoIntegrantes(p) && <p className="body-sm font-semibold mt-1 mb-0">{textoIntegrantes(p)}</p>}
               <ul className="body-sm mt-2 mb-0 pl-5">
                 {textosBeneficios(p.beneficios).map((t) => (
                   <li key={t}>{t}</li>
                 ))}
               </ul>
-              {conMp && p.precio > 0 && (puedePedir || (est.activa && miSocio?.planId === p.id)) ? (
+              {esIntegrante ? null : conMp && p.precio > 0 && (puedePedir || (est.activa && miSocio?.planId === p.id)) ? (
                 <div className="pd-btn-group mt-3">
                   <Button variant="primary" size="sm" onClick={() => pagarOnline(p)} cargando={enviando === `mp-${p.id}` ? "Abriendo Mercado Pago…" : ""}>
                     {est.activa ? "Renovar con Mercado Pago" : "Pagar con Mercado Pago"}
@@ -127,7 +132,7 @@ export default function SociosClub({ club, planes, miSocio, user, perfil, onCamb
                 puedePedir && (
                   <div className="mt-3">
                     <Button variant="primary" size="sm" onClick={() => pedir(p)} cargando={enviando === p.id ? "Enviando…" : ""}>
-                      Quiero ser socio
+                      Pedir este Pase
                     </Button>
                   </div>
                 )

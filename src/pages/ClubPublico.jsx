@@ -619,7 +619,7 @@ export default function ClubPublico() {
     { value: "canchas", label: "Canchas" },
     { value: "torneos", label: "Torneos", count: torneosClub ? torneosVisibles.length : 0 },
     { value: "info", label: "Info" },
-    ...(planesSocio.length ? [{ value: "socios", label: "Socios" }] : []),
+    ...(planesSocio.length ? [{ value: "socios", label: "Pase" }] : []),
     { value: "reviews", label: "Reviews", count: reviews.length },
   ];
 
@@ -1183,14 +1183,14 @@ export default function ClubPublico() {
                 <span className="numeral-lg pd-tnum text-ink">{formatPrecio(precioTotal)}</span>
               </div>
               {conSocio.descuento > 0 && (
-                <p className="body-sm text-success mt-1">Precio de socio: {conSocio.pct} % off ({formatPrecio(conSocio.descuento)} menos)</p>
+                <p className="body-sm text-success mt-1">Con tu Pase: {conSocio.pct} % off ({formatPrecio(conSocio.descuento)} menos)</p>
               )}
               {señaReserva > 0 ? (
                 <p className="body-sm text-ink-2 mt-1">
                   Seña {formatPrecio(señaReserva)} · el resto lo pagás en el club
                 </p>
               ) : (
-                beneficiosSocio?.sinSeña && calcularSeña(club, precioTotal) > 0 && <p className="body-sm text-success mt-1">Como socio, reservás sin seña</p>
+                beneficiosSocio?.sinSeña && calcularSeña(club, precioTotal) > 0 && <p className="body-sm text-success mt-1">Con tu Pase reservás sin seña</p>
               )}
             </div>
             <form onSubmit={handleReservar} className="flex flex-col gap-4 mt-4">

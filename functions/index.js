@@ -2598,6 +2598,7 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
     const plan = planSnap.data();
     const socio = socioSnap.exists ? socioSnap.data() : null;
     const M = await membresiasUtil();
+    if (socio && socio.titularId && M.estadoSocio({ ...socio, vence: msDe(socio.vence) }).activa) throw new HttpsError("failed-precondition", `Ya estás en el Pase de ${socio.titularNombre || "otra persona"}: lo renueva el titular`);
     const yaEsDelPlan = socio && M.estadoSocio({ ...socio, vence: msDe(socio.vence) }).activa && socio.planId === planId;
     if (plan.cupo != null && !yaEsDelPlan) {
       const ocupados = await clubRef.collection("socios").where("planId", "==", planId).where("estado", "in", ["activa", "pendiente"]).count().get();
@@ -2980,7 +2981,7 @@ async function aplicarPagoLeido(clubRef, pago) {
     if (r.resultado === "membresía aplicada") {
       const quien = (r.pm.pagador && r.pm.pagador.nombre) || "Un jugador";
       const monto = Math.round(Number(pago.transaction_amount) || r.pm.monto).toLocaleString("es-AR");
-      await avisarStaff(clubRef, ["gestionarReservas"], { tipo: "socio_pago_mp", titulo: r.renovacion ? "Membresía renovada por Mercado Pago" : "Nuevo socio por Mercado Pago", mensaje: `${quien} pagó $ ${monto} por Mercado Pago: su membresía quedó activa.`, link: "/admin/socios", icono: "🪪" }).catch((err) => logger.error(`mpWebhook ${clubId}/${pagoMpId}: aviso de membresía`, err));
+      await avisarStaff(clubRef, ["gestionarReservas"], { tipo: "socio_pago_mp", titulo: r.renovacion ? "Pase renovado por Mercado Pago" : "Nuevo Pase por Mercado Pago", mensaje: `${quien} pagó $ ${monto} por Mercado Pago: su Pase quedó activo.`, link: "/admin/socios", icono: "🪪" }).catch((err) => logger.error(`mpWebhook ${clubId}/${pagoMpId}: aviso de membresía`, err));
       return `pago ${paymentId}: ${r.resultado}`;
     }
     if (r.resultado !== "aplicado" && r.resultado !== "seña aplicada") return `pago ${paymentId}: ${r.resultado}`;
@@ -3959,21 +3960,137 @@ exports.onSocioEscrito = onDocumentWritten("clubs/{clubId}/socios/{socioId}", as
   const estDespues = despues.estado;
   const nombreClub = club.nombre || "el club";
   if (estDespues === "pendiente" && estAntes !== "pendiente" && club.ownerUid) {
-    await avisoA(club.ownerUid, { tipo: "socio_pedido", titulo: "Nuevo pedido de socio", mensaje: `${despues.nombre || "Un jugador"} quiere ser socio (${despues.planNombre || "plan"}).`, link: "/admin/socios", icono: "🪪" }).catch(() => {});
+    await avisoA(club.ownerUid, { tipo: "socio_pedido", titulo: "Nuevo pedido de Pase", mensaje: `${despues.nombre || "Un jugador"} pidió el Pase ${despues.planNombre || ""}.`, link: "/admin/socios", icono: "🪪" }).catch(() => {});
   }
   if (despues.uid) {
     const venceTxt = despues.vence ? fechaCortaArgentina(new Date(msDe(despues.vence) - 3 * 3600 * 1000).toISOString().slice(0, 10)) : "";
     if (estDespues === "activa" && estAntes !== "activa") {
-      await avisoA(despues.uid, { tipo: "socio_activo", titulo: `Ya sos socio de ${nombreClub}`, mensaje: `${despues.planNombre || "Tu membresía"} activa hasta el ${venceTxt}. Tu carnet está en Mis membresías.`, link: "/membresias", icono: "🪪" }).catch(() => {});
+      await avisoA(despues.uid, { tipo: "socio_activo", titulo: `Ya tenés tu Pase en ${nombreClub}`, mensaje: despues.titularId ? `${despues.titularNombre || "El titular"} te sumó a su Pase ${despues.planNombre || ""}, activo hasta el ${venceTxt}. Está en Mis pases.` : `${despues.planNombre || "Tu Pase"} activo hasta el ${venceTxt}. Tu QR está en Mis pases.`, link: "/membresias", icono: "🪪" }).catch(() => {});
     } else if (estDespues === "activa" && antes && msDe(despues.vence) > msDe(antes.vence)) {
-      await avisoA(despues.uid, { tipo: "socio_renovado", titulo: "Membresía renovada", mensaje: `Tu membresía en ${nombreClub} sigue activa hasta el ${venceTxt}.`, link: "/membresias", icono: "🪪" }).catch(() => {});
+      await avisoA(despues.uid, { tipo: "socio_renovado", titulo: "Pase renovado", mensaje: `Tu Pase en ${nombreClub} sigue activo hasta el ${venceTxt}.`, link: "/membresias", icono: "🪪" }).catch(() => {});
     } else if (estDespues === "rechazada" && estAntes === "pendiente") {
-      await avisoA(despues.uid, { tipo: "socio_rechazado", titulo: "Pedido de socio no aceptado", mensaje: `${nombreClub} no aceptó tu pedido${despues.motivo ? `: ${despues.motivo}` : "."}`, link: `/club/${clubId}`, icono: "🪪" }).catch(() => {});
+      await avisoA(despues.uid, { tipo: "socio_rechazado", titulo: "Pedido de Pase no aceptado", mensaje: `${nombreClub} no aceptó tu pedido${despues.motivo ? `: ${despues.motivo}` : "."}`, link: `/club/${clubId}`, icono: "🪪" }).catch(() => {});
     } else if (estDespues === "cancelada" && estAntes === "activa") {
-      await avisoA(despues.uid, { tipo: "socio_baja", titulo: "Membresía dada de baja", mensaje: `${nombreClub} dio de baja tu membresía.`, link: `/club/${clubId}`, icono: "🪪" }).catch(() => {});
+      await avisoA(despues.uid, { tipo: "socio_baja", titulo: "Pase dado de baja", mensaje: despues.titularId ? `Ya no estás en el Pase de ${despues.titularNombre || "tu grupo"} en ${nombreClub}.` : `${nombreClub} dio de baja tu Pase.`, link: `/club/${clubId}`, icono: "🪪" }).catch(() => {});
     }
   }
+  // 4) Pase familiar: los integrantes copian estado, plan, beneficios y fechas del titular
+  const familia = Array.isArray(despues.familia) ? despues.familia : [];
+  const cambio = !antes || antes.estado !== despues.estado || msDe(antes.vence) !== msDe(despues.vence) || antes.planId !== despues.planId || JSON.stringify(antes.beneficios || null) !== JSON.stringify(despues.beneficios || null);
+  if (familia.length && cambio && !despues.titularId) {
+    const copia = M.copiaParaIntegrante({ ...despues, uid: despues.uid });
+    await escribirEnLotes(familia.filter((f) => f && f.uid).map((f) => (b) => b.set(clubRef.collection("socios").doc(f.uid), { ...copia, desde: despues.desde || null, vence: despues.vence || null, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true })));
+  }
   logger.info(`socio ${clubId}/${socioId}: ${estAntes || "nuevo"} → ${estDespues}`);
+});
+
+// Pase familiar: el titular (o el club) suma a alguien con cuenta en Padely por su email; sin cargo extra
+exports.agregarIntegrante = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  const clubId = texto(request.data && request.data.clubId, 80);
+  const email = texto(request.data && request.data.email, 120).toLowerCase();
+  const titularUid = texto(request.data && request.data.titularUid, 128) || uid;
+  if (!clubId || !email) throw new HttpsError("invalid-argument", "clubId y email");
+  const clubRef = db.collection("clubs").doc(clubId);
+  if (titularUid !== uid && !(await accesoClub(clubRef, uid, ["gestionarReservas"])).esStaff) throw new HttpsError("permission-denied", "Solo el titular del Pase o el club");
+  let usuario;
+  try {
+    usuario = await getAuth().getUserByEmail(email);
+  } catch {
+    throw new HttpsError("not-found", "No encontramos una cuenta de Padely con ese email: pedile que se registre primero");
+  }
+  if (usuario.uid === titularUid) throw new HttpsError("invalid-argument", "Ese email es del titular");
+  const M = await membresiasUtil();
+  const nombre = await nombreDeUsuario(usuario.uid, usuario.displayName || "Jugador");
+  const titularRef = clubRef.collection("socios").doc(titularUid);
+  const integranteRef = clubRef.collection("socios").doc(usuario.uid);
+  await db.runTransaction(async (tx) => {
+    const [tSnap, iSnap] = await Promise.all([tx.get(titularRef), tx.get(integranteRef)]);
+    if (!tSnap.exists) throw new HttpsError("not-found", "No hay un Pase de ese titular");
+    const t = tSnap.data();
+    if (t.titularId) throw new HttpsError("failed-precondition", "Solo el titular suma integrantes");
+    if (!M.estadoSocio({ ...t, vence: msDe(t.vence) }).activa) throw new HttpsError("failed-precondition", "El Pase tiene que estar activo");
+    const pSnap = await tx.get(clubRef.collection("planesSocio").doc(t.planId || "x"));
+    const plan = pSnap.exists ? pSnap.data() : { integrantes: 1 };
+    const familia = Array.isArray(t.familia) ? t.familia : [];
+    if (familia.some((f) => f.uid === usuario.uid)) throw new HttpsError("already-exists", "Ya está en el Pase");
+    if (M.lugaresFamilia(t, plan) <= 0) throw new HttpsError("failed-precondition", Number(plan.integrantes) > 1 ? `El Pase es para ${plan.integrantes} personas y ya está completo` : "Este Pase es individual");
+    if (iSnap.exists) {
+      const i = iSnap.data();
+      if (M.estadoSocio({ ...i, vence: msDe(i.vence) }).activa && i.titularId !== titularUid) throw new HttpsError("failed-precondition", `${nombre} ya tiene su propio Pase activo en este club`);
+    }
+    const copia = M.copiaParaIntegrante({ ...t, uid: titularUid });
+    tx.set(integranteRef, { uid: usuario.uid, nombre, clubNombre: t.clubNombre || null, ...copia, desde: t.desde || null, vence: t.vence || null, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
+    tx.update(titularRef, { familia: [...familia, { uid: usuario.uid, nombre }], actualizadoEn: FieldValue.serverTimestamp() });
+  });
+  logger.info(`agregarIntegrante ${clubId}: ${usuario.uid} al Pase de ${titularUid} (por ${uid})`);
+  return { ok: true, uid: usuario.uid, nombre };
+});
+
+// Saca a un integrante del Pase familiar (el titular, el propio integrante o el club)
+exports.quitarIntegrante = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  const clubId = texto(request.data && request.data.clubId, 80);
+  const integranteUid = texto(request.data && request.data.uid, 128);
+  if (!clubId || !integranteUid) throw new HttpsError("invalid-argument", "clubId y uid");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const integranteRef = clubRef.collection("socios").doc(integranteUid);
+  const iSnap = await integranteRef.get();
+  if (!iSnap.exists || !iSnap.data().titularId) throw new HttpsError("not-found", "No es integrante de un Pase");
+  const titularUid = iSnap.data().titularId;
+  if (uid !== titularUid && uid !== integranteUid && !(await accesoClub(clubRef, uid, ["gestionarReservas"])).esStaff) throw new HttpsError("permission-denied", "Solo el titular, el integrante o el club");
+  const titularRef = clubRef.collection("socios").doc(titularUid);
+  await db.runTransaction(async (tx) => {
+    const tSnap = await tx.get(titularRef);
+    const familia = tSnap.exists && Array.isArray(tSnap.data().familia) ? tSnap.data().familia : [];
+    if (tSnap.exists) tx.update(titularRef, { familia: familia.filter((f) => f.uid !== integranteUid), actualizadoEn: FieldValue.serverTimestamp() });
+    tx.update(integranteRef, { estado: "cancelada", bajaEn: FieldValue.serverTimestamp(), actualizadoEn: FieldValue.serverTimestamp() });
+  });
+  return { ok: true };
+});
+
+// El club da de alta un Pase a alguien con cuenta en Padely (por email) y registra el pago (efectivo, transferencia…)
+exports.altaPasePorEmail = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  const d = request.data || {};
+  const clubId = texto(d.clubId, 80);
+  const email = texto(d.email, 120).toLowerCase();
+  const planId = texto(d.planId, 80);
+  if (!clubId || !email || !planId) throw new HttpsError("invalid-argument", "clubId, email y planId");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const acceso = await accesoClub(clubRef, uid, ["gestionarReservas"]);
+  if (!acceso.esStaff) throw new HttpsError("permission-denied", "Solo quien gestiona el club");
+  if (!(await planesUtil()).estadoPlan(acceso.club).pro) throw new HttpsError("failed-precondition", "Los Pases son del plan PRO");
+  let usuario;
+  try {
+    usuario = await getAuth().getUserByEmail(email);
+  } catch {
+    throw new HttpsError("not-found", "No hay una cuenta de Padely con ese email: pedile que se registre (es gratis) y volvé a probar");
+  }
+  const M = await membresiasUtil();
+  const nombre = await nombreDeUsuario(usuario.uid, usuario.displayName || "Jugador");
+  const socioRef = clubRef.collection("socios").doc(usuario.uid);
+  const planRef = clubRef.collection("planesSocio").doc(planId);
+  const medio = texto(d.medio, 20) || "efectivo";
+  await db.runTransaction(async (tx) => {
+    const [sSnap, pSnap] = await Promise.all([tx.get(socioRef), tx.get(planRef)]);
+    if (!pSnap.exists) throw new HttpsError("not-found", "El plan no existe");
+    const plan = { id: pSnap.id, ...pSnap.data() };
+    const previo = sSnap.exists ? sSnap.data() : null;
+    if (previo && previo.titularId) throw new HttpsError("failed-precondition", `${nombre} es integrante de otro Pase: sacalo de ese grupo primero`);
+    const socio = previo ? { ...previo, desde: msDe(previo.desde), vence: msDe(previo.vence) } : { historial: [] };
+    const c = M.registrarPagoSocio(socio, plan, { ahora: Date.now(), monto: d.monto === undefined || d.monto === null || d.monto === "" ? null : Number(d.monto), medio, por: uid, porNombre: acceso.nombre });
+    tx.set(socioRef, {
+      ...(previo ? {} : { uid: usuario.uid, nombre, creadoEn: FieldValue.serverTimestamp() }),
+      ...c,
+      desde: Timestamp.fromMillis(c.desde),
+      vence: Timestamp.fromMillis(c.vence),
+      historial: c.historial.map((h) => ({ ...h, en: typeof h.en === "number" ? Timestamp.fromMillis(h.en) : h.en })),
+      actualizadoEn: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+  logger.info(`altaPasePorEmail ${clubId}: ${usuario.uid} plan ${planId} por ${uid}`);
+  return { ok: true, uid: usuario.uid, nombre };
 });
 
 // Todos los días: membresías vencidas → "vencida" (y aviso); las que vencen en 5 días → aviso al socio (una vez)
@@ -3983,15 +4100,15 @@ exports.sociosVencidos = onSchedule({ schedule: "40 4 * * *", timeZone: ZONA_HOR
   await escribirEnLotes(vencidas.docs.map((d) => (b) => b.update(d.ref, { estado: "vencida", vencidaEn: FieldValue.serverTimestamp() })));
   for (const d of vencidas.docs) {
     const s = d.data();
-    if (s.uid) await avisoA(s.uid, { tipo: "socio_vencido", titulo: "Tu membresía venció", mensaje: `${s.planNombre || "Tu membresía"} venció. Renovala en el club para seguir con tus beneficios.`, link: "/membresias", icono: "🪪" }).catch(() => {});
+    if (s.uid && !s.titularId) await avisoA(s.uid, { tipo: "socio_vencido", titulo: "Tu Pase venció", mensaje: `${s.planNombre || "Tu Pase"} venció. Renovalo para seguir con tus beneficios.`, link: "/membresias", icono: "🪪" }).catch(() => {});
   }
   const pronto = await db.collectionGroup("socios").where("estado", "==", "activa").where("vence", "<", Timestamp.fromMillis(ahora + 5 * 86400000)).get();
   let avisados = 0;
   for (const d of pronto.docs) {
     const s = d.data();
     const vence = msDe(s.vence);
-    if (!s.uid || s.avisoVencimiento === vence) continue;
-    await avisoA(s.uid, { tipo: "socio_por_vencer", titulo: "Tu membresía vence pronto", mensaje: `${s.planNombre || "Tu membresía"} vence el ${fechaCortaArgentina(new Date(vence - 3 * 3600 * 1000).toISOString().slice(0, 10))}. Renovala en el club.`, link: "/membresias", icono: "🪪" }).catch(() => {});
+    if (!s.uid || s.titularId || s.avisoVencimiento === vence) continue;
+    await avisoA(s.uid, { tipo: "socio_por_vencer", titulo: "Tu Pase vence pronto", mensaje: `${s.planNombre || "Tu Pase"} vence el ${fechaCortaArgentina(new Date(vence - 3 * 3600 * 1000).toISOString().slice(0, 10))}. Renovalo desde Mis pases o en el club.`, link: "/membresias", icono: "🪪" }).catch(() => {});
     await d.ref.update({ avisoVencimiento: vence });
     avisados += 1;
   }

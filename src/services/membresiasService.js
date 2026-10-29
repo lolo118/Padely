@@ -1,11 +1,18 @@
-import { Timestamp, collection, collectionGroup, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { Timestamp, collection, collectionGroup, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "../lib/firebase";
 import { hayCupo, normalizarPlan, registrarPagoSocio } from "../utils/membresias";
 
 // Socios y membresías (P3-16). Planes: clubs/{c}/planesSocio (lectura pública; los escribe quien configura el club).
 // Socios: clubs/{c}/socios/{uid | id propio}. El token del QR y el número de socio los pone la Function
 // onSocioEscrito; la verificación pública vive en sociosPublicos/{token}. Antes del deploy de las reglas todo
 // esto falla sin romper nada: el flag configuracionPadely/flags.membresias lo mantiene oculto.
+
+// Pase familiar y altas por email (P3-16): pasan por Functions (buscan la cuenta de Padely por email)
+const llamar = (nombre) => async (datos) => (await httpsCallable(functions, nombre)(datos)).data;
+export const agregarIntegrante = llamar("agregarIntegrante"); // { clubId, email, titularUid? } → { uid, nombre }
+export const quitarIntegrante = llamar("quitarIntegrante"); // { clubId, uid }
+export const altaPasePorEmail = llamar("altaPasePorEmail"); // { clubId, email, planId, monto, medio } → { uid, nombre }
 
 const planesRef = (clubId) => collection(db, "clubs", clubId, "planesSocio");
 const sociosRef = (clubId) => collection(db, "clubs", clubId, "socios");
@@ -82,24 +89,6 @@ export const registrarPago = async (clubId, socio, plan, opciones = {}) => {
 
 export const rechazarPedido = (clubId, socioId, motivo = "") => updateDoc(doc(sociosRef(clubId), socioId), { estado: "rechazada", motivo: String(motivo || "").slice(0, 200), actualizadoEn: serverTimestamp() });
 export const darDeBaja = (clubId, socioId) => updateDoc(doc(sociosRef(clubId), socioId), { estado: "cancelada", bajaEn: serverTimestamp(), actualizadoEn: serverTimestamp() });
-
-// Club: alta manual (alguien sin cuenta de Padely, o que paga en el mostrador) ya activo
-export const agregarSocioManual = async (clubId, { nombre, telefono = "", email = "" }, plan, opciones = {}) => {
-  const n = String(nombre || "").trim();
-  if (!n) throw new Error("Poné el nombre del socio");
-  const cambios = registrarPagoSocio({ historial: [] }, plan, opciones);
-  if (cambios.error) throw new Error(cambios.error);
-  // El contacto va aparte (clubs/{c}/contactosSocios/{id}, solo quien gestiona socios): el documento del socio lo
-  // lee también el cajero (descuento en Vender)
-  const ref = doc(sociosRef(clubId));
-  const batch = writeBatch(db);
-  batch.set(ref, { uid: null, nombre: n.slice(0, 80), manual: true, ...patchPago(cambios), creadoEn: serverTimestamp() });
-  const tel = String(telefono || "").trim().slice(0, 30);
-  const mail = String(email || "").trim().toLowerCase().slice(0, 120);
-  if (tel || mail) batch.set(doc(db, "clubs", clubId, "contactosSocios", ref.id), { telefono: tel, email: mail, creadoEn: serverTimestamp() });
-  await batch.commit();
-  return ref.id;
-};
 
 export const cupoOcupado = (socios, planId) => socios.filter((s) => s.planId === planId && (s.estado === "activa" || s.estado === "pendiente")).length;
 export const planConCupo = (plan, socios) => hayCupo(plan, cupoOcupado(socios, plan.id));

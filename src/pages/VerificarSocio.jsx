@@ -10,7 +10,7 @@ import { Card } from "../components/ui";
 // /s/:token (P3-16): lo que ve quien escanea el QR del carnet en la puerta del club (estacionamiento, exhibiciones,
 // bar). Público y mínimo: nombre corto, número, plan, si está al día y los beneficios. Sin teléfono ni email.
 export default function VerificarSocio() {
-  useTituloPagina("Verificar socio");
+  useTituloPagina("Verificar Pase");
   const { token } = useParams();
   const [estado, setEstado] = useState({ datos: null, cargado: false });
   const [ahora] = useState(() => Date.now());
@@ -31,8 +31,8 @@ export default function VerificarSocio() {
     return (
       <div className="max-w-md mx-auto mt-6">
         <Card>
-          <Card.Title as="h1">Carnet no encontrado</Card.Title>
-          <Card.Meta className="mt-1!">El QR no corresponde a un socio de Padely, o el club lo dio de baja.</Card.Meta>
+          <Card.Title as="h1">Pase no encontrado</Card.Title>
+          <Card.Meta className="mt-1!">El QR no corresponde a un Pase de Padely, o el club lo dio de baja.</Card.Meta>
         </Card>
       </div>
     );
@@ -45,11 +45,11 @@ export default function VerificarSocio() {
         <p className="pd-eyebrow m-0">{datos.clubNombre || "Club"}</p>
         <div className={`flex items-center gap-3 mt-2 ${vigente ? "text-success" : "text-danger"}`}>
           <Icono size={40} aria-hidden="true" />
-          <span className="heading-lg">{vigente ? "Socio al día" : datos.estado === "activa" ? "Membresía vencida" : ESTADOS_SOCIO[datos.estado] || "No vigente"}</span>
+          <span className="heading-lg">{vigente ? "Pase al día" : datos.estado === "activa" || datos.estado === "vencida" ? "Pase vencido" : datos.estado === "cancelada" ? "Pase dado de baja" : ESTADOS_SOCIO[datos.estado] || "No vigente"}</span>
         </div>
         <h1 className="heading-xl mt-3 mb-0">{datos.nombre}</h1>
         <Card.Meta className="mt-1!">
-          {[datos.numero ? `Socio Nº ${datos.numero}` : null, datos.planNombre, datos.vence ? `${vigente ? "Vence" : "Venció"} el ${formatFechaLarga(datos.vence)}` : null].filter(Boolean).join(" · ")}
+          {[datos.numero ? `Pase Nº ${datos.numero}` : null, datos.planNombre, datos.titular ? `grupo de ${datos.titular}` : null, datos.vence ? `${vigente ? "Vence" : "Venció"} el ${formatFechaLarga(datos.vence)}` : null].filter(Boolean).join(" · ")}
         </Card.Meta>
         {vigente && datos.beneficios?.length > 0 && (
           <>

@@ -19,6 +19,8 @@ export const PERIODOS = [
 export const ESTADOS_SOCIO = { pendiente: "Pendiente", activa: "Activa", vencida: "Vencida", cancelada: "Dada de baja", rechazada: "Rechazada" };
 export const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 export const MAX_EXTRAS = 8;
+// Pase familiar: hasta 6 personas (el titular + 5 integrantes con cuenta en Padely), sin cargo extra por persona
+export const MAX_INTEGRANTES = 6;
 
 export const mesesDePeriodo = (periodo) => (PERIODOS.find((p) => p.id === periodo) || PERIODOS[0]).meses;
 export const etiquetaPeriodo = (periodo) => (PERIODOS.find((p) => p.id === periodo) || PERIODOS[0]).label;
@@ -49,7 +51,7 @@ export function normalizarBeneficios(b = {}) {
 }
 
 // Formulario del plan → plan válido, o { error }
-export function normalizarPlan({ nombre, descripcion = "", precio, periodo = "mensual", visible = true, cupo = null, orden = 0, beneficios = {} } = {}) {
+export function normalizarPlan({ nombre, descripcion = "", precio, periodo = "mensual", visible = true, cupo = null, orden = 0, integrantes = 1, beneficios = {} } = {}) {
   const n = String(nombre || "").trim().slice(0, 60);
   if (!n) return { error: "Poné un nombre al plan (ej.: Socio mensual)" };
   const p = Number(precio);
@@ -59,7 +61,7 @@ export function normalizarPlan({ nombre, descripcion = "", precio, periodo = "me
   if (c !== null && (!Number.isFinite(c) || c < 1)) return { error: "El cupo tiene que ser 1 o más (o vacío para sin límite)" };
   const ben = normalizarBeneficios(beneficios);
   if (!tieneBeneficios(ben)) return { error: "Elegí al menos un beneficio" };
-  return { nombre: n, descripcion: String(descripcion || "").trim().slice(0, 280), precio: Math.round(p), periodo, visible: visible !== false, cupo: c, orden: Number(orden) || 0, beneficios: ben };
+  return { nombre: n, descripcion: String(descripcion || "").trim().slice(0, 280), precio: Math.round(p), periodo, visible: visible !== false, cupo: c, orden: Number(orden) || 0, integrantes: entero(integrantes || 1, 1, MAX_INTEGRANTES), beneficios: ben };
 }
 
 export const tieneBeneficios = (b) => !!b && (b.descuentoCanchaPct > 0 || b.descuentoBarPct > 0 || b.diasExtraReserva > 0 || b.sinSeña === true || (b.extras || []).length > 0);
@@ -83,6 +85,26 @@ export function textosBeneficios(b) {
   if (b.descuentoBarPct > 0) out.push(`${b.descuentoBarPct} % off en el bar`);
   (b.extras || []).forEach((t) => out.push(t));
   return out;
+}
+
+// "Pase familiar · hasta 4 personas" (null si es individual)
+export const textoIntegrantes = (plan) => (plan && Number(plan.integrantes) > 1 ? `Pase familiar · hasta ${Number(plan.integrantes)} personas` : null);
+// ¿Cuántos integrantes más puede sumar el titular? (el titular cuenta como uno)
+export const lugaresFamilia = (titular, plan) => Math.max(0, (Number(plan?.integrantes) || 1) - 1 - (Array.isArray(titular?.familia) ? titular.familia.length : 0));
+
+// Lo que un integrante copia del titular (estado, plan, beneficios, fechas): lo mantiene la Function onSocioEscrito
+export function copiaParaIntegrante(titular) {
+  return {
+    estado: titular.estado,
+    planId: titular.planId || null,
+    planNombre: titular.planNombre || null,
+    periodo: titular.periodo || null,
+    beneficios: titular.beneficios ? normalizarBeneficios(titular.beneficios) : null,
+    desde: titular.desde ?? null,
+    vence: titular.vence ?? null,
+    titularId: titular.uid || null,
+    titularNombre: titular.nombre || null,
+  };
 }
 
 // --- Fechas (ms; hora argentina UTC−3 para "hoy") ---------------------------------------------------------------
@@ -123,8 +145,12 @@ export function registrarPagoSocio(socio, plan, { ahora = Date.now(), monto = nu
     planNombre: plan.nombre,
     periodo: plan.periodo,
     beneficios: normalizarBeneficios(plan.beneficios),
+    integrantes: Math.min(MAX_INTEGRANTES, Math.max(1, Math.round(Number(plan.integrantes) || 1))),
     desde,
     vence,
+    // Un pago propio lo vuelve titular (si antes era integrante de un Pase familiar, deja de serlo)
+    titularId: null,
+    titularNombre: null,
     historial: [...(Array.isArray(socio?.historial) ? socio.historial : []), entrada].slice(-50),
   };
 }
@@ -191,6 +217,7 @@ export function verificacionPublica(clubId, club, socio) {
     planNombre: socio.planNombre || null,
     estado: est.estado,
     vence: est.vence,
+    titular: socio.titularId ? nombreCorto(socio.titularNombre) : null,
     beneficios: textosBeneficios(socio.beneficios ? normalizarBeneficios(socio.beneficios) : null),
   };
 }

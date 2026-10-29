@@ -265,6 +265,7 @@ export default function App() {
             <Route path="/inicio" element={<RedirigirPorRol />} />
             <Route path="/mis-reservas" element={<MisReservas />} />
             <Route path="/membresias" element={<MisMembresias />} />
+            <Route path="/pases" element={<MisMembresias />} />
             <Route path="/mi-cuenta/:clubId/:grupoId" element={<MiCuenta />} />
             <Route path="/pedir/:clubId/:grupoId" element={<Pedir />} />
             <Route path="/noticias" element={<Noticias />} />
@@ -289,7 +290,7 @@ export default function App() {
             <Route path="estadisticas" element={<AdminEstadisticas />} />
             <Route path="configuracion" element={<AdminConfiguracion />} />
             <Route path="plan" element={<AdminMiPlan />} />
-            <Route path="socios" element={<RequierePro titulo="Socios"><AdminSocios /></RequierePro>} />
+            <Route path="socios" element={<RequierePro titulo="Los Pases"><AdminSocios /></RequierePro>} />
             <Route path="empezar" element={<AdminEmpezar />} />
             {/* Bar: secciones del plan PRO (P3-9); en FREE muestran "Disponible en PRO" */}
             <Route path="bar/vender" element={<RequierePro titulo="Vender"><BarVender /></RequierePro>} />

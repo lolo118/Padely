@@ -1,7 +1,7 @@
 @echo off
 setlocal
-rem P3-16b: membresias pagadas con Mercado Pago (mpCrearPago tipo "membresia" + aplicacion en el webhook).
-rem Acumulado sobre 18 (deployado el 29/10 12:03): reglas + indices + Storage + functions (58, sin funciones nuevas).
+rem P3-16b: Pases (membresias) pagados con Mercado Pago, pase familiar y alta por email.
+rem Acumulado sobre 18 (deployado el 29/10 12:03): reglas + indices + Storage + functions (61: +agregarIntegrante, quitarIntegrante, altaPasePorEmail).
 rem Tras cualquier corte del deploy, probar las callables nuevas (403 = falta el invoker publico, ver docs/LANZAMIENTO.md).
 rem La CLI aborta si el codigo de functions tarda mas de 10 s en cargar
 set FUNCTIONS_DISCOVERY_TIMEOUT=120

@@ -29,13 +29,13 @@ export default function SocioDialog({ clubId, onElegir, onCerrar }) {
   }, [socios, q]);
 
   return (
-    <Dialogo titulo="Venta a un socio" descripcion="Se aplica el descuento en el bar de su plan." onCerrar={onCerrar} onSubmit={(e) => e.preventDefault()} acciones={<Button onClick={onCerrar}>Cancelar</Button>}>
+    <Dialogo titulo="Venta con Pase" descripcion="Se aplica el descuento en el bar de su Pase." onCerrar={onCerrar} onSubmit={(e) => e.preventDefault()} acciones={<Button onClick={onCerrar}>Cancelar</Button>}>
       <div className="mt-4 grid gap-3">
-        <SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nombre o número de socio" aria-label="Buscar socio" data-autofocus />
+        <SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nombre o número de Pase" aria-label="Buscar Pase" data-autofocus />
         {socios === null ? (
           <div className="pd-skeleton h-24 rounded-lg" aria-busy="true" aria-label="Cargando" />
         ) : lista.length === 0 ? (
-          <p className="body-sm text-ink-3 m-0">{socios.length ? "Ningún socio activo coincide." : "El club todavía no tiene socios activos."}</p>
+          <p className="body-sm text-ink-3 m-0">{socios.length ? "Ningún Pase activo coincide." : "El club todavía no tiene Pases activos."}</p>
         ) : (
           <ul className="m-0 p-0 list-none grid gap-2 max-h-80 overflow-y-auto">
             {lista.map((s) => (
