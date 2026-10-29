@@ -24,7 +24,8 @@ const HORAS = Array.from({ length: 18 }, (_, i) => `${String(i + 7).padStart(2, 
 export default function Socios() {
   const club = useAuthStore((s) => s.clubActual);
   const puede = useAuthStore((s) => s.puede);
-  const [tab, setTab] = useState("socios");
+  const puedeSocios = puede("gestionarReservas");
+  const [tab, setTab] = useState(puedeSocios ? "socios" : "planes");
   const [planes, setPlanes] = useState(null);
   const [socios, setSocios] = useState(null);
   const [error, setError] = useState(false);
@@ -35,7 +36,7 @@ export default function Socios() {
   useEffect(() => {
     if (!clubId) return undefined;
     let vivo = true;
-    Promise.all([getPlanesSocio(clubId), getSocios(clubId)])
+    Promise.all([getPlanesSocio(clubId), puedeSocios ? getSocios(clubId) : Promise.resolve([])])
       .then(([p, s]) => {
         if (!vivo) return;
         setPlanes(p);
@@ -52,7 +53,7 @@ export default function Socios() {
     return () => {
       vivo = false;
     };
-  }, [clubId, version]);
+  }, [clubId, version, puedeSocios]);
 
   if (!club) return <div className="pd-skeleton h-40 rounded-lg" aria-busy="true" aria-label="Cargando" />;
   if (!puede("gestionarReservas") && !puede("configurarClub")) return <SinPermiso />;
@@ -67,7 +68,7 @@ export default function Socios() {
       {error && <Alert tone="warning">No pudimos leer los socios. Si la función es nueva, puede faltar la actualización de Padely: probá de nuevo en un rato.</Alert>}
       <Tabs
         items={[
-          { value: "socios", label: "Socios", count: pendientes || undefined },
+          ...(puedeSocios ? [{ value: "socios", label: "Socios", count: pendientes || undefined }] : []),
           { value: "planes", label: "Planes", count: planes?.length || undefined },
         ]}
         value={tab}

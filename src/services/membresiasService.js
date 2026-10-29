@@ -1,4 +1,4 @@
-import { Timestamp, addDoc, collection, collectionGroup, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
+import { Timestamp, collection, collectionGroup, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { hayCupo, normalizarPlan, registrarPagoSocio } from "../utils/membresias";
 
@@ -10,6 +10,8 @@ import { hayCupo, normalizarPlan, registrarPagoSocio } from "../utils/membresias
 const planesRef = (clubId) => collection(db, "clubs", clubId, "planesSocio");
 const sociosRef = (clubId) => collection(db, "clubs", clubId, "socios");
 const aTs = (ms) => (ms == null ? null : Timestamp.fromMillis(ms));
+// Las entradas viejas del historial vuelven de Firestore como Timestamp: solo se convierten los números
+const aTsSiNumero = (v) => (typeof v === "number" ? Timestamp.fromMillis(v) : v ?? null);
 
 export const getPlanesSocio = async (clubId, { soloVisibles = false } = {}) => {
   const snap = await getDocs(planesRef(clubId));
@@ -25,7 +27,8 @@ export const guardarPlanSocio = async (clubId, datos, planId = null) => {
     await updateDoc(doc(planesRef(clubId), planId), { ...plan, actualizadoEn: serverTimestamp() });
     return planId;
   }
-  const ref = await addDoc(planesRef(clubId), { ...plan, creadoEn: serverTimestamp() });
+  const ref = doc(planesRef(clubId));
+  await setDoc(ref, { ...plan, creadoEn: serverTimestamp() });
   return ref.id;
 };
 
@@ -65,7 +68,7 @@ const patchPago = (cambios) => ({
   ...cambios,
   desde: aTs(cambios.desde),
   vence: aTs(cambios.vence),
-  historial: cambios.historial.map((h) => ({ ...h, en: aTs(h.en) })),
+  historial: cambios.historial.map((h) => ({ ...h, en: aTsSiNumero(h.en) })),
   actualizadoEn: serverTimestamp(),
 });
 
@@ -86,15 +89,15 @@ export const agregarSocioManual = async (clubId, { nombre, telefono = "", email 
   if (!n) throw new Error("Poné el nombre del socio");
   const cambios = registrarPagoSocio({ historial: [] }, plan, opciones);
   if (cambios.error) throw new Error(cambios.error);
-  const ref = await addDoc(sociosRef(clubId), {
-    uid: null,
-    nombre: n.slice(0, 80),
-    telefono: String(telefono || "").trim().slice(0, 30),
-    email: String(email || "").trim().toLowerCase().slice(0, 120),
-    manual: true,
-    ...patchPago(cambios),
-    creadoEn: serverTimestamp(),
-  });
+  // El contacto va aparte (clubs/{c}/contactosSocios/{id}, solo quien gestiona socios): el documento del socio lo
+  // lee también el cajero (descuento en Vender)
+  const ref = doc(sociosRef(clubId));
+  const batch = writeBatch(db);
+  batch.set(ref, { uid: null, nombre: n.slice(0, 80), manual: true, ...patchPago(cambios), creadoEn: serverTimestamp() });
+  const tel = String(telefono || "").trim().slice(0, 30);
+  const mail = String(email || "").trim().toLowerCase().slice(0, 120);
+  if (tel || mail) batch.set(doc(db, "clubs", clubId, "contactosSocios", ref.id), { telefono: tel, email: mail, creadoEn: serverTimestamp() });
+  await batch.commit();
   return ref.id;
 };
 

@@ -213,6 +213,7 @@ export default function ClubPublico() {
     };
   }, [club?.id, user?.uid, user?.isAnonymous, versionSocio]);
   const beneficiosSocio = beneficiosVigentes(miSocio);
+  const diasExtraSocio = beneficiosSocio ? Number(beneficiosSocio.diasExtraReserva) || 0 : 0;
   const [canchas, setCanchas] = useState([]);
   const [reservas, setReservas] = useState([]);
   const [turnosFijos, setTurnosFijos] = useState([]);
@@ -259,7 +260,7 @@ export default function ClubPublico() {
           const clubData = { id: snap.id, ...snap.data() };
           setClub(clubData);
           // Ventana de reserva del club: si la fecha quedó fuera, la ajustamos (el efecto vuelve a correr)
-          const maxPermitida = addDaysLocal(getTodayLocal(), clubData.diasAnticipacion ?? 7);
+          const maxPermitida = addDaysLocal(getTodayLocal(), (clubData.diasAnticipacion ?? 7) + diasExtraSocio);
           if (fechaSeleccionada > maxPermitida) {
             setFechaSeleccionada(maxPermitida);
             return;
@@ -303,7 +304,7 @@ export default function ClubPublico() {
       setLoading(false);
     };
     cargar();
-  }, [id, fechaSeleccionada, user]);
+  }, [id, fechaSeleccionada, user, diasExtraSocio]);
 
   // Los torneos son de lectura pública: se cargan con o sin sesión, solo al abrir la pestaña
   const clubId = club?.id;

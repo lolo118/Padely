@@ -204,7 +204,10 @@ export default function Vender() {
   const seleccionarCuenta = useCallback((reserva) => {
     setCuentaSel(reserva || null);
     setParaId("");
-    if (reserva) setDescuentoGeneral(null); // el descuento general se decide al cerrar la cuenta
+    if (reserva) {
+      setDescuentoGeneral(null); // el descuento general se decide al cerrar la cuenta
+      setSocioVenta(null); // P3-16: el descuento de socio es solo para ventas de mostrador
+    }
     setTimeout(() => inputRef.current?.focus(), 0);
   }, []);
   const cuentaAbiertaSel = cuentaSel ? cuentasAbiertas.find((c) => c.id === (cuentaSel.grupoId || cuentaSel.id)) || null : null;

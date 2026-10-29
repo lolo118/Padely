@@ -56,6 +56,14 @@ service cloud.firestore {
       return s.get('estado', '') == 'activa' && s.get('vence', request.time) > request.time
         ? s.get('beneficios', {}).get('descuentoBarPct', 0) : 0;
     }
+    // P3-16: lo que el staff le pone a un socio no supera lo que da su plan (el % del bar sube el tope del cajero)
+    function beneficiosDelPlan(clubId) {
+      let pct = request.resource.data.get('beneficios', {}).get('descuentoBarPct', 0);
+      return pct == 0
+        || (request.resource.data.get('planId', null) is string
+            && pct <= get(/databases/$(database)/documents/clubs/$(clubId)/planesSocio/$(request.resource.data.planId)).data
+                         .get('beneficios', {}).get('descuentoBarPct', 0));
+    }
     function planSocioVisible(clubId, planId) {
       return planId is string
         && get(/databases/$(database)/documents/clubs/$(clubId)/planesSocio/$(planId)).data.get('visible', true) == true;
@@ -777,7 +785,8 @@ service cloud.firestore {
         allow read: if esStaff(clubId, 'gestionarReservas') || esStaff(clubId, 'vender') || superAdmin()
           || (signedIn() && resource.data.get('uid', null) == request.auth.uid);
         allow create: if (esStaff(clubId, 'gestionarReservas') && planPro(clubId)
-              && !request.resource.data.keys().hasAny(['token', 'numero']))
+              && !request.resource.data.keys().hasAny(['token', 'numero', 'telefono', 'email'])
+              && beneficiosDelPlan(clubId))
           || (noAnonimo() && socioId == request.auth.uid
               && request.resource.data.uid == request.auth.uid
               && request.resource.data.estado == 'pendiente'
@@ -785,15 +794,23 @@ service cloud.firestore {
               && planSocioVisible(clubId, request.resource.data.planId)
               && planPro(clubId) && clubActivo(clubId));
         allow update: if (esStaff(clubId, 'gestionarReservas')
-              && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['token', 'numero', 'uid']))
+              && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['token', 'numero', 'uid', 'telefono', 'email'])
+              && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['beneficios', 'planId']) || beneficiosDelPlan(clubId)))
           || (noAnonimo() && resource.data.get('uid', null) == request.auth.uid
               && ((resource.data.estado == 'pendiente' && request.resource.data.estado == 'cancelada'
                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'bajaEn']))
-                  || (resource.data.estado in ['cancelada', 'rechazada', 'vencida'] && request.resource.data.estado == 'pendiente'
+                  || ((resource.data.estado in ['cancelada', 'rechazada', 'vencida']
+                       || (resource.data.estado == 'activa' && resource.data.get('vence', request.time) < request.time))
+                      && request.resource.data.estado == 'pendiente'
                       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['planId', 'planNombre', 'estado', 'solicitadoEn'])
                       && planSocioVisible(clubId, request.resource.data.planId)
                       && planPro(clubId))));
         allow delete: if false;
+      }
+
+      // P3-16: teléfono y email de los socios cargados a mano (no los ve el cajero)
+      match /contactosSocios/{socioId} {
+        allow read, write: if esStaff(clubId, 'gestionarReservas');
       }
 
       match /contactosReservas/{reservaId} {
