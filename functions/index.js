@@ -4030,6 +4030,26 @@ exports.onVentaPuntosPase = onDocumentCreated("clubs/{clubId}/ventas/{numero}", 
   await sumarPuntosPase(db.collection("clubs").doc(event.params.clubId), String(v.socio.id), v.total, `venta_${event.params.numero}`, { tipo: "bar" }).catch((err) => logger.error(`puntos venta ${event.params.numero}`, err));
 });
 
+// Bar: si la venta con el Pase se anula, sus puntos se restan
+exports.onVentaAnuladaPuntosPase = onDocumentUpdated("clubs/{clubId}/ventas/{numero}", async (event) => {
+  const antes = event.data.before.data() || {};
+  const v = event.data.after.data() || {};
+  if (!v.socio || !v.socio.id || antes.estado === "anulada" || v.estado !== "anulada") return;
+  const clubRef = db.collection("clubs").doc(event.params.clubId);
+  const socioRef = clubRef.collection("socios").doc(String(v.socio.id));
+  const movRef = socioRef.collection("puntos").doc(`venta_${event.params.numero}`);
+  const M = await membresiasUtil();
+  await db.runTransaction(async (tx) => {
+    const [sSnap, mSnap, pSnap] = await Promise.all([tx.get(socioRef), tx.get(movRef), tx.get(paseRef(clubRef))]);
+    if (!sSnap.exists || !mSnap.exists) return;
+    const pase = pSnap.exists ? pSnap.data() : {};
+    const puntos = Math.max(0, (Number(sSnap.data().puntos) || 0) - (Number(mSnap.data().cantidad) || 0));
+    const nivel = M.nivelPorPuntos(puntos, pase.umbrales);
+    tx.delete(movRef);
+    tx.update(socioRef, { puntos, nivel, planNombre: M.ETIQUETA_NIVEL[nivel], ...(sSnap.data().estado === "activa" ? { beneficios: M.beneficiosDeNivel(pase, nivel) } : {}), actualizadoEn: FieldValue.serverTimestamp() });
+  });
+});
+
 // Socio del Pase → cliente de su suscripción en Mercado Pago (débito automático con el token del club)
 exports.mpSuscribirPase = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, async (request) => {
   const uid = exigirAuth(request);
@@ -4050,6 +4070,17 @@ exports.mpSuscribirPase = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }
   const sSnap = await socioRef.get();
   const s = sSnap.exists ? socioPlano(sSnap.data()) : null;
   if (s && s.suscripcion && s.suscripcion.estado === "authorized" && M.estadoSocio(s).activa) throw new HttpsError("already-exists", "Ya tenés el Pase activo con débito automático");
+  const anterior = s && s.suscripcion && s.suscripcion.preapprovalId;
+  if (anterior && s.suscripcion.estado !== "cancelled") {
+    try {
+      await mpFetch(`/preapproval/${encodeURIComponent(anterior)}`, { method: "PUT", token: tokens.accessToken, body: { status: "cancelled" } });
+    } catch (err) {
+      if (err.status !== 404) {
+        logger.error(`mpSuscribirPase ${clubId}: no se pudo cancelar la suscripción anterior ${anterior}: ${err.message}`);
+        throw new HttpsError("unavailable", "No pudimos cerrar tu suscripción anterior en Mercado Pago. Probá de nuevo en un momento.");
+      }
+    }
+  }
   const nombre = await nombreDeUsuario(uid, "Jugador");
   const ref = `pase_${clubId}_${uid}`;
   let r;
@@ -4102,10 +4133,16 @@ exports.mpCancelarPase = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] },
   if (!sSnap.exists) throw new HttpsError("not-found", "No hay un Pase");
   const s = sSnap.data();
   const preId = s.suscripcion && s.suscripcion.preapprovalId;
-  if (preId) {
+  if (preId && (s.suscripcion.estado || "") !== "cancelled") {
     const tokens = await tokensDelClub(clubRef);
-    if (tokens && tokens.accessToken) {
-      await mpFetch(`/preapproval/${encodeURIComponent(preId)}`, { method: "PUT", token: tokens.accessToken, body: { status: "cancelled" } }).catch((err) => logger.warn(`mpCancelarPase ${clubId}/${socioUid}: MP ${err.status || ""} ${err.message}`));
+    if (!tokens || !tokens.accessToken) throw new HttpsError("failed-precondition", "El club desconectó Mercado Pago: cancelá el débito desde tu cuenta de Mercado Pago (Suscripciones) y avisale al club");
+    try {
+      await mpFetch(`/preapproval/${encodeURIComponent(preId)}`, { method: "PUT", token: tokens.accessToken, body: { status: "cancelled" } });
+    } catch (err) {
+      if (err.status !== 404) {
+        logger.error(`mpCancelarPase ${clubId}/${socioUid}: MP ${err.status || ""} ${err.message}`);
+        throw new HttpsError("unavailable", "Mercado Pago no confirmó la baja del débito. Probá de nuevo en un momento.");
+      }
     }
   }
   const M = await membresiasUtil();
@@ -4151,12 +4188,19 @@ async function procesarNotificacionPase(clubRef, tipo, dataId, tokens) {
       if (cSnap.exists) return "ya aplicado";
       const pase = pSnap.exists ? pSnap.data() : { meses: 1 };
       const s = sSnap.exists ? socioPlano(sSnap.data()) : null;
+      const actual = s && s.suscripcion ? s.suscripcion : {};
+      if (actual.preapprovalId !== preId) return "suscripción vieja";
+      if (actual.estado === "cancelled") return "suscripción cancelada";
       const monto = Number(ap.transaction_amount) || Number(pase.precio) || 0;
       const c = M.registrarCobroPase(s, pase, { ahora: Date.now(), monto, paymentId });
       tx.set(socioRef, { ...aTsCampos(c), "suscripcion.estado": "authorized", ultimoCobroEn: FieldValue.serverTimestamp(), actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
       tx.set(comRef, { clubId: clubRef.id, uid: idx.data().uid, preapprovalId: preId, monto, pct, comision: Math.round(monto * pct) / 100, facturada: false, en: FieldValue.serverTimestamp() });
       return "pase activado";
     });
+    if (resultado === "suscripción vieja") {
+      await mpFetch(`/preapproval/${encodeURIComponent(preId)}`, { method: "PUT", token: tokens.accessToken, body: { status: "cancelled" } }).catch(() => {});
+      logger.warn(`pase ${clubRef.id}: cobro ${paymentId} de una suscripción vieja (${preId}) → cancelada; devolvelo desde Mercado Pago`);
+    }
     return `cobro ${ap.id} (${paymentId}): ${resultado}`;
   }
   return `tipo ${tipo} ignorado`;
@@ -4179,10 +4223,11 @@ async function puntosInscripcionPase(torneo, insc, monto, motivo) {
 // - Pases vencidos (sin cobro nuevo) → "vencida" (beneficios afuera, puntos 90 días) y aviso
 // - Puntos de las reservas jugadas ayer por socios activos
 // - Puntos y nivel vuelven a 0 a los 90 días de la baja
-exports.sociosVencidos = onSchedule({ schedule: "40 4 * * *", timeZone: ZONA_HORARIA }, async () => {
+exports.sociosVencidos = onSchedule({ schedule: "40 4 * * *", timeZone: ZONA_HORARIA, timeoutSeconds: 540, memory: "512MiB" }, async () => {
   const M = await membresiasUtil();
   const ahora = Date.now();
-  const vencidas = await db.collectionGroup("socios").where("estado", "==", "activa").where("vence", "<", Timestamp.fromMillis(ahora)).get();
+  // Con DIAS_GRACIA_PASE de gracia: Mercado Pago cobra el día del vencimiento o reintenta unos días
+  const vencidas = await db.collectionGroup("socios").where("estado", "==", "activa").where("vence", "<", Timestamp.fromMillis(ahora - M.DIAS_GRACIA_PASE * 86400000)).get();
   await escribirEnLotes(vencidas.docs.map((d) => (b) => b.update(d.ref, { ...aTsCampos({ ...M.cambiosBaja(ahora), estado: "vencida" }), vencidaEn: FieldValue.serverTimestamp() })));
   for (const d of vencidas.docs) {
     const s = d.data();

@@ -55,8 +55,8 @@ export const getSociosActivos = async (clubId) => {
 };
 
 // Equipo del club (interclubes): el socio se postula; el club marca a quién elige
-export const postularEquipo = (clubId, uid, { quiere, categoria = "", posicion = "" }) =>
-  updateDoc(doc(sociosRef(clubId), uid), { equipo: { quiere: !!quiere, categoria: String(categoria || "").slice(0, 20), posicion: String(posicion || "").slice(0, 20), seleccionado: false, en: serverTimestamp() } });
+export const postularEquipo = (clubId, socio, { quiere, categoria = "", posicion = "" }) =>
+  updateDoc(doc(sociosRef(clubId), socio.uid), { equipo: { quiere: !!quiere, categoria: String(categoria || "").slice(0, 20), posicion: String(posicion || "").slice(0, 20), seleccionado: socio.equipo?.seleccionado === true, en: serverTimestamp() } });
 export const marcarSeleccionado = (clubId, socio, seleccionado) => updateDoc(doc(sociosRef(clubId), socio.id), { equipo: { ...(socio.equipo || {}), seleccionado: !!seleccionado } });
 
 // Últimos movimientos de puntos del socio

@@ -24,6 +24,8 @@ export const PESOS_POR_PUNTO = 1000;
 export const DIAS_CONSERVA_PUNTOS = 90;
 export const MESES_PASE = [1, 3, 6, 12];
 export const DIAS_PUNTOS = 365;
+// Días de gracia después del vencimiento antes de cortar beneficios (Mercado Pago reintenta el cobro)
+export const DIAS_GRACIA_PASE = 5;
 export const MAX_SPONSORS = 10;
 export const ESTADOS_SOCIO = { pendiente: "Pendiente", activa: "Activo", vencida: "Vencido", cancelada: "Dado de baja", rechazada: "Rechazado" };
 export const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -166,12 +168,13 @@ export function textosBeneficios(b) {
 // --- Fechas (ms; hora argentina UTC−3) -------------------------------------------------------------------------------
 const aMs = (v) => (v == null ? null : typeof v === "number" ? v : typeof v.toMillis === "function" ? v.toMillis() : typeof v.seconds === "number" ? v.seconds * 1000 : new Date(v).getTime());
 // +N meses en calendario argentino; si el día no existe (31 → 30/28) queda el último del mes. Vence al final de ese día.
-export function sumarMesesAr(desdeMs, meses) {
+// diaAncla: el día del mes en que arrancó (31 → feb 28 → mar 31, sin correrse a fin de mes)
+export function sumarMesesAr(desdeMs, meses, diaAncla = null) {
   const ar = new Date(desdeMs - 3 * 3600 * 1000);
   const y = ar.getUTCFullYear();
   const m = ar.getUTCMonth() + meses;
   const ultimo = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-  const d = Math.min(ar.getUTCDate(), ultimo);
+  const d = Math.min(diaAncla || ar.getUTCDate(), ultimo);
   return Date.UTC(y, m, d, 23, 59, 59) + 3 * 3600 * 1000;
 }
 
@@ -188,17 +191,24 @@ export function estadoSocio(socio, ahora = Date.now()) {
 // Un cobro aprobado de la suscripción → cambios del socio. Vigente: suma desde el vencimiento; si no, desde hoy.
 // Los beneficios son los del nivel que dan sus puntos (si pasaron los 90 días de la baja, vuelve a Bronce con 0).
 export function registrarCobroPase(socio, pase, { ahora = Date.now(), monto = null, paymentId = null } = {}) {
-  const meses = Number(pase && pase.meses) || 1;
+  // La frecuencia es la de SU suscripción (la que autorizó en MP), no la configuración actual del club
+  const meses = Number(socio && socio.suscripcion && socio.suscripcion.meses) || Number(pase && pase.meses) || 1;
   const est = estadoSocio(socio, ahora);
-  const base = est.activa && est.vence ? est.vence : ahora;
+  // Vigente, o vencido hace menos que la gracia (cobro reintentado): suma desde el vencimiento; si no, desde hoy
+  const venceAntes = aMs(socio && socio.vence);
+  const enGracia = !!(socio && socio.estado !== "cancelada" && venceAntes && venceAntes + DIAS_GRACIA_PASE * 86400000 >= ahora);
+  const base = (est.activa || enGracia) && venceAntes ? venceAntes : ahora;
+  const sigue = est.activa || enGracia;
+  const diaAncla = sigue && socio && socio.diaAncla ? socio.diaAncla : new Date(ahora - 3 * 3600 * 1000).getUTCDate();
   const resetear = !!(socio && socio.puntosResetEn && aMs(socio.puntosResetEn) <= ahora);
   const puntos = resetear ? 0 : Number(socio && socio.puntos) || 0;
   const nivel = nivelPorPuntos(puntos, pase && pase.umbrales);
-  const entrada = { tipo: est.activa ? "renovacion" : "alta", monto: monto === null ? Number(pase && pase.precio) || 0 : Math.max(0, Number(monto) || 0), medio: "mercadopago", meses, en: ahora, paymentId };
+  const entrada = { tipo: est.activa || enGracia ? "renovacion" : "alta", monto: monto === null ? Number(pase && pase.precio) || 0 : Math.max(0, Number(monto) || 0), medio: "mercadopago", meses, en: ahora, paymentId };
   return {
     estado: "activa",
-    desde: est.activa && socio && aMs(socio.desde) ? aMs(socio.desde) : ahora,
-    vence: sumarMesesAr(base, meses),
+    desde: sigue && socio && aMs(socio.desde) ? aMs(socio.desde) : ahora,
+    vence: sumarMesesAr(base, meses, diaAncla),
+    diaAncla,
     periodo: periodoDeMeses(meses),
     puntos,
     nivel,

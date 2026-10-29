@@ -105,3 +105,18 @@ test("sponsors por nivel y puntos de los últimos 12 meses", async () => {
   const ahora = AR("2026-10-29T12:00:00");
   assert.equal(puntosVigentes([{ cantidad: 100, en: AR("2026-01-10T10:00:00") }, { cantidad: 50, en: AR("2025-10-01T10:00:00") }], ahora), 100);
 });
+
+test("cobro: frecuencia de la suscripción, día ancla y gracia", async () => {
+  const { registrarCobroPase: rc, normalizarPase: np } = await import("./membresias.js");
+  const pase = np({ precio: 1000, meses: 12, beneficios: { bronce: { sinSeña: true } } });
+  // La suscripción es mensual aunque el club ahora cobre anual
+  const a = rc({ suscripcion: { meses: 1 } }, pase, { ahora: AR("2026-01-31T10:00:00") });
+  assert.equal(a.vence, AR("2026-02-28T23:59:59"));
+  assert.equal(a.diaAncla, 31);
+  const b = rc({ ...a, suscripcion: { meses: 1 } }, pase, { ahora: AR("2026-02-28T12:00:00") });
+  assert.equal(b.vence, AR("2026-03-31T23:59:59"));
+  // Cobro reintentado 3 días después del vencimiento: sigue desde el vencimiento (renovación, no alta)
+  const c = rc({ ...b, estado: "activa", suscripcion: { meses: 1 } }, pase, { ahora: AR("2026-04-03T10:00:00") });
+  assert.equal(c.vence, AR("2026-04-30T23:59:59"));
+  assert.equal(c.historial[c.historial.length - 1].tipo, "renovacion");
+});

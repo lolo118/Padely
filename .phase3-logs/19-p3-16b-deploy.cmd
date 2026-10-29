@@ -1,7 +1,7 @@
 @echo off
 setlocal
 rem P3-16b: Pase Club (suscripcion de Mercado Pago con debito automatico, puntos y niveles Bronce/Plata/Oro, equipo).
-rem Acumulado sobre 18 (29/10 12:03): reglas + indices + Storage + functions (62: +mpSuscribirPase, mpCancelarPase, onPaseEscrito, onVentaPuntosPase).
+rem Acumulado sobre 18 (29/10 12:03): reglas + indices + Storage + functions (63: +mpSuscribirPase, mpCancelarPase, onPaseEscrito, onVentaPuntosPase, onVentaAnuladaPuntosPase).
 rem Tras cualquier corte del deploy, probar las callables nuevas (403 = falta el invoker publico, ver docs/LANZAMIENTO.md).
 rem La CLI aborta si el codigo de functions tarda mas de 10 s en cargar
 set FUNCTIONS_DISCOVERY_TIMEOUT=120
