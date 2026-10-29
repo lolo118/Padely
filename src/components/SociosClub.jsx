@@ -1,146 +1,130 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { pedirMembresia, retirarPedido } from "../services/membresiasService";
-import { pagarConMercadoPago } from "../services/mercadoPagoService";
-import { estadoSocio, etiquetaPeriodo, textoIntegrantes, textosBeneficios } from "../utils/membresias";
+import { Crown } from "lucide-react";
+import { suscribirPase } from "../services/membresiasService";
+import { ETIQUETA_NIVEL, NIVELES, TONO_NIVEL, PESOS_POR_PUNTO, estadoSocio, nombrePase, textoCada, textosBeneficios } from "../utils/membresias";
 import { formatPrecio } from "../utils/format";
 import { formatFechaLarga } from "../utils/formatDate";
-import { confirmar } from "./ConfirmDialog";
+import Dialogo from "./Dialogo";
 import { toast } from "./Toast";
-import { Alert, Badge, Button, Card } from "./ui";
+import { Alert, Badge, Button, Card, Field, Input } from "./ui";
 
-// Pestaña "Socios" de la página del club (P3-16): los planes visibles con sus beneficios y el estado del jugador.
-// Con Mercado Pago conectado se paga online y la membresía queda activa al aprobarse el pago (sin aprobación del
-// club); si no, o si el jugador prefiere, pide y el club aprueba y cobra en el club (Admin → Socios).
-const ESTADO_PASE = { vencida: "vencido", cancelada: "dado de baja", rechazada: "rechazado" };
-
-export default function SociosClub({ club, planes, miSocio, user, perfil, onCambio }) {
+// Pestaña "Pase" de la página del club (P3-16): el Pase Club con su precio, los niveles Bronce / Plata / Oro (puntos
+// y beneficios de cada uno) y la suscripción con Mercado Pago (débito automático: se autoriza una vez).
+export default function SociosClub({ club, pase, miSocio, user }) {
   const navigate = useNavigate();
-  const [enviando, setEnviando] = useState("");
+  const [dialogo, setDialogo] = useState(false);
+  const [email, setEmail] = useState(user?.email || "");
+  const [enviando, setEnviando] = useState(false);
   const est = estadoSocio(miSocio);
-  // El integrante de un Pase familiar no pide ni paga: lo renueva el titular
-  const puedePedir = !miSocio || ["cancelada", "rechazada", "vencida"].includes(est.estado);
-  const esIntegrante = !!miSocio?.titularId && est.activa;
   const conMp = club.mercadoPago?.conectado === true;
-  // Pagar online: alta, cambio de plan o renovación (si sigue vigente, el período se suma desde el vencimiento)
-  const pagarOnline = async (plan) => {
-    if (!user || user.isAnonymous) {
-      navigate(`/login?next=${encodeURIComponent(window.location.pathname)}`);
-      return;
-    }
-    setEnviando(`mp-${plan.id}`);
-    try {
-      await pagarConMercadoPago({ clubId: club.id, tipo: "membresia", planId: plan.id });
-    } catch (err) {
-      console.error("No se pudo abrir Mercado Pago:", err);
-      toast.error(err?.message || "No pudimos abrir Mercado Pago. Probá de nuevo o pedilo y pagás en el club.");
-      setEnviando("");
-    }
-  };
+  const umbrales = pase.umbrales || {};
+  const minimo = { bronce: 0, plata: umbrales.plata, oro: umbrales.oro };
 
-  const pedir = async (plan) => {
+  const abrir = () => {
     if (!user || user.isAnonymous) {
       navigate(`/login?next=${encodeURIComponent(window.location.pathname)}`);
       return;
     }
-    const ok = await confirmar({ titulo: `¿Pedir el ${plan.nombre}?`, mensaje: `${club.nombre} recibe tu pedido, te confirma y te cobra ${formatPrecio(plan.precio)} (${etiquetaPeriodo(plan.periodo).toLowerCase()}) en el club.`, confirmText: "Enviar pedido" });
-    if (!ok) return;
-    setEnviando(plan.id);
-    try {
-      await pedirMembresia(club.id, plan, { uid: user.uid, nombre: perfil?.nombre || user.displayName || "Jugador" }, miSocio);
-      toast.success("Listo: le avisamos al club. Te confirmamos cuando estés activo.");
-      onCambio?.();
-    } catch (err) {
-      console.error("No se pudo pedir la membresía:", err);
-      toast.error("No pudimos enviar el pedido. Probá de nuevo.");
-    } finally {
-      setEnviando("");
-    }
+    setDialogo(true);
   };
-  const retirar = async () => {
-    const ok = await confirmar({ titulo: "¿Retirar tu pedido?", mensaje: "Podés volver a pedirlo cuando quieras.", confirmText: "Retirar", danger: true });
-    if (!ok) return;
+  const suscribir = async (e) => {
+    e?.preventDefault?.();
+    setEnviando(true);
     try {
-      await retirarPedido(club.id, user.uid);
-      toast.success("Pedido retirado");
-      onCambio?.();
+      await suscribirPase({ clubId: club.id, email: email.trim() });
     } catch (err) {
-      console.error(err);
-      toast.error("No pudimos guardar el cambio.");
+      console.error("No se pudo abrir la suscripción:", err);
+      toast.error(err?.message || "No pudimos abrir Mercado Pago. Probá de nuevo.");
+      setEnviando(false);
     }
   };
 
   return (
     <div className="flex flex-col gap-4 mb-6">
-      {miSocio && est.estado !== "cancelada" && (
-        <Alert tone={est.activa ? "success" : est.estado === "pendiente" ? "warning" : "neutral"}>
-          {est.activa ? (
-            <>
-              <strong>Tenés el {miSocio.planNombre}{miSocio.titularId ? ` de ${miSocio.titularNombre || "tu grupo"}` : ""}.</strong> Vence el {formatFechaLarga(est.vence)}. Tu QR está en{" "}
-              <Link to="/membresias" className="underline font-semibold">
-                Mis pases
-              </Link>
-              .
-            </>
-          ) : est.estado === "pendiente" ? (
-            <>
-              <strong>Pediste {miSocio.planNombre}.</strong> El club te confirma y te cobra la cuota.{" "}
-              <button type="button" className="underline font-semibold" onClick={retirar}>
-                Retirar pedido
-              </button>
-            </>
-          ) : (
-            <>
-              <strong>Tu Pase está {ESTADO_PASE[est.estado] || est.estado}.</strong> Podés sacarlo de nuevo.
-            </>
-          )}
-        </Alert>
-      )}
-      <div className="grid gap-3 sm:grid-cols-2">
-        {planes.map((p) => {
-          const esMio = miSocio?.planId === p.id && (est.activa || est.estado === "pendiente");
+      <Card>
+        <div className="flex items-center gap-2">
+          <Crown className="pd-icon text-ink-3" size={22} aria-hidden="true" />
+          <Card.Title as="h2" className="m-0">
+            {nombrePase(club)}
+          </Card.Title>
+        </div>
+        <p className="numeral-lg pd-tnum mt-2 mb-0">
+          {formatPrecio(pase.precio)} <span className="body-md text-ink-3">{textoCada(pase.meses)}</span>
+        </p>
+        <p className="body-sm text-ink-2 mt-1 mb-0">
+          Débito automático con Mercado Pago. Sumás 1 punto cada {formatPrecio(PESOS_POR_PUNTO)} que gastás en el club (canchas, bar y torneos del club) y subís de nivel solo. Te das de baja cuando quieras.
+        </p>
+        {est.activa ? (
+          <Alert tone="success" className="mt-3">
+            <strong>Tenés el Pase · {ETIQUETA_NIVEL[miSocio.nivel || "bronce"]}</strong> con {miSocio.puntos || 0} puntos. Se renueva el {formatFechaLarga(est.vence)}.{" "}
+            <Link to="/membresias" className="underline font-semibold">
+              Ver mi Pase
+            </Link>
+          </Alert>
+        ) : miSocio && est.estado === "pendiente" ? (
+          <Alert tone="warning" className="mt-3">
+            Falta que autorices el débito en Mercado Pago.{" "}
+            <button type="button" className="underline font-semibold" onClick={abrir}>
+              Autorizar ahora
+            </button>
+          </Alert>
+        ) : conMp ? (
+          <div className="mt-3">
+            <Button variant="primary" onClick={abrir}>
+              Quiero el Pase
+            </Button>
+          </div>
+        ) : (
+          <p className="body-sm text-ink-3 mt-3 mb-0">El club todavía está terminando de habilitar el cobro del Pase.</p>
+        )}
+      </Card>
+      <div className="grid gap-3 md:grid-cols-3">
+        {NIVELES.map((n) => {
+          const textos = textosBeneficios(pase.beneficios?.[n]);
+          const esMio = est.activa && (miSocio?.nivel || "bronce") === n;
           return (
-            <Card key={p.id}>
+            <Card key={n}>
               <Card.Row>
-                <Card.Title as="h3" className="m-0">
-                  {p.nombre}
-                </Card.Title>
-                {esMio && <Badge tone={est.activa ? "success" : "warning"}>{est.activa ? "Tu Pase" : "Pedido"}</Badge>}
+                <Badge tone={TONO_NIVEL[n]}>{ETIQUETA_NIVEL[n]}</Badge>
+                {esMio && <Badge tone="success">Tu nivel</Badge>}
               </Card.Row>
-              <p className="numeral-md pd-tnum mt-1 mb-0">
-                {formatPrecio(p.precio)} <span className="body-sm text-ink-3">/ {etiquetaPeriodo(p.periodo).toLowerCase()}</span>
-              </p>
-              {p.descripcion && <p className="body-sm text-ink-2 mt-1 mb-0">{p.descripcion}</p>}
-              {textoIntegrantes(p) && <p className="body-sm font-semibold mt-1 mb-0">{textoIntegrantes(p)}</p>}
-              <ul className="body-sm mt-2 mb-0 pl-5">
-                {textosBeneficios(p.beneficios).map((t) => (
-                  <li key={t}>{t}</li>
-                ))}
-              </ul>
-              {esIntegrante ? null : conMp && p.precio > 0 && (puedePedir || (est.activa && miSocio?.planId === p.id)) ? (
-                <div className="pd-btn-group mt-3">
-                  <Button variant="primary" size="sm" onClick={() => pagarOnline(p)} cargando={enviando === `mp-${p.id}` ? "Abriendo Mercado Pago…" : ""}>
-                    {est.activa ? "Renovar con Mercado Pago" : "Pagar con Mercado Pago"}
-                  </Button>
-                  {puedePedir && (
-                    <Button variant="ghost" size="sm" onClick={() => pedir(p)} cargando={enviando === p.id ? "Enviando…" : ""}>
-                      Prefiero pagar en el club
-                    </Button>
-                  )}
-                </div>
+              <Card.Meta className="mt-2!">{n === "bronce" ? "Desde que te sumás" : `Desde ${minimo[n]} puntos`}</Card.Meta>
+              {textos.length ? (
+                <ul className="body-sm mt-2 mb-0 pl-5">
+                  {textos.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ul>
               ) : (
-                puedePedir && (
-                  <div className="mt-3">
-                    <Button variant="primary" size="sm" onClick={() => pedir(p)} cargando={enviando === p.id ? "Enviando…" : ""}>
-                      Pedir este Pase
-                    </Button>
-                  </div>
-                )
+                <p className="body-sm text-ink-3 mt-2 mb-0">—</p>
               )}
             </Card>
           );
         })}
       </div>
+      {dialogo && (
+        <Dialogo
+          titulo={`Suscribirte al ${nombrePase(club)}`}
+          descripcion={`${formatPrecio(pase.precio)} ${textoCada(pase.meses)} con débito automático. Mercado Pago te pide autorizarlo una vez; pagás con cualquier medio que tengas ahí.`}
+          onCerrar={() => setDialogo(false)}
+          onSubmit={suscribir}
+          acciones={
+            <>
+              <Button onClick={() => setDialogo(false)}>Cancelar</Button>
+              <Button type="submit" variant="primary" disabled={!email.includes("@")} cargando={enviando ? "Abriendo Mercado Pago…" : ""}>
+                Ir a Mercado Pago
+              </Button>
+            </>
+          }
+        >
+          <div className="mt-4">
+            <Field label="Email de tu cuenta de Mercado Pago" help="Tiene que ser el mismo con el que entrás a Mercado Pago.">
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} data-autofocus maxLength={120} />
+            </Field>
+          </div>
+        </Dialogo>
+      )}
     </div>
   );
 }

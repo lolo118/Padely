@@ -1,55 +1,51 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
-import { altaPasePorEmail, cupoOcupado, darDeBaja, getPlanesSocio, getSocios, guardarPlanSocio, quitarIntegrante, rechazarPedido, registrarPago } from "../../services/membresiasService";
-import { DIAS_SEMANA, ESTADOS_SOCIO, MAX_EXTRAS, MAX_INTEGRANTES, PERIODOS, estadoSocio, etiquetaPeriodo, normalizarPlan, textoIntegrantes, textosBeneficios } from "../../utils/membresias";
-import { MEDIOS_VENTA, ETIQUETA_MEDIO_VENTA } from "../../utils/ventas";
+import { cancelarPase, getPase, getSocios, guardarPase, marcarSeleccionado } from "../../services/membresiasService";
+import { DIAS_SEMANA, ESTADOS_SOCIO, ETIQUETA_NIVEL, MAX_EXTRAS, MESES_PASE, NIVELES, PESOS_POR_PUNTO, SUGERENCIAS_EXTRAS, TONO_NIVEL, UMBRALES_DEFECTO, estadoSocio, nombrePase, normalizarPase, textoCada, textosBeneficios } from "../../utils/membresias";
 import { formatPrecio } from "../../utils/format";
 import { formatFechaLarga } from "../../utils/formatDate";
-import Dialogo from "../../components/Dialogo";
 import SinPermiso from "../../components/SinPermiso";
 import { confirmar } from "../../components/ConfirmDialog";
 import { toast } from "../../components/Toast";
-import { Alert, Badge, Button, Card, Field, Input, Pills, SearchInput, Select, Tabs, Textarea } from "../../components/ui";
+import { Alert, Badge, Button, Card, Field, Input, Pills, SearchInput, Select, Tabs } from "../../components/ui";
 
-// /admin/socios (P3-16): los Pases del club (pedidos, activos, vencidos) y sus planes. El club arma cada plan con
-// beneficios que aplica Padely (descuento en la cancha y el bar, sin seña, reservar antes) y extras de texto libre
-// que cumple en persona (estacionamiento, lugar en exhibiciones…); el plan puede ser familiar (hasta 6 personas, sin
-// cargo extra). Se paga con Mercado Pago desde la app (queda activo solo) o en el club: "Aprobar y cobrar" /
-// "Registrar pago" suman el período desde hoy o desde el vencimiento si sigue vigente. Toda persona con Pase tiene
-// cuenta en Padely (el alta del club es por email).
-
-const TONO = { pendiente: "warning", activa: "success", vencida: "danger", cancelada: "neutral", rechazada: "neutral" };
-const SUGERENCIAS_EXTRAS = ["Estacionamiento para socios", "Lugar reservado en exhibiciones", "Toalla y agua en cada turno", "Descuento en clases", "Prioridad en los torneos del club"];
+// /admin/socios (P3-16): el Pase Club del club. Socios (nivel, puntos, estado), el equipo del club (los socios que
+// se postulan para los interclubes; el club marca a quién elige) y la configuración: precio, cada cuánto se cobra
+// (débito automático por Mercado Pago), puntos para Plata y Oro, y los beneficios de cada nivel (los que aplica
+// Padely y los propios del club, de texto libre).
+const TONO = { pendiente: "warning", activa: "success", vencida: "danger", cancelada: "neutral" };
 const HORAS = Array.from({ length: 18 }, (_, i) => `${String(i + 7).padStart(2, "0")}:00`);
+const POSICION = { drive: "Drive", reves: "Revés", indistinto: "Indistinto" };
 
 export default function Socios() {
   const club = useAuthStore((s) => s.clubActual);
   const puede = useAuthStore((s) => s.puede);
   const puedeSocios = puede("gestionarReservas");
-  const [tab, setTab] = useState(puedeSocios ? "socios" : "planes");
-  const [planes, setPlanes] = useState(null);
+  const puedeConfigurar = puede("configurarClub");
+  const [tab, setTab] = useState(puedeSocios ? "socios" : "config");
+  const [pase, setPase] = useState(undefined);
   const [socios, setSocios] = useState(null);
   const [error, setError] = useState(false);
-
   const [version, setVersion] = useState(0);
   const recargar = () => setVersion((v) => v + 1);
   const clubId = club?.id;
+
   useEffect(() => {
     if (!clubId) return undefined;
     let vivo = true;
-    Promise.all([getPlanesSocio(clubId), puedeSocios ? getSocios(clubId) : Promise.resolve([])])
+    Promise.all([getPase(clubId), puedeSocios ? getSocios(clubId) : Promise.resolve([])])
       .then(([p, s]) => {
         if (!vivo) return;
-        setPlanes(p);
+        setPase(p);
         setSocios(s);
         setError(false);
       })
       .catch((err) => {
-        console.error("Error cargando socios:", err);
+        console.error("Error cargando el Pase:", err);
         if (!vivo) return;
         setError(true);
-        setPlanes((x) => x || []);
+        setPase((x) => (x === undefined ? null : x));
         setSocios((x) => x || []);
       });
     return () => {
@@ -58,129 +54,80 @@ export default function Socios() {
   }, [clubId, version, puedeSocios]);
 
   if (!club) return <div className="pd-skeleton h-40 rounded-lg" aria-busy="true" aria-label="Cargando" />;
-  if (!puede("gestionarReservas") && !puede("configurarClub")) return <SinPermiso />;
-  const pendientes = (socios || []).filter((s) => s.estado === "pendiente").length;
+  if (!puedeSocios && !puedeConfigurar) return <SinPermiso />;
+  const postulados = (socios || []).filter((s) => s.equipo?.quiere && estadoSocio(s).activa).length;
 
   return (
     <div className="flex flex-col gap-4">
       <header>
-        <h1 className="heading-xl m-0">Pases</h1>
-        <p className="body-sm text-ink-2 mt-1 mb-0">Las membresías de tu club: los planes, los pedidos y quién está al día.</p>
+        <h1 className="heading-xl m-0">{nombrePase(club)}</h1>
+        <p className="body-sm text-ink-2 mt-1 mb-0">La membresía de tu club: débito automático por Mercado Pago, puntos por cada gasto y niveles Bronce, Plata y Oro.</p>
       </header>
-      {error && <Alert tone="warning">No pudimos leer los Pases. Si la función es nueva, puede faltar la actualización de Padely: probá de nuevo en un rato.</Alert>}
+      {error && <Alert tone="warning">No pudimos leer el Pase. Probá de nuevo en un rato.</Alert>}
+      {club.mercadoPago?.conectado !== true && <Alert tone="warning">Para cobrar el Pase conectá Mercado Pago en Configuración → Pagos.</Alert>}
       <Tabs
         items={[
-          ...(puedeSocios ? [{ value: "socios", label: "Pases", count: pendientes || undefined }] : []),
-          { value: "planes", label: "Planes", count: planes?.length || undefined },
+          ...(puedeSocios ? [{ value: "socios", label: "Socios", count: (socios || []).filter((s) => estadoSocio(s).activa).length || undefined }] : []),
+          ...(puedeSocios ? [{ value: "equipo", label: "Equipo", count: postulados || undefined }] : []),
+          ...(puedeConfigurar ? [{ value: "config", label: "Configurar" }] : []),
         ]}
         value={tab}
         onChange={setTab}
-        ariaLabel="Secciones de Pases"
+        ariaLabel="Secciones del Pase"
       />
-      {tab === "socios" ? (
-        <ListaSocios club={club} socios={socios} planes={planes} onCambio={recargar} irAPlanes={() => setTab("planes")} />
-      ) : (
-        <ListaPlanes club={club} planes={planes} socios={socios || []} puedeEditar={puede("configurarClub")} onCambio={recargar} />
-      )}
+      {tab === "socios" && <ListaSocios club={club} socios={socios} onCambio={recargar} />}
+      {tab === "equipo" && <ListaEquipo club={club} socios={socios} onCambio={recargar} />}
+      {tab === "config" && pase !== undefined && <ConfigPase club={club} pase={pase} onGuardado={recargar} />}
     </div>
   );
 }
 
 // ---- Socios ------------------------------------------------------------------------------------------------------
-function ListaSocios({ club, socios, planes, onCambio, irAPlanes }) {
-  const uid = useAuthStore((s) => s.user?.uid);
-  const nombreStaff = useAuthStore((s) => s.perfil?.nombre || s.user?.email || null);
-  const [filtro, setFiltro] = useState("pendiente");
+function ListaSocios({ club, socios, onCambio }) {
+  const [filtro, setFiltro] = useState("activa");
   const [busqueda, setBusqueda] = useState("");
-  const [cobro, setCobro] = useState(null); // { socio | null (alta manual) }
   const lista = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return (socios || [])
       .map((s) => ({ ...s, est: estadoSocio(s) }))
       .filter((s) => filtro === "todos" || s.est.estado === filtro)
       .filter((s) => !q || String(s.nombre || "").toLowerCase().includes(q) || String(s.numero || "") === q)
-      .sort((a, b) => String(a.nombre || "").localeCompare(String(b.nombre || ""), "es"));
+      .sort((a, b) => (Number(b.puntos) || 0) - (Number(a.puntos) || 0));
   }, [socios, filtro, busqueda]);
-
-  if (!socios || !planes) return <div className="pd-skeleton h-32 rounded-lg" aria-busy="true" aria-label="Cargando" />;
+  if (!socios) return <div className="pd-skeleton h-32 rounded-lg" aria-busy="true" aria-label="Cargando" />;
   const cuenta = (e) => socios.filter((s) => estadoSocio(s).estado === e).length;
-
-  const rechazar = async (s) => {
-    const ok = await confirmar({ titulo: `¿Rechazar a ${s.nombre}?`, mensaje: "Le avisamos que no se aceptó su pedido.", confirmText: "Rechazar", danger: true });
-    if (!ok) return;
-    try {
-      await rechazarPedido(club.id, s.id);
-      toast.success("Pedido rechazado");
-      onCambio();
-    } catch (err) {
-      console.error(err);
-      toast.error("No pudimos guardar el cambio.");
-    }
-  };
   const baja = async (s) => {
-    const ok = await confirmar({ titulo: `¿Dar de baja el Pase de ${s.nombre}?`, mensaje: s.familia?.length ? "Deja de tener los beneficios desde ahora, y también su grupo. Lo pagado no se devuelve desde Padely." : "Deja de tener los beneficios desde ahora. Lo pagado no se devuelve desde Padely.", confirmText: "Dar de baja", danger: true });
+    const ok = await confirmar({ titulo: `¿Dar de baja el Pase de ${s.nombre}?`, mensaje: "Se cancela su débito en Mercado Pago y los beneficios terminan hoy. Sus puntos se guardan 90 días.", confirmText: "Dar de baja", danger: true });
     if (!ok) return;
     try {
-      await darDeBaja(club.id, s.id);
+      await cancelarPase({ clubId: club.id, uid: s.id });
       toast.success("Pase dado de baja");
       onCambio();
     } catch (err) {
       console.error(err);
-      toast.error("No pudimos guardar el cambio.");
+      toast.error(err?.message || "No pudimos dar de baja el Pase.");
     }
   };
-
-  const sacarDelGrupo = async (s) => {
-    const ok = await confirmar({ titulo: `¿Sacar a ${s.nombre} del Pase de ${s.titularNombre || "su titular"}?`, mensaje: "Deja de tener los beneficios y se libera su lugar en el grupo.", confirmText: "Sacar", danger: true });
-    if (!ok) return;
-    try {
-      await quitarIntegrante({ clubId: club.id, uid: s.id });
-      toast.success("Listo, ya no está en el grupo");
-      onCambio();
-    } catch (err) {
-      console.error(err);
-      toast.error(err?.message || "No pudimos guardar el cambio.");
-    }
-  };
-
-  if (!planes.length) {
-    return (
-      <Card>
-        <Card.Title as="h2">Primero armá un plan</Card.Title>
-        <Card.Meta className="mt-1!">Elegí precio, período y beneficios (descuentos, reservar antes, estacionamiento…). Después los jugadores lo pagan con Mercado Pago o lo piden desde la página del club.</Card.Meta>
-        <div className="mt-4">
-          <Button variant="primary" onClick={irAPlanes}>
-            Crear un plan
-          </Button>
-        </div>
-      </Card>
-    );
-  }
-
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Pills
           items={[
-            { value: "pendiente", label: "Pedidos", count: cuenta("pendiente") },
             { value: "activa", label: "Activos", count: cuenta("activa") },
+            { value: "pendiente", label: "Sin autorizar", count: cuenta("pendiente") },
             { value: "vencida", label: "Vencidos", count: cuenta("vencida") },
+            { value: "cancelada", label: "De baja", count: cuenta("cancelada") },
             { value: "todos", label: "Todos", count: socios.length },
           ]}
           value={filtro}
           onChange={setFiltro}
-          ariaLabel="Filtrar Pases"
+          ariaLabel="Filtrar socios"
         />
-        <div className="flex items-center gap-2">
-          <SearchInput value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Nombre o número" aria-label="Buscar Pase" />
-          <Button variant="primary" icon={<Plus className="pd-icon" size={16} aria-hidden="true" />} onClick={() => setCobro({ socio: null })}>
-            Dar un Pase
-          </Button>
-        </div>
+        <SearchInput value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Nombre o número" aria-label="Buscar socio" />
       </div>
       {lista.length === 0 ? (
         <Card>
-          <Card.Meta>{filtro === "pendiente" ? "No hay pedidos nuevos. Los jugadores piden su Pase desde la página del club." : "No hay Pases en esta lista."}</Card.Meta>
+          <Card.Meta>{filtro === "activa" ? "Todavía no hay socios activos. Los jugadores se suscriben desde la pestaña Pase de la página del club." : "No hay socios en esta lista."}</Card.Meta>
         </Card>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
@@ -191,368 +138,226 @@ function ListaSocios({ club, socios, planes, onCambio, irAPlanes }) {
                   {s.nombre}
                   {s.numero ? <span className="text-ink-3 font-normal"> · Nº {s.numero}</span> : null}
                 </Card.Title>
-                <Badge tone={TONO[s.est.estado] || "neutral"} dot>
-                  {ESTADOS_SOCIO[s.est.estado] || s.est.estado}
-                </Badge>
+                <span className="pd-badge-group">
+                  {s.est.activa && <Badge tone={TONO_NIVEL[s.nivel || "bronce"]}>{ETIQUETA_NIVEL[s.nivel || "bronce"]}</Badge>}
+                  <Badge tone={TONO[s.est.estado] || "neutral"} dot>
+                    {ESTADOS_SOCIO[s.est.estado] || s.est.estado}
+                  </Badge>
+                </span>
               </Card.Row>
               <Card.Meta className="mt-1!">
-                {[s.planNombre, s.est.vence ? `${s.est.estado === "activa" ? "Vence" : "Venció"} el ${formatFechaLarga(s.est.vence)}` : null].filter(Boolean).join(" · ")}
+                {[`${s.puntos || 0} puntos`, s.est.vence ? `${s.est.activa ? "Se renueva" : "Venció"} el ${formatFechaLarga(s.est.vence)}` : null, s.equipo?.quiere ? "Quiere estar en el equipo" : null].filter(Boolean).join(" · ")}
               </Card.Meta>
-              {s.titularId && <p className="body-sm text-ink-2 mt-1 mb-0">Integrante del Pase de {s.titularNombre || "su titular"}</p>}
-              {!s.titularId && s.familia?.length > 0 && <p className="body-sm text-ink-2 mt-1 mb-0">Grupo: {s.familia.map((f) => f.nombre).join(", ")}</p>}
-              {s.est.porVencer && <p className="body-sm text-warning mt-1 mb-0">Vence en {s.est.diasRestantes} {s.est.diasRestantes === 1 ? "día" : "días"}</p>}
-              <div className="pd-btn-group mt-3">
-                {s.titularId ? (
-                  s.est.estado === "activa" && (
-                    <Button size="sm" variant="ghost" onClick={() => sacarDelGrupo(s)}>
-                      Sacar del grupo
-                    </Button>
-                  )
-                ) : s.est.estado === "pendiente" ? (
-                  <>
-                    <Button size="sm" variant="primary" onClick={() => setCobro({ socio: s })}>
-                      Aprobar y cobrar
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => rechazar(s)}>
-                      Rechazar
-                    </Button>
-                  </>
-                ) : s.est.estado === "activa" || s.est.estado === "vencida" ? (
-                  <>
-                    <Button size="sm" onClick={() => setCobro({ socio: s })}>
-                      Registrar pago
-                    </Button>
-                    {s.est.estado === "activa" && (
-                      <Button size="sm" variant="ghost" onClick={() => baja(s)}>
-                        Dar de baja
-                      </Button>
-                    )}
-                  </>
-                ) : null}
-              </div>
+              {s.est.activa && (
+                <div className="mt-3">
+                  <Button size="sm" variant="ghost" onClick={() => baja(s)}>
+                    Dar de baja
+                  </Button>
+                </div>
+              )}
             </Card>
           ))}
         </div>
       )}
-      {cobro && (
-        <CobroDialog
-          club={club}
-          socio={cobro.socio}
-          planes={planes}
-          socios={socios}
-          onCerrar={() => setCobro(null)}
-          onListo={() => {
-            setCobro(null);
-            onCambio();
-          }}
-          staff={{ uid, nombre: nombreStaff }}
-        />
-      )}
     </>
   );
 }
 
-// Aprobar un pedido, renovar o dar de alta a mano: plan, monto y medio
-function CobroDialog({ club, socio, planes, socios, staff, onCerrar, onListo }) {
-  const [planId, setPlanId] = useState(socio?.planId || planes[0]?.id || "");
-  const plan = planes.find((p) => p.id === planId) || null;
-  const [monto, setMonto] = useState(plan ? String(plan.precio) : "");
-  const [medio, setMedio] = useState("efectivo");
-  const [email, setEmail] = useState("");
-  const [guardando, setGuardando] = useState(false);
-  const est = estadoSocio(socio);
-  const sinCupo = plan && plan.cupo != null && !est.activa && cupoOcupado(socios.filter((s) => s.id !== socio?.id), plan.id) >= plan.cupo;
-
-  const guardar = async (e) => {
-    e?.preventDefault?.();
-    if (!plan) return;
-    setGuardando(true);
+// ---- Equipo del club ---------------------------------------------------------------------------------------------
+function ListaEquipo({ club, socios, onCambio }) {
+  if (!socios) return <div className="pd-skeleton h-32 rounded-lg" aria-busy="true" aria-label="Cargando" />;
+  const lista = socios.filter((s) => s.equipo?.quiere && estadoSocio(s).activa).sort((a, b) => String(a.equipo.categoria).localeCompare(String(b.equipo.categoria)) || String(a.nombre).localeCompare(String(b.nombre), "es"));
+  const alternar = async (s) => {
     try {
-      const opciones = { monto: Number(monto) || 0, medio, por: staff.uid || null, porNombre: staff.nombre || null };
-      if (socio) await registrarPago(club.id, socio, plan, opciones);
-      else await altaPasePorEmail({ clubId: club.id, email: email.trim(), planId: plan.id, monto: opciones.monto, medio });
-      toast.success(socio ? (est.activa ? "Pago registrado: el Pase se extendió" : `${socio.nombre} ya tiene su Pase`) : "Pase dado de alta");
-      onListo();
+      await marcarSeleccionado(club.id, s, !s.equipo.seleccionado);
+      onCambio();
     } catch (err) {
-      console.error("No se pudo registrar el pago del Pase:", err);
-      toast.error(err?.message || "No pudimos guardar.");
-      setGuardando(false);
+      console.error(err);
+      toast.error("No pudimos guardar.");
     }
   };
-
+  if (!lista.length) {
+    return (
+      <Card>
+        <Card.Meta>Todavía nadie se postuló. Los socios se anotan desde su Pase ("Quiero estar en el equipo") con categoría y posición.</Card.Meta>
+      </Card>
+    );
+  }
   return (
-    <Dialogo
-      titulo={socio ? (socio.estado === "pendiente" ? `Aprobar a ${socio.nombre}` : `Registrar pago de ${socio.nombre}`) : "Dar un Pase"}
-      descripcion={socio ? (est.activa ? "Sigue vigente: el período nuevo se suma desde su vencimiento." : "El Pase arranca hoy.") : "Para alguien que paga en el club. Tiene que tener cuenta en Padely (es gratis): buscala por su email."}
-      onCerrar={onCerrar}
-      onSubmit={guardar}
-      acciones={
-        <>
-          <Button onClick={onCerrar}>Cancelar</Button>
-          <Button type="submit" variant="primary" disabled={!plan || sinCupo || (!socio && !email.includes("@"))} cargando={guardando ? "Guardando…" : ""}>
-            {socio && socio.estado === "pendiente" ? "Aprobar y registrar pago" : "Registrar pago"}
-          </Button>
-        </>
-      }
-    >
-      <div className="mt-4 grid gap-4">
-        {!socio && (
-          <Field label="Email de su cuenta de Padely">
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} data-autofocus maxLength={120} placeholder="nombre@mail.com" />
-          </Field>
-        )}
-        <Field label="Plan" error={sinCupo ? "Este plan no tiene más cupo." : ""}>
-          <Select
-            value={planId}
-            onChange={(e) => {
-              setPlanId(e.target.value);
-              const p = planes.find((x) => x.id === e.target.value);
-              if (p) setMonto(String(p.precio));
-            }}
-          >
-            {planes.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre} · {formatPrecio(p.precio)} {etiquetaPeriodo(p.periodo).toLowerCase()}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Monto cobrado ($)">
-            <Input type="number" min="0" value={monto} onChange={(e) => setMonto(e.target.value)} inputMode="numeric" />
-          </Field>
-          <Field label="Medio">
-            <Select value={medio} onChange={(e) => setMedio(e.target.value)}>
-              {MEDIOS_VENTA.map((m) => (
-                <option key={m} value={m}>
-                  {ETIQUETA_MEDIO_VENTA[m]}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-        <p className="pd-help m-0">El cobro no pasa por la caja del bar: anotalo como ingreso del club como hacés hoy.</p>
-      </div>
-    </Dialogo>
-  );
-}
-
-// ---- Planes ------------------------------------------------------------------------------------------------------
-function ListaPlanes({ club, planes, socios, puedeEditar, onCambio }) {
-  const [editando, setEditando] = useState(null); // { plan | null }
-  if (!planes) return <div className="pd-skeleton h-32 rounded-lg" aria-busy="true" aria-label="Cargando" />;
-  return (
-    <>
-      {puedeEditar && (
-        <div>
-          <Button variant="primary" icon={<Plus className="pd-icon" size={16} aria-hidden="true" />} onClick={() => setEditando({ plan: null })}>
-            Nuevo plan
-          </Button>
-        </div>
-      )}
-      {planes.length === 0 ? (
-        <Card>
-          <Card.Title as="h2">Todavía no tenés planes de Pase</Card.Title>
-          <Card.Meta className="mt-1!">Ejemplos: "Pase mensual" con 15 % off en la cancha y en el bar; "Pase mañana" con 30 % off de lunes a viernes de 8 a 17; "Pase Gold" con estacionamiento y lugar en las exhibiciones; "Pase familiar" para 4.</Card.Meta>
+    <div className="grid gap-3 md:grid-cols-2">
+      {lista.map((s) => (
+        <Card key={s.id}>
+          <Card.Row>
+            <Card.Title as="h3" className="m-0">
+              {s.nombre}
+            </Card.Title>
+            {s.equipo.seleccionado && <Badge tone="success">En el equipo</Badge>}
+          </Card.Row>
+          <Card.Meta className="mt-1!">{[s.equipo.categoria, POSICION[s.equipo.posicion], ETIQUETA_NIVEL[s.nivel || "bronce"]].filter(Boolean).join(" · ")}</Card.Meta>
+          <div className="mt-3">
+            <Button size="sm" variant={s.equipo.seleccionado ? "ghost" : "primary"} onClick={() => alternar(s)}>
+              {s.equipo.seleccionado ? "Sacar del equipo" : "Sumar al equipo"}
+            </Button>
+          </div>
         </Card>
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {planes.map((p) => {
-            const activos = socios.filter((s) => s.planId === p.id && estadoSocio(s).activa).length;
-            return (
-              <Card key={p.id}>
-                <Card.Row>
-                  <Card.Title as="h3" className="m-0">
-                    {p.nombre}
-                  </Card.Title>
-                  {p.visible === false ? <Badge>Oculto</Badge> : <Badge tone="court">Visible</Badge>}
-                </Card.Row>
-                <p className="numeral-md pd-tnum mt-1 mb-0">
-                  {formatPrecio(p.precio)} <span className="body-sm text-ink-3">/ {etiquetaPeriodo(p.periodo).toLowerCase()}</span>
-                </p>
-                {p.descripcion && <p className="body-sm text-ink-2 mt-1 mb-0">{p.descripcion}</p>}
-                {textoIntegrantes(p) && <p className="body-sm font-semibold mt-1 mb-0">{textoIntegrantes(p)}</p>}
-                <ul className="body-sm mt-2 mb-0 pl-5">
-                  {textosBeneficios(p.beneficios).map((t) => (
-                    <li key={t}>{t}</li>
-                  ))}
-                </ul>
-                <Card.Meta className="mt-2!">
-                  {activos} {activos === 1 ? "Pase activo" : "Pases activos"}
-                  {p.cupo ? ` · cupo ${p.cupo}` : ""}
-                </Card.Meta>
-                {puedeEditar && (
-                  <div className="mt-3">
-                    <Button size="sm" onClick={() => setEditando({ plan: p })}>
-                      Editar
-                    </Button>
-                  </div>
-                )}
-              </Card>
-            );
-          })}
-        </div>
-      )}
-      {editando && (
-        <PlanDialog
-          club={club}
-          plan={editando.plan}
-          onCerrar={() => setEditando(null)}
-          onListo={() => {
-            setEditando(null);
-            onCambio();
-          }}
-        />
-      )}
-    </>
+      ))}
+    </div>
   );
 }
 
-const PLAN_VACIO = { nombre: "", descripcion: "", precio: "", periodo: "mensual", visible: true, cupo: "", integrantes: 1, beneficios: { descuentoCanchaPct: 0, franja: null, descuentoBarPct: 0, diasExtraReserva: 0, sinSeña: false, extras: [] } };
+// ---- Configuración del Pase ---------------------------------------------------------------------------------------
+const VACIO = { descuentoCanchaPct: 0, franja: null, descuentoBarPct: 0, descuentoTorneoPct: 0, torneoGratis: false, diasExtraReserva: 0, sinSeña: false, extras: [] };
 
-function PlanDialog({ club, plan, onCerrar, onListo }) {
-  const [form, setForm] = useState(() => (plan ? { ...PLAN_VACIO, ...plan, cupo: plan.cupo ?? "", beneficios: { ...PLAN_VACIO.beneficios, ...plan.beneficios } } : PLAN_VACIO));
+function ConfigPase({ club, pase, onGuardado }) {
+  const [form, setForm] = useState(() => ({
+    precio: pase?.precio ?? "",
+    meses: pase?.meses ?? 1,
+    visible: pase ? pase.visible !== false : true,
+    umbrales: { ...UMBRALES_DEFECTO, ...(pase?.umbrales || {}) },
+    beneficios: Object.fromEntries(NIVELES.map((n) => [n, { ...VACIO, ...(pase?.beneficios?.[n] || {}) }])),
+  }));
+  const [nivel, setNivel] = useState("bronce");
   const [extra, setExtra] = useState("");
   const [guardando, setGuardando] = useState(false);
-  const b = form.beneficios;
-  const setB = (cambios) => setForm((f) => ({ ...f, beneficios: { ...f.beneficios, ...cambios } }));
-  const conFranja = !!b.franja;
-  const validacion = normalizarPlan(form);
-
-  const agregarExtra = (texto) => {
-    const t = String(texto || "").trim();
-    if (!t || b.extras.includes(t) || b.extras.length >= MAX_EXTRAS) return;
-    setB({ extras: [...b.extras, t] });
+  const b = form.beneficios[nivel];
+  const setB = (cambios) => setForm((f) => ({ ...f, beneficios: { ...f.beneficios, [nivel]: { ...f.beneficios[nivel], ...cambios } } }));
+  const validacion = normalizarPase(form);
+  const agregarExtra = (t) => {
+    const x = String(t || "").trim();
+    if (!x || b.extras.includes(x) || b.extras.length >= MAX_EXTRAS) return;
+    setB({ extras: [...b.extras, x] });
     setExtra("");
   };
-  const guardar = async (e) => {
-    e?.preventDefault?.();
+  const copiarDe = (desde) => setB({ ...form.beneficios[desde], extras: [...form.beneficios[desde].extras] });
+  const guardar = async () => {
     if (validacion.error) {
       toast.error(validacion.error);
       return;
     }
     setGuardando(true);
     try {
-      await guardarPlanSocio(club.id, form, plan?.id || null);
-      toast.success(plan ? "Plan actualizado" : "Plan creado");
-      onListo();
+      await guardarPase(club.id, form);
+      toast.success(pase ? "Pase actualizado: los socios activos ya tienen los beneficios nuevos" : "Pase creado");
+      onGuardado();
     } catch (err) {
-      console.error("No se pudo guardar el plan:", err);
-      toast.error(err?.message || "No pudimos guardar el plan.");
+      console.error(err);
+      toast.error(err?.message || "No pudimos guardar el Pase.");
+    } finally {
       setGuardando(false);
     }
   };
 
   return (
-    <Dialogo
-      titulo={plan ? `Editar ${plan.nombre}` : "Nuevo plan de Pase"}
-      descripcion="Los cambios valen para las altas y renovaciones nuevas; quien ya tiene el Pase conserva sus beneficios hasta renovar."
-      onCerrar={onCerrar}
-      onSubmit={guardar}
-      ancho
-      acciones={
-        <>
-          <Button onClick={onCerrar}>Cancelar</Button>
-          <Button type="submit" variant="primary" cargando={guardando ? "Guardando…" : ""}>
-            Guardar plan
-          </Button>
-        </>
-      }
-    >
-      <div className="mt-4 grid gap-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Nombre">
-            <Input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} placeholder="Ej.: Pase Gold" maxLength={60} data-autofocus />
+    <div className="flex flex-col gap-4">
+      <Card>
+        <Card.Title as="h2">Precio y puntos</Card.Title>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+          <Field label="Precio ($)">
+            <Input type="number" min="100" inputMode="numeric" value={form.precio} onChange={(e) => setForm({ ...form, precio: e.target.value })} />
           </Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Precio ($)">
-              <Input type="number" min="0" inputMode="numeric" value={form.precio} onChange={(e) => setForm({ ...form, precio: e.target.value })} />
-            </Field>
-            <Field label="Período">
-              <Select value={form.periodo} onChange={(e) => setForm({ ...form, periodo: e.target.value })}>
-                {PERIODOS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </div>
+          <Field label="Se cobra">
+            <Select value={String(form.meses)} onChange={(e) => setForm({ ...form, meses: Number(e.target.value) })}>
+              {MESES_PASE.map((m) => (
+                <option key={m} value={m}>
+                  {m === 1 ? "Todos los meses" : m === 12 ? "Una vez por año" : `Cada ${m} meses`}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Puntos para Plata">
+            <Input type="number" min="1" inputMode="numeric" value={form.umbrales.plata} onChange={(e) => setForm({ ...form, umbrales: { ...form.umbrales, plata: e.target.value } })} />
+          </Field>
+          <Field label="Puntos para Oro">
+            <Input type="number" min="2" inputMode="numeric" value={form.umbrales.oro} onChange={(e) => setForm({ ...form, umbrales: { ...form.umbrales, oro: e.target.value } })} />
+          </Field>
         </div>
-        <Field label="Personas por Pase" help="Familiar: el titular suma integrantes con cuenta en Padely, sin cargo extra. Todos tienen los mismos beneficios.">
-          <Select value={String(form.integrantes || 1)} onChange={(e) => setForm({ ...form, integrantes: Number(e.target.value) })}>
-            {Array.from({ length: MAX_INTEGRANTES }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>
-                {n === 1 ? "Individual" : `Familiar · hasta ${n} personas`}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Descripción (opcional)">
-          <Textarea value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} maxLength={280} rows={2} />
-        </Field>
+        <p className="pd-help mt-2 mb-0">
+          1 punto cada {formatPrecio(PESOS_POR_PUNTO)} que el socio gasta en el club (canchas jugadas, bar con su Pase, torneos que organiza el club). Plata = {formatPrecio((Number(form.umbrales.plata) || 0) * PESOS_POR_PUNTO)} gastados; Oro = {formatPrecio((Number(form.umbrales.oro) || 0) * PESOS_POR_PUNTO)}.
+        </p>
+        <label className="flex items-center gap-2 body-sm mt-3">
+          <input type="checkbox" checked={form.visible} onChange={(e) => setForm({ ...form, visible: e.target.checked })} />
+          Visible en la página del club (los jugadores se pueden suscribir)
+        </label>
+      </Card>
 
-        <fieldset className="grid gap-3 border border-line rounded-lg p-4 m-0">
-          <legend className="heading-sm px-1">Beneficios que aplica Padely</legend>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Descuento en la cancha (%)" help="Se aplica solo al reservar desde Padely.">
-              <Input type="number" min="0" max="100" inputMode="numeric" value={b.descuentoCanchaPct || ""} onChange={(e) => setB({ descuentoCanchaPct: e.target.value })} placeholder="0" />
-            </Field>
-            <Field label="Descuento en el bar (%)" help="En Vender, con el botón Socio.">
-              <Input type="number" min="0" max="100" inputMode="numeric" value={b.descuentoBarPct || ""} onChange={(e) => setB({ descuentoBarPct: e.target.value })} placeholder="0" />
-            </Field>
+      <Card>
+        <Card.Row>
+          <Card.Title as="h2" className="m-0">
+            Beneficios por nivel
+          </Card.Title>
+          <Pills items={NIVELES.map((n) => ({ value: n, label: ETIQUETA_NIVEL[n] }))} value={nivel} onChange={setNivel} ariaLabel="Nivel" />
+        </Card.Row>
+        {nivel !== "bronce" && (
+          <div className="mt-2">
+            <Button size="sm" variant="ghost" onClick={() => copiarDe(nivel === "oro" ? "plata" : "bronce")}>
+              Copiar los de {nivel === "oro" ? "Plata" : "Bronce"} para mejorarlos
+            </Button>
           </div>
+        )}
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <Field label="Descuento en la cancha (%)" help="Al reservar desde Padely (no en las reservas que carga el club).">
+            <Input type="number" min="0" max="100" inputMode="numeric" value={b.descuentoCanchaPct || ""} onChange={(e) => setB({ descuentoCanchaPct: e.target.value })} placeholder="0" />
+          </Field>
+          <Field label="Descuento en el bar (%)" help="En Vender, con el botón Pase.">
+            <Input type="number" min="0" max="100" inputMode="numeric" value={b.descuentoBarPct || ""} onChange={(e) => setB({ descuentoBarPct: e.target.value })} placeholder="0" />
+          </Field>
+          <Field label="Descuento en torneos del club (%)" help="En la inscripción online a torneos que organiza el club.">
+            <Input type="number" min="0" max="100" inputMode="numeric" value={b.descuentoTorneoPct || ""} onChange={(e) => setB({ descuentoTorneoPct: e.target.value })} placeholder="0" disabled={b.torneoGratis} />
+          </Field>
+          <Field label="Reservar antes (días extra)" help={`El resto reserva hasta ${club.diasAnticipacion ?? 7} días antes.`}>
+            <Input type="number" min="0" max="60" inputMode="numeric" value={b.diasExtraReserva || ""} onChange={(e) => setB({ diasExtraReserva: e.target.value })} placeholder="0" />
+          </Field>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 body-sm">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={b.torneoGratis === true} onChange={(e) => setB({ torneoGratis: e.target.checked })} />
+            Inscripción gratis a los torneos del club
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={b.sinSeña === true} onChange={(e) => setB({ sinSeña: e.target.checked })} />
+            Reserva sin seña
+          </label>
           {Number(b.descuentoCanchaPct) > 0 && (
-            <label className="flex items-center gap-2 body-sm">
-              <input type="checkbox" checked={conFranja} onChange={(e) => setB({ franja: e.target.checked ? { dias: [1, 2, 3, 4, 5], desde: "08:00", hasta: "17:00" } : null })} />
-              Solo algunos días y horarios (ej.: de mañana entre semana)
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={!!b.franja} onChange={(e) => setB({ franja: e.target.checked ? { dias: [1, 2, 3, 4, 5], desde: "08:00", hasta: "17:00" } : null })} />
+              Descuento de cancha solo algunos días y horarios
             </label>
           )}
-          {conFranja && (
-            <div className="grid gap-3">
-              <Pills
-                multi
-                items={DIAS_SEMANA.map((d, i) => ({ value: i, label: d }))}
-                value={b.franja.dias}
-                onChange={(d) => setB({ franja: { ...b.franja, dias: b.franja.dias.includes(d) ? b.franja.dias.filter((x) => x !== d) : [...b.franja.dias, d].sort() } })}
-                ariaLabel="Días del descuento"
-              />
-              <div className="grid grid-cols-2 gap-4 max-w-sm">
-                <Field label="Desde">
-                  <Select value={b.franja.desde} onChange={(e) => setB({ franja: { ...b.franja, desde: e.target.value } })}>
-                    {HORAS.map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Hasta">
-                  <Select value={b.franja.hasta} onChange={(e) => setB({ franja: { ...b.franja, hasta: e.target.value } })}>
-                    {[...HORAS.slice(1), "23:59"].map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-              </div>
+        </div>
+        {b.franja && (
+          <div className="mt-3 grid gap-3">
+            <Pills
+              multi
+              items={DIAS_SEMANA.map((d, i) => ({ value: i, label: d }))}
+              value={b.franja.dias}
+              onChange={(d) => setB({ franja: { ...b.franja, dias: b.franja.dias.includes(d) ? b.franja.dias.filter((x) => x !== d) : [...b.franja.dias, d].sort() } })}
+              ariaLabel="Días del descuento"
+            />
+            <div className="grid grid-cols-2 gap-4 max-w-sm">
+              <Field label="Desde">
+                <Select value={b.franja.desde} onChange={(e) => setB({ franja: { ...b.franja, desde: e.target.value } })}>
+                  {HORAS.map((h) => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Hasta">
+                <Select value={b.franja.hasta} onChange={(e) => setB({ franja: { ...b.franja, hasta: e.target.value } })}>
+                  {[...HORAS.slice(1), "23:59"].map((h) => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
             </div>
-          )}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Reservar antes (días extra)" help={`El resto reserva hasta ${club.diasAnticipacion ?? 7} días antes.`}>
-              <Input type="number" min="0" max="60" inputMode="numeric" value={b.diasExtraReserva || ""} onChange={(e) => setB({ diasExtraReserva: e.target.value })} placeholder="0" />
-            </Field>
-            <label className="flex items-center gap-2 body-sm self-end pb-3">
-              <input type="checkbox" checked={b.sinSeña === true} onChange={(e) => setB({ sinSeña: e.target.checked })} />
-              Reserva sin seña
-            </label>
           </div>
-        </fieldset>
-
-        <fieldset className="grid gap-3 border border-line rounded-lg p-4 m-0">
-          <legend className="heading-sm px-1">Beneficios del club (los cumplís vos)</legend>
-          <p className="pd-help m-0">Se muestran en el Pase del jugador y cuando escaneás su QR.</p>
+        )}
+        <div className="mt-4 pt-3 border-t border-line grid gap-3">
+          <p className="heading-sm m-0">Beneficios del club ({ETIQUETA_NIVEL[nivel]})</p>
+          <p className="pd-help m-0">Los cumplís vos: se muestran en el Pase del socio y cuando escaneás su QR.</p>
           {b.extras.length > 0 && (
             <ul className="flex flex-wrap gap-2 m-0 p-0 list-none">
               {b.extras.map((t) => (
@@ -569,7 +374,7 @@ function PlanDialog({ club, plan, onCerrar, onListo }) {
             <Input
               value={extra}
               onChange={(e) => setExtra(e.target.value)}
-              placeholder="Ej.: Estacionamiento para socios"
+              placeholder="Ej.: 15 % off en la tienda de un sponsor"
               maxLength={80}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -589,25 +394,24 @@ function PlanDialog({ club, plan, onCerrar, onListo }) {
               </Button>
             ))}
           </div>
-        </fieldset>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Cupo (opcional)" help="Vacío = sin límite. Cuentan los titulares activos y los pedidos.">
-            <Input type="number" min="1" inputMode="numeric" value={form.cupo} onChange={(e) => setForm({ ...form, cupo: e.target.value })} />
-          </Field>
-          <label className="flex items-center gap-2 body-sm self-end pb-3">
-            <input type="checkbox" checked={form.visible !== false} onChange={(e) => setForm({ ...form, visible: e.target.checked })} />
-            Visible en la página del club (los jugadores lo pueden pedir)
-          </label>
         </div>
-        {validacion.error ? (
-          <p className="pd-help m-0">{validacion.error}</p>
-        ) : (
-          <Alert tone="court">
-            <strong>Así lo ve el jugador:</strong> {textosBeneficios(validacion.beneficios).join(" · ")}
-          </Alert>
-        )}
+      </Card>
+
+      {validacion.error ? (
+        <p className="pd-help m-0">{validacion.error}</p>
+      ) : (
+        <Alert tone="court">
+          <strong>
+            Así lo ve el jugador: {formatPrecio(validacion.precio)} {textoCada(validacion.meses)}.
+          </strong>{" "}
+          {NIVELES.map((n) => `${ETIQUETA_NIVEL[n]}: ${textosBeneficios(validacion.beneficios[n]).join(", ") || "—"}`).join(" · ")}
+        </Alert>
+      )}
+      <div>
+        <Button variant="primary" onClick={guardar} cargando={guardando ? "Guardando…" : ""}>
+          {pase ? "Guardar cambios" : "Lanzar el Pase"}
+        </Button>
       </div>
-    </Dialogo>
+    </div>
   );
 }

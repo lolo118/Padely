@@ -1,42 +1,37 @@
-import { Timestamp, collection, collectionGroup, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
+import { collection, collectionGroup, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "../lib/firebase";
-import { hayCupo, normalizarPlan, registrarPagoSocio } from "../utils/membresias";
+import { PASE_ID, normalizarPase } from "../utils/membresias";
 
-// Socios y membresías (P3-16). Planes: clubs/{c}/planesSocio (lectura pública; los escribe quien configura el club).
-// Socios: clubs/{c}/socios/{uid | id propio}. El token del QR y el número de socio los pone la Function
-// onSocioEscrito; la verificación pública vive en sociosPublicos/{token}. Antes del deploy de las reglas todo
-// esto falla sin romper nada: el flag configuracionPadely/flags.membresias lo mantiene oculto.
-
-// Pase familiar y altas por email (P3-16): pasan por Functions (buscan la cuenta de Padely por email)
+// Pase Club (P3-16). La configuración: clubs/{c}/planesSocio/pase (lectura pública; la escribe quien configura).
+// Los socios (clubs/{c}/socios/{uid}) los escriben las Functions: suscripción por Mercado Pago (débito automático),
+// cobros, puntos, nivel y bajas. El jugador y el club solo tocan la postulación al equipo del club.
 const llamar = (nombre) => async (datos) => (await httpsCallable(functions, nombre)(datos)).data;
-export const agregarIntegrante = llamar("agregarIntegrante"); // { clubId, email, titularUid? } → { uid, nombre }
-export const quitarIntegrante = llamar("quitarIntegrante"); // { clubId, uid }
-export const altaPasePorEmail = llamar("altaPasePorEmail"); // { clubId, email, planId, monto, medio } → { uid, nombre }
+const mpSuscribirPase = llamar("mpSuscribirPase"); // { clubId, email } → { initPoint }
+export const cancelarPase = llamar("mpCancelarPase"); // { clubId, uid? }
 
-const planesRef = (clubId) => collection(db, "clubs", clubId, "planesSocio");
 const sociosRef = (clubId) => collection(db, "clubs", clubId, "socios");
-const aTs = (ms) => (ms == null ? null : Timestamp.fromMillis(ms));
-// Las entradas viejas del historial vuelven de Firestore como Timestamp: solo se convierten los números
-const aTsSiNumero = (v) => (typeof v === "number" ? Timestamp.fromMillis(v) : v ?? null);
+const paseRef = (clubId) => doc(db, "clubs", clubId, "planesSocio", PASE_ID);
 
-export const getPlanesSocio = async (clubId, { soloVisibles = false } = {}) => {
-  const snap = await getDocs(planesRef(clubId));
-  const lista = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  return lista.filter((p) => !soloVisibles || p.visible !== false).sort((a, b) => (a.orden || 0) - (b.orden || 0) || (a.precio || 0) - (b.precio || 0));
+export const getPase = async (clubId) => {
+  const snap = await getDoc(paseRef(clubId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 };
 
-// Crea o actualiza un plan → id. Tira Error con el mensaje de validación.
-export const guardarPlanSocio = async (clubId, datos, planId = null) => {
-  const plan = normalizarPlan(datos);
-  if (plan.error) throw new Error(plan.error);
-  if (planId) {
-    await updateDoc(doc(planesRef(clubId), planId), { ...plan, actualizadoEn: serverTimestamp() });
-    return planId;
-  }
-  const ref = doc(planesRef(clubId));
-  await setDoc(ref, { ...plan, creadoEn: serverTimestamp() });
-  return ref.id;
+// Guarda la configuración del Pase. Tira Error con el mensaje de validación.
+export const guardarPase = async (clubId, datos) => {
+  const pase = normalizarPase(datos);
+  if (pase.error) throw new Error(pase.error);
+  await setDoc(paseRef(clubId), { ...pase, actualizadoEn: serverTimestamp() }, { merge: true });
+  return pase;
+};
+
+// Suscribirse: Mercado Pago devuelve el link para autorizar el débito automático
+export const suscribirPase = async ({ clubId, email }) => {
+  const r = await mpSuscribirPase({ clubId, email });
+  if (!r?.initPoint) throw new Error("Mercado Pago no devolvió el link");
+  window.location.assign(r.initPoint);
+  return r;
 };
 
 export const getMiSocio = async (clubId, uid) => {
@@ -49,63 +44,43 @@ export const getMiSocio = async (clubId, uid) => {
   }
 };
 
-// Jugador: pide ser socio con un plan (o vuelve a pedir después de una baja, un rechazo o un vencimiento)
-export const pedirMembresia = async (clubId, plan, { uid, nombre }, existente = null) => {
-  const datos = { planId: plan.id, planNombre: plan.nombre, estado: "pendiente", solicitadoEn: serverTimestamp() };
-  if (existente) await updateDoc(doc(sociosRef(clubId), uid), datos);
-  else await setDoc(doc(sociosRef(clubId), uid), { uid, nombre: String(nombre || "Jugador").slice(0, 80), ...datos });
-};
-
-// Jugador: retira su pedido pendiente
-export const retirarPedido = (clubId, uid) => updateDoc(doc(sociosRef(clubId), uid), { estado: "cancelada", bajaEn: serverTimestamp() });
-
-// Club: todos los socios (pendientes, activos, vencidos…)
 export const getSocios = async (clubId) => {
   const snap = await getDocs(sociosRef(clubId));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
-// Club: socios activos (Vender: descuento de socio)
 export const getSociosActivos = async (clubId) => {
   const snap = await getDocs(query(sociosRef(clubId), where("estado", "==", "activa")));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
-const patchPago = (cambios) => ({
-  ...cambios,
-  desde: aTs(cambios.desde),
-  vence: aTs(cambios.vence),
-  historial: cambios.historial.map((h) => ({ ...h, en: aTsSiNumero(h.en) })),
-  actualizadoEn: serverTimestamp(),
-});
+// Equipo del club (interclubes): el socio se postula; el club marca a quién elige
+export const postularEquipo = (clubId, uid, { quiere, categoria = "", posicion = "" }) =>
+  updateDoc(doc(sociosRef(clubId), uid), { equipo: { quiere: !!quiere, categoria: String(categoria || "").slice(0, 20), posicion: String(posicion || "").slice(0, 20), seleccionado: false, en: serverTimestamp() } });
+export const marcarSeleccionado = (clubId, socio, seleccionado) => updateDoc(doc(sociosRef(clubId), socio.id), { equipo: { ...(socio.equipo || {}), seleccionado: !!seleccionado } });
 
-// Club: aprueba un pedido o renueva → registra el pago (manual) y activa hasta el nuevo vencimiento
-export const registrarPago = async (clubId, socio, plan, opciones = {}) => {
-  const cambios = registrarPagoSocio(socio, plan, opciones);
-  if (cambios.error) throw new Error(cambios.error);
-  await updateDoc(doc(sociosRef(clubId), socio.id), patchPago(cambios));
-  return cambios;
+// Últimos movimientos de puntos del socio
+export const getPuntos = async (clubId, uid, n = 20) => {
+  try {
+    const snap = await getDocs(query(collection(db, "clubs", clubId, "socios", uid, "puntos"), orderBy("en", "desc"), limit(n)));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch {
+    return [];
+  }
 };
 
-export const rechazarPedido = (clubId, socioId, motivo = "") => updateDoc(doc(sociosRef(clubId), socioId), { estado: "rechazada", motivo: String(motivo || "").slice(0, 200), actualizadoEn: serverTimestamp() });
-export const darDeBaja = (clubId, socioId) => updateDoc(doc(sociosRef(clubId), socioId), { estado: "cancelada", bajaEn: serverTimestamp(), actualizadoEn: serverTimestamp() });
-
-export const cupoOcupado = (socios, planId) => socios.filter((s) => s.planId === planId && (s.estado === "activa" || s.estado === "pendiente")).length;
-export const planConCupo = (plan, socios) => hayCupo(plan, cupoOcupado(socios, plan.id));
-
-// Jugador: sus membresías en todos los clubes
+// Jugador: sus Pases en todos los clubes
 export const getMisMembresias = async (uid) => {
   if (!uid) return [];
   try {
     const snap = await getDocs(query(collectionGroup(db, "socios"), where("uid", "==", uid)));
     return snap.docs.map((d) => ({ id: d.id, clubId: d.ref.parent.parent.id, ...d.data() }));
   } catch (err) {
-    console.error("No se pudieron leer las membresías:", err);
+    console.error("No se pudieron leer los Pases:", err);
     return [];
   }
 };
 
-// Verificación pública del QR del carnet
 export const getVerificacionSocio = async (token) => {
   const snap = await getDoc(doc(db, "sociosPublicos", String(token || "x")));
   return snap.exists() ? snap.data() : null;

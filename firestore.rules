@@ -56,18 +56,6 @@ service cloud.firestore {
       return s.get('estado', '') == 'activa' && s.get('vence', request.time) > request.time
         ? s.get('beneficios', {}).get('descuentoBarPct', 0) : 0;
     }
-    // P3-16: lo que el staff le pone a un socio no supera lo que da su plan (el % del bar sube el tope del cajero)
-    function beneficiosDelPlan(clubId) {
-      let pct = request.resource.data.get('beneficios', {}).get('descuentoBarPct', 0);
-      return pct == 0
-        || (request.resource.data.get('planId', null) is string
-            && pct <= get(/databases/$(database)/documents/clubs/$(clubId)/planesSocio/$(request.resource.data.planId)).data
-                         .get('beneficios', {}).get('descuentoBarPct', 0));
-    }
-    function planSocioVisible(clubId, planId) {
-      return planId is string
-        && get(/databases/$(database)/documents/clubs/$(clubId)/planesSocio/$(planId)).data.get('visible', true) == true;
-    }
     function cajaAbierta(clubId, cajaId) {
       return get(/databases/$(database)/documents/clubs/$(clubId)/cajas/$(cajaId)).data.estado == 'abierta';
     }
@@ -249,6 +237,11 @@ service cloud.firestore {
     }
     // P3-16: membresías. Verificación pública del carnet (nombre corto, plan, estado, vence, beneficios); la escribe
     // solo la Function onSocioEscrito. Y "Mis membresías": cada jugador lee las suyas en todos los clubes.
+    // P3-16: comisión de Padely por cada cobro del Pase (se factura a mano)
+    match /comisionesPase/{paymentId} {
+      allow read: if superAdmin();
+      allow write: if false;
+    }
     match /sociosPublicos/{token} {
       allow read: if true;
       allow write: if false;
@@ -771,48 +764,32 @@ service cloud.firestore {
         allow delete: if !reservaDeTorneo() && esStaff(clubId, 'gestionarReservas');
       }
 
-      // Contacto (email/teléfono) de quien reservó, con el id de la reserva: lo lee solo el club. Lo escribe
-      // el club, o el jugador en la misma transacción que crea su reserva (getAfter ve la reserva tal como queda).
-      // P3-16: planes de socio del club (lectura pública; los arma quien configura el club, plan PRO)
+      // P3-16: el Pase Club (planesSocio/pase): lectura pública; lo configura quien configura el club (plan PRO)
       match /planesSocio/{planId} {
         allow read: if true;
-        allow write: if esStaff(clubId, 'configurarClub') && planPro(clubId);
+        allow write: if planId == 'pase' && esStaff(clubId, 'configurarClub') && planPro(clubId);
       }
-      // P3-16: socios. Los ve el staff que reserva o vende (descuento en el bar) y el propio jugador. El jugador solo
-      // pide (pendiente, con un plan visible), retira su pedido o vuelve a pedir; activar, renovar, rechazar y dar de
-      // baja es del club. token y numero los pone la Function onSocioEscrito.
+      // P3-16: socios del Pase. Los ve el staff que reserva o vende (descuento en el bar) y el propio jugador. Estado,
+      // puntos, nivel, beneficios y fechas los escriben SOLO las Functions (se paga por Mercado Pago). El jugador y el
+      // club solo tocan la postulación al equipo del club (equipo; "seleccionado" lo marca solo el club).
       match /socios/{socioId} {
         allow read: if esStaff(clubId, 'gestionarReservas') || esStaff(clubId, 'vender') || superAdmin()
           || (signedIn() && resource.data.get('uid', null) == request.auth.uid);
-        allow create: if (esStaff(clubId, 'gestionarReservas') && planPro(clubId)
-              && !request.resource.data.keys().hasAny(['token', 'numero', 'telefono', 'email'])
-              && beneficiosDelPlan(clubId))
-          || (noAnonimo() && socioId == request.auth.uid
-              && request.resource.data.uid == request.auth.uid
-              && request.resource.data.estado == 'pendiente'
-              && request.resource.data.keys().hasOnly(['uid', 'nombre', 'planId', 'planNombre', 'estado', 'solicitadoEn'])
-              && planSocioVisible(clubId, request.resource.data.planId)
-              && planPro(clubId) && clubActivo(clubId));
-        allow update: if (esStaff(clubId, 'gestionarReservas')
-              && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['token', 'numero', 'uid', 'telefono', 'email'])
-              && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['beneficios', 'planId']) || beneficiosDelPlan(clubId)))
-          || (noAnonimo() && resource.data.get('uid', null) == request.auth.uid
-              && ((resource.data.estado == 'pendiente' && request.resource.data.estado == 'cancelada'
-                   && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'bajaEn']))
-                  || ((resource.data.estado in ['cancelada', 'rechazada', 'vencida']
-                       || (resource.data.estado == 'activa' && resource.data.get('vence', request.time) < request.time))
-                      && request.resource.data.estado == 'pendiente'
-                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['planId', 'planNombre', 'estado', 'solicitadoEn'])
-                      && planSocioVisible(clubId, request.resource.data.planId)
-                      && planPro(clubId))));
-        allow delete: if false;
+        allow create, delete: if false;
+        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['equipo'])
+          && request.resource.data.equipo is map
+          && ((noAnonimo() && resource.data.get('uid', null) == request.auth.uid
+               && request.resource.data.equipo.get('seleccionado', false) == resource.data.get('equipo', {}).get('seleccionado', false))
+              || esStaff(clubId, 'gestionarReservas'));
+        match /puntos/{movId} {
+          allow read: if esStaff(clubId, 'gestionarReservas')
+            || (signedIn() && get(/databases/$(database)/documents/clubs/$(clubId)/socios/$(socioId)).data.get('uid', null) == request.auth.uid);
+          allow write: if false;
+        }
       }
 
-      // P3-16: teléfono y email de los socios cargados a mano (no los ve el cajero)
-      match /contactosSocios/{socioId} {
-        allow read, write: if esStaff(clubId, 'gestionarReservas');
-      }
-
+      // Contacto (email/teléfono) de quien reservó, con el id de la reserva: lo lee solo el club. Lo escribe
+      // el club, o el jugador en la misma transacción que crea su reserva (getAfter ve la reserva tal como queda).
       match /contactosReservas/{reservaId} {
         allow read, delete: if esStaff(clubId, 'gestionarReservas');
         allow read: if superAdmin();

@@ -159,8 +159,8 @@ function DatosPagoCard() {
   const [guardando, setGuardando] = useState(false);
   useEffect(() => {
     getDatosFacturacion()
-      .then((d) => setDatos({ alias: "", cbu: "", titular: "", nota: "", ...d, comisionTorneosPct: d.comisionTorneosPct !== undefined ? String(d.comisionTorneosPct) : "0" }))
-      .catch(() => setDatos({ alias: "", cbu: "", titular: "", nota: "", comisionTorneosPct: "0" }));
+      .then((d) => setDatos({ alias: "", cbu: "", titular: "", nota: "", ...d, comisionTorneosPct: d.comisionTorneosPct !== undefined ? String(d.comisionTorneosPct) : "0", comisionPasesPct: d.comisionPasesPct !== undefined ? String(d.comisionPasesPct) : "0" }))
+      .catch(() => setDatos({ alias: "", cbu: "", titular: "", nota: "", comisionTorneosPct: "0", comisionPasesPct: "0" }));
   }, []);
   if (!datos) return <div className="pd-skeleton h-40 rounded-lg" aria-busy="true" aria-label="Cargando" />;
   const campo = (k) => ({ value: datos[k] || "", onChange: (e) => setDatos((d) => ({ ...d, [k]: e.target.value })) });
@@ -169,7 +169,8 @@ function DatosPagoCard() {
     setGuardando(true);
     try {
       const pct = Math.min(10, Math.max(0, Number(String(datos.comisionTorneosPct).replace(",", ".")) || 0));
-      await guardarDatosFacturacion({ alias: datos.alias.trim(), cbu: datos.cbu.trim(), titular: datos.titular.trim(), nota: datos.nota.trim(), comisionTorneosPct: pct });
+      const pctPases = Math.min(30, Math.max(0, Number(String(datos.comisionPasesPct).replace(",", ".")) || 0));
+      await guardarDatosFacturacion({ alias: datos.alias.trim(), cbu: datos.cbu.trim(), titular: datos.titular.trim(), nota: datos.nota.trim(), comisionTorneosPct: pct, comisionPasesPct: pctPases });
       toast.success("Datos de pago guardados");
     } catch (err) {
       console.error("Error guardando los datos de pago:", err);
@@ -197,6 +198,9 @@ function DatosPagoCard() {
         </Field>
         <Field label="Comisión sobre inscripciones online (%)" help="P3-14: se descuenta de cada inscripción pagada por Mercado Pago (0 a 10).">
           <Input {...campo("comisionTorneosPct")} type="number" min="0" max="10" step="0.5" inputMode="decimal" className="pd-tnum" />
+        </Field>
+        <Field label="Comisión sobre el Pase Club (%)" help="P3-16: se anota en cada cobro del Pase (débito automático; la plata va al club) y se factura a mano con el plan (0 a 30).">
+          <Input {...campo("comisionPasesPct")} type="number" min="0" max="30" step="0.5" inputMode="decimal" className="pd-tnum" />
         </Field>
       </div>
       <div className="mt-4">

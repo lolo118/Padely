@@ -21,7 +21,7 @@ import PartidosAbiertos from "../components/PartidosAbiertos";
 import useTituloPagina from "../hooks/useTituloPagina";
 import { getCreditoEnClub } from "../services/creditosService";
 import { cargarFlags } from "../services/flagsService";
-import { getMiSocio, getPlanesSocio } from "../services/membresiasService";
+import { getMiSocio, getPase } from "../services/membresiasService";
 import { beneficiosVigentes, diasAnticipacionCon, preciosConSocio, señaConSocio } from "../utils/membresias";
 import SociosClub from "../components/SociosClub";
 import { formatFecha, getTodayLocal, addDaysLocal, horaActualStr } from "../utils/formatDate";
@@ -180,7 +180,7 @@ function ListaCanchas({ canchas }) {
 
 export default function ClubPublico() {
   const { id } = useParams();
-  const { user, perfil } = useAuthStore();
+  const { user } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [club, setClub] = useState(null);
@@ -194,24 +194,23 @@ export default function ClubPublico() {
       vivo = false;
     };
   }, [user?.uid, club?.id]);
-  // P3-16: planes de socio del club y la membresía del jugador (oculto hasta flags.membresias)
-  const [planesSocio, setPlanesSocio] = useState([]);
+  // P3-16: el Pase Club y el del jugador (oculto hasta flags.membresias)
+  const [pase, setPase] = useState(null);
   const [miSocio, setMiSocio] = useState(null);
-  const [versionSocio, setVersionSocio] = useState(0);
   useEffect(() => {
     let vivo = true;
     if (!club?.id) return undefined;
     cargarFlags().then((f) => {
       if (!vivo || f?.membresias !== true) return;
-      getPlanesSocio(club.id, { soloVisibles: true })
-        .then((l) => vivo && setPlanesSocio(l))
+      getPase(club.id)
+        .then((p) => vivo && setPase(p && p.visible !== false ? p : null))
         .catch(() => {});
       if (user?.uid && !user.isAnonymous) getMiSocio(club.id, user.uid).then((m) => vivo && setMiSocio(m));
     });
     return () => {
       vivo = false;
     };
-  }, [club?.id, user?.uid, user?.isAnonymous, versionSocio]);
+  }, [club?.id, user?.uid, user?.isAnonymous]);
   const beneficiosSocio = beneficiosVigentes(miSocio);
   const diasExtraSocio = beneficiosSocio ? Number(beneficiosSocio.diasExtraReserva) || 0 : 0;
   const [canchas, setCanchas] = useState([]);
@@ -619,7 +618,7 @@ export default function ClubPublico() {
     { value: "canchas", label: "Canchas" },
     { value: "torneos", label: "Torneos", count: torneosClub ? torneosVisibles.length : 0 },
     { value: "info", label: "Info" },
-    ...(planesSocio.length ? [{ value: "socios", label: "Pase" }] : []),
+    ...(pase ? [{ value: "socios", label: "Pase" }] : []),
     { value: "reviews", label: "Reviews", count: reviews.length },
   ];
 
@@ -879,8 +878,8 @@ export default function ClubPublico() {
       )}
 
       {/* Tab: Info */}
-      {tab === "socios" && planesSocio.length > 0 && (
-        <SociosClub club={club} planes={planesSocio} miSocio={miSocio} user={user} perfil={perfil} onCambio={() => setVersionSocio((v) => v + 1)} />
+      {tab === "socios" && pase && (
+        <SociosClub club={club} pase={pase} miSocio={miSocio} user={user} />
       )}
 
       {tab === "info" && (

@@ -455,6 +455,13 @@ export default function DetalleTorneoPublico() {
     setPagandoInscripcion(true);
     try {
       const r = await mpPagarInscripcion({ torneoId: id, inscripcionId: miInscripcion.id });
+      // P3-16: con el Pase Club (Oro) la inscripción a un torneo del club es gratis: queda pagada sin Mercado Pago
+      if (r?.gratis) {
+        toast.success("Listo: tu inscripción es gratis con tu Pase Club");
+        setPagandoInscripcion(false);
+        window.location.reload();
+        return;
+      }
       if (!r?.initPoint) throw new Error("Mercado Pago no devolvió el link de pago");
       window.location.assign(r.initPoint);
     } catch (err) {

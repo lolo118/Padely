@@ -2558,7 +2558,7 @@ async function avisarStaff(clubRef, permisos, datos) {
 // Una preferencia pendiente y vigente para el mismo destino (mismos participantes / misma reserva) se reutiliza
 async function pagoMpPendiente(clubRef, filtro) {
   let q = clubRef.collection("pagosMp").where("estado", "==", "pendiente");
-  q = filtro.membresiaDe ? q.where("membresiaDe", "==", filtro.membresiaDe) : filtro.grupoId ? q.where("grupoId", "==", filtro.grupoId) : q.where("reservaId", "==", filtro.reservaId);
+  q = filtro.grupoId ? q.where("grupoId", "==", filtro.grupoId) : q.where("reservaId", "==", filtro.reservaId);
   const snap = await q.get();
   const ahora = Date.now();
   return (
@@ -2574,7 +2574,7 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
   const d = request.data || {};
   const clubId = texto(d.clubId, 80);
   const tipo = texto(d.tipo, 20);
-  if (!clubId || !["parte", "seña", "mostrador", "membresia"].includes(tipo)) throw new HttpsError("invalid-argument", "clubId y tipo (parte | seña | mostrador | membresia)");
+  if (!clubId || !["parte", "seña", "mostrador"].includes(tipo)) throw new HttpsError("invalid-argument", "clubId y tipo (parte | seña | mostrador)");
   const clubRef = db.collection("clubs").doc(clubId);
   const clubSnap = await clubRef.get();
   if (!clubSnap.exists) throw new HttpsError("not-found", "El club no existe");
@@ -2587,29 +2587,7 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
   const comisionPct = (await planesUtil()).comisionPct(club);
 
   let destino; // { monto, titulo, backUrl, pagador, participanteIds, lineas, piezas, grupoId, reservaId, filtro }
-  if (tipo === "membresia") {
-    // P3-16: pagar el alta o la renovación de una membresía; al aprobarse queda activa (sin aprobación del club)
-    if (anonimo) throw new HttpsError("permission-denied", "Entrá con tu cuenta de Padely");
-    const planId = texto(d.planId, 80);
-    if (!planId) throw new HttpsError("invalid-argument", "planId");
-    if (!(await planesUtil()).estadoPlan(club).pro) throw new HttpsError("failed-precondition", "El club no tiene membresías habilitadas");
-    const [planSnap, socioSnap] = await Promise.all([clubRef.collection("planesSocio").doc(planId).get(), clubRef.collection("socios").doc(uid).get()]);
-    if (!planSnap.exists || planSnap.data().visible === false) throw new HttpsError("not-found", "Ese plan ya no está disponible");
-    const plan = planSnap.data();
-    const socio = socioSnap.exists ? socioSnap.data() : null;
-    const M = await membresiasUtil();
-    if (socio && socio.titularId && M.estadoSocio({ ...socio, vence: msDe(socio.vence) }).activa) throw new HttpsError("failed-precondition", `Ya estás en el Pase de ${socio.titularNombre || "otra persona"}: lo renueva el titular`);
-    const yaEsDelPlan = socio && M.estadoSocio({ ...socio, vence: msDe(socio.vence) }).activa && socio.planId === planId;
-    if (plan.cupo != null && !yaEsDelPlan) {
-      const ocupados = await clubRef.collection("socios").where("planId", "==", planId).where("estado", "in", ["activa", "pendiente"]).count().get();
-      const propio = socio && socio.planId === planId && ["activa", "pendiente"].includes(socio.estado) ? 1 : 0;
-      if (ocupados.data().count - propio >= plan.cupo) throw new HttpsError("failed-precondition", "Este plan no tiene más cupo");
-    }
-    const monto = Math.round(Number(plan.precio) || 0);
-    if (monto <= 0) throw new HttpsError("failed-precondition", "Este plan no se paga online: pedilo y el club te confirma");
-    const nombre = await nombreDeUsuario(uid, "Jugador");
-    destino = { monto, titulo: `${club.nombre || "Club"} · ${plan.nombre} (${M.etiquetaPeriodo(plan.periodo).toLowerCase()})`, backUrl: `${APP_URL}/membresias`, pagador: { uid, nombre }, participanteIds: [], lineas: [], piezas: [], grupoId: null, reservaId: null, planId, membresiaDe: `${uid}_${planId}`, filtro: { membresiaDe: `${uid}_${planId}`, monto, participanteIds: [] } };
-  } else if (tipo === "seña") {
+  if (tipo === "seña") {
     if (anonimo) throw new HttpsError("permission-denied", "Entrá con tu cuenta de Padely");
     const reservaId = texto(d.reservaId, 120);
     if (!reservaId) throw new HttpsError("invalid-argument", "reservaId");
@@ -2729,8 +2707,6 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
     initPoint,
     linkCorto,
     pedido: destino.pedido || null,
-    planId: destino.planId || null,
-    membresiaDe: destino.membresiaDe || null,
     sandboxInitPoint: r.sandbox_init_point || null,
     paymentId: null,
     pagador: destino.pagador,
@@ -2776,7 +2752,6 @@ exports.mpIr = onRequest({ region: REGION }, async (req, res) => {
 // cierra si ya nadie debe. Idempotente por paymentId.
 async function aplicarPagoAprobado(clubRef, pagoMpRef, pago) {
   const util = await cuentasUtil();
-  const M = await membresiasUtil();
   const clubSnap = await clubRef.get();
   const club = clubSnap.exists ? clubSnap.data() : {};
   const paymentId = String(pago.id);
@@ -2797,30 +2772,6 @@ async function aplicarPagoAprobado(clubRef, pagoMpRef, pago) {
       if (cSnap && cSnap.exists) tx.update(cuentaRef, { alertas: FieldValue.arrayUnion("mp-excedente"), actualizadoEn: FieldValue.serverTimestamp() });
       tx.update(pagoMpRef, { estado: "aprobado", paymentId, aprobadoEn: FieldValue.serverTimestamp(), ventaNumero: null, montoPagado, montoAplicado: 0, excedente: montoPagado, excedenteDevuelto: null, pagoTardio: true, estadoMp: pago.status, actualizadoEn: FieldValue.serverTimestamp() });
       return { resultado: decision.resultado, pm, excedente: montoPagado, tardio: true };
-    }
-    if (pm.tipo === "membresia") {
-      // P3-16: alta o renovación pagada → la membresía queda activa (desde hoy, o desde su vencimiento si sigue vigente)
-      const socioRef = clubRef.collection("socios").doc(pm.pagador.uid);
-      const [sSnap, pSnap] = await Promise.all([tx.get(socioRef), tx.get(clubRef.collection("planesSocio").doc(pm.planId))]);
-      const plan = pSnap.exists ? { id: pSnap.id, ...pSnap.data() } : { id: pm.planId, nombre: "Membresía", periodo: "mensual", beneficios: {} };
-      const previo = sSnap.exists ? sSnap.data() : null;
-      const socio = previo ? { ...previo, desde: msDe(previo.desde), vence: msDe(previo.vence) } : { historial: [] };
-      const c = M.registrarPagoSocio(socio, plan, { ahora: Date.now(), monto: montoPagado, medio: "mercadopago", por: pm.pagador.uid, porNombre: "Mercado Pago" });
-      tx.set(
-        socioRef,
-        {
-          ...(previo ? {} : { uid: pm.pagador.uid, nombre: pm.pagador.nombre || "Jugador", creadoEn: FieldValue.serverTimestamp() }),
-          ...c,
-          desde: Timestamp.fromMillis(c.desde),
-          vence: Timestamp.fromMillis(c.vence),
-          historial: c.historial.map((h, i) => ({ ...h, en: typeof h.en === "number" ? Timestamp.fromMillis(h.en) : h.en, ...(i === c.historial.length - 1 ? { pagoMpId: pagoMpRef.id } : {}) })),
-          ultimoPagoMpId: pagoMpRef.id,
-          actualizadoEn: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-      tx.update(pagoMpRef, { estado: "aprobado", paymentId, aprobadoEn: FieldValue.serverTimestamp(), montoPagado, montoAplicado: montoPagado, excedente: 0, estadoMp: pago.status, actualizadoEn: FieldValue.serverTimestamp() });
-      return { resultado: "membresía aplicada", pm, renovacion: !!(previo && previo.estado === "activa") };
     }
     if (pm.tipo === "seña") {
       const cabezaRef = clubRef.collection("reservas").doc(pm.reservaId);
@@ -2978,12 +2929,6 @@ async function aplicarPagoLeido(clubRef, pago) {
       }
       return `pago ${paymentId}: ${r.resultado}`;
     }
-    if (r.resultado === "membresía aplicada") {
-      const quien = (r.pm.pagador && r.pm.pagador.nombre) || "Un jugador";
-      const monto = Math.round(Number(pago.transaction_amount) || r.pm.monto).toLocaleString("es-AR");
-      await avisarStaff(clubRef, ["gestionarReservas"], { tipo: "socio_pago_mp", titulo: r.renovacion ? "Pase renovado por Mercado Pago" : "Nuevo Pase por Mercado Pago", mensaje: `${quien} pagó $ ${monto} por Mercado Pago: su Pase quedó activo.`, link: "/admin/socios", icono: "🪪" }).catch((err) => logger.error(`mpWebhook ${clubId}/${pagoMpId}: aviso de membresía`, err));
-      return `pago ${paymentId}: ${r.resultado}`;
-    }
     if (r.resultado !== "aplicado" && r.resultado !== "seña aplicada") return `pago ${paymentId}: ${r.resultado}`;
     const pm = r.pm;
     const club = (await clubRef.get()).data() || {};
@@ -3075,6 +3020,36 @@ exports.mpWebhook = onRequest({ region: REGION, secrets: [MP_WEBHOOK_SECRET, MP_
       res.status(200).send(r.resultado);
     } catch (err) {
       logger.error(`mpWebhook org ${organizerId}: ${err.message || err}`);
+      res.status(500).send("error");
+    }
+    return;
+  }
+  // P3-16: notificaciones de la suscripción del Pase. Sin ?club=, el club sale del índice (preapproval) o de la
+  // cuenta de MP que cobró (user_id → clubs/{c}/privado/mpCuenta)
+  if (String(datos.tipo || "").startsWith("subscription")) {
+    try {
+      let cId = clubId;
+      if (!cId && datos.tipo === "subscription_preapproval" && datos.dataId) {
+        const idx = await db.collection("suscripcionesPaseIndice").doc(String(datos.dataId)).get();
+        cId = idx.exists ? idx.data().clubId : null;
+      }
+      const userId = req.body && req.body.user_id;
+      if (!cId && userId) {
+        const q = await db.collectionGroup("privado").where("userId", "in", [Number(userId), String(userId)]).limit(5).get();
+        const doc = q.docs.find((d) => d.id === "mpCuenta" && d.ref.parent.parent && d.ref.parent.parent.parent.id === "clubs");
+        cId = doc ? doc.ref.parent.parent.id : null;
+      }
+      if (!cId) {
+        logger.warn(`mpWebhook pase: club desconocido · ${datos.tipo} ${datos.dataId || "?"}`);
+        res.status(200).send("sin club");
+        return;
+      }
+      const cRef = db.collection("clubs").doc(cId);
+      const r = await procesarNotificacionPase(cRef, datos.tipo, datos.dataId, await tokensDelClub(cRef));
+      logger.info(`mpWebhook pase ${cId}: firma ${firmaTxt} · ${datos.tipo} ${datos.dataId || "?"} → ${r}`);
+      res.status(200).send("ok");
+    } catch (err) {
+      logger.error(`mpWebhook pase: ${err.message || err}`);
       res.status(500).send("error");
     }
     return;
@@ -3668,6 +3643,25 @@ exports.mpPagarInscripcion = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET
   if (!torneo.inscripcionOnline || !(Number(torneo.inscripcion) > 0)) throw new HttpsError("failed-precondition", "Este torneo no cobra la inscripción online");
   if (insc.status === "rechazada") throw new HttpsError("failed-precondition", "La inscripción fue rechazada");
   if (insc.pago && insc.pago.estado === "pagado") throw new HttpsError("failed-precondition", "La inscripción ya está pagada");
+  // P3-16: torneo que organiza el club → el Pase de quien paga descuenta la inscripción (o la hace gratis)
+  let montoPase = null;
+  const clubTorneoId = torneo.club && torneo.club.id;
+  if (clubTorneoId) {
+    const cRef = db.collection("clubs").doc(clubTorneoId);
+    const [cSnap, sSnap] = await Promise.all([cRef.get(), cRef.collection("socios").doc(uid).get()]);
+    if (cSnap.exists && cSnap.data().ownerUid === torneo.organizerId && sSnap.exists) {
+      const M = await membresiasUtil();
+      const ben = M.beneficiosVigentes(socioPlano(sSnap.data()));
+      if (ben) {
+        montoPase = M.inscripcionConPase(Number(torneo.inscripcion), ben);
+        if (montoPase <= 0) {
+          await torneoRef.collection("inscripciones").doc(inscripcionId).update({ pago: { estado: "pagado", medio: "pase", monto: 0, porUid: uid, en: FieldValue.serverTimestamp() } });
+          logger.info(`mpPagarInscripcion ${torneoId}/${inscripcionId}: gratis con el Pase (${uid})`);
+          return { gratis: true, monto: 0 };
+        }
+      }
+    }
+  }
   const orgSnap = await db.collection("organizers").where("ownerUid", "==", torneo.organizerId).limit(1).get();
   if (orgSnap.empty) throw new HttpsError("failed-precondition", "El organizador no tiene Mercado Pago conectado");
   const orgRef = orgSnap.docs[0].ref;
@@ -3675,7 +3669,7 @@ exports.mpPagarInscripcion = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET
   if (!tokens || !tokens.accessToken) throw new HttpsError("failed-precondition", "El organizador no tiene Mercado Pago conectado");
   const facturacion = (await db.collection("configuracionPadely").doc("facturacion").get()).data() || {};
   const comision = mp.comisionTorneos(facturacion);
-  const monto = Number(torneo.inscripcion);
+  const monto = montoPase !== null ? montoPase : Number(torneo.inscripcion);
   const pagoRef = torneoRef.collection("pagosInscripcion").doc();
   const nombre = await nombreDeUsuario(uid, "");
   const pref = mp.cuerpoPreferencia({
@@ -3736,6 +3730,11 @@ async function aplicarPagoInscripcionLeido(orgRef, pago) {
       const r = await devolverPagoMp(orgRef, paymentId, { idempotencia: `insc_dup_${pagoId}` });
       await pagoRef.set({ devolucion: { ...mp.devolucionDe(r, { monto: Number(pago.transaction_amount) || 0 }), en: Timestamp.now() }, ...(r.ok ? { estado: "devuelto" } : {}) }, { merge: true });
       logger.warn(`inscripción: pago duplicado ${paymentId} → devolución ${r.ok ? "ok" : `falló (${r.error})`}`);
+    }
+    if (resultado === "aplicado") {
+      const [tSnap2, pSnap2] = await Promise.all([torneoRef.get(), pagoRef.get()]);
+      const iSnap2 = pSnap2.exists ? await torneoRef.collection("inscripciones").doc(pSnap2.data().inscripcionId).get() : null;
+      if (tSnap2.exists && iSnap2 && iSnap2.exists) await puntosInscripcionPase(tSnap2.data(), iSnap2.data(), Number(pago.transaction_amount) || 0, `insc_${iSnap2.id}`).catch(() => {});
     }
     return `pago ${paymentId}: ${resultado}`;
   }
@@ -3908,15 +3907,26 @@ exports.partidosAbiertosVencidos = onSchedule({ schedule: "every 60 minutes", ti
 
 
 // ============================================================================
-// SOCIOS Y MEMBRESÍAS (P3-16): cada club arma sus planes (clubs/{c}/planesSocio) con beneficios que aplica Padely
-// (descuento en la cancha y el bar, sin seña, reservar antes) y extras de texto libre (estacionamiento, lugar en
-// exhibiciones…). clubs/{c}/socios/{id}: el jugador pide, el club aprueba y cobra (a mano en esta versión).
-// onSocioEscrito pone el token del QR y el número de socio, publica sociosPublicos/{token} y avisa; el barrido diario
-// marca vencidas y avisa 5 días antes. Lógica en src/utils/membresias.js (copiada a functions/lib/membresias.mjs).
+// PASE CLUB (P3-16): la membresía de cada club. Un solo Pase por club (clubs/{c}/planesSocio/pase): precio, cada
+// cuántos meses se cobra, umbrales de puntos y beneficios por nivel (Bronce / Plata / Oro). Se paga SOLO por Mercado
+// Pago con débito automático (suscripción /preapproval con el token del club: la plata va al club). Cada cobro
+// aprobado activa o extiende el Pase y anota la comisión de Padely (comisionesPase/{paymentId}, se factura a mano).
+// Puntos: 1 cada $ 1.000 en el club (reservas jugadas, bar con el Pase, torneos que organiza el club), solo con el
+// Pase activo; el nivel y sus beneficios se recalculan solos. Baja: beneficios afuera ya, puntos 90 días.
+// clubs/{c}/socios/{uid}; lógica en src/utils/membresias.js (copiada a functions/lib/membresias.mjs).
 // ============================================================================
 let membresiasUtilPromesa = null;
 const membresiasUtil = () => (membresiasUtilPromesa ||= import("./lib/membresias.mjs"));
 const msDe = (v) => (v == null ? null : typeof v.toMillis === "function" ? v.toMillis() : Number(v));
+const paseRef = (clubRef) => clubRef.collection("planesSocio").doc("pase");
+const aTsCampos = (c) => ({
+  ...c,
+  ...(c.desde !== undefined ? { desde: c.desde == null ? null : Timestamp.fromMillis(c.desde) } : {}),
+  ...(c.vence !== undefined ? { vence: c.vence == null ? null : Timestamp.fromMillis(c.vence) } : {}),
+  ...(c.puntosResetEn !== undefined ? { puntosResetEn: c.puntosResetEn == null ? null : Timestamp.fromMillis(c.puntosResetEn) } : {}),
+  ...(Array.isArray(c.historial) ? { historial: c.historial.map((h) => ({ ...h, en: typeof h.en === "number" ? Timestamp.fromMillis(h.en) : h.en })) } : {}),
+});
+const socioPlano = (d) => (d ? { ...d, desde: msDe(d.desde), vence: msDe(d.vence), puntosResetEn: msDe(d.puntosResetEn) } : null);
 
 exports.onSocioEscrito = onDocumentWritten("clubs/{clubId}/socios/{socioId}", async (event) => {
   const { clubId, socioId } = event.params;
@@ -3928,8 +3938,8 @@ exports.onSocioEscrito = onDocumentWritten("clubs/{clubId}/socios/{socioId}", as
   }
   const ref = event.data.after.ref;
   const clubRef = db.collection("clubs").doc(clubId);
-  // 1) Token del QR y nombre del club (una vez) y número de socio (al activarse por primera vez). Esa escritura
-  //    vuelve a disparar el trigger (sin cambio de estado: no repite avisos) y ahí se publica la verificación.
+  // 1) Token del QR y nombre del club (una vez) y número (al activarse por primera vez). Esa escritura vuelve a
+  //    disparar el trigger (sin cambio de estado: no repite avisos) y ahí se publica la verificación.
   if (!despues.token || !despues.clubNombre || (despues.estado === "activa" && !despues.numero)) {
     const clubSnap = await clubRef.get();
     await db.runTransaction(async (tx) => {
@@ -3953,164 +3963,242 @@ exports.onSocioEscrito = onDocumentWritten("clubs/{clubId}/socios/{socioId}", as
   }
   const M = await membresiasUtil();
   const club = (await clubRef.get()).data() || {};
-  // 2) Verificación pública del carnet (cuando ya hay token: si recién se creó, la escribe el próximo disparo)
+  // 2) Verificación pública del QR
   if (despues.token) await db.collection("sociosPublicos").doc(despues.token).set({ ...M.verificacionPublica(clubId, club, { ...despues, vence: msDe(despues.vence) }), actualizadoEn: FieldValue.serverTimestamp() });
-  // 3) Avisos según el cambio de estado
+  // 3) Avisos
   const estAntes = antes ? antes.estado : null;
   const estDespues = despues.estado;
   const nombreClub = club.nombre || "el club";
-  if (estDespues === "pendiente" && estAntes !== "pendiente" && club.ownerUid) {
-    await avisoA(club.ownerUid, { tipo: "socio_pedido", titulo: "Nuevo pedido de Pase", mensaje: `${despues.nombre || "Un jugador"} pidió el Pase ${despues.planNombre || ""}.`, link: "/admin/socios", icono: "🪪" }).catch(() => {});
-  }
+  const pase = M.nombrePase(club);
   if (despues.uid) {
     const venceTxt = despues.vence ? fechaCortaArgentina(new Date(msDe(despues.vence) - 3 * 3600 * 1000).toISOString().slice(0, 10)) : "";
     if (estDespues === "activa" && estAntes !== "activa") {
-      await avisoA(despues.uid, { tipo: "socio_activo", titulo: `Ya tenés tu Pase en ${nombreClub}`, mensaje: despues.titularId ? `${despues.titularNombre || "El titular"} te sumó a su Pase ${despues.planNombre || ""}, activo hasta el ${venceTxt}. Está en Mis pases.` : `${despues.planNombre || "Tu Pase"} activo hasta el ${venceTxt}. Tu QR está en Mis pases.`, link: "/membresias", icono: "🪪" }).catch(() => {});
+      await avisoA(despues.uid, { tipo: "socio_activo", titulo: `Ya tenés tu ${pase}`, mensaje: `Sos ${M.ETIQUETA_NIVEL[despues.nivel || "bronce"]} hasta el ${venceTxt}: sumá puntos jugando y consumiendo en el club para subir de nivel. Tu QR está en Mis pases.`, link: "/membresias", icono: "🪪" }).catch(() => {});
+      if (club.ownerUid) await avisoA(club.ownerUid, { tipo: "socio_nuevo", titulo: `Nuevo ${pase}`, mensaje: `${despues.nombre || "Un jugador"} se sumó al Pase del club.`, link: "/admin/socios", icono: "🪪" }).catch(() => {});
     } else if (estDespues === "activa" && antes && msDe(despues.vence) > msDe(antes.vence)) {
-      await avisoA(despues.uid, { tipo: "socio_renovado", titulo: "Pase renovado", mensaje: `Tu Pase en ${nombreClub} sigue activo hasta el ${venceTxt}.`, link: "/membresias", icono: "🪪" }).catch(() => {});
-    } else if (estDespues === "rechazada" && estAntes === "pendiente") {
-      await avisoA(despues.uid, { tipo: "socio_rechazado", titulo: "Pedido de Pase no aceptado", mensaje: `${nombreClub} no aceptó tu pedido${despues.motivo ? `: ${despues.motivo}` : "."}`, link: `/club/${clubId}`, icono: "🪪" }).catch(() => {});
+      await avisoA(despues.uid, { tipo: "socio_renovado", titulo: "Pase renovado", mensaje: `Se cobró tu ${pase}: sigue activo hasta el ${venceTxt}.`, link: "/membresias", icono: "🪪" }).catch(() => {});
+    } else if (estDespues === "activa" && antes && antes.nivel && despues.nivel && M.NIVELES.indexOf(despues.nivel) > M.NIVELES.indexOf(antes.nivel)) {
+      await avisoA(despues.uid, { tipo: "socio_nivel", titulo: `¡Subiste a ${M.ETIQUETA_NIVEL[despues.nivel]}!`, mensaje: `Con ${despues.puntos} puntos ya sos ${M.ETIQUETA_NIVEL[despues.nivel]} en ${nombreClub}: mirá tus nuevos beneficios.`, link: "/membresias", icono: "🏅" }).catch(() => {});
     } else if (estDespues === "cancelada" && estAntes === "activa") {
-      await avisoA(despues.uid, { tipo: "socio_baja", titulo: "Pase dado de baja", mensaje: despues.titularId ? `Ya no estás en el Pase de ${despues.titularNombre || "tu grupo"} en ${nombreClub}.` : `${nombreClub} dio de baja tu Pase.`, link: `/club/${clubId}`, icono: "🪪" }).catch(() => {});
+      await avisoA(despues.uid, { tipo: "socio_baja", titulo: "Pase dado de baja", mensaje: `Tu ${pase} se dio de baja y los beneficios terminan hoy. Tus puntos y tu nivel se guardan 90 días por si volvés.`, link: `/club/${clubId}`, icono: "🪪" }).catch(() => {});
     }
-  }
-  // 4) Pase familiar: los integrantes copian estado, plan, beneficios y fechas del titular
-  const familia = Array.isArray(despues.familia) ? despues.familia : [];
-  const cambio = !antes || antes.estado !== despues.estado || msDe(antes.vence) !== msDe(despues.vence) || antes.planId !== despues.planId || JSON.stringify(antes.beneficios || null) !== JSON.stringify(despues.beneficios || null);
-  if (familia.length && cambio && !despues.titularId) {
-    const copia = M.copiaParaIntegrante({ ...despues, uid: despues.uid });
-    await escribirEnLotes(familia.filter((f) => f && f.uid).map((f) => (b) => b.set(clubRef.collection("socios").doc(f.uid), { ...copia, desde: despues.desde || null, vence: despues.vence || null, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true })));
   }
   logger.info(`socio ${clubId}/${socioId}: ${estAntes || "nuevo"} → ${estDespues}`);
 });
 
-// Pase familiar: el titular (o el club) suma a alguien con cuenta en Padely por su email; sin cargo extra
-exports.agregarIntegrante = onCall({ region: REGION }, async (request) => {
+// Cambió el Pase del club (umbrales o beneficios) → cada socio activo recalcula nivel y beneficios
+exports.onPaseEscrito = onDocumentWritten("clubs/{clubId}/planesSocio/{planId}", async (event) => {
+  if (event.params.planId !== "pase" || !event.data.after.exists) return;
+  const M = await membresiasUtil();
+  const pase = event.data.after.data();
+  const clubRef = db.collection("clubs").doc(event.params.clubId);
+  const activos = await clubRef.collection("socios").where("estado", "==", "activa").get();
+  await escribirEnLotes(
+    activos.docs.map((d) => (b) => {
+      const nivel = M.nivelPorPuntos(d.data().puntos, pase.umbrales);
+      b.update(d.ref, { nivel, planNombre: M.ETIQUETA_NIVEL[nivel], beneficios: M.beneficiosDeNivel(pase, nivel), actualizadoEn: FieldValue.serverTimestamp() });
+    }),
+  );
+});
+
+// Suma puntos a un socio activo (idempotente por motivo: reserva_x, venta_x, insc_x)
+async function sumarPuntosPase(clubRef, uid, monto, motivo, detalle = {}) {
+  if (!uid || !motivo) return null;
+  const M = await membresiasUtil();
+  const cantidad = M.puntosPorGasto(monto);
+  if (cantidad <= 0) return null;
+  const socioRef = clubRef.collection("socios").doc(uid);
+  const movRef = socioRef.collection("puntos").doc(motivo);
+  return db.runTransaction(async (tx) => {
+    const [sSnap, mSnap, pSnap] = await Promise.all([tx.get(socioRef), tx.get(movRef), tx.get(paseRef(clubRef))]);
+    if (!sSnap.exists || mSnap.exists) return null;
+    const s = socioPlano(sSnap.data());
+    if (!M.estadoSocio(s).activa) return null;
+    const pase = pSnap.exists ? pSnap.data() : {};
+    const r = M.sumarPuntos(s, pase, cantidad);
+    tx.set(movRef, { cantidad, monto: Number(monto) || 0, ...detalle, en: FieldValue.serverTimestamp() });
+    tx.update(socioRef, { puntos: r.puntos, nivel: r.nivel, planNombre: M.ETIQUETA_NIVEL[r.nivel], beneficios: M.beneficiosDeNivel(pase, r.nivel), actualizadoEn: FieldValue.serverTimestamp() });
+    return r;
+  });
+}
+
+// Bar: una venta con el Pase identificado suma puntos
+exports.onVentaPuntosPase = onDocumentCreated("clubs/{clubId}/ventas/{numero}", async (event) => {
+  const v = event.data && event.data.data();
+  if (!v || !v.socio || !v.socio.id || v.estado !== "ok") return;
+  await sumarPuntosPase(db.collection("clubs").doc(event.params.clubId), String(v.socio.id), v.total, `venta_${event.params.numero}`, { tipo: "bar" }).catch((err) => logger.error(`puntos venta ${event.params.numero}`, err));
+});
+
+// Socio del Pase → cliente de su suscripción en Mercado Pago (débito automático con el token del club)
+exports.mpSuscribirPase = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, async (request) => {
   const uid = exigirAuth(request);
   const clubId = texto(request.data && request.data.clubId, 80);
   const email = texto(request.data && request.data.email, 120).toLowerCase();
-  const titularUid = texto(request.data && request.data.titularUid, 128) || uid;
-  if (!clubId || !email) throw new HttpsError("invalid-argument", "clubId y email");
+  if (!clubId || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpsError("invalid-argument", "clubId y el email de tu cuenta de Mercado Pago");
   const clubRef = db.collection("clubs").doc(clubId);
-  if (titularUid !== uid && !(await accesoClub(clubRef, uid, ["gestionarReservas"])).esStaff) throw new HttpsError("permission-denied", "Solo el titular del Pase o el club");
-  let usuario;
-  try {
-    usuario = await getAuth().getUserByEmail(email);
-  } catch {
-    throw new HttpsError("not-found", "No encontramos una cuenta de Padely con ese email: pedile que se registre primero");
-  }
-  if (usuario.uid === titularUid) throw new HttpsError("invalid-argument", "Ese email es del titular");
+  const club = (await clubRef.get()).data();
+  if (!club) throw new HttpsError("not-found", "El club no existe");
+  if (!(await planesUtil()).estadoPlan(club).pro) throw new HttpsError("failed-precondition", "Este club no tiene el Pase habilitado");
+  const tokens = await tokensDelClub(clubRef);
+  if (!tokens || !tokens.accessToken) throw new HttpsError("failed-precondition", "El club todavía no conectó Mercado Pago");
+  const pSnap = await paseRef(clubRef).get();
+  if (!pSnap.exists || pSnap.data().visible === false) throw new HttpsError("failed-precondition", "El club todavía no lanzó su Pase");
+  const pase = pSnap.data();
   const M = await membresiasUtil();
-  const nombre = await nombreDeUsuario(usuario.uid, usuario.displayName || "Jugador");
-  const titularRef = clubRef.collection("socios").doc(titularUid);
-  const integranteRef = clubRef.collection("socios").doc(usuario.uid);
-  await db.runTransaction(async (tx) => {
-    const [tSnap, iSnap] = await Promise.all([tx.get(titularRef), tx.get(integranteRef)]);
-    if (!tSnap.exists) throw new HttpsError("not-found", "No hay un Pase de ese titular");
-    const t = tSnap.data();
-    if (t.titularId) throw new HttpsError("failed-precondition", "Solo el titular suma integrantes");
-    if (!M.estadoSocio({ ...t, vence: msDe(t.vence) }).activa) throw new HttpsError("failed-precondition", "El Pase tiene que estar activo");
-    const pSnap = await tx.get(clubRef.collection("planesSocio").doc(t.planId || "x"));
-    const plan = pSnap.exists ? pSnap.data() : { integrantes: 1 };
-    const familia = Array.isArray(t.familia) ? t.familia : [];
-    if (familia.some((f) => f.uid === usuario.uid)) throw new HttpsError("already-exists", "Ya está en el Pase");
-    if (M.lugaresFamilia(t, plan) <= 0) throw new HttpsError("failed-precondition", Number(plan.integrantes) > 1 ? `El Pase es para ${plan.integrantes} personas y ya está completo` : "Este Pase es individual");
-    if (iSnap.exists) {
-      const i = iSnap.data();
-      if (M.estadoSocio({ ...i, vence: msDe(i.vence) }).activa && i.titularId !== titularUid) throw new HttpsError("failed-precondition", `${nombre} ya tiene su propio Pase activo en este club`);
-    }
-    const copia = M.copiaParaIntegrante({ ...t, uid: titularUid });
-    tx.set(integranteRef, { uid: usuario.uid, nombre, clubNombre: t.clubNombre || null, ...copia, desde: t.desde || null, vence: t.vence || null, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
-    tx.update(titularRef, { familia: [...familia, { uid: usuario.uid, nombre }], actualizadoEn: FieldValue.serverTimestamp() });
-  });
-  logger.info(`agregarIntegrante ${clubId}: ${usuario.uid} al Pase de ${titularUid} (por ${uid})`);
-  return { ok: true, uid: usuario.uid, nombre };
+  const socioRef = clubRef.collection("socios").doc(uid);
+  const sSnap = await socioRef.get();
+  const s = sSnap.exists ? socioPlano(sSnap.data()) : null;
+  if (s && s.suscripcion && s.suscripcion.estado === "authorized" && M.estadoSocio(s).activa) throw new HttpsError("already-exists", "Ya tenés el Pase activo con débito automático");
+  const nombre = await nombreDeUsuario(uid, "Jugador");
+  const ref = `pase_${clubId}_${uid}`;
+  let r;
+  try {
+    r = await mpFetch("/preapproval", {
+      method: "POST",
+      token: tokens.accessToken,
+      idempotencia: `${ref}_${Date.now()}`,
+      body: {
+        reason: M.nombrePase(club),
+        external_reference: ref,
+        payer_email: email,
+        back_url: `${APP_URL}/membresias`,
+        notification_url: `${MP_WEBHOOK_URL}?club=${clubId}`,
+        auto_recurring: { frequency: Number(pase.meses) || 1, frequency_type: "months", transaction_amount: Number(pase.precio), currency_id: "ARS" },
+        status: "pending",
+      },
+    });
+  } catch (err) {
+    logger.error(`mpSuscribirPase ${clubId}: ${err.status || ""} ${err.message}`);
+    throw new HttpsError("unavailable", err.status === 400 ? "Mercado Pago no aceptó la suscripción: revisá que el email sea el de tu cuenta de Mercado Pago" : "Mercado Pago no respondió. Probá de nuevo en un momento.");
+  }
+  if (!r || !r.id || !r.init_point) throw new HttpsError("unavailable", "Mercado Pago no devolvió el link de la suscripción");
+  await db.collection("suscripcionesPaseIndice").doc(String(r.id)).set({ clubId, uid, creadoEn: FieldValue.serverTimestamp() });
+  await socioRef.set(
+    {
+      uid,
+      nombre,
+      ...(s && s.estado === "activa" ? {} : { estado: "pendiente" }),
+      suscripcion: { preapprovalId: String(r.id), estado: r.status || "pending", payerEmail: email, monto: Number(pase.precio), meses: Number(pase.meses) || 1 },
+      solicitadoEn: FieldValue.serverTimestamp(),
+      ...(s ? {} : { puntos: 0, nivel: "bronce", creadoEn: FieldValue.serverTimestamp() }),
+    },
+    { merge: true },
+  );
+  logger.info(`mpSuscribirPase ${clubId}: ${uid} preapproval ${r.id}`);
+  return { ok: true, initPoint: r.init_point };
 });
 
-// Saca a un integrante del Pase familiar (el titular, el propio integrante o el club)
-exports.quitarIntegrante = onCall({ region: REGION }, async (request) => {
+// El socio se da de baja: se cancela el débito en MP y los beneficios terminan en el acto
+exports.mpCancelarPase = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, async (request) => {
   const uid = exigirAuth(request);
   const clubId = texto(request.data && request.data.clubId, 80);
-  const integranteUid = texto(request.data && request.data.uid, 128);
-  if (!clubId || !integranteUid) throw new HttpsError("invalid-argument", "clubId y uid");
+  const socioUid = texto(request.data && request.data.uid, 128) || uid;
+  if (!clubId) throw new HttpsError("invalid-argument", "clubId");
   const clubRef = db.collection("clubs").doc(clubId);
-  const integranteRef = clubRef.collection("socios").doc(integranteUid);
-  const iSnap = await integranteRef.get();
-  if (!iSnap.exists || !iSnap.data().titularId) throw new HttpsError("not-found", "No es integrante de un Pase");
-  const titularUid = iSnap.data().titularId;
-  if (uid !== titularUid && uid !== integranteUid && !(await accesoClub(clubRef, uid, ["gestionarReservas"])).esStaff) throw new HttpsError("permission-denied", "Solo el titular, el integrante o el club");
-  const titularRef = clubRef.collection("socios").doc(titularUid);
-  await db.runTransaction(async (tx) => {
-    const tSnap = await tx.get(titularRef);
-    const familia = tSnap.exists && Array.isArray(tSnap.data().familia) ? tSnap.data().familia : [];
-    if (tSnap.exists) tx.update(titularRef, { familia: familia.filter((f) => f.uid !== integranteUid), actualizadoEn: FieldValue.serverTimestamp() });
-    tx.update(integranteRef, { estado: "cancelada", bajaEn: FieldValue.serverTimestamp(), actualizadoEn: FieldValue.serverTimestamp() });
-  });
+  if (socioUid !== uid && !(await accesoClub(clubRef, uid, ["gestionarReservas"])).esStaff) throw new HttpsError("permission-denied", "Solo el socio o el club");
+  const socioRef = clubRef.collection("socios").doc(socioUid);
+  const sSnap = await socioRef.get();
+  if (!sSnap.exists) throw new HttpsError("not-found", "No hay un Pase");
+  const s = sSnap.data();
+  const preId = s.suscripcion && s.suscripcion.preapprovalId;
+  if (preId) {
+    const tokens = await tokensDelClub(clubRef);
+    if (tokens && tokens.accessToken) {
+      await mpFetch(`/preapproval/${encodeURIComponent(preId)}`, { method: "PUT", token: tokens.accessToken, body: { status: "cancelled" } }).catch((err) => logger.warn(`mpCancelarPase ${clubId}/${socioUid}: MP ${err.status || ""} ${err.message}`));
+    }
+  }
+  const M = await membresiasUtil();
+  await socioRef.update({ ...aTsCampos(M.cambiosBaja(Date.now())), "suscripcion.estado": "cancelled", bajaEn: FieldValue.serverTimestamp(), bajaPor: uid, actualizadoEn: FieldValue.serverTimestamp() });
   return { ok: true };
 });
 
-// El club da de alta un Pase a alguien con cuenta en Padely (por email) y registra el pago (efectivo, transferencia…)
-exports.altaPasePorEmail = onCall({ region: REGION }, async (request) => {
-  const uid = exigirAuth(request);
-  const d = request.data || {};
-  const clubId = texto(d.clubId, 80);
-  const email = texto(d.email, 120).toLowerCase();
-  const planId = texto(d.planId, 80);
-  if (!clubId || !email || !planId) throw new HttpsError("invalid-argument", "clubId, email y planId");
-  const clubRef = db.collection("clubs").doc(clubId);
-  const acceso = await accesoClub(clubRef, uid, ["gestionarReservas"]);
-  if (!acceso.esStaff) throw new HttpsError("permission-denied", "Solo quien gestiona el club");
-  if (!(await planesUtil()).estadoPlan(acceso.club).pro) throw new HttpsError("failed-precondition", "Los Pases son del plan PRO");
-  let usuario;
-  try {
-    usuario = await getAuth().getUserByEmail(email);
-  } catch {
-    throw new HttpsError("not-found", "No hay una cuenta de Padely con ese email: pedile que se registre (es gratis) y volvé a probar");
-  }
+// Notificaciones de suscripciones (subscription_preapproval / subscription_authorized_payment): se releen de la API
+async function procesarNotificacionPase(clubRef, tipo, dataId, tokens) {
   const M = await membresiasUtil();
-  const nombre = await nombreDeUsuario(usuario.uid, usuario.displayName || "Jugador");
-  const socioRef = clubRef.collection("socios").doc(usuario.uid);
-  const planRef = clubRef.collection("planesSocio").doc(planId);
-  const medio = texto(d.medio, 20) || "efectivo";
-  await db.runTransaction(async (tx) => {
-    const [sSnap, pSnap] = await Promise.all([tx.get(socioRef), tx.get(planRef)]);
-    if (!pSnap.exists) throw new HttpsError("not-found", "El plan no existe");
-    const plan = { id: pSnap.id, ...pSnap.data() };
-    const previo = sSnap.exists ? sSnap.data() : null;
-    if (previo && previo.titularId) throw new HttpsError("failed-precondition", `${nombre} es integrante de otro Pase: sacalo de ese grupo primero`);
-    const socio = previo ? { ...previo, desde: msDe(previo.desde), vence: msDe(previo.vence) } : { historial: [] };
-    const c = M.registrarPagoSocio(socio, plan, { ahora: Date.now(), monto: d.monto === undefined || d.monto === null || d.monto === "" ? null : Number(d.monto), medio, por: uid, porNombre: acceso.nombre });
-    tx.set(socioRef, {
-      ...(previo ? {} : { uid: usuario.uid, nombre, creadoEn: FieldValue.serverTimestamp() }),
-      ...c,
-      desde: Timestamp.fromMillis(c.desde),
-      vence: Timestamp.fromMillis(c.vence),
-      historial: c.historial.map((h) => ({ ...h, en: typeof h.en === "number" ? Timestamp.fromMillis(h.en) : h.en })),
-      actualizadoEn: FieldValue.serverTimestamp(),
-    }, { merge: true });
-  });
-  logger.info(`altaPasePorEmail ${clubId}: ${usuario.uid} plan ${planId} por ${uid}`);
-  return { ok: true, uid: usuario.uid, nombre };
-});
+  if (!tokens || !tokens.accessToken || !dataId) return "sin tokens o id";
+  const leer = (path) => mpFetch(path, { token: tokens.accessToken }).catch((err) => (err.status === 404 ? null : Promise.reject(err)));
+  if (tipo === "subscription_preapproval") {
+    const pre = await leer(`/preapproval/${encodeURIComponent(dataId)}`);
+    if (!pre) return "preapproval no encontrada";
+    const idx = await db.collection("suscripcionesPaseIndice").doc(String(pre.id)).get();
+    if (!idx.exists || idx.data().clubId !== clubRef.id) return "preapproval de otro club";
+    const socioRef = clubRef.collection("socios").doc(idx.data().uid);
+    const sSnap = await socioRef.get();
+    if (!sSnap.exists || (sSnap.data().suscripcion || {}).preapprovalId !== String(pre.id)) return "suscripción vieja";
+    const cambios = { "suscripcion.estado": pre.status, actualizadoEn: FieldValue.serverTimestamp() };
+    // Cancelada o pausada desde Mercado Pago → baja (beneficios afuera ya, puntos 90 días)
+    if ((pre.status === "cancelled" || pre.status === "paused") && sSnap.data().estado !== "cancelada") Object.assign(cambios, aTsCampos(M.cambiosBaja(Date.now())));
+    await socioRef.update(cambios);
+    return `preapproval ${pre.id}: ${pre.status}`;
+  }
+  if (tipo === "subscription_authorized_payment") {
+    const ap = await leer(`/authorized_payments/${encodeURIComponent(dataId)}`);
+    if (!ap) return "cobro no encontrado";
+    const preId = String(ap.preapproval_id || "");
+    const idx = await db.collection("suscripcionesPaseIndice").doc(preId).get();
+    if (!idx.exists || idx.data().clubId !== clubRef.id) return "cobro de otro club";
+    const aprobado = ap.status === "processed" && ap.payment && ap.payment.status === "approved";
+    if (!aprobado) return `cobro ${ap.id}: ${ap.status}/${(ap.payment && ap.payment.status) || "?"}`;
+    const paymentId = String(ap.payment.id || ap.id);
+    const socioRef = clubRef.collection("socios").doc(idx.data().uid);
+    const facturacion = (await db.collection("configuracionPadely").doc("facturacion").get()).data() || {};
+    const pct = Math.min(30, Math.max(0, Number(facturacion.comisionPasesPct) || 0));
+    const resultado = await db.runTransaction(async (tx) => {
+      const comRef = db.collection("comisionesPase").doc(paymentId);
+      const [sSnap, pSnap, cSnap] = await Promise.all([tx.get(socioRef), tx.get(paseRef(clubRef)), tx.get(comRef)]);
+      if (cSnap.exists) return "ya aplicado";
+      const pase = pSnap.exists ? pSnap.data() : { meses: 1 };
+      const s = sSnap.exists ? socioPlano(sSnap.data()) : null;
+      const monto = Number(ap.transaction_amount) || Number(pase.precio) || 0;
+      const c = M.registrarCobroPase(s, pase, { ahora: Date.now(), monto, paymentId });
+      tx.set(socioRef, { ...aTsCampos(c), "suscripcion.estado": "authorized", ultimoCobroEn: FieldValue.serverTimestamp(), actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
+      tx.set(comRef, { clubId: clubRef.id, uid: idx.data().uid, preapprovalId: preId, monto, pct, comision: Math.round(monto * pct) / 100, facturada: false, en: FieldValue.serverTimestamp() });
+      return "pase activado";
+    });
+    return `cobro ${ap.id} (${paymentId}): ${resultado}`;
+  }
+  return `tipo ${tipo} ignorado`;
+}
 
-// Todos los días: membresías vencidas → "vencida" (y aviso); las que vencen en 5 días → aviso al socio (una vez)
+// Torneos que organiza el club: puntos por la inscripción pagada (a cada jugador con el Pase activo)
+async function puntosInscripcionPase(torneo, insc, monto, motivo) {
+  const clubId = torneo && (torneo.clubId || (torneo.club && torneo.club.id));
+  if (!clubId) return;
+  const clubRef = db.collection("clubs").doc(clubId);
+  const club = (await clubRef.get()).data();
+  if (!club || club.ownerUid !== torneo.organizerId) return;
+  const porJugador = (Number(monto) || 0) / 2;
+  for (const uid of [insc.jugador1Uid, insc.jugador2Uid].filter(Boolean)) {
+    await sumarPuntosPase(clubRef, uid, porJugador, `${motivo}_${uid}`, { tipo: "torneo" }).catch(() => {});
+  }
+}
+
+// Todos los días:
+// - Pases vencidos (sin cobro nuevo) → "vencida" (beneficios afuera, puntos 90 días) y aviso
+// - Puntos de las reservas jugadas ayer por socios activos
+// - Puntos y nivel vuelven a 0 a los 90 días de la baja
 exports.sociosVencidos = onSchedule({ schedule: "40 4 * * *", timeZone: ZONA_HORARIA }, async () => {
+  const M = await membresiasUtil();
   const ahora = Date.now();
   const vencidas = await db.collectionGroup("socios").where("estado", "==", "activa").where("vence", "<", Timestamp.fromMillis(ahora)).get();
-  await escribirEnLotes(vencidas.docs.map((d) => (b) => b.update(d.ref, { estado: "vencida", vencidaEn: FieldValue.serverTimestamp() })));
+  await escribirEnLotes(vencidas.docs.map((d) => (b) => b.update(d.ref, { ...aTsCampos({ ...M.cambiosBaja(ahora), estado: "vencida" }), vencidaEn: FieldValue.serverTimestamp() })));
   for (const d of vencidas.docs) {
     const s = d.data();
-    if (s.uid && !s.titularId) await avisoA(s.uid, { tipo: "socio_vencido", titulo: "Tu Pase venció", mensaje: `${s.planNombre || "Tu Pase"} venció. Renovalo para seguir con tus beneficios.`, link: "/membresias", icono: "🪪" }).catch(() => {});
+    if (s.uid) await avisoA(s.uid, { tipo: "socio_vencido", titulo: "Tu Pase venció", mensaje: "No se pudo cobrar la cuota del Pase. Revisá tu medio de pago en Mercado Pago o volvé a suscribirte: tus puntos se guardan 90 días.", link: "/membresias", icono: "🪪" }).catch(() => {});
   }
-  const pronto = await db.collectionGroup("socios").where("estado", "==", "activa").where("vence", "<", Timestamp.fromMillis(ahora + 5 * 86400000)).get();
-  let avisados = 0;
-  for (const d of pronto.docs) {
-    const s = d.data();
-    const vence = msDe(s.vence);
-    if (!s.uid || s.titularId || s.avisoVencimiento === vence) continue;
-    await avisoA(s.uid, { tipo: "socio_por_vencer", titulo: "Tu Pase vence pronto", mensaje: `${s.planNombre || "Tu Pase"} vence el ${fechaCortaArgentina(new Date(vence - 3 * 3600 * 1000).toISOString().slice(0, 10))}. Renovalo desde Mis pases o en el club.`, link: "/membresias", icono: "🪪" }).catch(() => {});
-    await d.ref.update({ avisoVencimiento: vence });
-    avisados += 1;
+  // Reservas jugadas ayer (cabeza del grupo, confirmadas) → puntos al titular si tiene el Pase activo en ese club
+  const ayer = new Date(ahora - 3 * 3600 * 1000 - 86400000).toISOString().slice(0, 10);
+  const jugadas = await db.collectionGroup("reservas").where("fecha", "==", ayer).where("status", "==", "confirmada").get();
+  let conPuntos = 0;
+  for (const d of jugadas.docs) {
+    const r = d.data();
+    if (!r.jugadorUid || (r.grupoId && r.grupoId !== d.id)) continue;
+    const clubRef = d.ref.parent.parent;
+    const hecho = await sumarPuntosPase(clubRef, r.jugadorUid, r.precioTotal || r.precio, `reserva_${d.id}`, { tipo: "reserva", fecha: r.fecha }).catch(() => null);
+    if (hecho) conPuntos += 1;
   }
-  logger.info(`sociosVencidos: ${vencidas.size} vencidas, ${avisados} avisos de vencimiento`);
+  // 90 días después de la baja o el vencimiento: puntos y nivel en 0
+  const reset = await db.collectionGroup("socios").where("puntosResetEn", "<=", Timestamp.fromMillis(ahora)).get();
+  await escribirEnLotes(reset.docs.filter((d) => d.data().estado !== "activa").map((d) => (b) => b.update(d.ref, { puntos: 0, nivel: "bronce", puntosResetEn: null, actualizadoEn: FieldValue.serverTimestamp() })));
+  logger.info(`sociosVencidos: ${vencidas.size} vencidos, ${conPuntos} reservas con puntos, ${reset.size} reseteados`);
 });

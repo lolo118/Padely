@@ -1,110 +1,97 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  cambiosBaja,
   descuentoCanchaPara,
   diasAnticipacionCon,
   estadoSocio,
+  inscripcionConPase,
+  nivelPorPuntos,
   nombreCorto,
-  normalizarPlan,
+  normalizarPase,
   preciosConSocio,
-  registrarPagoSocio,
+  proximoNivel,
+  puntosPorGasto,
+  registrarCobroPase,
   señaConSocio,
   sumarMesesAr,
+  sumarPuntos,
   textoFranja,
   textosBeneficios,
 } from "./membresias.js";
 
 const AR = (s) => new Date(`${s}-03:00`).getTime();
-
-test("normalizarPlan: valida nombre, precio, período y al menos un beneficio", () => {
-  assert.match(normalizarPlan({ nombre: "", precio: 1 }).error, /nombre/);
-  assert.match(normalizarPlan({ nombre: "Socio", precio: -1 }).error, /precio/);
-  assert.match(normalizarPlan({ nombre: "Socio", precio: 1000, beneficios: {} }).error, /beneficio/);
-  const p = normalizarPlan({ nombre: " Socio ", precio: "15000", periodo: "anual", cupo: "", beneficios: { descuentoCanchaPct: 150, extras: ["Estacionamiento", " ", "x".repeat(200)] } });
-  assert.equal(p.nombre, "Socio");
-  assert.equal(p.precio, 15000);
-  assert.equal(p.cupo, null);
-  assert.equal(p.beneficios.descuentoCanchaPct, 100);
-  assert.deepEqual(p.beneficios.extras.map((t) => t.length), [15, 80]);
+const PASE = normalizarPase({
+  precio: 15000,
+  meses: 1,
+  umbrales: { plata: 150, oro: 400 },
+  beneficios: { bronce: { descuentoBarPct: 5 }, plata: { descuentoBarPct: 10, descuentoCanchaPct: 10 }, oro: { descuentoBarPct: 15, torneoGratis: true, extras: ["Prioridad de estacionamiento"] } },
 });
 
-test("franja inválida se descarta; textoFranja", () => {
-  const p = normalizarPlan({ nombre: "Mañana", precio: 0, beneficios: { descuentoCanchaPct: 20, franja: { dias: [1, 2, 3, 4, 5], desde: "08:00", hasta: "17:00" } } });
-  assert.equal(textoFranja(p.beneficios.franja), "Lun a vie de 08:00 a 17:00");
-  const q = normalizarPlan({ nombre: "X", precio: 0, beneficios: { descuentoCanchaPct: 20, franja: { dias: [2], desde: "18:00", hasta: "10:00" } } });
-  assert.equal(q.beneficios.franja, null);
+test("normalizarPase: precio, meses, umbrales y al menos un beneficio", () => {
+  assert.match(normalizarPase({ precio: 0 }).error, /precio/);
+  assert.match(normalizarPase({ precio: 1000, meses: 2 }).error, /1, 3, 6 o 12/);
+  assert.match(normalizarPase({ precio: 1000, umbrales: { plata: 300, oro: 200 }, beneficios: { bronce: { sinSeña: true } } }).error, /Oro/);
+  assert.match(normalizarPase({ precio: 1000 }).error, /beneficio/);
+  assert.equal(PASE.precio, 15000);
+  assert.deepEqual(PASE.umbrales, { plata: 150, oro: 400 });
+  assert.equal(PASE.beneficios.oro.torneoGratis, true);
+  assert.equal(PASE.beneficios.bronce.descuentoTorneoPct, 0);
 });
 
-test("descuento de cancha por franja y precios por turno", () => {
-  const b = { descuentoCanchaPct: 25, franja: { dias: [6], desde: "10:00", hasta: "12:00" } };
-  assert.equal(descuentoCanchaPara(b, "2026-10-31", "10:00"), 25); // sábado
-  assert.equal(descuentoCanchaPara(b, "2026-10-31", "12:00"), 0);
-  assert.equal(descuentoCanchaPara(b, "2026-10-30", "10:00"), 0); // viernes
-  const r = preciosConSocio([20000, 20000, 20000], b, "2026-10-31", ["10:00", "11:00", "12:00"]);
-  assert.deepEqual(r.precios, [15000, 15000, 20000]);
-  assert.equal(r.descuento, 10000);
-  assert.equal(r.pct, 25);
-  assert.deepEqual(preciosConSocio([1000], null, "2026-10-31", ["10:00"]).precios, [1000]);
+test("puntos → nivel y próximo nivel", () => {
+  assert.equal(puntosPorGasto(20000), 20);
+  assert.equal(puntosPorGasto(999), 0);
+  assert.equal(nivelPorPuntos(0, PASE.umbrales), "bronce");
+  assert.equal(nivelPorPuntos(150, PASE.umbrales), "plata");
+  assert.equal(nivelPorPuntos(400, PASE.umbrales), "oro");
+  assert.deepEqual(proximoNivel(100, PASE.umbrales), { siguiente: "plata", faltan: 50 });
+  assert.equal(proximoNivel(500, PASE.umbrales), null);
+  const s = sumarPuntos({ puntos: 140 }, PASE, 20);
+  assert.deepEqual(s, { puntos: 160, nivel: "plata", subio: true });
 });
 
-test("estadoSocio: activa, por vencer y vencida por fecha", () => {
+test("cobro del Pase: alta desde hoy, renovación desde el vencimiento, beneficios del nivel", () => {
   const ahora = AR("2026-10-29T12:00:00");
-  assert.equal(estadoSocio({ estado: "activa", vence: AR("2026-11-29T23:59:59") }, ahora).activa, true);
-  const pv = estadoSocio({ estado: "activa", vence: AR("2026-11-01T23:59:59") }, ahora);
-  assert.equal(pv.porVencer, true);
-  assert.equal(pv.diasRestantes, 4);
-  assert.equal(estadoSocio({ estado: "activa", vence: AR("2026-10-28T23:59:59") }, ahora).estado, "vencida");
-  assert.equal(estadoSocio({ estado: "pendiente" }, ahora).activa, false);
-});
-
-test("sumarMesesAr: fin de mes y fin del día argentino", () => {
-  assert.equal(sumarMesesAr(AR("2026-01-31T10:00:00"), 1), AR("2026-02-28T23:59:59"));
-  assert.equal(sumarMesesAr(AR("2026-10-29T22:30:00"), 12), AR("2027-10-29T23:59:59"));
-});
-
-test("registrarPagoSocio: alta desde hoy, renovación vigente suma desde el vencimiento", () => {
-  const ahora = AR("2026-10-29T12:00:00");
-  const plan = { id: "p1", nombre: "Socio", precio: 15000, periodo: "mensual", beneficios: { descuentoBarPct: 10 } };
-  const alta = registrarPagoSocio({ estado: "pendiente", historial: [] }, plan, { ahora, por: "u1" });
+  const alta = registrarCobroPase(null, PASE, { ahora, paymentId: "p1" });
   assert.equal(alta.estado, "activa");
   assert.equal(alta.vence, AR("2026-11-29T23:59:59"));
+  assert.equal(alta.nivel, "bronce");
+  assert.equal(alta.beneficios.descuentoBarPct, 5);
   assert.equal(alta.historial[0].tipo, "alta");
-  assert.equal(alta.historial[0].monto, 15000);
-  const renov = registrarPagoSocio({ ...alta }, plan, { ahora: AR("2026-11-20T09:00:00"), monto: 14000 });
+  const conPuntos = { ...alta, puntos: 420 };
+  const renov = registrarCobroPase(conPuntos, PASE, { ahora: AR("2026-11-25T09:00:00") });
   assert.equal(renov.vence, AR("2026-12-29T23:59:59"));
-  assert.equal(renov.historial[1].tipo, "renovacion");
-  assert.equal(renov.desde, alta.desde);
-  const tarde = registrarPagoSocio({ ...alta }, plan, { ahora: AR("2026-12-05T09:00:00") });
-  assert.equal(tarde.vence, AR("2027-01-05T23:59:59"));
+  assert.equal(renov.nivel, "oro");
+  assert.equal(renov.beneficios.torneoGratis, true);
+  // Baja y vuelta después de 90 días → puntos en 0
+  const baja = { ...renov, ...cambiosBaja(AR("2026-12-01T10:00:00")) };
+  assert.equal(baja.beneficios, null);
+  const vuelve = registrarCobroPase(baja, PASE, { ahora: AR("2027-03-15T10:00:00") });
+  assert.equal(vuelve.puntos, 0);
+  assert.equal(vuelve.nivel, "bronce");
+  const vuelvePronto = registrarCobroPase(baja, PASE, { ahora: AR("2027-01-15T10:00:00") });
+  assert.equal(vuelvePronto.puntos, 420);
 });
 
-test("anticipación, seña y textos", () => {
-  assert.equal(diasAnticipacionCon({ diasAnticipacion: 7 }, { diasExtraReserva: 7 }), 14);
-  assert.equal(diasAnticipacionCon({}, null), 7);
+test("estadoSocio y sumarMesesAr", () => {
+  const ahora = AR("2026-10-29T12:00:00");
+  assert.equal(estadoSocio({ estado: "activa", vence: AR("2026-10-28T23:59:59") }, ahora).estado, "vencida");
+  assert.equal(estadoSocio({ estado: "activa", vence: AR("2026-11-01T23:59:59") }, ahora).diasRestantes, 4);
+  assert.equal(sumarMesesAr(AR("2026-01-31T10:00:00"), 1), AR("2026-02-28T23:59:59"));
+});
+
+test("descuentos: cancha por franja, seña, anticipación, torneo", () => {
+  const b = { descuentoCanchaPct: 25, franja: { dias: [6], desde: "10:00", hasta: "12:00" } };
+  assert.equal(descuentoCanchaPara(b, "2026-10-31", "10:00"), 25);
+  assert.equal(descuentoCanchaPara(b, "2026-10-30", "10:00"), 0);
+  assert.deepEqual(preciosConSocio([20000, 20000, 20000], b, "2026-10-31", ["10:00", "11:00", "12:00"]).precios, [15000, 15000, 20000]);
   assert.equal(señaConSocio(4500, { sinSeña: true }), 0);
-  assert.equal(señaConSocio(4500, null), 4500);
-  assert.deepEqual(textosBeneficios({ descuentoCanchaPct: 10, franja: null, descuentoBarPct: 5, diasExtraReserva: 1, sinSeña: true, extras: ["Estacionamiento"] }), [
-    "10 % off en la cancha",
-    "Reservás sin seña",
-    "Reservás 1 día antes que el resto",
-    "5 % off en el bar",
-    "Estacionamiento",
-  ]);
+  assert.equal(diasAnticipacionCon({ diasAnticipacion: 7 }, { diasExtraReserva: 7 }), 14);
+  assert.equal(inscripcionConPase(30000, { descuentoTorneoPct: 20 }), 24000);
+  assert.equal(inscripcionConPase(30000, { torneoGratis: true }), 0);
+  assert.equal(inscripcionConPase(30000, null), 30000);
+  assert.equal(textoFranja({ dias: [1, 2, 3, 4, 5], desde: "08:00", hasta: "17:00" }), "Lun a vie de 08:00 a 17:00");
+  assert.deepEqual(textosBeneficios(PASE.beneficios.oro), ["15 % off en el bar", "Inscripción gratis a los torneos del club", "Prioridad de estacionamiento"]);
   assert.equal(nombreCorto("Juan Carlos Pérez"), "Juan P.");
-  assert.equal(nombreCorto(""), "Socio");
-});
-
-test("pase familiar: integrantes, lugares y copia para el integrante", async () => {
-  const { normalizarPlan: np, lugaresFamilia, copiaParaIntegrante, textoIntegrantes } = await import("./membresias.js");
-  const p = np({ nombre: "Familia", precio: 30000, integrantes: 9, beneficios: { sinSeña: true } });
-  assert.equal(p.integrantes, 6);
-  assert.equal(np({ nombre: "Uno", precio: 1, beneficios: { sinSeña: true } }).integrantes, 1);
-  assert.equal(textoIntegrantes({ integrantes: 4 }), "Pase familiar · hasta 4 personas");
-  assert.equal(textoIntegrantes({ integrantes: 1 }), null);
-  assert.equal(lugaresFamilia({ familia: [{ uid: "a" }] }, { integrantes: 4 }), 2);
-  assert.equal(lugaresFamilia({}, { integrantes: 1 }), 0);
-  const c = copiaParaIntegrante({ uid: "t1", nombre: "Ana López", estado: "activa", planId: "p", planNombre: "Familia", periodo: "mensual", beneficios: { descuentoBarPct: 10 }, desde: 1, vence: 2 });
-  assert.equal(c.titularId, "t1");
-  assert.equal(c.beneficios.descuentoBarPct, 10);
-  assert.equal(c.estado, "activa");
 });
