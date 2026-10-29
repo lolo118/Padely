@@ -1,60 +1,71 @@
-# Pases: membresías de cada club (P3-16)
+# Pase Club: the membership of each club (P3-16)
 
-> Name chosen by Sebastián (29/10): the player sees **"Pase"** (Pase tab, Mis pases, Pase Nº, Pase al día). The panel says **Pases**. Internally, collections and code keep `socios` / `planesSocio`.
+Design agreed with Sebastián on 29/10. It replaces the first version (multiple plans, family Pase, paying at the club).
 
-## Why
-Competitors (Playtomic Manager, Padelista) sell club memberships: a monthly or annual fee in exchange for cheaper courts, a longer booking window and perks. Clubs in the NOA already have "socios" on paper or in WhatsApp lists. Padely makes it digital without forcing every club into the same model.
+## The idea
+A **loyal community** with **recurring subscription income** for the club:
+- **One Pase per club: "Pase Club <Club>".** The club sets the price, how often it's charged, the points and the benefits.
+- **Paid only through Mercado Pago, with automatic debit.** The player authorizes once, with any method MP offers; MP charges every period.
+- **Points**: only members with an active Pase earn them, at **1 point per $ 1.000** spent at the club:
+  - bookings that were played;
+  - the bar (when the member is identified with the Pase in Vender);
+  - tournaments **organized by the club** (each player gets half).
+- **Levels Bronce → Plata → Oro**, set automatically by points. Each club sets the thresholds (defaults: Plata 150, Oro 400 ≈ $ 150.000 / $ 400.000 spent).
+- **Benefits per level**: higher levels get more benefits or bigger percentages.
+- **Club team**: members sign up for the interclub tournaments (category, position) and the club picks. No ranking.
 
-## The idea: building blocks, not one fixed plan per club
-Each club creates **its own plans** (name, price, period, optional cap) and picks benefits from two groups:
+## Benefits
+Padely applies these automatically:
+- % off bookings, optionally on certain days and hours only.
+- % off the bar (Vender).
+- % off the inscription to the club's tournaments, or **free** (e.g. for Oro).
+- Booking N days earlier.
+- No seña.
 
-| Block | What Padely does |
-|---|---|
-| Court discount (%) | Applied to the price when the member books from Padely. Optional **time band** (days + from/to, e.g. Mon–Fri 08–17) |
-| No seña | Members book with seña $ 0 |
-| Book earlier (+N days) | The member's booking window is the club's days + N |
-| Bar discount (%) | In Vender, **Socio** button → the % goes on the ticket (the rules add it to the cashier's discount cap) |
-| Club extras (free text) | "Estacionamiento para socios", "Lugar reservado en exhibiciones", "Toalla y agua"… Shown on the card and when the QR is scanned. The club honours them in person |
+The club honours these itself (free text, shown in the Pase and on the QR scan):
+- Parking priority during the booking.
+- Places at exhibitions and events.
+- Free merchandise, or % off merchandise.
+- % off the club's coaches.
+- Priority on the waiting list.
+- A guest pass.
+- A birthday perk.
+- Early tournament sign-ups.
+- Discounts at sponsor stores (text for now; a sponsor model comes after launch).
 
-This covers "some clubs offer parking, others exhibition spots, others bar discounts" without special code per club.
+Bookings **the club enters by hand** don't get the discount.
 
-## Flow (v1)
-1. **Club** → Admin → **Pases** → Planes → "Nuevo plan": price, period (1/3/6/12 months), **individual or family (up to 6 people, no extra charge)**, benefits, cap, visible.
-2. **Player** → club page → **Pase** tab:
-   - **"Pagar con Mercado Pago"** → once the payment is approved the Pase becomes **active automatically** (no club approval). The money goes to the club's MP account.
-   - or "Prefiero pagar en el club" → request → Admin → Pases → **Aprobar y cobrar**.
-3. **Renewal**: "Renovar con Mercado Pago" in Mis pases (or "Registrar pago" at the club). If the Pase is still current, the period is added from the expiry date.
-4. **Family Pase**: the holder adds people **with a Padely account, by email** (and removes them) from Mis pases. Each member gets the same benefits and their own QR, and copies the holder's status and dates. Only the holder pays and renews.
-5. **Club grants a Pase**: "Dar un Pase" asks for the email of a Padely account (**everyone with a Pase has an account**; the club doesn't add people without one).
-6. **Expiry**: daily at 04:40, plus a notice 5 days before (holders only; members follow the holder).
-7. **QR**: /s/<token> → "Pase al día · Nº · plan · (grupo de X) · vence · beneficios".
-8. **Bookings the club enters by hand** don't get the Pase discount (it only applies when the player books from Padely).
+## Flow
+1. Club → Admin → **Pase Club** → Configurar: price, frequency, points for Plata and Oro, benefits per level (with "copiar de Bronce/Plata"), visible → **Lanzar el Pase**.
+2. Player → club page → **Pase** tab: price, levels and their benefits → **Quiero el Pase**.
+   - They enter the email of their MP account → Mercado Pago (authorize the debit).
+3. MP charges → webhook `subscription_authorized_payment` → the Pase becomes **active**, or is extended if it was current.
+   - It gets a number and a QR, and starts at Bronce (or at the level its points give, if it comes back within 90 days).
+   - Padely's cut is recorded in `comisionesPase/{paymentId}`.
+4. Points add up automatically and the level goes up by itself (notification "¡Subiste a Plata!").
+5. Mis pases shows the level, the points, "te faltan N para Oro", the QR, the benefits, the team sign-up and **Dar de baja**.
+6. Cancellation (the member, the club, or cancelled/paused in MP):
+   - The debit is cancelled and the benefits **end right away**.
+   - Points are kept **90 days**, then reset to 0 / Bronce.
+7. A charge that fails and lets the Pase expire → "vencida" (same as a cancellation) + a notification.
 
 ## Data
-- `clubs/{c}/planesSocio/{planId}`: `{ nombre, descripcion, precio, periodo, visible, cupo, orden, beneficios }`.
-- `clubs/{c}/socios/{uid}`: `{ uid, nombre, clubNombre, planId, planNombre, periodo, integrantes, beneficios (snapshot), estado, desde, vence, numero, token, historial[], avisoVencimiento }`.
-  - The holder also stores `familia: [{ uid, nombre }]`.
-  - A family member stores `titularId` and `titularNombre`.
-- Callables: `agregarIntegrante`, `quitarIntegrante`, `altaPasePorEmail`. Payments go through `mpCrearPago` (`tipo: "membresia"`) and the webhook.
-- `sociosPublicos/{token}`: the QR verification. Written only by Functions.
-- `reservas.socio = { id, planId, descuentoPct, descuento, sinSeña }` and `ventas.socio = { id, nombre, numero, pct }`, for traceability.
-- Counter: `clubs/{c}/contadoresDispositivos/SOCIOS` (member numbers 1, 2, 3…).
-- Logic: `src/utils/membresias.js` (tested), copied to `functions/lib/membresias.mjs`.
+- `clubs/{c}/planesSocio/pase`: `{ precio, meses, visible, umbrales: { plata, oro }, beneficios: { bronce, plata, oro } }`.
+- `clubs/{c}/socios/{uid}`: `{ uid, nombre, clubNombre, estado, desde, vence, puntos, nivel, beneficios (those of the current level), suscripcion { preapprovalId, estado, payerEmail }, equipo { quiere, categoria, posicion, seleccionado }, puntosResetEn, numero, token, historial[] }`.
+- `clubs/{c}/socios/{uid}/puntos/{motivo}`: one doc per movement (`reserva_x`, `venta_x`, `insc_x_uid`). The id makes it idempotent.
+- `suscripcionesPaseIndice/{preapprovalId}` → `{ clubId, uid }`; `comisionesPase/{paymentId}` (super-admin); `sociosPublicos/{token}` (the QR).
+- Functions: `mpSuscribirPase`, `mpCancelarPase`, `onSocioEscrito`, `onPaseEscrito`, `onVentaPuntosPase`, `sociosVencidos` (04:40: expired passes, points for yesterday's bookings, reset after 90 days). The webhook handles `subscription_*`.
+- Logic and tests: `src/utils/membresias.js`.
 
-## Rules (summary)
-- Plans: public read; `configurarClub` + PRO can write.
-- Members:
-  - Readable by staff with `gestionarReservas` or `vender`, by the member themself and by the super-admin.
-  - The player can only request (`pendiente`, visible plan, only those fields), withdraw a pending request, or request again after a cancellation, rejection or expiry.
-  - `gestionarReservas` + PRO manages everything except `token`, `numero` and `uid`.
-- Bar sales: `descuentoTotal ≤ subtotal × (staff descuentoMax + the active member's descuentoBarPct)`.
+## Padely's cut
+MP's documentation only shows the marketplace fee on one-off payments (preferences/payments), not on subscriptions. So the money goes 100 % to the club, and Padely's % (Super-admin → Planes → "Comisión sobre el Pase Club") is **recorded on every charge** and **billed by hand** together with the plan.
 
-## Plan and flag
-- PRO only (and the trial). In FREE the "Socios" item shows the padlock.
-- Hidden behind `configuracionPadely/flags.membresias` (Super-admin → Planes → Funciones).
+## Setup for the go-live
+- In Padely's app in MP Developers → Webhooks: tick **"Planes y suscripciones"** (subscription_preapproval, subscription_authorized_payment) with the same URL as payments.
+- The payer has to use the email of their MP account (in test mode, the buyer test user's email).
 
-## v2 (not built yet)
-- Auto-renewal (MP subscriptions).
-- Pase discount on the **cuenta del turno** (today: Vender only).
-- Slots reserved for Pase holders, and Pase-only events with limited places.
-- Reports: active Pases, income, churn.
+## Later
+- Sponsors (a model of their own).
+- Discount on the **cuenta del turno** (today: Vender).
+- Members-only slots and events with limited places.
+- Pase reports (income, retention, members by level).

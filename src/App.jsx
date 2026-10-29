@@ -290,7 +290,7 @@ export default function App() {
             <Route path="estadisticas" element={<AdminEstadisticas />} />
             <Route path="configuracion" element={<AdminConfiguracion />} />
             <Route path="plan" element={<AdminMiPlan />} />
-            <Route path="socios" element={<RequierePro titulo="Los Pases"><AdminSocios /></RequierePro>} />
+            <Route path="socios" element={<RequierePro titulo="El Pase Club"><AdminSocios /></RequierePro>} />
             <Route path="empezar" element={<AdminEmpezar />} />
             {/* Bar: secciones del plan PRO (P3-9); en FREE muestran "Disponible en PRO" */}
             <Route path="bar/vender" element={<RequierePro titulo="Vender"><BarVender /></RequierePro>} />
