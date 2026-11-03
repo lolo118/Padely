@@ -3057,6 +3057,23 @@ exports.mpWebhook = onRequest({ region: REGION, secrets: [MP_WEBHOOK_SECRET, MP_
   const clubRef = clubId ? db.collection("clubs").doc(clubId) : null;
   const clubSnap = clubRef ? await clubRef.get() : null;
   if (!clubSnap || !clubSnap.exists) {
+    // P3-16: los cobros del Pase llegan como "payment" al webhook de la app (sin ?club=): club por user_id
+    if (!clubId && (datos.tipo === "payment" || !datos.tipo) && datos.dataId && req.body && req.body.user_id) {
+      try {
+        const cId = await clubPorUsuarioMp(req.body.user_id);
+        if (cId) {
+          const cRef = db.collection("clubs").doc(cId);
+          const r = await procesarNotificacionPase(cRef, "payment_pase", datos.dataId, await tokensDelClub(cRef));
+          logger.info(`mpWebhook pase ${cId}: firma ${firmaTxt} · payment ${datos.dataId} → ${r}`);
+          res.status(200).send("ok");
+          return;
+        }
+      } catch (err) {
+        logger.error(`mpWebhook pase (payment sin club): ${err.message || err}`);
+        res.status(500).send("error");
+        return;
+      }
+    }
     logger.warn(`mpWebhook: club desconocido (${clubId || "sin club"}) · firma ${firmaTxt} · ${datos.tipo || "?"} ${datos.dataId || "?"}`);
     res.status(401).send("club desconocido");
     return;
@@ -4247,6 +4264,17 @@ async function vincularPreapprovalPase(clubRef, pre) {
 }
 
 // Notificaciones de suscripciones (subscription_preapproval / subscription_authorized_payment): se releen de la API
+// Club dueño de la cuenta de MP (user_id de la notificación) → clubId | null
+async function clubPorUsuarioMp(userId) {
+  if (!userId) return null;
+  const q = await db.collectionGroup("privado").where("userId", "in", [Number(userId), String(userId)]).limit(5).get();
+  const doc = q.docs.find((d) => d.id === "mpCuenta" && d.ref.parent.parent && d.ref.parent.parent.parent.id === "clubs");
+  return doc ? doc.ref.parent.parent.id : null;
+}
+// Pago de una suscripción → id de su preapproval (MP lo pone en metadata o en point_of_interaction)
+const preapprovalDePago = (pay) =>
+  String((pay && pay.metadata && (pay.metadata.preapproval_id || pay.metadata.preapprovalId)) || (pay && pay.point_of_interaction && pay.point_of_interaction.transaction_data && pay.point_of_interaction.transaction_data.subscription_id) || "") || null;
+
 async function procesarNotificacionPase(clubRef, tipo, dataId, tokens) {
   const M = await membresiasUtil();
   if (!tokens || !tokens.accessToken || !dataId) return "sin tokens o id";
@@ -4292,8 +4320,16 @@ async function procesarNotificacionPase(clubRef, tipo, dataId, tokens) {
       return resumen;
     });
   }
-  if (tipo === "subscription_authorized_payment") {
-    const ap = await leer(`/authorized_payments/${encodeURIComponent(dataId)}`);
+  if (tipo === "subscription_authorized_payment" || tipo === "payment_pase") {
+    let ap;
+    if (tipo === "payment_pase") {
+      // MP a veces avisa el cobro de la suscripción solo como "payment": se relee el pago y se arma el mismo cobro
+      const pay = await leer(`/v1/payments/${encodeURIComponent(dataId)}`);
+      if (!pay) return "pago no encontrado";
+      const preDelPago = preapprovalDePago(pay);
+      if (!preDelPago) return "pago sin suscripción";
+      ap = { id: pay.id, preapproval_id: preDelPago, status: pay.status === "approved" ? "processed" : pay.status, payment: { id: pay.id, status: pay.status }, transaction_amount: pay.transaction_amount };
+    } else ap = await leer(`/authorized_payments/${encodeURIComponent(dataId)}`);
     if (!ap) return "cobro no encontrado";
     const preId = String(ap.preapproval_id || "");
     if (!preId) return "cobro sin preapproval";
