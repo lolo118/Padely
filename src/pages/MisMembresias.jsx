@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Crown } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
-import { cancelarPase, getMisMembresias, getPase } from "../services/membresiasService";
+import { cancelarPase, escucharMiSocio, getMisMembresias, getPase } from "../services/membresiasService";
 import { toast } from "../components/Toast";
 import { confirmar } from "../components/ConfirmDialog";
 import { DIAS_CONSERVA_PUNTOS, ESTADOS_SOCIO, ETIQUETA_NIVEL, TONO_NIVEL, estadoSocio, proximoNivel, textosBeneficios } from "../utils/membresias";
 import { svgQr } from "../utils/qr";
 import { formatFechaLarga } from "../utils/formatDate";
 import useTituloPagina from "../hooks/useTituloPagina";
-import { Badge, Button, Card } from "../components/ui";
+import { Alert, Badge, Button, Card } from "../components/ui";
 
 // /membresias (P3-16): los Pases Club del jugador: nivel (Bronce / Plata / Oro), puntos y cuánto falta para el
 // próximo, el QR (→ /s/:token) para mostrar en el club, los beneficios del nivel (con los sponsors) y la baja (corta el débito de Mercado Pago; los beneficios terminan ya, los puntos se guardan 90 días).
+// Vuelta de Mercado Pago (?club=<clubId>): el Pase queda "pendiente" hasta que llega el webhook de la suscripción
+const ESPERA_LARGA_MS = 2 * 60 * 1000;
 const TONO = { pendiente: "warning", activa: "success", vencida: "danger", cancelada: "neutral", rechazada: "neutral" };
 
 export default function MisMembresias() {
@@ -20,6 +22,30 @@ export default function MisMembresias() {
   const user = useAuthStore((s) => s.user);
   const [lista, setLista] = useState(null);
   const [version, setVersion] = useState(0);
+  const [params] = useSearchParams();
+  const clubVuelta = params.get("club") || "";
+  const [confirmando, setConfirmando] = useState(false);
+  const [esperaLarga, setEsperaLarga] = useState(false);
+
+  // Vuelta de Mercado Pago: mientras el socio de ese club siga "pendiente", "Estamos confirmando tu suscripción"
+  useEffect(() => {
+    if (!clubVuelta || !user?.uid) return undefined;
+    let estabaPendiente = false;
+    const t = setTimeout(() => setEsperaLarga(true), ESPERA_LARGA_MS);
+    const corte = escucharMiSocio(clubVuelta, user.uid, (s) => {
+      const pendiente = s?.estado === "pendiente";
+      setConfirmando(pendiente);
+      if (pendiente) estabaPendiente = true;
+      else if (estabaPendiente && s?.estado === "activa") {
+        toast.success("¡Listo! Tu Pase ya está activo");
+        setVersion((v) => v + 1);
+      }
+    });
+    return () => {
+      clearTimeout(t);
+      corte();
+    };
+  }, [clubVuelta, user?.uid]);
 
   useEffect(() => {
     if (!user?.uid) return undefined;
@@ -41,6 +67,12 @@ export default function MisMembresias() {
         <h1 className="heading-xl m-0">Mis pases</h1>
         <p className="body-sm text-ink-2 mt-1 mb-0">Mostrá el QR en el club para tus beneficios. Cuanto más jugás y consumís, más subís de nivel.</p>
       </header>
+      {confirmando && (
+        <Alert tone="info" role="status" aria-live="polite">
+          <strong>Estamos confirmando tu suscripción.</strong>{" "}
+          {esperaLarga ? "Mercado Pago todavía no nos avisó: si autorizaste el débito, tu Pase se activa solo en unos minutos (te llega un aviso)." : "Mercado Pago nos avisa en unos segundos; no hace falta que hagas nada."}
+        </Alert>
+      )}
       {lista === null ? (
         <div className="pd-skeleton h-40 rounded-lg" aria-busy="true" aria-label="Cargando" />
       ) : ordenadas.length === 0 ? (
@@ -54,13 +86,13 @@ export default function MisMembresias() {
           </div>
         </Card>
       ) : (
-        ordenadas.map((s) => <PaseCard key={`${s.clubId}-${s.id}`} socio={s} onCambio={() => setVersion((v) => v + 1)} />)
+        ordenadas.map((s) => <PaseCard key={`${s.clubId}-${s.id}`} socio={s} confirmando={confirmando && s.clubId === clubVuelta} onCambio={() => setVersion((v) => v + 1)} />)
       )}
     </div>
   );
 }
 
-function PaseCard({ socio, onCambio }) {
+function PaseCard({ socio, confirmando, onCambio }) {
   const { est } = socio;
   const [pase, setPase] = useState(null);
   useEffect(() => {
@@ -120,7 +152,7 @@ function PaseCard({ socio, onCambio }) {
           Te faltan <strong>{proximo.faltan} puntos</strong> para {ETIQUETA_NIVEL[proximo.siguiente]}.
         </p>
       )}
-      {est.estado === "pendiente" && <p className="body-sm text-ink-2 mt-2 mb-0">Falta que autorices el débito en Mercado Pago: entrá a la pestaña Pase del club.</p>}
+      {est.estado === "pendiente" && !confirmando && <p className="body-sm text-ink-2 mt-2 mb-0">Falta que autorices el débito en Mercado Pago: entrá a la pestaña Pase del club.</p>}
       {(est.estado === "cancelada" || est.estado === "vencida") && <p className="body-sm text-ink-2 mt-2 mb-0">Tus puntos se guardan {DIAS_CONSERVA_PUNTOS} días desde la baja: si volvés antes, seguís en tu nivel.</p>}
       {est.activa && (
         <div className="mt-3 flex flex-col sm:flex-row gap-4 items-start">

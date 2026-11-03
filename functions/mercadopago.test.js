@@ -212,3 +212,47 @@ test("P3-14 C: pagos de inscripción (referencia, decisión, comisión de torneo
   assert.equal(pref.body.external_reference, "ins_p1");
   assert.equal(pref.body.marketplace_fee, 600);
 });
+
+test("Pase con plan (P3-16e): cuerpo del plan, cuándo crear/actualizar, link con referencia", () => {
+  assert.deepEqual(mp.cuerpoPlanPase({ reason: "Pase Club Central", meses: 3, precio: 15000, backUrl: "https://padely.netlify.app/membresias?club=c1" }), {
+    reason: "Pase Club Central",
+    back_url: "https://padely.netlify.app/membresias?club=c1",
+    auto_recurring: { frequency: 3, frequency_type: "months", transaction_amount: 15000, currency_id: "ARS" },
+  });
+  assert.equal(mp.accionPlanPase({ precio: 0 }, "X"), null);
+  assert.equal(mp.accionPlanPase({ precio: 1000, meses: 1 }, "X"), "crear");
+  const mpOk = { planId: "p1", precio: 1000, meses: 1, reason: "X" };
+  assert.equal(mp.accionPlanPase({ precio: 1000, meses: 1, mp: mpOk }, "X"), null);
+  assert.equal(mp.accionPlanPase({ precio: 1200, meses: 1, mp: mpOk }, "X"), "actualizar");
+  assert.equal(mp.accionPlanPase({ precio: 1000, meses: 3, mp: mpOk }, "X"), "actualizar");
+  assert.equal(mp.accionPlanPase({ precio: 1000, meses: 1, mp: mpOk }, "Y"), "actualizar");
+  assert.equal(mp.referenciaPase("c1", "u1"), "pase_c1_u1");
+  assert.equal(mp.uidDeReferenciaPase("pase_c1_u1", "c1"), "u1");
+  assert.equal(mp.uidDeReferenciaPase("pase_c2_u1", "c1"), null);
+  assert.equal(mp.uidDeReferenciaPase(null, "c1"), null);
+  const link = mp.initPointConReferencia("https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=abc", "pase_c1_u1");
+  assert.match(link, /preapproval_plan_id=abc/);
+  assert.match(link, /external_reference=pase_c1_u1/);
+  assert.equal(mp.initPointConReferencia(null, "x"), null);
+});
+
+test("Pase con plan (P3-16e): a qué socio va una preapproval nueva", () => {
+  const socios = [
+    { uid: "viejo", estado: "pendiente", solicitadoMs: 1000, preapprovalId: null },
+    { uid: "nuevo", estado: "pendiente", solicitadoMs: 5000, preapprovalId: null },
+    { uid: "ocupado", estado: "pendiente", solicitadoMs: 9000, preapprovalId: "otra" },
+    { uid: "mail", estado: "cancelada", solicitadoMs: 100, preapprovalId: null },
+  ];
+  // 1) external_reference de este club
+  assert.deepEqual(mp.elegirSocioPreapproval({ pre: { id: "p", external_reference: "pase_c1_viejo" }, clubId: "c1", socios }), { uid: "viejo", via: "external_reference" });
+  // referencia de otro club → no cuenta
+  assert.equal(mp.elegirSocioPreapproval({ pre: { id: "p", external_reference: "pase_c2_viejo" }, clubId: "c1", socios }).via, "pendiente_reciente");
+  // 2) payer_email = cuenta de Padely
+  assert.deepEqual(mp.elegirSocioPreapproval({ pre: { id: "p" }, clubId: "c1", socios, uidPorEmail: "mail" }), { uid: "mail", via: "payer_email" });
+  // 3) el pendiente más reciente sin otra preapproval
+  assert.deepEqual(mp.elegirSocioPreapproval({ pre: { id: "p" }, clubId: "c1", socios }), { uid: "nuevo", via: "pendiente_reciente" });
+  // un socio ya vinculado a OTRA preapproval no se pisa; a la misma, sí
+  assert.equal(mp.elegirSocioPreapproval({ pre: { id: "p", external_reference: "pase_c1_ocupado" }, clubId: "c1", socios }).uid, "nuevo");
+  assert.equal(mp.elegirSocioPreapproval({ pre: { id: "otra", external_reference: "pase_c1_ocupado" }, clubId: "c1", socios }).uid, "ocupado");
+  assert.equal(mp.elegirSocioPreapproval({ pre: { id: "p" }, clubId: "c1", socios: [] }), null);
+});

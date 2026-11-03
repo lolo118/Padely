@@ -7,14 +7,13 @@ import { formatPrecio } from "../utils/format";
 import { formatFechaLarga } from "../utils/formatDate";
 import Dialogo from "./Dialogo";
 import { toast } from "./Toast";
-import { Alert, Badge, Button, Card, Field, Input } from "./ui";
+import { Alert, Badge, Button, Card } from "./ui";
 
 // Pestaña "Pase" de la página del club (P3-16): el Pase Club con su precio, los niveles Bronce / Plata / Oro (puntos
 // y beneficios de cada uno) y la suscripción con Mercado Pago (débito automático: se autoriza una vez).
 export default function SociosClub({ club, pase, miSocio, user }) {
   const navigate = useNavigate();
   const [dialogo, setDialogo] = useState(false);
-  const [email, setEmail] = useState(user?.email || "");
   const [enviando, setEnviando] = useState(false);
   const est = estadoSocio(miSocio);
   const conMp = club.mercadoPago?.conectado === true;
@@ -32,7 +31,7 @@ export default function SociosClub({ club, pase, miSocio, user }) {
     e?.preventDefault?.();
     setEnviando(true);
     try {
-      await suscribirPase({ clubId: club.id, email: email.trim() });
+      await suscribirPase({ clubId: club.id });
     } catch (err) {
       console.error("No se pudo abrir la suscripción:", err);
       toast.error(err?.message || "No pudimos abrir Mercado Pago. Probá de nuevo.");
@@ -112,17 +111,13 @@ export default function SociosClub({ club, pase, miSocio, user }) {
           acciones={
             <>
               <Button onClick={() => setDialogo(false)}>Cancelar</Button>
-              <Button type="submit" variant="primary" disabled={!email.includes("@")} cargando={enviando ? "Abriendo Mercado Pago…" : ""}>
+              <Button type="submit" variant="primary" cargando={enviando ? "Abriendo Mercado Pago…" : ""}>
                 Ir a Mercado Pago
               </Button>
             </>
           }
         >
-          <div className="mt-4">
-            <Field label="Email de tu cuenta de Mercado Pago" help="Tiene que ser el mismo con el que entrás a Mercado Pago.">
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} data-autofocus maxLength={120} />
-            </Field>
-          </div>
+          <p className="body-sm text-ink-2 mt-4 mb-0">Entrás con tu cuenta de Mercado Pago y autorizás el débito. Cuando volvés a Padely, confirmamos tu Pase en unos segundos.</p>
         </Dialogo>
       )}
     </div>

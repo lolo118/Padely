@@ -241,7 +241,75 @@ function aplicarPiezas(cuenta, piezas = []) {
 // Número de venta online: "MP-000123"
 const numeroMp = (n) => `MP-${String(Math.max(1, Math.trunc(Number(n) || 1))).padStart(6, "0")}`;
 
+
+// ---------------------------------------------------------------------------
+// Pase Club con "suscripción con plan" (P3-16e). Cada club tiene UN preapproval_plan en SU cuenta de MP (lo crea
+// onPaseEscrito con el token del club); el jugador se suscribe desde el init_point del plan y MP crea la preapproval.
+// Sin payer_email: el webhook vincula la preapproval con el socio.
+// ---------------------------------------------------------------------------
+const PREFIJO_REF_PASE = "pase_";
+const referenciaPase = (clubId, uid) => `${PREFIJO_REF_PASE}${clubId}_${uid}`;
+// uid de una referencia "pase_<clubId>_<uid>" de ESE club; null si no es de ese club
+function uidDeReferenciaPase(ref, clubId) {
+  const pre = `${PREFIJO_REF_PASE}${clubId}_`;
+  if (typeof ref !== "string" || !clubId || !ref.startsWith(pre)) return null;
+  const uid = ref.slice(pre.length);
+  return /^[A-Za-z0-9_-]{1,128}$/.test(uid) ? uid : null;
+}
+
+// Cuerpo de POST/PUT /preapproval_plan
+function cuerpoPlanPase({ reason, meses, precio, backUrl }) {
+  return {
+    reason: String(reason || "Pase Club").slice(0, 120),
+    back_url: backUrl,
+    auto_recurring: { frequency: Math.max(1, Math.round(Number(meses) || 1)), frequency_type: "months", transaction_amount: Math.round(Number(precio) * 100) / 100, currency_id: "ARS" },
+  };
+}
+
+// Qué hay que hacer con el plan de MP del Pase: "crear" (no hay), "actualizar" (cambió precio, meses o nombre) o null
+function accionPlanPase(pase, reason) {
+  if (!pase || !(Number(pase.precio) > 0)) return null;
+  const m = pase.mp || {};
+  if (!m.planId) return "crear";
+  const meses = Math.max(1, Math.round(Number(pase.meses) || 1));
+  if (Number(m.precio) !== Number(pase.precio) || Number(m.meses) !== meses || (reason && m.reason !== reason)) return "actualizar";
+  return null;
+}
+
+// Link del plan con la referencia del jugador (si MP la pasa a la preapproval, el webhook la usa; si no, la ignora)
+function initPointConReferencia(initPoint, ref) {
+  if (!initPoint) return null;
+  try {
+    const u = new URL(initPoint);
+    if (ref) u.searchParams.set("external_reference", ref);
+    return u.toString();
+  } catch {
+    return initPoint;
+  }
+}
+
+// A qué socio pertenece una preapproval nueva del plan del club. Orden: external_reference (si MP la pasa),
+// payer_email = email de la cuenta de Padely, y si no, el "pendiente" más reciente del club sin otra preapproval.
+// socios: [{ uid, estado, solicitadoMs, preapprovalId }]; uidPorEmail: uid de Padely con el payer_email (o null).
+function elegirSocioPreapproval({ pre, clubId, socios = [], uidPorEmail = null }) {
+  const porUid = new Map(socios.map((s) => [s.uid, s]));
+  const preId = String((pre && pre.id) || "");
+  const libre = (s) => s && (!s.preapprovalId || s.preapprovalId === preId);
+  const deRef = uidDeReferenciaPase(pre && pre.external_reference, clubId);
+  if (deRef && libre(porUid.get(deRef))) return { uid: deRef, via: "external_reference" };
+  if (uidPorEmail && libre(porUid.get(uidPorEmail))) return { uid: uidPorEmail, via: "payer_email" };
+  const pendientes = socios.filter((s) => s.estado === "pendiente" && libre(s)).sort((a, b) => (Number(b.solicitadoMs) || 0) - (Number(a.solicitadoMs) || 0));
+  if (pendientes.length) return { uid: pendientes[0].uid, via: "pendiente_reciente" };
+  return null;
+}
+
 module.exports = {
+  accionPlanPase,
+  cuerpoPlanPase,
+  elegirSocioPreapproval,
+  initPointConReferencia,
+  referenciaPase,
+  uidDeReferenciaPase,
   COMISION_MAX_PCT,
   MP_API,
   MP_AUTH,

@@ -1,4 +1,4 @@
-import { collection, collectionGroup, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
+import { collection, collectionGroup, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "../lib/firebase";
 import { PASE_ID, normalizarPase } from "../utils/membresias";
@@ -7,7 +7,7 @@ import { PASE_ID, normalizarPase } from "../utils/membresias";
 // Los socios (clubs/{c}/socios/{uid}) los escriben las Functions: suscripción por Mercado Pago (débito automático),
 // cobros, puntos, nivel y bajas. El jugador y el club solo tocan la postulación al equipo del club.
 const llamar = (nombre) => async (datos) => (await httpsCallable(functions, nombre)(datos)).data;
-const mpSuscribirPase = llamar("mpSuscribirPase"); // { clubId, email } → { initPoint }
+const mpSuscribirPase = llamar("mpSuscribirPase"); // { clubId } → { initPoint } (link del plan del club en MP)
 export const cancelarPase = llamar("mpCancelarPase"); // { clubId, uid? }
 
 const sociosRef = (clubId) => collection(db, "clubs", clubId, "socios");
@@ -26,12 +26,22 @@ export const guardarPase = async (clubId, datos) => {
   return pase;
 };
 
-// Suscribirse: Mercado Pago devuelve el link para autorizar el débito automático
-export const suscribirPase = async ({ clubId, email }) => {
-  const r = await mpSuscribirPase({ clubId, email });
+// Suscribirse: el socio queda "pendiente" y Mercado Pago abre el plan del club (la cuenta se elige en MP)
+export const suscribirPase = async ({ clubId }) => {
+  const r = await mpSuscribirPase({ clubId });
   if (!r?.initPoint) throw new Error("Mercado Pago no devolvió el link");
   window.location.assign(r.initPoint);
   return r;
+};
+
+// Escucha el socio propio de un club (vuelta de Mercado Pago: "pendiente" hasta que llega el webhook)
+export const escucharMiSocio = (clubId, uid, cb) => {
+  if (!clubId || !uid) return () => {};
+  return onSnapshot(
+    doc(sociosRef(clubId), uid),
+    (snap) => cb(snap.exists() ? { id: snap.id, clubId, ...snap.data() } : null),
+    () => cb(null),
+  );
 };
 
 export const getMiSocio = async (clubId, uid) => {

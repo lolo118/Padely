@@ -3987,12 +3987,64 @@ exports.onSocioEscrito = onDocumentWritten("clubs/{clubId}/socios/{socioId}", as
   logger.info(`socio ${clubId}/${socioId}: ${estAntes || "nuevo"} → ${estDespues}`);
 });
 
-// Cambió el Pase del club (umbrales o beneficios) → cada socio activo recalcula nivel y beneficios
-exports.onPaseEscrito = onDocumentWritten("clubs/{clubId}/planesSocio/{planId}", async (event) => {
+// P3-16e: el Pase se cobra con "suscripción con plan": cada club tiene UN preapproval_plan en SU cuenta de MP
+// (clubs/{c}/planesSocio/pase.mp = { planId, initPoint, precio, meses, reason }). Se crea al guardar el Pase y se
+// actualiza (PUT) si cambian el precio, los meses o el nombre. planesPaseIndice/{planId} → { clubId } (solo
+// Functions) dice de qué club es cada plan, aunque alguien toque pase.mp.
+const planesPaseIndice = () => db.collection("planesPaseIndice");
+async function asegurarPlanPase(clubRef, club, pase, tokens) {
+  const M = await membresiasUtil();
+  const reason = M.nombrePase(club);
+  const actual = (pase && pase.mp) || {};
+  let accion = mp.accionPlanPase(pase, reason);
+  if (!accion && actual.planId) {
+    const i = await planesPaseIndice().doc(String(actual.planId)).get();
+    if (!i.exists || i.data().clubId !== clubRef.id) accion = "crear";
+  }
+  if (!accion) return actual;
+  if (!tokens || !tokens.accessToken) throw new HttpsError("failed-precondition", "El club todavía no conectó Mercado Pago");
+  const meses = Math.max(1, Math.round(Number(pase.meses) || 1));
+  const cuerpo = mp.cuerpoPlanPase({ reason, meses, precio: pase.precio, backUrl: `${APP_URL}/membresias?club=${clubRef.id}` });
+  let r = null;
+  if (accion === "actualizar") {
+    try {
+      r = await mpFetch(`/preapproval_plan/${encodeURIComponent(actual.planId)}`, { method: "PUT", token: tokens.accessToken, body: cuerpo });
+    } catch (err) {
+      if (err.status !== 404) throw err;
+      accion = "crear";
+    }
+  }
+  if (accion === "crear") r = await mpFetch("/preapproval_plan", { method: "POST", token: tokens.accessToken, idempotencia: `plan_pase_${clubRef.id}_${Date.now()}`, body: cuerpo });
+  const planId = String((r && r.id) || (accion === "actualizar" ? actual.planId : ""));
+  const initPoint = (r && r.init_point) || (accion === "actualizar" ? actual.initPoint : null);
+  if (!planId || !initPoint) throw new Error("Mercado Pago no devolvió el plan del Pase");
+  if (accion === "crear") await planesPaseIndice().doc(planId).set({ clubId: clubRef.id, creadoEn: FieldValue.serverTimestamp() });
+  const datos = { planId, initPoint, precio: Number(pase.precio), meses, reason };
+  await paseRef(clubRef).set({ mp: { ...datos, sincronizadoEn: FieldValue.serverTimestamp() } }, { merge: true });
+  logger.info(`pase ${clubRef.id}: plan de MP ${planId} ${accion === "crear" ? "creado" : "actualizado"} ($ ${datos.precio} cada ${meses} mes/es)`);
+  return datos;
+}
+
+// Cambió el Pase del club → (1) plan de MP al día (precio / meses), (2) cada socio activo recalcula nivel y beneficios
+exports.onPaseEscrito = onDocumentWritten({ document: "clubs/{clubId}/planesSocio/{planId}", secrets: [MP_CLIENT_SECRET] }, async (event) => {
   if (event.params.planId !== "pase" || !event.data.after.exists) return;
   const M = await membresiasUtil();
   const pase = event.data.after.data();
   const clubRef = db.collection("clubs").doc(event.params.clubId);
+  const club = (await clubRef.get()).data() || {};
+  // Escribir pase.mp vuelve a disparar este trigger: ahí accionPlanPase da null y no se toca MP
+  if (mp.accionPlanPase(pase, M.nombrePase(club))) {
+    try {
+      const tokens = await tokensDelClub(clubRef);
+      if (tokens && tokens.accessToken) await asegurarPlanPase(clubRef, club, pase, tokens);
+      else logger.info(`pase ${clubRef.id}: sin Mercado Pago conectado, el plan se crea cuando lo conecte y alguien se suscriba`);
+    } catch (err) {
+      // Sin escribir nada (escribir volvería a disparar el trigger): mpSuscribirPase lo reintenta
+      logger.error(`pase ${clubRef.id}: no se pudo sincronizar el plan de MP: ${err.status || ""} ${err.message} · ${JSON.stringify(err.detalle || {}).slice(0, 500)}`);
+    }
+  }
+  const cambioNiveles = !event.data.before.exists || JSON.stringify(event.data.before.data().umbrales || {}) !== JSON.stringify(pase.umbrales || {}) || JSON.stringify(event.data.before.data().beneficios || {}) !== JSON.stringify(pase.beneficios || {});
+  if (!cambioNiveles) return;
   const activos = await clubRef.collection("socios").where("estado", "==", "activa").get();
   await escribirEnLotes(
     activos.docs.map((d) => (b) => {
@@ -4050,13 +4102,12 @@ exports.onVentaAnuladaPuntosPase = onDocumentUpdated("clubs/{clubId}/ventas/{num
   });
 });
 
-// Socio del Pase → cliente de su suscripción en Mercado Pago (débito automático con el token del club)
+// Socio del Pase → link del plan del club en Mercado Pago (P3-16e: sin email; MP pide la cuenta en el checkout).
+// El socio queda "pendiente" y el webhook (subscription_preapproval) vincula la preapproval que crea MP.
 exports.mpSuscribirPase = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, async (request) => {
   const uid = exigirAuth(request);
   const clubId = texto(request.data && request.data.clubId, 80);
-  // Tal cual lo escribió: los usuarios de prueba de MP tienen el email en mayúsculas (TESTUSER…@testuser.com)
-  const email = texto(request.data && request.data.email, 120);
-  if (!clubId || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpsError("invalid-argument", "clubId y el email de tu cuenta de Mercado Pago");
+  if (!clubId) throw new HttpsError("invalid-argument", "clubId");
   const clubRef = db.collection("clubs").doc(clubId);
   const club = (await clubRef.get()).data();
   if (!club) throw new HttpsError("not-found", "El club no existe");
@@ -4066,6 +4117,7 @@ exports.mpSuscribirPase = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }
   const pSnap = await paseRef(clubRef).get();
   if (!pSnap.exists || pSnap.data().visible === false) throw new HttpsError("failed-precondition", "El club todavía no lanzó su Pase");
   const pase = pSnap.data();
+  if (!(Number(pase.precio) > 0)) throw new HttpsError("failed-precondition", "El Pase del club no tiene precio");
   const M = await membresiasUtil();
   const socioRef = clubRef.collection("socios").doc(uid);
   const sSnap = await socioRef.get();
@@ -4082,49 +4134,30 @@ exports.mpSuscribirPase = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }
       }
     }
   }
-  const nombre = await nombreDeUsuario(uid, "Jugador");
-  const ref = `pase_${clubId}_${uid}`;
-  const cuerpo = {
-    reason: M.nombrePase(club),
-    external_reference: ref,
-    payer_email: email,
-    back_url: `${APP_URL}/membresias`,
-    notification_url: `${MP_WEBHOOK_URL}?club=${clubId}`,
-    auto_recurring: { frequency: Number(pase.meses) || 1, frequency_type: "months", transaction_amount: Number(pase.precio), currency_id: "ARS" },
-    status: "pending",
-  };
-  const crear = (body) => mpFetch("/preapproval", { method: "POST", token: tokens.accessToken, idempotencia: `${ref}_${Date.now()}`, body });
-  let r;
+  let plan;
   try {
-    try {
-      r = await crear(cuerpo);
-    } catch (err) {
-      // Si MP no acepta notification_url en /preapproval, se reintenta sin ella (el webhook de la app lo encuentra igual)
-      if (err.status !== 400) throw err;
-      logger.warn(`mpSuscribirPase ${clubId}: 400 con notification_url (${JSON.stringify(err.detalle || {}).slice(0, 500)}); reintento sin ella`);
-      const { notification_url: _n, ...sinNotificacion } = cuerpo;
-      r = await crear(sinNotificacion);
-    }
+    plan = await asegurarPlanPase(clubRef, club, pase, tokens);
   } catch (err) {
-    logger.error(`mpSuscribirPase ${clubId}: ${err.status || ""} ${err.message} · ${JSON.stringify(err.detalle || {}).slice(0, 800)}`);
+    if (err instanceof HttpsError) throw err;
+    logger.error(`mpSuscribirPase ${clubId}: plan de MP: ${err.status || ""} ${err.message} · ${JSON.stringify(err.detalle || {}).slice(0, 800)}`);
     const causa = err.detalle && (err.detalle.message || (Array.isArray(err.detalle.cause) && err.detalle.cause[0] && err.detalle.cause[0].description));
-    throw new HttpsError("unavailable", err.status === 400 ? `Mercado Pago no aceptó la suscripción${causa ? ` (${String(causa).slice(0, 120)})` : ""}: revisá que el email sea el de tu cuenta de Mercado Pago` : "Mercado Pago no respondió. Probá de nuevo en un momento.");
+    throw new HttpsError("unavailable", err.status === 400 ? `Mercado Pago no aceptó el Pase del club${causa ? ` (${String(causa).slice(0, 120)})` : ""}` : "Mercado Pago no respondió. Probá de nuevo en un momento.");
   }
-  if (!r || !r.id || !r.init_point) throw new HttpsError("unavailable", "Mercado Pago no devolvió el link de la suscripción");
-  await db.collection("suscripcionesPaseIndice").doc(String(r.id)).set({ clubId, uid, creadoEn: FieldValue.serverTimestamp() });
+  const nombre = await nombreDeUsuario(uid, "Jugador");
   await socioRef.set(
     {
       uid,
       nombre,
       ...(s && s.estado === "activa" ? {} : { estado: "pendiente" }),
-      suscripcion: { preapprovalId: String(r.id), estado: r.status || "pending", payerEmail: email, monto: Number(pase.precio), meses: Number(pase.meses) || 1 },
+      // Suscripción nueva: sin preapproval hasta que llegue el webhook
+      suscripcion: { planId: plan.planId, preapprovalId: null, estado: "pendiente", payerEmail: null, monto: Number(pase.precio), meses: Math.max(1, Math.round(Number(pase.meses) || 1)), cobrado: false, primerCobroPendiente: false },
       solicitadoEn: FieldValue.serverTimestamp(),
       ...(s ? {} : { puntos: 0, nivel: "bronce", creadoEn: FieldValue.serverTimestamp() }),
     },
     { merge: true },
   );
-  logger.info(`mpSuscribirPase ${clubId}: ${uid} preapproval ${r.id}`);
-  return { ok: true, initPoint: r.init_point };
+  logger.info(`mpSuscribirPase ${clubId}: ${uid} pendiente en el plan ${plan.planId}`);
+  return { ok: true, initPoint: mp.initPointConReferencia(plan.initPoint, mp.referenciaPase(clubId, uid)) };
 });
 
 // El socio se da de baja: se cancela el débito en MP y los beneficios terminan en el acto
@@ -4157,35 +4190,128 @@ exports.mpCancelarPase = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] },
   return { ok: true };
 });
 
+// P3-16e: una preapproval nueva del plan de un club → su socio. Primero external_reference (si MP la pasa), después
+// payer_email = email de la cuenta de Padely, y si no, el "pendiente" más reciente del club sin otra preapproval.
+// Escribe suscripcionesPaseIndice/{preapprovalId} → { clubId, uid, via }. Devuelve { uid } o { motivo }.
+async function vincularPreapprovalPase(clubRef, pre) {
+  const preId = String(pre.id);
+  const planId = String(pre.preapproval_plan_id || "");
+  if (!planId) return { motivo: "preapproval sin plan" };
+  const pIdx = await planesPaseIndice().doc(planId).get();
+  if (!pIdx.exists || pIdx.data().clubId !== clubRef.id) return { motivo: "plan de otro club" };
+  const email = String(pre.payer_email || "").trim().toLowerCase();
+  let uidPorEmail = null;
+  if (email) {
+    try {
+      uidPorEmail = (await getAuth().getUserByEmail(email)).uid;
+    } catch {
+      uidPorEmail = null;
+    }
+  }
+  const aCandidato = (d) => {
+    const x = d.data();
+    return { uid: d.id, estado: x.estado, solicitadoMs: msDe(x.solicitadoEn), preapprovalId: (x.suscripcion && x.suscripcion.preapprovalId) || null };
+  };
+  const socios = (await clubRef.collection("socios").where("estado", "==", "pendiente").get()).docs.map(aCandidato);
+  for (const u of [mp.uidDeReferenciaPase(pre.external_reference, clubRef.id), uidPorEmail]) {
+    if (!u || socios.some((x) => x.uid === u)) continue;
+    const d = await clubRef.collection("socios").doc(u).get();
+    if (d.exists) socios.push(aCandidato(d));
+  }
+  const elegido = mp.elegirSocioPreapproval({ pre, clubId: clubRef.id, socios, uidPorEmail });
+  if (!elegido) return { motivo: "ningún socio pendiente para vincular" };
+  const idxRef = db.collection("suscripcionesPaseIndice").doc(preId);
+  const socioRef = clubRef.collection("socios").doc(elegido.uid);
+  const r = await db.runTransaction(async (tx) => {
+    const [iSnap, sSnap] = await Promise.all([tx.get(idxRef), tx.get(socioRef)]);
+    if (iSnap.exists) return { uid: iSnap.data().uid };
+    if (!sSnap.exists) return { motivo: "socio borrado" };
+    const otra = sSnap.data().suscripcion && sSnap.data().suscripcion.preapprovalId;
+    if (otra && otra !== preId) return { motivo: "el socio ya tiene otra preapproval" };
+    const ar = pre.auto_recurring || {};
+    tx.set(idxRef, { clubId: clubRef.id, uid: elegido.uid, via: elegido.via, planId, creadoEn: FieldValue.serverTimestamp() });
+    tx.update(socioRef, {
+      "suscripcion.preapprovalId": preId,
+      "suscripcion.planId": planId,
+      "suscripcion.estado": pre.status || "pending",
+      "suscripcion.payerEmail": email || null,
+      "suscripcion.vinculadaPor": elegido.via,
+      ...(Number(ar.transaction_amount) > 0 ? { "suscripcion.monto": Number(ar.transaction_amount) } : {}),
+      ...(Number(ar.frequency) > 0 ? { "suscripcion.meses": Number(ar.frequency) } : {}),
+      actualizadoEn: FieldValue.serverTimestamp(),
+    });
+    return { uid: elegido.uid };
+  });
+  if (r.uid) logger.info(`pase ${clubRef.id}: preapproval ${preId} → socio ${r.uid} (${elegido.via})`);
+  return r;
+}
+
 // Notificaciones de suscripciones (subscription_preapproval / subscription_authorized_payment): se releen de la API
 async function procesarNotificacionPase(clubRef, tipo, dataId, tokens) {
   const M = await membresiasUtil();
   if (!tokens || !tokens.accessToken || !dataId) return "sin tokens o id";
   const leer = (path) => mpFetch(path, { token: tokens.accessToken }).catch((err) => (err.status === 404 ? null : Promise.reject(err)));
+  // Índice de la preapproval; si no está (preapproval nueva del plan), se vincula con su socio
+  const indiceDe = async (pre) => {
+    const ref = db.collection("suscripcionesPaseIndice").doc(String(pre.id));
+    let idx = await ref.get();
+    if (!idx.exists) {
+      const v = await vincularPreapprovalPase(clubRef, pre);
+      if (!v.uid) return { motivo: v.motivo };
+      idx = await ref.get();
+    }
+    if (!idx.exists || idx.data().clubId !== clubRef.id) return { motivo: "preapproval de otro club" };
+    return { uid: idx.data().uid };
+  };
   if (tipo === "subscription_preapproval") {
     const pre = await leer(`/preapproval/${encodeURIComponent(dataId)}`);
     if (!pre) return "preapproval no encontrada";
-    const idx = await db.collection("suscripcionesPaseIndice").doc(String(pre.id)).get();
-    if (!idx.exists || idx.data().clubId !== clubRef.id) return "preapproval de otro club";
-    const socioRef = clubRef.collection("socios").doc(idx.data().uid);
-    const sSnap = await socioRef.get();
-    if (!sSnap.exists || (sSnap.data().suscripcion || {}).preapprovalId !== String(pre.id)) return "suscripción vieja";
-    const cambios = { "suscripcion.estado": pre.status, actualizadoEn: FieldValue.serverTimestamp() };
-    // Cancelada o pausada desde Mercado Pago → baja (beneficios afuera ya, puntos 90 días)
-    if ((pre.status === "cancelled" || pre.status === "paused") && sSnap.data().estado !== "cancelada") Object.assign(cambios, aTsCampos(M.cambiosBaja(Date.now())));
-    await socioRef.update(cambios);
-    return `preapproval ${pre.id}: ${pre.status}`;
+    const idx = await indiceDe(pre);
+    if (!idx.uid) return idx.motivo;
+    const socioRef = clubRef.collection("socios").doc(idx.uid);
+    const preId = String(pre.id);
+    return db.runTransaction(async (tx) => {
+      const [sSnap, pSnap] = await Promise.all([tx.get(socioRef), tx.get(paseRef(clubRef))]);
+      if (!sSnap.exists || (sSnap.data().suscripcion || {}).preapprovalId !== preId) return "suscripción vieja";
+      const s = socioPlano(sSnap.data());
+      const sus = s.suscripcion || {};
+      const cambios = { "suscripcion.estado": pre.status, actualizadoEn: FieldValue.serverTimestamp() };
+      let resumen = `preapproval ${preId}: ${pre.status}`;
+      if ((pre.status === "cancelled" || pre.status === "paused") && s.estado !== "cancelada") {
+        // Cancelada o pausada desde Mercado Pago → baja (beneficios afuera ya, puntos 90 días)
+        Object.assign(cambios, aTsCampos(M.cambiosBaja(Date.now())));
+      } else if (pre.status === "authorized" && s.estado !== "activa" && !sus.cobrado) {
+        // Autorizada → Pase activo ya (el primer cobro, cuando llegue, anota la comisión sin sumar otro período)
+        const ar = pre.auto_recurring || {};
+        const pase = pSnap.exists ? pSnap.data() : { meses: 1 };
+        const c = M.registrarCobroPase({ ...s, suscripcion: { ...sus, meses: Number(ar.frequency) || sus.meses } }, pase, { ahora: Date.now(), monto: Number(ar.transaction_amount) || Number(sus.monto) || Number(pase.precio) || 0 });
+        Object.assign(cambios, aTsCampos(c), { "suscripcion.primerCobroPendiente": true });
+        resumen += " → pase activado";
+      }
+      tx.update(socioRef, cambios);
+      return resumen;
+    });
   }
   if (tipo === "subscription_authorized_payment") {
     const ap = await leer(`/authorized_payments/${encodeURIComponent(dataId)}`);
     if (!ap) return "cobro no encontrado";
     const preId = String(ap.preapproval_id || "");
-    const idx = await db.collection("suscripcionesPaseIndice").doc(preId).get();
-    if (!idx.exists || idx.data().clubId !== clubRef.id) return "cobro de otro club";
+    if (!preId) return "cobro sin preapproval";
+    let idxSnap = await db.collection("suscripcionesPaseIndice").doc(preId).get();
+    if (!idxSnap.exists) {
+      // El cobro llegó antes que la notificación de la preapproval: se vincula acá
+      const pre = await leer(`/preapproval/${encodeURIComponent(preId)}`);
+      if (!pre) return "preapproval del cobro no encontrada";
+      const idx = await indiceDe(pre);
+      if (!idx.uid) return `cobro ${ap.id}: ${idx.motivo}`;
+      idxSnap = await db.collection("suscripcionesPaseIndice").doc(preId).get();
+    }
+    if (!idxSnap.exists || idxSnap.data().clubId !== clubRef.id) return "cobro de otro club";
     const aprobado = ap.status === "processed" && ap.payment && ap.payment.status === "approved";
     if (!aprobado) return `cobro ${ap.id}: ${ap.status}/${(ap.payment && ap.payment.status) || "?"}`;
     const paymentId = String(ap.payment.id || ap.id);
-    const socioRef = clubRef.collection("socios").doc(idx.data().uid);
+    const uid = idxSnap.data().uid;
+    const socioRef = clubRef.collection("socios").doc(uid);
     const facturacion = (await db.collection("configuracionPadely").doc("facturacion").get()).data() || {};
     // Comisión de Padely sobre el Pase: 5 % salvo que el super-admin cargue otra (0 a 30)
     const pct = Math.min(30, Math.max(0, facturacion.comisionPasesPct === undefined || facturacion.comisionPasesPct === null || facturacion.comisionPasesPct === "" ? 5 : Number(facturacion.comisionPasesPct) || 0));
@@ -4199,10 +4325,19 @@ async function procesarNotificacionPase(clubRef, tipo, dataId, tokens) {
       if (actual.preapprovalId !== preId) return "suscripción vieja";
       if (actual.estado === "cancelled") return "suscripción cancelada";
       const monto = Number(ap.transaction_amount) || Number(pase.precio) || 0;
-      const c = M.registrarCobroPase(s, pase, { ahora: Date.now(), monto, paymentId });
-      tx.set(socioRef, { ...aTsCampos(c), "suscripcion.estado": "authorized", ultimoCobroEn: FieldValue.serverTimestamp(), actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
-      tx.set(comRef, { clubId: clubRef.id, uid: idx.data().uid, preapprovalId: preId, monto, pct, comision: Math.round(monto * pct) / 100, facturada: false, en: FieldValue.serverTimestamp() });
-      return "pase activado";
+      const base = { "suscripcion.estado": "authorized", "suscripcion.cobrado": true, "suscripcion.primerCobroPendiente": false, ultimoCobroEn: FieldValue.serverTimestamp(), actualizadoEn: FieldValue.serverTimestamp() };
+      let res;
+      if (actual.primerCobroPendiente && M.estadoSocio(s).activa) {
+        // El período ya lo abrió la preapproval autorizada: este cobro solo se anota
+        tx.update(socioRef, base);
+        res = "primer cobro anotado";
+      } else {
+        const c = M.registrarCobroPase(s, pase, { ahora: Date.now(), monto, paymentId });
+        tx.update(socioRef, { ...aTsCampos(c), ...base });
+        res = "pase activado";
+      }
+      tx.set(comRef, { clubId: clubRef.id, uid, preapprovalId: preId, monto, pct, comision: Math.round(monto * pct) / 100, facturada: false, en: FieldValue.serverTimestamp() });
+      return res;
     });
     if (resultado === "suscripción vieja") {
       await mpFetch(`/preapproval/${encodeURIComponent(preId)}`, { method: "PUT", token: tokens.accessToken, body: { status: "cancelled" } }).catch(() => {});
