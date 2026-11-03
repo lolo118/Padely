@@ -4054,7 +4054,8 @@ exports.onVentaAnuladaPuntosPase = onDocumentUpdated("clubs/{clubId}/ventas/{num
 exports.mpSuscribirPase = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, async (request) => {
   const uid = exigirAuth(request);
   const clubId = texto(request.data && request.data.clubId, 80);
-  const email = texto(request.data && request.data.email, 120).toLowerCase();
+  // Tal cual lo escribió: los usuarios de prueba de MP tienen el email en mayúsculas (TESTUSER…@testuser.com)
+  const email = texto(request.data && request.data.email, 120);
   if (!clubId || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpsError("invalid-argument", "clubId y el email de tu cuenta de Mercado Pago");
   const clubRef = db.collection("clubs").doc(clubId);
   const club = (await clubRef.get()).data();
@@ -4083,25 +4084,31 @@ exports.mpSuscribirPase = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }
   }
   const nombre = await nombreDeUsuario(uid, "Jugador");
   const ref = `pase_${clubId}_${uid}`;
+  const cuerpo = {
+    reason: M.nombrePase(club),
+    external_reference: ref,
+    payer_email: email,
+    back_url: `${APP_URL}/membresias`,
+    notification_url: `${MP_WEBHOOK_URL}?club=${clubId}`,
+    auto_recurring: { frequency: Number(pase.meses) || 1, frequency_type: "months", transaction_amount: Number(pase.precio), currency_id: "ARS" },
+    status: "pending",
+  };
+  const crear = (body) => mpFetch("/preapproval", { method: "POST", token: tokens.accessToken, idempotencia: `${ref}_${Date.now()}`, body });
   let r;
   try {
-    r = await mpFetch("/preapproval", {
-      method: "POST",
-      token: tokens.accessToken,
-      idempotencia: `${ref}_${Date.now()}`,
-      body: {
-        reason: M.nombrePase(club),
-        external_reference: ref,
-        payer_email: email,
-        back_url: `${APP_URL}/membresias`,
-        notification_url: `${MP_WEBHOOK_URL}?club=${clubId}`,
-        auto_recurring: { frequency: Number(pase.meses) || 1, frequency_type: "months", transaction_amount: Number(pase.precio), currency_id: "ARS" },
-        status: "pending",
-      },
-    });
+    try {
+      r = await crear(cuerpo);
+    } catch (err) {
+      // Si MP no acepta notification_url en /preapproval, se reintenta sin ella (el webhook de la app lo encuentra igual)
+      if (err.status !== 400) throw err;
+      logger.warn(`mpSuscribirPase ${clubId}: 400 con notification_url (${JSON.stringify(err.detalle || {}).slice(0, 500)}); reintento sin ella`);
+      const { notification_url: _n, ...sinNotificacion } = cuerpo;
+      r = await crear(sinNotificacion);
+    }
   } catch (err) {
-    logger.error(`mpSuscribirPase ${clubId}: ${err.status || ""} ${err.message}`);
-    throw new HttpsError("unavailable", err.status === 400 ? "Mercado Pago no aceptó la suscripción: revisá que el email sea el de tu cuenta de Mercado Pago" : "Mercado Pago no respondió. Probá de nuevo en un momento.");
+    logger.error(`mpSuscribirPase ${clubId}: ${err.status || ""} ${err.message} · ${JSON.stringify(err.detalle || {}).slice(0, 800)}`);
+    const causa = err.detalle && (err.detalle.message || (Array.isArray(err.detalle.cause) && err.detalle.cause[0] && err.detalle.cause[0].description));
+    throw new HttpsError("unavailable", err.status === 400 ? `Mercado Pago no aceptó la suscripción${causa ? ` (${String(causa).slice(0, 120)})` : ""}: revisá que el email sea el de tu cuenta de Mercado Pago` : "Mercado Pago no respondió. Probá de nuevo en un momento.");
   }
   if (!r || !r.id || !r.init_point) throw new HttpsError("unavailable", "Mercado Pago no devolvió el link de la suscripción");
   await db.collection("suscripcionesPaseIndice").doc(String(r.id)).set({ clubId, uid, creadoEn: FieldValue.serverTimestamp() });
