@@ -288,13 +288,25 @@ function initPointConReferencia(initPoint, ref) {
   }
 }
 
+// P3-16g: un socio que todavía está "pendiente" y quedó vinculado a una preapproval muerta (un intento fallido del
+// mismo checkout: MP la cancela al rechazar el primer cobro) se puede re-vincular a la nueva. Nunca se pisa una
+// autorizada; una "pending" solo la reemplaza una autorizada (la pending podría estar autorizándose en MP).
+const PREAPPROVAL_MUERTA = new Set(["cancelled", "rejected", "paused"]);
+function puedeReemplazarPreapproval({ socioEstado, actual, nueva }) {
+  if (socioEstado !== "pendiente") return false;
+  const a = String(actual || "");
+  if (a === "authorized") return false;
+  if (PREAPPROVAL_MUERTA.has(a)) return true;
+  return nueva === "authorized";
+}
+
 // A qué socio pertenece una preapproval nueva del plan del club. Orden: external_reference (si MP la pasa),
 // payer_email = email de la cuenta de Padely, y si no, el "pendiente" más reciente del club sin otra preapproval.
-// socios: [{ uid, estado, solicitadoMs, preapprovalId }]; uidPorEmail: uid de Padely con el payer_email (o null).
+// socios: [{ uid, estado, solicitadoMs, preapprovalId, susEstado }]; uidPorEmail: uid de Padely con el payer_email (o null).
 function elegirSocioPreapproval({ pre, clubId, socios = [], uidPorEmail = null }) {
   const porUid = new Map(socios.map((s) => [s.uid, s]));
   const preId = String((pre && pre.id) || "");
-  const libre = (s) => s && (!s.preapprovalId || s.preapprovalId === preId);
+  const libre = (s) => s && (!s.preapprovalId || s.preapprovalId === preId || puedeReemplazarPreapproval({ socioEstado: s.estado, actual: s.susEstado, nueva: pre && pre.status }));
   const deRef = uidDeReferenciaPase(pre && pre.external_reference, clubId);
   if (deRef && libre(porUid.get(deRef))) return { uid: deRef, via: "external_reference" };
   if (uidPorEmail && libre(porUid.get(uidPorEmail))) return { uid: uidPorEmail, via: "payer_email" };
@@ -307,6 +319,7 @@ module.exports = {
   accionPlanPase,
   cuerpoPlanPase,
   elegirSocioPreapproval,
+  puedeReemplazarPreapproval,
   initPointConReferencia,
   referenciaPase,
   uidDeReferenciaPase,

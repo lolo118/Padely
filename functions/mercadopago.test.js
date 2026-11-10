@@ -256,3 +256,34 @@ test("Pase con plan (P3-16e): a qué socio va una preapproval nueva", () => {
   assert.equal(mp.elegirSocioPreapproval({ pre: { id: "otra", external_reference: "pase_c1_ocupado" }, clubId: "c1", socios }).uid, "ocupado");
   assert.equal(mp.elegirSocioPreapproval({ pre: { id: "p" }, clubId: "c1", socios: [] }), null);
 });
+
+test("Pase con plan (P3-16g): re-vincular un socio pendiente que quedó en una preapproval fallida", () => {
+  const R = mp.puedeReemplazarPreapproval;
+  // preapproval muerta → la reemplaza cualquiera
+  for (const actual of ["cancelled", "rejected", "paused"]) {
+    assert.equal(R({ socioEstado: "pendiente", actual, nueva: "pending" }), true, actual);
+    assert.equal(R({ socioEstado: "pendiente", actual, nueva: "authorized" }), true, actual);
+  }
+  // pending: solo la reemplaza una autorizada
+  assert.equal(R({ socioEstado: "pendiente", actual: "pending", nueva: "authorized" }), true);
+  assert.equal(R({ socioEstado: "pendiente", actual: "pending", nueva: "pending" }), false);
+  assert.equal(R({ socioEstado: "pendiente", actual: null, nueva: "pending" }), false);
+  // una autorizada nunca se pisa
+  assert.equal(R({ socioEstado: "pendiente", actual: "authorized", nueva: "authorized" }), false);
+  assert.equal(R({ socioEstado: "pendiente", actual: "authorized", nueva: "pending" }), false);
+  // socio activo o dado de baja: no se toca
+  assert.equal(R({ socioEstado: "activa", actual: "cancelled", nueva: "authorized" }), false);
+  assert.equal(R({ socioEstado: "cancelada", actual: "cancelled", nueva: "authorized" }), false);
+
+  // El caso real (2026-11-10): el intento rechazado "bacbca24" se vinculó 9 s antes; llega la autorizada "39af"
+  const socios = [{ uid: "jug", estado: "pendiente", solicitadoMs: 5000, preapprovalId: "bacbca24", susEstado: "cancelled" }];
+  assert.deepEqual(mp.elegirSocioPreapproval({ pre: { id: "39af", status: "authorized" }, clubId: "c1", socios }), { uid: "jug", via: "pendiente_reciente" });
+  assert.deepEqual(mp.elegirSocioPreapproval({ pre: { id: "39af", status: "pending", external_reference: "pase_c1_jug" }, clubId: "c1", socios }), { uid: "jug", via: "external_reference" });
+  // al revés: vinculado a una autorizada, llega otra (fallida o pendiente) → no se pisa
+  const conAutorizada = [{ uid: "jug", estado: "pendiente", solicitadoMs: 5000, preapprovalId: "39af", susEstado: "authorized" }];
+  assert.equal(mp.elegirSocioPreapproval({ pre: { id: "otra", status: "cancelled" }, clubId: "c1", socios: conAutorizada }), null);
+  assert.equal(mp.elegirSocioPreapproval({ pre: { id: "otra", status: "authorized" }, clubId: "c1", socios: conAutorizada }), null);
+  // pending vs pending: no hay flip-flop
+  const conPending = [{ uid: "jug", estado: "pendiente", solicitadoMs: 5000, preapprovalId: "a", susEstado: "pending" }];
+  assert.equal(mp.elegirSocioPreapproval({ pre: { id: "b", status: "pending" }, clubId: "c1", socios: conPending }), null);
+});

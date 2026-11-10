@@ -4227,7 +4227,7 @@ async function vincularPreapprovalPase(clubRef, pre) {
   }
   const aCandidato = (d) => {
     const x = d.data();
-    return { uid: d.id, estado: x.estado, solicitadoMs: msDe(x.solicitadoEn), preapprovalId: (x.suscripcion && x.suscripcion.preapprovalId) || null };
+    return { uid: d.id, estado: x.estado, solicitadoMs: msDe(x.solicitadoEn), preapprovalId: (x.suscripcion && x.suscripcion.preapprovalId) || null, susEstado: (x.suscripcion && x.suscripcion.estado) || null };
   };
   const socios = (await clubRef.collection("socios").where("estado", "==", "pendiente").get()).docs.map(aCandidato);
   for (const u of [mp.uidDeReferenciaPase(pre.external_reference, clubRef.id), uidPorEmail]) {
@@ -4243,8 +4243,11 @@ async function vincularPreapprovalPase(clubRef, pre) {
     const [iSnap, sSnap] = await Promise.all([tx.get(idxRef), tx.get(socioRef)]);
     if (iSnap.exists) return { uid: iSnap.data().uid };
     if (!sSnap.exists) return { motivo: "socio borrado" };
-    const otra = sSnap.data().suscripcion && sSnap.data().suscripcion.preapprovalId;
-    if (otra && otra !== preId) return { motivo: "el socio ya tiene otra preapproval" };
+    const susActual = sSnap.data().suscripcion || {};
+    const otra = susActual.preapprovalId;
+    // P3-16g: una preapproval muerta (intento fallido del mismo checkout) no bloquea a la nueva
+    if (otra && otra !== preId && !mp.puedeReemplazarPreapproval({ socioEstado: sSnap.data().estado, actual: susActual.estado, nueva: pre.status })) return { motivo: "el socio ya tiene otra preapproval" };
+    if (otra && otra !== preId) logger.info(`pase ${clubRef.id}: socio ${elegido.uid} pasa de la preapproval ${otra} (${susActual.estado || "?"}) a ${preId} (${pre.status || "?"})`);
     const ar = pre.auto_recurring || {};
     tx.set(idxRef, { clubId: clubRef.id, uid: elegido.uid, via: elegido.via, planId, creadoEn: FieldValue.serverTimestamp() });
     tx.update(socioRef, {
@@ -4383,6 +4386,30 @@ async function procesarNotificacionPase(clubRef, tipo, dataId, tokens) {
   }
   return `tipo ${tipo} ignorado`;
 }
+
+// P3-16g: super-admin → vuelve a procesar un cobro del Pase (por ejemplo uno que llegó cuando el socio estaba
+// vinculado a una preapproval fallida). Es idempotente: comisionesPase/{paymentId} evita sumar dos veces.
+exports.paseReprocesarPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, async (request) => {
+  const uid = exigirAuth(request);
+  const admin = await db.collection("superadmins").doc(uid).get();
+  if (!admin.exists) throw new HttpsError("permission-denied", "Solo el super-admin");
+  const clubId = texto(request.data && request.data.clubId, 80);
+  const paymentId = texto(request.data && request.data.paymentId != null ? String(request.data.paymentId) : "", 40);
+  if (!clubId || !/^\d{1,30}$/.test(paymentId)) throw new HttpsError("invalid-argument", "clubId y paymentId (numérico)");
+  const clubRef = db.collection("clubs").doc(clubId);
+  if (!(await clubRef.get()).exists) throw new HttpsError("not-found", "El club no existe");
+  const tokens = await tokensDelClub(clubRef);
+  if (!tokens || !tokens.accessToken) throw new HttpsError("failed-precondition", "El club no tiene Mercado Pago conectado");
+  let resultado;
+  try {
+    resultado = await procesarNotificacionPase(clubRef, "payment_pase", paymentId, tokens);
+  } catch (err) {
+    logger.error(`paseReprocesarPago ${clubId}/${paymentId}: ${err.status || ""} ${err.message}`);
+    throw new HttpsError("unavailable", `No se pudo reprocesar: ${String(err.message || err).slice(0, 160)}`);
+  }
+  logger.info(`paseReprocesarPago ${clubId}/${paymentId} por ${uid}: ${resultado}`);
+  return { ok: true, resultado };
+});
 
 // Torneos que organiza el club: puntos por la inscripción pagada (a cada jugador con el Pase activo)
 async function puntosInscripcionPase(torneo, insc, monto, motivo) {
