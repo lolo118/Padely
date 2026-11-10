@@ -230,3 +230,77 @@ describe("Pase Club (P3-16)", () => {
     await assertFails(getDoc(doc(como("dueno"), "comisionesPase", "p1")));
   });
 });
+
+describe("mini torneo de un turno", () => {
+  const FUTURA = "2099-01-01";
+  const sesionAnonima = (uid) => env.authenticatedContext(uid, { firebase: { sign_in_provider: "anonymous" } }).firestore();
+  const jugadoresMini = [1, 2, 3, 4].map((i) => ({ id: `j${i}`, nombre: `J${i}` }));
+  const mini = (creadorUid, extra = {}) => ({
+    clubId: CLUB, clubNombre: "Club Legacy", canchaNombre: "Cancha 1", fecha: FUTURA, horaInicio: "20:00", horaFin: "21:30", reservaGrupoId: "rm1",
+    creadorUid, creadorNombre: "Jugador", editoresUids: [], edicionAbierta: false, nombre: "Mini", modo: "auto", formato: "americano",
+    partidoA: { tipo: "games", valor: 4 }, canchas: 1, jugadores: jugadoresMini, parejas: [], grupos: [], partidos: [], descansos: [], llave: null,
+    rondas: 3, estimacionMin: 80, minutosTurno: 90, motivo: "", estado: "en_curso", ...extra,
+  });
+  const ref = (db, id = "m1") => doc(db, "clubs", CLUB, "miniTorneos", id);
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "clubs", CLUB, "reservas", "rm1"), { jugadorUid: "jugador", status: "confirmada", fecha: FUTURA, grupoId: "rm1" });
+      await setDoc(doc(db, "clubs", CLUB, "cuentas", "rm1"), { estado: "abierta", jugadorUid: "jugador", participantesUids: ["jugador", "amigo"], items: [], pagos: [] });
+      await setDoc(doc(db, "clubs", CLUB, "reservas", "rmCancelada"), { jugadorUid: "jugador", status: "cancelada", fecha: FUTURA, grupoId: "rmCancelada" });
+      await setDoc(doc(db, "clubs", CLUB, "reservas", "rmPasada"), { jugadorUid: "jugador", status: "confirmada", fecha: "2020-01-01", grupoId: "rmPasada" });
+      await setDoc(ref(db), mini("jugador", { editoresUids: ["amigo"] }));
+      await setDoc(doc(db, "clubs", CLUB, "miniTorneos", "m1", "privado", "edicion"), { clave: "clave-secreta-de-prueba" });
+    });
+  });
+
+  test("lo crea quien reservó o un participante de la cuenta; nadie más", async () => {
+    await assertSucceeds(setDoc(ref(como("jugador"), "m2"), mini("jugador")));
+    await assertSucceeds(setDoc(ref(como("amigo"), "m3"), mini("amigo")));
+    await assertFails(setDoc(ref(como("otro"), "m4"), mini("otro")));
+    await assertFails(setDoc(ref(como("otro"), "m5"), mini("jugador")));
+    await assertFails(setDoc(ref(sesionAnonima("anon"), "m6"), mini("anon")));
+  });
+  test("solo reservas confirmadas y vigentes, 4 a 16 jugadores, sin campos de más", async () => {
+    await assertFails(setDoc(ref(como("jugador"), "m2"), mini("jugador", { reservaGrupoId: "rmCancelada" })));
+    await assertFails(setDoc(ref(como("jugador"), "m3"), mini("jugador", { reservaGrupoId: "rmPasada", fecha: "2020-01-01" })));
+    await assertFails(setDoc(ref(como("jugador"), "m4"), mini("jugador", { fecha: "2099-01-02" })));
+    await assertFails(setDoc(ref(como("jugador"), "m5"), mini("jugador", { jugadores: jugadoresMini.slice(0, 3) })));
+    await assertFails(setDoc(ref(como("jugador"), "m6"), mini("jugador", { email: "x@test.com" })));
+    await assertFails(setDoc(ref(como("jugador"), "m7"), mini("jugador", { estado: "finalizado" })));
+  });
+  test("lectura pública (el link de WhatsApp), sin sesión", async () => {
+    await assertSucceeds(getDoc(ref(anonimo())));
+  });
+  test("el creador edita todo menos el dueño y la reserva; editoresUids solo resultados; otro nada", async () => {
+    await assertSucceeds(updateDoc(ref(como("jugador")), { nombre: "Otro nombre", edicionAbierta: true }));
+    await assertFails(updateDoc(ref(como("jugador")), { creadorUid: "otro" }));
+    await assertFails(updateDoc(ref(como("jugador")), { reservaGrupoId: "rmPasada" }));
+    await assertSucceeds(updateDoc(ref(como("amigo")), { partidos: [{ id: "a1-1", resultado: { sets: [{ g1: 4, g2: 2 }] } }], estado: "en_curso" }));
+    await assertFails(updateDoc(ref(como("amigo")), { nombre: "Cambio" }));
+    await assertFails(updateDoc(ref(como("otro")), { partidos: [] }));
+    await assertFails(deleteDoc(ref(como("amigo"))));
+    await assertSucceeds(deleteDoc(ref(como("jugador"))));
+  });
+  test("link de carga: con la carga abierta y la clave correcta, cualquiera (aun anónimo) carga resultados", async () => {
+    const editor = (uid, db) => doc(db, "clubs", CLUB, "miniTorneos", "m1", "editores", uid);
+    // Carga cerrada: la clave no alcanza
+    await assertFails(setDoc(editor("anon", sesionAnonima("anon")), { clave: "clave-secreta-de-prueba" }));
+    await assertSucceeds(updateDoc(ref(como("jugador")), { edicionAbierta: true }));
+    await assertFails(setDoc(editor("anon", sesionAnonima("anon")), { clave: "otra" }));
+    await assertFails(setDoc(editor("otro", sesionAnonima("anon")), { clave: "clave-secreta-de-prueba" }));
+    await assertFails(updateDoc(ref(sesionAnonima("anon")), { partidos: [] }));
+    await assertSucceeds(setDoc(editor("anon", sesionAnonima("anon")), { clave: "clave-secreta-de-prueba" }));
+    await assertSucceeds(updateDoc(ref(sesionAnonima("anon")), { partidos: [], estado: "en_curso" }));
+    await assertFails(updateDoc(ref(sesionAnonima("anon")), { edicionAbierta: false }));
+    // Cerrar la carga deja afuera a quienes entraron con el link
+    await assertSucceeds(updateDoc(ref(como("jugador")), { edicionAbierta: false }));
+    await assertFails(updateDoc(ref(sesionAnonima("anon")), { partidos: [] }));
+  });
+  test("la clave de carga la lee solo quien lo creó", async () => {
+    const clave = (db) => doc(db, "clubs", CLUB, "miniTorneos", "m1", "privado", "edicion");
+    await assertSucceeds(getDoc(clave(como("jugador"))));
+    await assertFails(getDoc(clave(como("amigo"))));
+    await assertFails(getDoc(clave(anonimo())));
+  });
+});

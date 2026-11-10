@@ -15,6 +15,7 @@ import { confirmar } from "../components/ConfirmDialog";
 import { Badge, Button, Card } from "../components/ui";
 import CuentaTurnoResumen from "../components/CuentaTurnoResumen";
 import PartidoDeReserva from "../components/PartidoDeReserva";
+import MiniTorneoDeReserva from "../components/MiniTorneoDeReserva";
 import SumarJugadorDialog from "../components/cuenta/SumarJugadorDialog";
 import { escucharCuentasDondeParticipo, escucharMisCuentasAbiertas } from "../services/cuentasService";
 import { escucharMisPedidos } from "../services/pedidosService";
@@ -277,6 +278,8 @@ export default function MisReservas() {
             <span className="text-ink-3"> · {mio.pagado > 0 ? `Pagaste ${formatPrecio(mio.pagado)}` : `Debés ${formatPrecio(mio.debe)}`}</span>
           </p>
         )}
+        {/* Mini torneo del turno (oculto hasta flags.miniTorneo): una cuenta abierta es de una reserva confirmada */}
+        <MiniTorneoDeReserva clubId={c.clubId} grupoId={c.id} fecha={c.fecha} confirmada uid={user?.uid} />
         <Card.Foot>
           <Button as="link" to={`/mi-cuenta/${c.clubId}/${c.id}`} size="sm" variant="primary">
             Ver cuenta
@@ -308,6 +311,8 @@ export default function MisReservas() {
         {r.precioTotal > 0 && <p className="body-sm text-ink-2 pd-tnum">{formatPrecio(r.precioTotal)}</p>}
         {r.status !== "cancelada" && <CuentaTurnoResumen reserva={r} cuenta={cuentaDe(r)} pedidos={pedidosDe(r)} uid={user?.uid} onInvitar={(reserva, cuenta) => setInvitando({ reserva, cuenta })} />}
         {/* P3-15: buscar jugadores para este turno (oculto hasta habilitarlo) */}
+        {/* Mini torneo del turno (oculto hasta flags.miniTorneo) */}
+        {!pasada && r.status !== "cancelada" && <MiniTorneoDeReserva clubId={r.clubId} grupoId={r.grupoId || r.id} fecha={r.fecha} confirmada={r.status === "confirmada"} uid={user?.uid} />}
         {!pasada && <PartidoDeReserva reserva={r} uid={user?.uid} onCambio={(nueva) => setReservas((prev) => prev.map((x) => (x.id === r.id ? { ...x, partidoAbierto: nueva.partidoAbierto } : x)))} />}
         {!pasada && r.status !== "cancelada" && (
           <Card.Foot>

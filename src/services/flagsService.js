@@ -5,6 +5,7 @@ import { db } from "../lib/firebase";
 //   ticketsPublicId: los QR y links del ticket digital usan venta.publicId (aleatorio) en vez del número
 //   privacidadMigrada: plan.historial y los datos de la cuenta de MP viven en clubs/{c}/privado/*
 //   inscripcionesOnline: pago de inscripciones a torneos con Mercado Pago (organizadores)
+//   miniTorneo: "Armar mini torneo" en Mis reservas y Mi cuenta (clubs/{c}/miniTorneos, sin Functions)
 // Sin el documento (o sin permiso para leerlo) todo queda apagado: la app se porta como antes.
 let flags = {};
 let promesa = null;
