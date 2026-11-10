@@ -42,13 +42,65 @@ export function calcularTotalesCuenta(cuenta) {
   return { consumos, cancha, seña, total: Math.max(0, redondear(consumos + cancha - seña)) };
 }
 
-// "Cancha 1 · 20:00–22:00 · Gómez"
+// ----- Cuentas de mesa (sin reserva) -----
+// Una cuenta "de mesa" (tipo "mesa", id "mesa_…") es la de comensales sin turno: no tiene reserva, ni cancha, ni
+// seña (cancha.cobrar false, precio 0). fecha / horaInicio = cuándo se abrió (así la lista ordena y el barrido de las
+// 04:00 la trata como cualquier cuenta de un día anterior). Una cuenta del turno también puede estar en una mesa
+// (mesaId / mesaNombre / mesaZona), sin dejar de ser la cuenta de su reserva.
+export const esCuentaDeMesa = (c) => c?.tipo === "mesa";
+// ¿La cuenta tiene una reserva detrás? (las cuentas del turno: id = grupoId de la reserva)
+export const tieneReserva = (c) => !!c && !esCuentaDeMesa(c);
+// "Mesa 4 · Patio" / "Cancha 1 · 20:00–22:00"
+export function lugarDeCuenta(c) {
+  if (esCuentaDeMesa(c)) return [c?.mesaNombre || "Mesa", c?.mesaZona].filter(Boolean).join(" · ");
+  const horas = c?.horaInicio ? `${c.horaInicio}${c.horaFin && c.horaFin !== c.horaInicio ? `–${c.horaFin}` : ""}` : "";
+  return [c?.canchaNombre || c?.canchaName || "Cancha", horas].filter(Boolean).join(" · ");
+}
+
+// "Cancha 1 · 20:00–22:00 · Gómez" (· "Mesa 4" si el turno está en una mesa) / "Mesa 4 · desde 21:30 · Gómez"
 export function textoTurno(c) {
+  if (esCuentaDeMesa(c)) {
+    const partes = [c?.mesaNombre || "Mesa"];
+    if (c?.horaInicio) partes.push(`desde ${c.horaInicio}`);
+    if (c?.nombreJugador && c.nombreJugador !== c.mesaNombre) partes.push(c.nombreJugador);
+    return partes.join(" · ");
+  }
   const partes = [c?.canchaNombre || c?.canchaName || "Cancha"];
   const horas = c?.horaInicio ? `${c.horaInicio}${c.horaFin && c.horaFin !== c.horaInicio ? `–${c.horaFin}` : ""}` : "";
   if (horas) partes.push(horas);
   if (c?.nombreJugador) partes.push(c.nombreJugador);
+  if (c?.mesaNombre) partes.push(c.mesaNombre);
   return partes.join(" · ");
+}
+
+// Datos de una cuenta de mesa nueva (sin timestamps ni autor). mesa: { id, nombre, zona }; nombre: a nombre de quién
+// (opcional; si no, el titular se llama como la mesa); fecha "YYYY-MM-DD" y hora "HH:MM" de la apertura.
+export function cuentaDeMesa(mesa, { nombre = "", fecha, hora = "", agregadoPor = null, ahora = new Date() } = {}) {
+  const cliente = String(nombre || "").trim().slice(0, 40);
+  const base = {
+    tipo: "mesa",
+    reservaGrupoId: null,
+    mesaId: mesa?.id || null,
+    mesaNombre: mesa?.nombre || "Mesa",
+    mesaZona: mesa?.zona || null,
+    canchaId: null,
+    canchaNombre: null,
+    fecha,
+    horaInicio: hora,
+    horaFin: "",
+    turnos: 0,
+    jugadorUid: null,
+    nombreJugador: cliente,
+    estado: "abierta",
+    cancha: { precioTotal: 0, seña: 0, señaPagada: false, cobrar: false },
+    items: [],
+    division: null,
+    ventas: [],
+    pagos: [],
+    invitacion: null,
+  };
+  const participantes = [titularDe({ jugadorUid: null, nombreJugador: cliente || base.mesaNombre }, { agregadoPor, ahora })];
+  return { ...base, participantes, participantesUids: uidsDe(participantes) };
 }
 
 // Una línea nueva de consumo a partir de una línea del ticket del POS

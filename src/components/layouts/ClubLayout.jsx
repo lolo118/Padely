@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { BadgeCheck, BarChart3, ChefHat, IdCard, LayoutDashboard, LayoutGrid, Package, ReceiptText, Settings, ShoppingCart, TrendingUp, Trophy, Wallet } from "lucide-react";
+import { Armchair, BadgeCheck, BarChart3, ChefHat, IdCard, LayoutDashboard, LayoutGrid, Package, ReceiptText, Settings, ShoppingCart, TrendingUp, Trophy, Wallet } from "lucide-react";
 import PanelLayout from "./PanelLayout";
 import { useEffect, useState } from "react";
 import { cargarFlags } from "../../services/flagsService";
@@ -25,6 +25,7 @@ const navItems = [
   { seccion: "Bar", permisos: ["vender", "cobrarTurnos", "pedidos", "abrirCaja", "cerrarCaja", "cerrarCajaAjena", "verCajasCerradas", "editarProductos", "cargarStock", "importar", "verReportes"] },
   { to: "/admin/bar/vender", label: "Vender", icon: ShoppingCart, permisos: ["vender"], pro: true },
   { to: "/admin/bar/cuentas", label: "Cuentas", icon: ReceiptText, permisos: ["cobrarTurnos", "vender"], pro: true },
+  { to: "/admin/bar/mesas", label: "Mesas", icon: Armchair, permisos: ["cobrarTurnos", "vender", "editarProductos"], pro: true },
   { to: "/admin/bar/barra", label: "Barra", icon: ChefHat, permisos: ["pedidos"], pro: true },
   { to: "/admin/bar/caja", label: "Caja", icon: Wallet, permisos: ["abrirCaja", "cerrarCaja", "cerrarCajaAjena", "verCajasCerradas"], pro: true },
   { to: "/admin/bar/productos", label: "Productos", icon: Package, permisos: ["editarProductos", "cargarStock", "importar"], pro: true },

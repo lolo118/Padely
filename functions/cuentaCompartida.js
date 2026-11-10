@@ -156,7 +156,20 @@ function decisionCuentaVencida(cuenta, { pendiente = 0 } = {}) {
   return "avisar";
 }
 
+// Mesas: una cuenta "de mesa" (tipo "mesa", id "mesa_…") no tiene reserva detrás (ni cancha, ni seña, ni turnos
+// que actualizar al cerrarla). fecha / horaInicio son los de la apertura, así el barrido de las 04:00 la trata como
+// cualquier cuenta abierta de un día anterior (misma decisión: anular vacía, cerrar pagada, avisar si se debe).
+const PREFIJO_CUENTA_MESA = "mesa_";
+const esCuentaDeMesa = (cuenta) => !!cuenta && cuenta.tipo === "mesa";
+const esIdCuentaDeMesa = (id) => typeof id === "string" && id.startsWith(PREFIJO_CUENTA_MESA);
+// Dónde está la cuenta, para los avisos: "Mesa 4" o "Cancha 1"
+const lugarDeCuenta = (cuenta) => (esCuentaDeMesa(cuenta) ? (cuenta && cuenta.mesaNombre) || "Mesa" : (cuenta && cuenta.canchaNombre) || "Cancha");
+
 module.exports = {
+  PREFIJO_CUENTA_MESA,
+  esCuentaDeMesa,
+  esIdCuentaDeMesa,
+  lugarDeCuenta,
   ALERTA_SEÑA_POSTERIOR,
   decisionCuentaVencida,
   canchaPagadaEnParte,

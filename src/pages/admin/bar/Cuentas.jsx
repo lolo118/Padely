@@ -4,7 +4,7 @@ import { useAuthStore } from "../../../store/authStore";
 import SinPermiso from "../../../components/SinPermiso";
 import { Alert, Badge, Button, Card, Tabs } from "../../../components/ui";
 import { escucharCuentasAbiertas, getCuentasCerradas, getCuentasDeCancha } from "../../../services/cuentasService";
-import { esLegacyDividida, partesPagadas, participantesActivos, saldosDeCuenta } from "../../../utils/cuentas";
+import { esCuentaDeMesa, esLegacyDividida, lugarDeCuenta, partesPagadas, participantesActivos, saldosDeCuenta, tieneReserva } from "../../../utils/cuentas";
 import { formatPrecio } from "../../../utils/format";
 import { formatDiaCorto, formatFechaHora } from "../../../utils/formatDate";
 
@@ -101,8 +101,9 @@ export default function Cuentas() {
       <Card key={c.id} variant="hover" as="div" role="link" tabIndex={0} onClick={() => navigate(`/admin/bar/cuentas/${c.id}`)} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && navigate(`/admin/bar/cuentas/${c.id}`)}>
         <Card.Row className="items-start!">
           <Card.Eyebrow>
-            {c.canchaNombre} · {c.horaInicio}
-            {c.horaFin ? `–${c.horaFin}` : ""}
+            {lugarDeCuenta(c)}
+            {esCuentaDeMesa(c) && c.horaInicio ? ` · desde ${c.horaInicio}` : ""}
+            {!esCuentaDeMesa(c) && c.mesaNombre ? ` · ${c.mesaNombre}` : ""}
           </Card.Eyebrow>
           <span className="flex flex-wrap justify-end gap-1">
             {Number(c.pedidosPendientes) > 0 && <Badge tone="warning">{c.pedidosPendientes === 1 ? "1 pedido" : `${c.pedidosPendientes} pedidos`}</Badge>}
@@ -111,7 +112,7 @@ export default function Cuentas() {
             </Badge>
           </span>
         </Card.Row>
-        <Card.Title className="mt-2!">{c.nombreJugador || "Sin nombre"}</Card.Title>
+        <Card.Title className="mt-2!">{c.nombreJugador || (esCuentaDeMesa(c) ? c.mesaNombre : "") || "Sin nombre"}</Card.Title>
         <Card.Meta className="mt-1!">
           {(c.items || []).length} {(c.items || []).length === 1 ? "consumo" : "consumos"} · abierta {haceTexto(c.abiertaEn)}
           {partes ? ` · ${pagadas}/${partes} partes pagadas` : ""}
@@ -124,9 +125,13 @@ export default function Cuentas() {
         </div>
         <Card.Row className="mt-3 items-end!">
           <p className="numeral-md pd-tnum m-0">{formatPrecio(c.totales?.total)}</p>
-          <Link to={`/admin/canchas?fecha=${c.fecha}&turno=${c.id}`} className="body-sm text-ink-2 underline" onClick={(e) => e.stopPropagation()}>
-            Ver turno
-          </Link>
+          {tieneReserva(c) ? (
+            <Link to={`/admin/canchas?fecha=${c.fecha}&turno=${c.id}`} className="body-sm text-ink-2 underline" onClick={(e) => e.stopPropagation()}>
+              Ver turno
+            </Link>
+          ) : (
+            <Badge tone="court">Mesa</Badge>
+          )}
         </Card.Row>
       </Card>
     );
@@ -166,7 +171,7 @@ export default function Cuentas() {
           <Card className="text-center py-12!">
             <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
             <p className="heading-sm m-0">No hay cuentas abiertas</p>
-            <p className="body-sm text-ink-2 mt-1 mb-0">Se abren solas cuando cargás el primer consumo a un turno desde Vender.</p>
+            <p className="body-sm text-ink-2 mt-1 mb-0">Se abren solas cuando cargás el primer consumo a un turno desde Vender, o al abrir una mesa.</p>
             <Button as="link" to="/admin/bar/vender" variant="primary" className="mt-4">
               Ir a Vender
             </Button>
@@ -210,7 +215,7 @@ export default function Cuentas() {
                 <Card key={c.id}>
                   <Card.Row className="items-start!">
                     <Card.Eyebrow>
-                      {formatDiaCorto(c.fecha)} · {c.canchaNombre} · {c.horaInicio}
+                      {formatDiaCorto(c.fecha)} · {lugarDeCuenta(c)}
                     </Card.Eyebrow>
                     <Badge tone={TONO_ESTADO[c.estado] || "neutral"}>{ETIQUETA_ESTADO[c.estado] || c.estado}</Badge>
                   </Card.Row>
@@ -248,10 +253,7 @@ export default function Cuentas() {
                     {cerradas.lista.map((c) => (
                       <tr key={c.id}>
                         <td className="pd-tnum whitespace-nowrap">{formatDiaCorto(c.fecha)}</td>
-                        <td className="font-semibold whitespace-nowrap">
-                          {c.canchaNombre} · {c.horaInicio}
-                          {c.horaFin ? `–${c.horaFin}` : ""}
-                        </td>
+                        <td className="font-semibold whitespace-nowrap">{lugarDeCuenta(c)}</td>
                         <td>{c.nombreJugador || "—"}</td>
                         <td className="num pd-tnum">{formatPrecio(c.totales?.total)}</td>
                         <td className="pd-tnum">{(c.ventas || []).join(", ") || "—"}</td>

@@ -18,7 +18,7 @@ import PartidoDeReserva from "../components/PartidoDeReserva";
 import SumarJugadorDialog from "../components/cuenta/SumarJugadorDialog";
 import { escucharCuentasDondeParticipo, escucharMisCuentasAbiertas } from "../services/cuentasService";
 import { escucharMisPedidos } from "../services/pedidosService";
-import { participantePorUid, saldosDeCuenta } from "../utils/cuentas";
+import { esCuentaDeMesa, lugarDeCuenta, participantePorUid, saldosDeCuenta } from "../utils/cuentas";
 
 // Estado de la reserva → tono del badge y su palabra. Llevan punto: son estados que cambian con el tiempo.
 function estadoReserva(status) {
@@ -264,12 +264,10 @@ export default function MisReservas() {
       <Card key={`p/${c.clubId}/${c.id}`}>
         <Card.Row>
           <Card.Eyebrow>{formatDiaCorto(c.fecha)}</Card.Eyebrow>
-          <Badge tone="court">Te sumó {c.nombreJugador || "el titular"}</Badge>
+          <Badge tone="court">{esCuentaDeMesa(c) ? "Te sumaron a la mesa" : `Te sumó ${c.nombreJugador || "el titular"}`}</Badge>
         </Card.Row>
         <Card.Title className="mt-2!">{nombresClub[c.clubId] || "Club"}</Card.Title>
-        <p className="body-sm text-ink-2 mt-1 pd-tnum">
-          {c.canchaNombre || "Cancha"} · {rangoHoras(c.horaInicio, c.horaFin)}
-        </p>
+        <p className="body-sm text-ink-2 mt-1 pd-tnum">{esCuentaDeMesa(c) ? `${lugarDeCuenta(c)}${c.horaInicio ? ` · desde ${c.horaInicio}` : ""}` : `${c.canchaNombre || "Cancha"} · ${rangoHoras(c.horaInicio, c.horaFin)}`}</p>
         {mio && (
           <p className="body-sm m-0 pd-tnum">
             <span className="text-ink-2">Mi parte: </span>

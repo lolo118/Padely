@@ -11,7 +11,8 @@ import { iniciales } from "../../utils/cuentas";
 // nombre (invitado sin cuenta) e Invitar por WhatsApp (el link). Con `companerosDe` (uid) también muestra "Jugaste
 // con…". Cada alta pasa por la Function sumarJugador (crea la cuenta si hace falta y avisa al jugador registrado).
 //   clubId · grupoId · clubNombre · turno { fecha, horaInicio, canchaNombre } · participantes (activos, para no repetir)
-export default function SumarJugadorDialog({ clubId, grupoId, clubNombre, turno, participantes = [], companerosDe = null, pestañaInicial = "buscar", onCerrar, onSumado }) {
+// sinInvitar: cuenta de mesa (sin turno): no hay link de invitación por WhatsApp
+export default function SumarJugadorDialog({ clubId, grupoId, clubNombre, turno, participantes = [], companerosDe = null, pestañaInicial = "buscar", sinInvitar = false, onCerrar, onSumado }) {
   const [tab, setTab] = useState(pestañaInicial);
   const [texto, setTexto] = useState("");
   const [resultados, setResultados] = useState({ para: "", lista: [] });
@@ -110,7 +111,7 @@ export default function SumarJugadorDialog({ clubId, grupoId, clubNombre, turno,
           items={[
             { value: "buscar", label: "Buscar" },
             { value: "nombre", label: "Por nombre" },
-            { value: "wa", label: "Invitar por WhatsApp" },
+            ...(sinInvitar ? [] : [{ value: "wa", label: "Invitar por WhatsApp" }]),
           ]}
           value={tab}
           onChange={(v) => {
@@ -137,7 +138,7 @@ export default function SumarJugadorDialog({ clubId, grupoId, clubNombre, turno,
         )}
         {tab === "nombre" && (
           <>
-            <Field label="Nombre" help="Para alguien sin cuenta de Padely: queda como invitado, con su parte de la cancha y lo que pida." error={error && tab === "nombre" ? error : ""}>
+            <Field label="Nombre" help={sinInvitar ? "Para alguien sin cuenta de Padely: queda como invitado, con lo que pida." : "Para alguien sin cuenta de Padely: queda como invitado, con su parte de la cancha y lo que pida."} error={error && tab === "nombre" ? error : ""}>
               <Input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Pedro" maxLength={40} autoComplete="off" data-autofocus />
             </Field>
             <Button variant="primary" className="self-start" onClick={sumarPorNombre} cargando={ocupado === "nombre" ? "Sumando…" : ""}>
@@ -145,7 +146,7 @@ export default function SumarJugadorDialog({ clubId, grupoId, clubNombre, turno,
             </Button>
           </>
         )}
-        {tab === "wa" && <InvitarWhatsApp clubId={clubId} grupoId={grupoId} clubNombre={clubNombre} turno={turno} />}
+        {tab === "wa" && !sinInvitar && <InvitarWhatsApp clubId={clubId} grupoId={grupoId} clubNombre={clubNombre} turno={turno} />}
         {error && tab !== "nombre" && <Alert tone="danger">{error}</Alert>}
       </div>
     </Dialogo>

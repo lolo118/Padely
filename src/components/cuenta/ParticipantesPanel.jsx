@@ -54,7 +54,8 @@ function FijoDialog({ participante, onCerrar, onGuardar }) {
   );
 }
 
-export default function ParticipantesPanel({ saldos, abierta, puedeCobrar, puedeEditar, ocupado = false, onCobrar, onSumar, onExcluir, onFijo, onQuitar }) {
+// sinCancha: cuenta de mesa (sin turno): no se muestra ni se edita la parte de cancha
+export default function ParticipantesPanel({ saldos, abierta, puedeCobrar, puedeEditar, ocupado = false, sinCancha = false, onCobrar, onSumar, onExcluir, onFijo, onQuitar }) {
   const [fijoDe, setFijoDe] = useState(null);
   const lista = saldos?.participantes || [];
   const consumosDe = (p) => p.consumos.reduce((s, c) => s + c.monto, 0);
@@ -86,8 +87,8 @@ export default function ParticipantesPanel({ saldos, abierta, puedeCobrar, puede
                   {p.anonimo && <Badge>Sin cuenta</Badge>}
                 </p>
                 <p className="body-sm text-ink-2 m-0 pd-tnum">
-                  {textoCanchaDe(p)}
-                  {" · Bar "}
+                  {sinCancha ? "" : `${textoCanchaDe(p)} · `}
+                  {"Bar "}
                   {fmt(consumos)}
                   {p.sinAsignar > 0 ? ` (${fmt(p.sinAsignar)} sin asignar)` : ""}
                   {p.pagado > 0 ? ` · ${p.pagoPropio > 0 ? "Pagó" : "Cubierto"} ${fmt(p.pagado)}` : ""}
@@ -105,10 +106,12 @@ export default function ParticipantesPanel({ saldos, abierta, puedeCobrar, puede
               </div>
               {abierta && puedeEditar && (
                 <div className="w-full pd-btn-group">
-                  <Button size="sm" variant="ghost" disabled={p.canchaPagada || ocupado} onClick={() => onExcluir(p, !p.excluirCancha)} aria-pressed={p.excluirCancha}>
-                    {p.excluirCancha ? "Con cancha" : "Sin cancha"}
-                  </Button>
-                  {!p.excluirCancha && (
+                  {!sinCancha && (
+                    <Button size="sm" variant="ghost" disabled={p.canchaPagada || ocupado} onClick={() => onExcluir(p, !p.excluirCancha)} aria-pressed={p.excluirCancha}>
+                      {p.excluirCancha ? "Con cancha" : "Sin cancha"}
+                    </Button>
+                  )}
+                  {!sinCancha && !p.excluirCancha && (
                     <Button size="sm" variant="ghost" disabled={p.canchaPagada || ocupado} onClick={() => setFijoDe(p)}>
                       {p.canchaFija === null ? "Monto fijo de cancha" : `Fijo ${fmt(p.canchaFija)}`}
                     </Button>

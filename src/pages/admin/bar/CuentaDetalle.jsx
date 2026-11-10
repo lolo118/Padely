@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, CalendarDays, MessageSquare, Plus, Printer, X } from "lucide-react";
+import { Armchair, ArrowLeft, CalendarDays, MessageSquare, Plus, Printer, X } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
 import SinPermiso from "../../../components/SinPermiso";
 import Dialogo from "../../../components/Dialogo";
@@ -17,6 +17,7 @@ import ParticipantesPanel from "../../../components/cuenta/ParticipantesPanel";
 import ChipsParticipantes from "../../../components/cuenta/ChipsParticipantes";
 import AsignarSheet from "../../../components/cuenta/AsignarSheet";
 import SumarJugadorDialog from "../../../components/cuenta/SumarJugadorDialog";
+import ElegirMesaDialog from "../../../components/cuenta/ElegirMesaDialog";
 import { htmlTicketCuenta } from "../../../print/ticketCuenta";
 import { anchoTicketGuardado } from "../../../print/imprimir";
 import { dispositivoGuardado, escucharCajaAbierta } from "../../../services/cajaService";
@@ -43,7 +44,8 @@ import { ETIQUETA_MEDIO_VENTA } from "../../../utils/ventas";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { useOnline } from "../../../utils/conexion";
-import { ALERTA_MP_EXCEDENTE, ALERTA_SEÑA_POSTERIOR, ALERTA_VENTA_ANULADA, calcularTotalesCuenta, canchaPagadaEnParte, cobroDeLineas, cobroRestoAlTitular, cuentaEditable, esLegacyDividida, lineaPagada, partePagada, partesPagadas, participantesActivos, saldosDeCuenta, textoReparto, textoTurno } from "../../../utils/cuentas";
+import { ALERTA_MP_EXCEDENTE, ALERTA_SEÑA_POSTERIOR, ALERTA_VENTA_ANULADA, calcularTotalesCuenta, canchaPagadaEnParte, cobroDeLineas, cobroRestoAlTitular, cuentaEditable, esCuentaDeMesa, esLegacyDividida, lineaPagada, lugarDeCuenta, partePagada, partesPagadas, participantesActivos, saldosDeCuenta, textoReparto, textoTurno } from "../../../utils/cuentas";
+import { esIdCuentaDeMesa, minutosAbierta, textoTiempo } from "../../../utils/mesas";
 import { formatPrecio } from "../../../utils/format";
 import { formatDiaCorto, formatFechaHora, formatHora } from "../../../utils/formatDate";
 
@@ -68,7 +70,7 @@ function AnularCuentaDialog({ cuenta, clubId, uid, nombre, onCerrar, onAnulada }
     }
     const ok = await confirmar({
       titulo: "¿Anular la cuenta?",
-      mensaje: "Los consumos se descartan: nunca movieron stock ni caja. La reserva queda como estaba.",
+      mensaje: `Los consumos se descartan: nunca movieron stock ni caja. ${esCuentaDeMesa(cuenta) ? "La mesa queda libre." : "La reserva queda como estaba."}`,
       confirmText: "Anular cuenta",
       danger: true,
     });
@@ -178,7 +180,8 @@ export default function CuentaDetalle() {
   // La seña se muestra como está en la RESERVA (la cuenta guarda una foto que puede quedar vieja)
   const [reservaSeña, setReservaSeña] = useState(null); // { seña, señaPagada, señaMedio } | null
   useEffect(() => {
-    if (!clubId || !id || !puedeEntrar) return undefined;
+    // Una cuenta de mesa no tiene reserva (ni seña)
+    if (!clubId || !id || !puedeEntrar || esIdCuentaDeMesa(id)) return undefined;
     let vivo = true;
     getDoc(doc(db, "clubs", clubId, "reservas", id))
       .then((snap) => vivo && setReservaSeña(snap.exists() ? { seña: Number(snap.data().seña) || 0, señaPagada: !!snap.data().señaPagada, señaMedio: snap.data().señaMedio || null } : null))
@@ -251,6 +254,9 @@ export default function CuentaDetalle() {
   const puedeCobrar = abierta && !!caja && !sinNumeros;
   const hayPagos = (cuenta.pagos || []).length > 0;
   const linkTurno = `/admin/canchas?fecha=${cuenta.fecha}&turno=${cuenta.id}`;
+  // Cuenta de mesa (sin reserva): sin cancha, seña, turno ni invitación por link
+  const deMesa = esCuentaDeMesa(cuenta);
+  const volverA = deMesa ? { to: "/admin/bar/mesas", texto: "Mesas" } : { to: "/admin/bar/cuentas", texto: "Cuentas" };
 
   // ----- Cobros -----
   const cobrar = async (hacer) => {
@@ -411,16 +417,16 @@ export default function CuentaDetalle() {
   return (
     <div className="flex flex-col gap-6 max-w-[1100px]">
       <div className="flex flex-col gap-2">
-        <Link to="/admin/bar/cuentas" className="body-sm text-ink-2 inline-flex items-center gap-1 hover:underline self-start">
-          <ArrowLeft className="pd-icon" size={16} aria-hidden="true" /> Cuentas
+        <Link to={volverA.to} className="body-sm text-ink-2 inline-flex items-center gap-1 hover:underline self-start">
+          <ArrowLeft className="pd-icon" size={16} aria-hidden="true" /> {volverA.texto}
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="pd-eyebrow m-0">
-              {formatDiaCorto(cuenta.fecha)} · {cuenta.canchaNombre} · {cuenta.horaInicio}
-              {cuenta.horaFin ? `–${cuenta.horaFin}` : ""}
+              {formatDiaCorto(cuenta.fecha)} · {lugarDeCuenta(cuenta)}
+              {deMesa && cuenta.horaInicio ? ` · desde ${cuenta.horaInicio}` : ""}
             </p>
-            <h1 className="heading-lg m-0 break-words">{cuenta.nombreJugador || "Sin nombre"}</h1>
+            <h1 className="heading-lg m-0 break-words">{cuenta.nombreJugador || (deMesa ? cuenta.mesaNombre : "") || "Sin nombre"}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={TONO_ESTADO[cuenta.estado] || "neutral"} dot={abierta}>
@@ -434,9 +440,16 @@ export default function CuentaDetalle() {
                 {cuenta.pedidosPendientes === 1 ? "1 pedido en espera" : `${cuenta.pedidosPendientes} pedidos en espera`}
               </Link>
             )}
-            <Button as="link" to={linkTurno} size="sm" variant="ghost" icon={<CalendarDays className="pd-icon" size={20} aria-hidden="true" />}>
-              Ver turno
-            </Button>
+            {!deMesa && (abierta || cuenta.mesaNombre) && (
+              <Button size="sm" variant="ghost" disabled={!abierta} onClick={() => setDialogo("mesa")} icon={<Armchair className="pd-icon" size={20} aria-hidden="true" />}>
+                {cuenta.mesaNombre || "Asignar mesa"}
+              </Button>
+            )}
+            {!deMesa && (
+              <Button as="link" to={linkTurno} size="sm" variant="ghost" icon={<CalendarDays className="pd-icon" size={20} aria-hidden="true" />}>
+                Ver turno
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -539,6 +552,7 @@ export default function CuentaDetalle() {
               puedeCobrar={puedeCobrar}
               puedeEditar={abierta}
               ocupado={ocupado}
+              sinCancha={deMesa}
               onCobrar={(p) => setDialogo({ tipo: "cobrarA", participanteId: p.id })}
               onSumar={() => setDialogo("sumar")}
               onExcluir={excluir}
@@ -547,7 +561,37 @@ export default function CuentaDetalle() {
             />
           )}
 
+          {/* Cuenta de mesa: la mesa en lugar de la cancha */}
+          {deMesa && (
+            <Card>
+              <Card.Row>
+                <Card.Title as="h2">Mesa</Card.Title>
+                {abierta && (
+                  <Button size="sm" icon={<Armchair className="pd-icon" size={20} aria-hidden="true" />} onClick={() => setDialogo("mesa")}>
+                    Cambiar de mesa
+                  </Button>
+                )}
+              </Card.Row>
+              <dl className="pd-dl mt-3">
+                <div>
+                  <dt>Mesa</dt>
+                  <dd>{lugarDeCuenta(cuenta)}</dd>
+                </div>
+                <div>
+                  <dt>Abierta</dt>
+                  <dd className="pd-tnum">
+                    {cuenta.horaInicio || "—"}
+                    {abierta ? ` · hace ${textoTiempo(minutosAbierta(cuenta))}` : ""}
+                    {cuenta.abiertaPorNombre ? ` · ${cuenta.abiertaPorNombre}` : ""}
+                  </dd>
+                </div>
+              </dl>
+              <p className="pd-help mt-3 mb-0">Sin turno: la cuenta lleva solo lo que se consume. Cobrarla o anularla libera la mesa.</p>
+            </Card>
+          )}
+
           {/* Cancha: un libro */}
+          {!deMesa && (
           <Card>
             <Card.Row>
               <Card.Title as="h2">Cancha</Card.Title>
@@ -598,6 +642,7 @@ export default function CuentaDetalle() {
                         : "Se cobra el precio completo de la cancha, repartido entre los participantes."}
             </p>
           </Card>
+          )}
 
           {/* Bar: el otro libro */}
           <Card className="p-0!">
@@ -805,10 +850,12 @@ export default function CuentaDetalle() {
               <dt>Bar</dt>
               <dd className="m-0 pd-tnum">{formatPrecio(totales.consumos)}</dd>
             </div>
-            <div className="flex items-center justify-between body-sm text-ink-2">
-              <dt>Cancha</dt>
-              <dd className="m-0 pd-tnum">{totales.cancha > 0 ? formatPrecio(totales.cancha) : "—"}</dd>
-            </div>
+            {!deMesa && (
+              <div className="flex items-center justify-between body-sm text-ink-2">
+                <dt>Cancha</dt>
+                <dd className="m-0 pd-tnum">{totales.cancha > 0 ? formatPrecio(totales.cancha) : "—"}</dd>
+              </div>
+            )}
             {totales.seña > 0 && (
               <div className="flex items-center justify-between body-sm text-ink-2">
                 <dt>Seña pagada</dt>
@@ -872,8 +919,9 @@ export default function CuentaDetalle() {
         <AsignarSheet lineas={(cuenta.items || []).filter((it) => dialogo.lineaIds.includes(it.lineaId))} participantes={participantes} onCerrar={() => setDialogo(null)} onGuardar={(ids) => asignar(dialogo.lineaIds, ids)} />
       )}
       {dialogo === "sumar" && (
-        <SumarJugadorDialog clubId={clubId} grupoId={cuenta.id} clubNombre={clubActual?.nombre} turno={{ fecha: cuenta.fecha, horaInicio: cuenta.horaInicio, horaFin: cuenta.horaFin, canchaNombre: cuenta.canchaNombre }} participantes={participantes} onCerrar={() => setDialogo(null)} />
+        <SumarJugadorDialog clubId={clubId} grupoId={cuenta.id} clubNombre={clubActual?.nombre} turno={{ fecha: cuenta.fecha, horaInicio: cuenta.horaInicio, horaFin: cuenta.horaFin, canchaNombre: deMesa ? cuenta.mesaNombre : cuenta.canchaNombre }} participantes={participantes} sinInvitar={deMesa} onCerrar={() => setDialogo(null)} />
       )}
+      {dialogo === "mesa" && <ElegirMesaDialog clubId={clubId} cuenta={cuenta} onCerrar={() => setDialogo(null)} onListo={() => setDialogo(null)} />}
       {dialogo === "anular" && (
         <AnularCuentaDialog
           cuenta={cuenta}
@@ -883,7 +931,7 @@ export default function CuentaDetalle() {
           onCerrar={() => setDialogo(null)}
           onAnulada={() => {
             setDialogo(null);
-            navigate("/admin/bar/cuentas");
+            navigate(volverA.to);
           }}
         />
       )}
@@ -912,7 +960,7 @@ export default function CuentaDetalle() {
           onCerrar={() => setUltimaVenta(null)}
         />
       )}
-      {ticketCuenta && <TicketPreview titulo="Cuenta del turno" descripcion={textoTurno(cuenta)} html={ticketCuenta} ancho={ancho} onCerrar={() => setTicketCuenta(null)} />}
+      {ticketCuenta && <TicketPreview titulo={deMesa ? "Cuenta de la mesa" : "Cuenta del turno"}descripcion={textoTurno(cuenta)} html={ticketCuenta} ancho={ancho} onCerrar={() => setTicketCuenta(null)} />}
     </div>
   );
 }

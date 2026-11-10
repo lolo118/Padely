@@ -6,7 +6,7 @@ import { escucharCuenta } from "../services/cuentasService";
 import { getClubConfig } from "../services/canchaService";
 import { clubConectadoMp, pagarConMercadoPago } from "../services/mercadoPagoService";
 import { asignarLineasTurno } from "../services/participantesService";
-import { calcularTotalesCuenta, esLegacyDividida, estadoPagoDe, iniciales, lineaPagada, lineasDeVentaParaParte, parteDelJugador, partePagada, participantePorUid, participantesActivos, plural, puedeAsignar, saldosDeCuenta, textoRepartoLargo } from "../utils/cuentas";
+import { calcularTotalesCuenta, esCuentaDeMesa, esLegacyDividida, estadoPagoDe, lugarDeCuenta, iniciales, lineaPagada, lineasDeVentaParaParte, parteDelJugador, partePagada, participantePorUid, participantesActivos, plural, puedeAsignar, saldosDeCuenta, textoRepartoLargo } from "../utils/cuentas";
 import { puedePedir } from "../utils/pedidos";
 import { formatPrecio } from "../utils/format";
 import { formatDiaCorto, formatHora } from "../utils/formatDate";
@@ -86,7 +86,9 @@ export default function MiCuenta() {
   const esTitular = !!cuenta && ((!!cuenta.jugadorUid && cuenta.jugadorUid === user?.uid) || yo?.tipo === "titular");
   const miSaldo = saldos && !saldos.legacy && yo ? saldos.participantes.find((p) => p.id === yo.id) : null;
   const reservaDelTurno = cuenta ? { id: grupoId, grupoId, clubId, canchaId: cuenta.canchaId, canchaName: cuenta.canchaNombre, fecha: cuenta.fecha, horaInicio: cuenta.horaInicio, horaFin: cuenta.horaFin, status: "confirmada", jugadorUid: cuenta.jugadorUid } : null;
-  const enVentana = !!cuenta && cuenta.estado === "abierta" && puedePedir(reservaDelTurno, ahora);
+  // Una cuenta de mesa (sin turno) no tiene pedidos desde el celular: se pide al mozo / en la barra
+  const deMesa = esCuentaDeMesa(cuenta);
+  const enVentana = !!cuenta && !deMesa && cuenta.estado === "abierta" && puedePedir(reservaDelTurno, ahora);
 
   const volver = !anonimo ? (
     <Link to="/mis-reservas" className="body-sm text-ink-2 inline-flex items-center gap-1 hover:underline self-start">
@@ -164,11 +166,11 @@ export default function MiCuenta() {
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
         <p className="pd-eyebrow m-0">{club?.nombre || "Club"}</p>
-        <h1 className="heading-lg m-0 mt-1">{vista === "pedir" ? "Pedir a la barra" : "Cuenta del turno"}</h1>
+        <h1 className="heading-lg m-0 mt-1">{vista === "pedir" ? "Pedir a la barra" : deMesa ? "Cuenta de la mesa" : "Cuenta del turno"}</h1>
         <p className="body-sm text-ink-2 m-0 mt-1 pd-tnum">
-          {formatDiaCorto(cuenta.fecha)} · {cuenta.canchaNombre} · {cuenta.horaInicio}
-          {cuenta.horaFin ? `–${cuenta.horaFin}` : ""}
-          {cuenta.nombreJugador ? ` · reservó ${cuenta.nombreJugador}` : ""}
+          {formatDiaCorto(cuenta.fecha)} · {lugarDeCuenta(cuenta)}
+          {deMesa && cuenta.horaInicio ? ` · desde ${cuenta.horaInicio}` : ""}
+          {!deMesa && cuenta.nombreJugador ? ` · reservó ${cuenta.nombreJugador}` : ""}
         </p>
       </div>
       <Badge tone={TONO[cuenta.estado] || "neutral"} dot={abierta}>
@@ -273,7 +275,7 @@ export default function MiCuenta() {
               Pedir a la barra
             </Button>
           )}
-          {esTitular && !anonimo && (
+          {esTitular && !anonimo && !deMesa && (
             <Button icon={<UserPlus className="pd-icon" size={20} aria-hidden="true" />} onClick={() => setDialogo("invitar")}>
               Invitar
             </Button>
@@ -353,10 +355,12 @@ export default function MiCuenta() {
             <dt>Consumos</dt>
             <dd className="m-0 pd-tnum">{formatPrecio(totales.consumos)}</dd>
           </div>
-          <div className="flex justify-between text-ink-2">
-            <dt>Cancha</dt>
-            <dd className="m-0 pd-tnum">{totales.cancha > 0 ? formatPrecio(totales.cancha) : c.cobrar === false ? "pagada aparte" : "—"}</dd>
-          </div>
+          {!deMesa && (
+            <div className="flex justify-between text-ink-2">
+              <dt>Cancha</dt>
+              <dd className="m-0 pd-tnum">{totales.cancha > 0 ? formatPrecio(totales.cancha) : c.cobrar === false ? "pagada aparte" : "—"}</dd>
+            </div>
+          )}
           {Number(c.seña) > 0 && (
             <div className="flex justify-between text-ink-2">
               <dt>Seña {c.señaPagada ? "pagada" : cuenta.estado === "cerrada" && c.cobrar !== false ? "pagada con la cuenta" : "pendiente"}</dt>
