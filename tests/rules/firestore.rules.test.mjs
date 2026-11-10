@@ -31,6 +31,13 @@ async function sembrar() {
     await setDoc(doc(db, "clubs", CLUB, "contactosReservas", "r1"), { jugadorUid: "jugador", telefono: "385" });
     await setDoc(doc(db, "clubs", CLUB, "cuentas", "r1"), { estado: "abierta", jugadorUid: "jugador", participantesUids: ["jugador"], items: [{ lineaId: "a" }, { lineaId: "b" }], pagos: [{ ventaNumero: "D1-1", total: 100 }] });
     await setDoc(doc(db, "clubs", CLUB, "cuentas", "r2"), { estado: "abierta", jugadorUid: "otro", participantesUids: ["otro"], items: [{ lineaId: "a" }], pagos: [] });
+    // Mesas: una mesa libre, una ocupada por una cuenta de mesa, y staff de la barra / de productos
+    await setDoc(doc(db, "clubs", CLUB, "staff", "barra"), { uid: "barra", activo: true, rol: "barra", permisos: ["pedidos"], descuentoMax: 0 });
+    await setDoc(doc(db, "clubs", CLUB, "staff", "repositor"), { uid: "repositor", activo: true, rol: "encargado", permisos: ["editarProductos"], descuentoMax: 0 });
+    await setDoc(doc(db, "clubs", CLUB, "reservas", "r3"), { jugadorUid: "jugador", status: "confirmada", fecha: "2026-11-10", grupoId: "r3" });
+    await setDoc(doc(db, "clubs", CLUB, "mesas", "m1"), { nombre: "Mesa 1", zona: "Salón", capacidad: 4, orden: 1, activa: true, cuentaAbiertaId: null });
+    await setDoc(doc(db, "clubs", CLUB, "mesas", "m2"), { nombre: "Mesa 2", zona: null, capacidad: null, orden: 2, activa: true, cuentaAbiertaId: "mesa_abierta" });
+    await setDoc(doc(db, "clubs", CLUB, "cuentas", "mesa_abierta"), { tipo: "mesa", estado: "abierta", reservaGrupoId: null, mesaId: "m2", mesaNombre: "Mesa 2", jugadorUid: null, participantesUids: [], cancha: { precioTotal: 0, seña: 0, señaPagada: false, cobrar: false }, items: [], pagos: [], ventas: [] });
     await setDoc(doc(db, "superadmins", "sa"), { creado: ahora });
     await setDoc(doc(db, "users", "org"), { uid: "org", role: ["organizador"] });
     await setDoc(doc(db, "organizers", "ent1"), { ownerUid: "org", suspendido: true });
@@ -259,5 +266,70 @@ describe("fichaje de empleados", () => {
     await assertFails(setDoc(doc(como("dueno"), "clubs", CLUB, "privado", "fichaje"), { salt: "mio" }));
     await assertFails(getDoc(doc(como("cajero"), "clubs", CLUB, "fichajeIntentos", "cajero")));
     await assertFails(deleteDoc(doc(como("cajero"), "clubs", CLUB, "fichajeIntentos", "cajero")));
+  });
+});
+
+describe("Mesas", () => {
+  const cuentaMesa = (uid, extra = {}) => ({
+    tipo: "mesa",
+    estado: "abierta",
+    reservaGrupoId: null,
+    mesaId: "m1",
+    mesaNombre: "Mesa 1",
+    canchaId: null,
+    jugadorUid: null,
+    participantes: [{ id: "titular", uid: null, nombre: "Mesa 1", tipo: "titular" }],
+    participantesUids: [],
+    cancha: { precioTotal: 0, seña: 0, señaPagada: false, cobrar: false },
+    items: [],
+    pagos: [],
+    ventas: [],
+    abiertaPor: uid,
+    cerradaEn: null,
+    ...extra,
+  });
+  test("configura quien edita productos; el cajero no; nadie nace con candado", async () => {
+    await assertSucceeds(setDoc(doc(como("repositor"), "clubs", CLUB, "mesas", "m9"), { nombre: "Mesa 9", zona: "Patio", capacidad: 6, orden: 9, activa: true, cuentaAbiertaId: null }));
+    await assertFails(setDoc(doc(como("cajero"), "clubs", CLUB, "mesas", "m8"), { nombre: "Mesa 8", cuentaAbiertaId: null }));
+    await assertFails(setDoc(doc(como("repositor"), "clubs", CLUB, "mesas", "m7"), { nombre: "Mesa 7", cuentaAbiertaId: "mesa_x" }));
+    await assertFails(setDoc(doc(como("duenoFree"), "clubs", CLUB_FREE, "mesas", "m1"), { nombre: "Mesa 1", cuentaAbiertaId: null }));
+    await assertSucceeds(updateDoc(doc(como("repositor"), "clubs", CLUB, "mesas", "m1"), { nombre: "Ventana" }));
+    await assertFails(updateDoc(doc(como("repositor"), "clubs", CLUB, "mesas", "m1"), { cuentaAbiertaId: "mesa_x" }));
+    await assertFails(updateDoc(doc(como("cajero"), "clubs", CLUB, "mesas", "m1"), { nombre: "Otra" }));
+    await assertSucceeds(updateDoc(doc(como("cajero"), "clubs", CLUB, "mesas", "m1"), { cuentaAbiertaId: "mesa_x" }));
+    await assertFails(deleteDoc(doc(como("cajero"), "clubs", CLUB, "mesas", "m1")));
+    await assertSucceeds(deleteDoc(doc(como("repositor"), "clubs", CLUB, "mesas", "m1")));
+  });
+  test("las mesas las lee el staff del bar y de la caja, no un jugador", async () => {
+    await assertSucceeds(getDoc(doc(como("cajero"), "clubs", CLUB, "mesas", "m1")));
+    await assertSucceeds(getDoc(doc(como("barra"), "clubs", CLUB, "mesas", "m1")));
+    await assertFails(getDoc(doc(como("jugador"), "clubs", CLUB, "mesas", "m1")));
+  });
+  test("cuenta de mesa: la abre quien cobra o vende, sin reserva ni cancha ni jugador, en una mesa que existe", async () => {
+    await assertSucceeds(setDoc(doc(como("cajero"), "clubs", CLUB, "cuentas", "mesa_n1"), cuentaMesa("cajero")));
+    await assertFails(setDoc(doc(como("barra"), "clubs", CLUB, "cuentas", "mesa_n2"), cuentaMesa("barra")));
+    await assertFails(setDoc(doc(como("cajero"), "clubs", CLUB, "cuentas", "mesa_n3"), cuentaMesa("cajero", { mesaId: "noExiste" })));
+    await assertFails(setDoc(doc(como("cajero"), "clubs", CLUB, "cuentas", "mesa_n4"), cuentaMesa("cajero", { cancha: { precioTotal: 5000, seña: 0, señaPagada: false, cobrar: true } })));
+    await assertFails(setDoc(doc(como("cajero"), "clubs", CLUB, "cuentas", "mesa_n5"), cuentaMesa("cajero", { jugadorUid: "jugador", participantesUids: ["jugador"] })));
+    await assertFails(setDoc(doc(como("cajero"), "clubs", CLUB, "cuentas", "otraCosa"), cuentaMesa("cajero")));
+    await assertFails(setDoc(doc(como("cajeroFree"), "clubs", CLUB_FREE, "cuentas", "mesa_n6"), cuentaMesa("cajeroFree")));
+    // Una cuenta del turno (reserva r3 confirmada) no puede nacer con tipo "mesa"; como turno, sí (y con mesa)
+    await assertFails(setDoc(doc(como("cajero"), "clubs", CLUB, "cuentas", "r3"), cuentaMesa("cajero", { reservaGrupoId: "r3" })));
+    await assertSucceeds(setDoc(doc(como("cajero"), "clubs", CLUB, "cuentas", "r3"), cuentaMesa("cajero", { tipo: "turno", reservaGrupoId: "r3", jugadorUid: "jugador", participantesUids: ["jugador"] })));
+  });
+  test("mover de mesa: quien cobra cambia mesaId; una cuenta de mesa no queda sin mesa ni toca la cancha", async () => {
+    const ref = (db) => doc(db, "clubs", CLUB, "cuentas", "mesa_abierta");
+    await assertSucceeds(updateDoc(ref(como("cajero")), { mesaId: "m1", mesaNombre: "Mesa 1", mesaZona: "Salón" }));
+    await assertFails(updateDoc(ref(como("cajero")), { mesaId: null, mesaNombre: null }));
+    await assertFails(updateDoc(ref(como("cajero")), { cancha: { precioTotal: 9000, seña: 0, señaPagada: false, cobrar: true } }));
+    await assertFails(updateDoc(ref(como("barra")), { mesaId: "m1" }));
+    // La cuenta del turno r2 puede ir a una mesa y salir de ella
+    await assertSucceeds(updateDoc(doc(como("cajero"), "clubs", CLUB, "cuentas", "r2"), { mesaId: "m1", mesaNombre: "Mesa 1", mesaZona: null }));
+    await assertSucceeds(updateDoc(doc(como("cajero"), "clubs", CLUB, "cuentas", "r2"), { mesaId: null, mesaNombre: null, mesaZona: null }));
+  });
+  test("una cuenta de mesa anulada no se reabre; se cierra cobrándola o se anula como cualquier cuenta", async () => {
+    const ref = (db) => doc(db, "clubs", CLUB, "cuentas", "mesa_abierta");
+    await assertSucceeds(updateDoc(ref(como("encargado")), { estado: "anulada", cerradaPor: "encargado", cerradaEn: serverTimestamp(), anulacion: { por: "encargado", motivo: "se fueron" } }));
+    await assertFails(updateDoc(ref(como("cajero")), { estado: "abierta", abiertaPor: "cajero", ventas: [], cerradaEn: null, items: [] }));
   });
 });

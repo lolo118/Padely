@@ -47,6 +47,8 @@ const BarVender = lazy(() => import("./pages/admin/bar/Vender"));
 const BarKiosk = lazy(() => import("./pages/admin/bar/Kiosk"));
 const BarCuentas = lazy(() => import("./pages/admin/bar/Cuentas"));
 const BarCuentaDetalle = lazy(() => import("./pages/admin/bar/CuentaDetalle"));
+const BarMesas = lazy(() => import("./pages/admin/bar/Mesas"));
+const BarMesasConfig = lazy(() => import("./pages/admin/bar/MesasConfig"));
 const BarBarra = lazy(() => import("./pages/admin/bar/Barra"));
 const BarQr = lazy(() => import("./pages/admin/bar/QrCanchas"));
 const BarReportes = lazy(() => import("./pages/admin/bar/Reportes"));
@@ -303,6 +305,8 @@ export default function App() {
             <Route path="bar/kiosk" element={<RequierePro titulo="El kiosco"><BarKiosk /></RequierePro>} />
             <Route path="bar/cuentas" element={<RequierePro titulo="Cuentas"><BarCuentas /></RequierePro>} />
             <Route path="bar/cuentas/:id" element={<RequierePro titulo="La cuenta del turno"><BarCuentaDetalle /></RequierePro>} />
+            <Route path="bar/mesas" element={<RequierePro titulo="Las mesas"><BarMesas /></RequierePro>} />
+            <Route path="bar/mesas/configurar" element={<RequierePro titulo="Las mesas"><BarMesasConfig /></RequierePro>} />
             <Route path="bar/barra" element={<RequierePro titulo="La barra"><BarBarra /></RequierePro>} />
             <Route path="bar/qr" element={<RequierePro titulo="Los QR de las canchas"><BarQr /></RequierePro>} />
             <Route path="bar/reportes" element={<RequierePro titulo="Reportes"><BarReportes /></RequierePro>} />

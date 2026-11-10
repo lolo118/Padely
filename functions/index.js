@@ -1181,7 +1181,9 @@ exports.onCuentaUpdated = onDocumentUpdated("clubs/{clubId}/cuentas/{cuentaId}",
   if (!antes || !despues || antes.estado !== "abierta" || despues.estado === "abierta") return;
   const clubRef = db.collection("clubs").doc(clubId);
   const cuentaRef = clubRef.collection("cuentas").doc(cuentaId);
-  const textoTurno = `${despues.canchaNombre || "Cancha"} ${fechaCortaArgentina(despues.fecha)} ${despues.horaInicio || ""}${despues.horaFin ? `–${despues.horaFin}` : ""}`.trim();
+  // Mesas: una cuenta de mesa no tiene reserva (no hay turnos que marcar) y se nombra por la mesa
+  const deMesa = cc.esCuentaDeMesa(despues);
+  const textoTurno = `${cc.lugarDeCuenta(despues)} ${fechaCortaArgentina(despues.fecha)} ${despues.horaInicio || ""}${despues.horaFin ? `–${despues.horaFin}` : ""}`.trim();
   const total = Number(despues.totales && despues.totales.total) || 0;
   // Pedidos que quedaron en curso: con la cuenta cerrada o anulada ya no se pueden servir ni cobrar
   try {
@@ -1244,8 +1246,9 @@ exports.onCuentaUpdated = onDocumentUpdated("clubs/{clubId}/cuentas/{cuentaId}",
           },
         });
       });
-      // 2. Los turnos de la reserva (y los perfiles de los participantes registrados, para "Jugaste con…")
-      const reservasSnap = await tx.get(clubRef.collection("reservas").where("grupoId", "==", cuentaId));
+      // 2. Los turnos de la reserva (y los perfiles de los participantes registrados, para "Jugaste con…"). Una
+      // cuenta de mesa no tiene reserva: no se lee ni se escribe ningún turno.
+      const reservasSnap = deMesa ? { docs: [], size: 0 } : await tx.get(clubRef.collection("reservas").where("grupoId", "==", cuentaId));
       const existentes = pendientes.length ? await tx.getAll(...pendientes.map((p) => p.ref)) : [];
       const registrados = cc.participantesActivos(cuenta).filter((p) => p.uid && p.anonimo !== true);
       const perfiles = registrados.length > 1 ? await tx.getAll(...registrados.map((p) => db.collection("perfilesPublicos").doc(p.uid))) : [];
@@ -1257,7 +1260,7 @@ exports.onCuentaUpdated = onDocumentUpdated("clubs/{clubId}/cuentas/{cuentaId}",
         escritos += 1;
       });
       const cancha = cuenta.cancha || {};
-      const señaCobradaAca = cancha.cobrar !== false && cancha.señaPagada !== true && Number(cancha.seña) > 0;
+      const señaCobradaAca = !deMesa && cancha.cobrar !== false && cancha.señaPagada !== true && Number(cancha.seña) > 0;
       const cambiosReserva = { cuentaCerrada: true, cuentaTotal: Number(cuenta.totales && cuenta.totales.total) || 0, cuentaCerradaEn: FieldValue.serverTimestamp() };
       if (señaCobradaAca) cambiosReserva.señaPagada = true;
       reservasSnap.docs.forEach((d) => tx.update(d.ref, cambiosReserva));
@@ -1303,7 +1306,7 @@ exports.onCuentaUpdated = onDocumentUpdated("clubs/{clubId}/cuentas/{cuentaId}",
         if (pago <= 0) continue;
         batch.set(nuevaNotificacionRef(p.uid), {
           tipo: "cuenta_cerrada",
-          titulo: "Cuenta del turno cerrada",
+          titulo: deMesa ? "Cuenta de la mesa cerrada" : "Cuenta del turno cerrada",
           mensaje: `${textoTurno} · pagaste $ ${Math.round(pago).toLocaleString("es-AR")} de $ ${Math.round(total).toLocaleString("es-AR")}`,
           link: `/mi-cuenta/${clubId}/${cuentaId}`,
           icono: "🧾",
@@ -1332,6 +1335,9 @@ exports.onCuentaUpdated = onDocumentUpdated("clubs/{clubId}/cuentas/{cuentaId}",
 // Todos los días a las 4: las cuentas abiertas de días anteriores. Sin consumos → se anulan solas ("sin consumos,
 // vencida"); con consumos → se avisa al dueño del club una vez (avisoVencidaEnviado) y la cuenta queda abierta
 // para que la cierre alguien (cobrándola o anulándola).
+// Mesas: las cuentas de mesa (sin reserva) entran por la misma consulta: su fecha es la de la apertura (abiertaEn),
+// así que una mesa abierta ayer se trata igual (vacía → anulada, y la mesa queda libre; pagada → cerrada; si se
+// debe algo → aviso). Sus pedidos no existen todavía (sin QR de mesa), así que el barrido de pedidos no cambia.
 exports.cerrarCuentasVencidas = onSchedule({ schedule: "every day 04:00", timeZone: ZONA_HORARIA }, async () => {
   const hoy = fechaLocalArgentina();
   // Pedidos colgados: en curso (pendiente / aceptado / listo) en turnos que terminaron hace más de 2 h. Un aceptado
@@ -1404,7 +1410,7 @@ exports.cerrarCuentasVencidas = onSchedule({ schedule: "every day 04:00", timeZo
         await nuevaNotificacionRef(ownerUid).set({
           tipo: "cuenta_vencida",
           titulo: "Cuenta del turno sin cerrar",
-          mensaje: `La cuenta de ${cuenta.canchaNombre || "una cancha"} del ${cuenta.fecha || ""} (${cuenta.nombreJugador || "sin nombre"}) sigue abierta con $ ${Math.round(Number(saldos.pendiente) || 0).toLocaleString("es-AR")} pendientes. Cobrala o anulala desde Bar → Cuentas.`,
+          mensaje: `La cuenta de ${cc.esCuentaDeMesa(cuenta) ? cc.lugarDeCuenta(cuenta) : cuenta.canchaNombre || "una cancha"} del ${cuenta.fecha || ""} (${cuenta.nombreJugador || "sin nombre"}) sigue abierta con $ ${Math.round(Number(saldos.pendiente) || 0).toLocaleString("es-AR")} pendientes. Cobrala o anulala desde Bar → Cuentas.`,
           link: "/admin/bar/cuentas",
           icono: "🧾",
           leida: false,
@@ -2161,17 +2167,20 @@ exports.sumarJugador = onCall({ region: REGION }, async (request) => {
   const nombreDado = texto(request.data && request.data.nombre, 40);
   if (!clubId || !grupoId || (!otroUid && nombreDado.length < 2)) throw new HttpsError("invalid-argument", "clubId, grupoId y un jugador (uid) o un nombre de 2 a 40 letras");
   const clubRef = db.collection("clubs").doc(clubId);
-  const [acceso, reserva] = await Promise.all([accesoClub(clubRef, uid), reservaDelTurno(clubRef, grupoId)]);
-  const esTitular = !!reserva.jugadorUid && reserva.jugadorUid === uid;
-  if (!esTitular && !acceso.esStaff) throw new HttpsError("permission-denied", "Solo el titular del turno o el club pueden sumar jugadores");
-  if (cc.terminoHace(reserva)) throw new HttpsError("failed-precondition", "El turno ya terminó");
+  // Mesas: una cuenta de mesa no tiene reserva (ni titular con cuenta ni horario): solo el club suma gente, mientras
+  // la cuenta esté abierta (cuentaDelTurnoEnTx lo verifica; si no existe, falla como un turno inexistente)
+  const deMesa = cc.esIdCuentaDeMesa(grupoId);
+  const [acceso, reserva] = await Promise.all([accesoClub(clubRef, uid), deMesa ? Promise.resolve(null) : reservaDelTurno(clubRef, grupoId)]);
+  const esTitular = !!reserva && !!reserva.jugadorUid && reserva.jugadorUid === uid;
+  if (!esTitular && !acceso.esStaff) throw new HttpsError("permission-denied", deMesa ? "Solo el club puede sumar gente a una mesa" : "Solo el titular del turno o el club pueden sumar jugadores");
+  if (reserva && cc.terminoHace(reserva)) throw new HttpsError("failed-precondition", "El turno ya terminó");
   let nombreOtro = nombreDado;
   if (otroUid) {
     const perfil = await userRef(otroUid).get();
     if (!perfil.exists) throw new HttpsError("not-found", "Ese jugador no existe");
     nombreOtro = perfil.data().nombre || nombreDado || "Jugador";
   }
-  const quien = acceso.esStaff && !esTitular ? acceso.nombre || (await nombreDeUsuario(uid, "El club")) : await nombreDeUsuario(uid, reserva.nombreJugador || "El titular");
+  const quien = acceso.esStaff && !esTitular ? acceso.nombre || (await nombreDeUsuario(uid, "El club")) : await nombreDeUsuario(uid, (reserva && reserva.nombreJugador) || "El titular");
   const resultado = await db.runTransaction(async (tx) => {
     const { cuenta, guardar } = await cuentaDelTurnoEnTx(tx, clubRef, grupoId, { uid, nombre: quien });
     const participantes = cc.participantesDe(cuenta).map((p) => ({ ...p }));
@@ -2197,9 +2206,12 @@ exports.sumarJugador = onCall({ region: REGION }, async (request) => {
     try {
       await avisoA(otroUid, {
         tipo: "turno_sumado",
-        titulo: "Te sumaron a un turno",
+        titulo: deMesa ? "Te sumaron a una mesa" : "Te sumaron a un turno",
         // Staff: "Te sumaron al turno de Gómez · vie 23 oct · 14:00 en Club X"; titular: "Gómez te sumó al turno del vie 23 oct · 14:00 en Club X"
-        mensaje: esTitular
+        // Mesa: "Te sumaron a la cuenta de Mesa 4 · vie 23 oct en Club X"
+        mensaje: deMesa
+          ? `Te sumaron a la cuenta de ${cc.lugarDeCuenta(resultado.cuenta)} · ${fechaCortaArgentina(resultado.cuenta.fecha)} en ${acceso.club.nombre || "el club"}.`
+          : esTitular
           ? `${quien} te sumó al turno del ${fechaCortaArgentina(resultado.cuenta.fecha)} · ${resultado.cuenta.horaInicio || ""} en ${acceso.club.nombre || "el club"}.`
           : `Te sumaron al turno de ${resultado.cuenta.nombreJugador || "un jugador"} · ${fechaCortaArgentina(resultado.cuenta.fecha)} · ${resultado.cuenta.horaInicio || ""} en ${acceso.club.nombre || "el club"}.`,
         link: `/mi-cuenta/${clubId}/${grupoId}`,
@@ -2657,7 +2669,7 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
     if (!cobro || cobro.total <= 0) throw new HttpsError("failed-precondition", "No hay nada para cobrar");
     destino = {
       monto: cobro.total,
-      titulo: `${club.nombre || "Club"} · ${cuenta.canchaNombre || "Cancha"} · ${horaCorta(cuenta)} · ${tipo === "parte" ? "Tu parte" : pagador.nombre ? `Parte de ${pagador.nombre}` : "Cuenta"}`,
+      titulo: `${club.nombre || "Club"} · ${cc.lugarDeCuenta(cuenta)} · ${horaCorta(cuenta)} · ${tipo === "parte" ? "Tu parte" : pagador.nombre ? `Parte de ${pagador.nombre}` : "Cuenta"}`,
       // M4: quien paga un QR del mostrador no ve la cuenta; vuelve a una página neutra (el club lo ve en su pantalla)
       backUrl: tipo === "mostrador" ? `${APP_URL}/pago-recibido` : `${APP_URL}/turno/${clubId}/${grupoId}`,
       pagador,

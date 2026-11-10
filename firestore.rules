@@ -397,6 +397,28 @@ service cloud.firestore {
         allow create, update, delete: if esStaff(clubId, 'editarProductos');
       }
 
+      // Mesas del bar: las configura quien edita productos (nombre, zona, capacidad, orden, activa). La ocupación
+      // NO se guarda (se deriva de las cuentas abiertas con mesaId); cuentaAbiertaId es el candado que escriben las
+      // transacciones que abren o mueven una cuenta (quien cobra o vende), y solo ese campo.
+      match /mesas/{mesaId} {
+        allow read: if esStaffBar(clubId) || esStaffCaja(clubId) || esStaff(clubId, 'cobrarTurnos') || superAdmin();
+        allow create: if esStaff(clubId, 'editarProductos')
+          && planPro(clubId)
+          && request.resource.data.nombre is string
+          && request.resource.data.nombre.size() > 0
+          && request.resource.data.nombre.size() <= 30
+          && request.resource.data.get('cuentaAbiertaId', null) == null;
+        allow update: if (esStaff(clubId, 'editarProductos')
+              && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['cuentaAbiertaId'])
+              && request.resource.data.nombre is string
+              && request.resource.data.nombre.size() > 0
+              && request.resource.data.nombre.size() <= 30)
+          || ((esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender'))
+              && planPro(clubId)
+              && changedOnly(['cuentaAbiertaId', 'actualizadoEn']));
+        allow delete: if esStaff(clubId, 'editarProductos');
+      }
+
       match /proveedores/{proveedorId} {
         allow read: if esStaffBar(clubId) || superAdmin();
         allow create, delete: if esStaff(clubId, 'editarProductos');
@@ -565,18 +587,40 @@ service cloud.firestore {
             || request.resource.data.get('items', []).size() >= resource.data.get('items', []).size()
             || esStaff(clubId, 'anularVenta');
         }
+        // Mesas: quien cobra o vende asigna / cambia / saca la mesa (mesaId, mesaNombre, mesaZona). Una cuenta de
+        // mesa nunca toca la cancha y siempre queda en alguna mesa.
+        function mesaSigueValida() {
+          return resource.data.get('tipo', 'turno') != 'mesa'
+            || (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['cancha'])
+                && request.resource.data.get('mesaId', null) is string);
+        }
         allow read: if esStaffCaja(clubId) || esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender') || esStaff(clubId, 'pedidos')
           || (signedIn() && resource.data.jugadorUid == request.auth.uid)
           || (signedIn() && request.auth.uid in resource.data.get('participantesUids', []))
           || superAdmin();
-        allow create: if (esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender') || esStaff(clubId, 'pedidos'))
-          && planPro(clubId)
+        // Dos tipos: la cuenta del turno (id = grupoId de una reserva confirmada) y la cuenta de una mesa sin turno
+        // (id "mesa_…", tipo "mesa": sin reserva, sin cancha que cobrar, sin jugador dueño; la abre solo quien cobra o
+        // vende, en una mesa que existe). Las dos pueden llevar mesaId / mesaNombre / mesaZona.
+        allow create: if planPro(clubId)
           && request.resource.data.estado == 'abierta'
           && request.resource.data.abiertaPor == request.auth.uid
-          && request.resource.data.reservaGrupoId == cuentaId
-          && get(/databases/$(database)/documents/clubs/$(clubId)/reservas/$(cuentaId)).data.status == 'confirmada'
           && request.resource.data.ventas.size() == 0
-          && request.resource.data.cerradaEn == null;
+          && request.resource.data.cerradaEn == null
+          && (((esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender') || esStaff(clubId, 'pedidos'))
+               && request.resource.data.get('tipo', 'turno') != 'mesa'
+               && request.resource.data.reservaGrupoId == cuentaId
+               && get(/databases/$(database)/documents/clubs/$(clubId)/reservas/$(cuentaId)).data.status == 'confirmada')
+              || ((esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender'))
+                  && cuentaId.matches('^mesa_[A-Za-z0-9]+$')
+                  && request.resource.data.tipo == 'mesa'
+                  && request.resource.data.reservaGrupoId == null
+                  && request.resource.data.get('jugadorUid', null) == null
+                  && request.resource.data.get('participantesUids', []).size() == 0
+                  && request.resource.data.cancha.cobrar == false
+                  && request.resource.data.cancha.precioTotal == 0
+                  && request.resource.data.cancha.get('seña', 0) == 0
+                  && request.resource.data.mesaId is string
+                  && exists(/databases/$(database)/documents/clubs/$(clubId)/mesas/$(request.resource.data.mesaId))));
         // Mientras está abierta: editar consumos / cancha / división (y anotar las ventas de las partes cobradas),
         // o cerrarla (cerrada: quien cobra; anulada: quien puede anular ventas). Quien atiende la barra ('pedidos')
         // solo suma consumos (al aceptar un pedido). Una cuenta anulada se puede reabrir (vuelve vacía, con lo
@@ -586,8 +630,10 @@ service cloud.firestore {
         // (dueño o encargado); sumar consumos sigue abierto para quien vende o atiende la barra.
         allow update: if (resource.data.estado == 'abierta'
             && (((esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender'))
-                 && changedOnly(['items', 'totales', 'division', 'cancha', 'ventas', 'pagos', 'participantes', 'participantesUids', 'alertas', 'actualizadoEn', 'nombreJugador'])
+                 && changedOnly(['items', 'totales', 'division', 'cancha', 'ventas', 'pagos', 'participantes', 'participantesUids', 'alertas', 'actualizadoEn', 'nombreJugador',
+                                 'mesaId', 'mesaNombre', 'mesaZona'])
                  && request.resource.data.estado == 'abierta'
+                 && mesaSigueValida()
                  && itemsNoBajanConPagos(clubId))
                 || (esStaff(clubId, 'pedidos')
                     && changedOnly(['items', 'totales', 'division', 'participantes', 'participantesUids', 'actualizadoEn'])
@@ -598,14 +644,17 @@ service cloud.firestore {
                     && request.resource.data.estado in ['cerrada', 'anulada']
                     && request.resource.data.cerradaPor == request.auth.uid
                     && (request.resource.data.estado == 'cerrada' || esStaff(clubId, 'anularVenta')))))
+          // Reabrir una anulada: solo cuentas del turno (una de mesa no se reabre: se abre otra); vuelve sin mesa
           || (resource.data.estado == 'anulada'
+              && resource.data.get('tipo', 'turno') != 'mesa'
               && (esStaff(clubId, 'cobrarTurnos') || esStaff(clubId, 'vender') || esStaff(clubId, 'pedidos'))
               && request.resource.data.estado == 'abierta'
               && request.resource.data.abiertaPor == request.auth.uid
               && request.resource.data.ventas.size() == 0
               && request.resource.data.cerradaEn == null
+              && request.resource.data.get('mesaId', null) == null
               && changedOnly(['estado', 'items', 'totales', 'division', 'ventas', 'pagos', 'participantes', 'participantesUids', 'cerradaPor', 'cerradaEn', 'anulacion',
-                              'historial', 'abiertaPor', 'abiertaPorNombre', 'abiertaEn', 'actualizadoEn']));
+                              'historial', 'abiertaPor', 'abiertaPorNombre', 'abiertaEn', 'actualizadoEn', 'mesaId', 'mesaNombre', 'mesaZona']));
         allow delete: if false;
       }
 

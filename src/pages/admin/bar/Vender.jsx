@@ -218,7 +218,7 @@ export default function Vender() {
     const para = participantesSel.find((p) => p.id === paraId) || null;
     try {
       await agregarItemsACuenta(clubId, grupoId, totales.lineas, { uid, nombre, reserva: cuentaSel, asignadoA: para ? [para.id] : [] });
-      toast.success(`Agregado a la cuenta de ${cuentaSel.nombreJugador || cuentaSel.canchaName || "el turno"}${para ? ` · para ${para.nombre}` : ""} · ${formatPrecio(totales.subtotal)}`);
+      toast.success(`Agregado a la cuenta de ${cuentaSel.esMesa ? cuentaSel.mesaNombre || "la mesa" : cuentaSel.nombreJugador || cuentaSel.canchaName || "el turno"}${para ? ` · para ${para.nombre}` : ""} · ${formatPrecio(totales.subtotal)}`);
       limpiar();
       setParaId(""); // la próxima carga vuelve a "Sin asignar": nada va a la misma persona sin elegirla
     } catch (e) {
@@ -228,7 +228,8 @@ export default function Vender() {
     }
     enfocar();
   };
-  const textoCuenta = cuentaSel ? textoTurno({ canchaNombre: cuentaSel.canchaName, horaInicio: cuentaSel.horaInicio, horaFin: cuentaSel.horaFin, nombreJugador: cuentaSel.nombreJugador }) : "";
+  // Una cuenta de mesa (sin turno) se elige desde la franja como una reserva más (esMesa: true)
+  const textoCuenta = !cuentaSel ? "" : cuentaSel.esMesa ? textoTurno(cuentaSel) : textoTurno({ canchaNombre: cuentaSel.canchaName, horaInicio: cuentaSel.horaInicio, horaFin: cuentaSel.horaFin, nombreJugador: cuentaSel.nombreJugador, mesaNombre: cuentaAbiertaSel?.mesaNombre });
 
   // ----- Venta -----
   const confirmarVenta = async (calculo) => {

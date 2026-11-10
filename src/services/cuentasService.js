@@ -29,11 +29,14 @@ import {
   cobroRestoAlTitular,
   cobroTodo,
   conPago,
+  cuentaDeMesa,
   cuentaDesdeReserva,
   cuentaEditable,
   cuentaSaldada,
   divisionCompleta,
+  esCuentaDeMesa,
   esLegacyDividida,
+  fechaLocalDe,
   lineaPagada,
   lineasDeVentaParaParte,
   normalizarCuenta,
@@ -47,6 +50,7 @@ import {
   totalDeLineas,
   uidsDe,
 } from "../utils/cuentas";
+import { PREFIJO_CUENTA_MESA, esIdCuentaDeMesa, mesaOcupadaPorOtra } from "../utils/mesas";
 
 // Cuenta del turno (clubs/{c}/cuentas/{grupoId}): la cancha, la seña y los consumos de una reserva. Se crea desde el
 // POS al cargar el primer consumo (id = grupoId de la reserva: una reserva, a lo sumo una cuenta) y se cierra
@@ -110,8 +114,8 @@ export const escucharMisCuentasAbiertas = (uid, onDatos, onError) =>
 const base = (cuenta) => ({ ...cuenta });
 
 export class CuentaCerradaError extends Error {
-  constructor() {
-    super("La cuenta de ese turno ya está cerrada");
+  constructor(mensaje = "La cuenta de ese turno ya está cerrada") {
+    super(mensaje);
     this.name = "CuentaCerradaError";
   }
 }
@@ -131,10 +135,14 @@ async function cuentaAbiertaEnTx(tx, clubId, grupoId, { uid, nombre, reserva = n
       const extra = normalizarCuenta(actual, { agregadoPor: uid });
       return { ref: r, cuenta: { ...base(actual), ...extra }, nueva: false, reabierta: false, extra };
     }
+    // Una cuenta de mesa cerrada o anulada no se reabre: la mesa ya puede tener otra (se abre una nueva desde Mesas)
+    if (esCuentaDeMesa(actual)) throw new CuentaCerradaError("La cuenta de esa mesa ya está cerrada: abrí una nueva desde Mesas");
     if (actual.estado === "anulada") {
       const previo = { estado: "anulada", anulacion: actual.anulacion || null, items: actual.items || [], cerradaPor: actual.cerradaPor || null, cerradaEn: actual.cerradaEn || null, reabiertaPor: uid, reabiertaEn: Timestamp.now() };
       const participantes = [titularDe(actual, { agregadoPor: uid })];
-      const cuenta = { ...base(actual), estado: "abierta", items: [], division: null, ventas: [], pagos: [], participantes, participantesUids: uidsDe(participantes), cerradaPor: null, cerradaEn: null, anulacion: null };
+      // Reabierta, vuelve sin mesa (la mesa pudo ocuparse mientras estaba anulada): se asigna de nuevo si hace falta
+      const sinMesa = actual.mesaId ? { mesaId: null, mesaNombre: null, mesaZona: null } : {};
+      const cuenta = { ...base(actual), estado: "abierta", items: [], division: null, ventas: [], pagos: [], participantes, participantesUids: uidsDe(participantes), cerradaPor: null, cerradaEn: null, anulacion: null, ...sinMesa };
       cuenta.totales = calcularTotalesCuenta(cuenta);
       tx.update(r, {
         estado: "abierta",
@@ -148,6 +156,7 @@ async function cuentaAbiertaEnTx(tx, clubId, grupoId, { uid, nombre, reserva = n
         cerradaPor: null,
         cerradaEn: null,
         anulacion: null,
+        ...sinMesa,
         historial: arrayUnion(previo),
         abiertaPor: uid,
         abiertaPorNombre: nombre || null,
@@ -158,6 +167,7 @@ async function cuentaAbiertaEnTx(tx, clubId, grupoId, { uid, nombre, reserva = n
     }
     throw new CuentaCerradaError();
   }
+  if (esIdCuentaDeMesa(grupoId)) throw new Error("La cuenta de esa mesa no existe");
   let datosReserva = reserva;
   if (!datosReserva) {
     const rs = await tx.get(doc(db, "clubs", clubId, "reservas", grupoId));
@@ -457,3 +467,86 @@ export const anularCuenta = async (clubId, cuenta, { motivo, uid, nombre }) => {
 
 // Staff: saca una alerta de la cuenta (las reglas dejan tocar alertas en una cuenta abierta)
 export const quitarAlertaCuenta = (clubId, cuentaId, alerta) => updateDoc(doc(db, "clubs", clubId, "cuentas", cuentaId), { alertas: arrayRemove(alerta), actualizadoEn: serverTimestamp() });
+
+// ----- Mesas -----
+// La ocupación de una mesa se deriva de las cuentas abiertas (cuenta.mesaId). mesas/{id}.cuentaAbiertaId es el
+// candado de estas transacciones: si apunta a una cuenta que sigue abierta en esa mesa, la mesa está ocupada; si
+// apunta a una cerrada (o a nada), está libre. Así dos tablets no abren dos cuentas en la misma mesa a la vez.
+
+export class MesaOcupadaError extends Error {
+  constructor(cuentaId = null) {
+    super("Esa mesa ya tiene una cuenta abierta");
+    this.name = "MesaOcupadaError";
+    this.cuentaId = cuentaId;
+  }
+}
+const refMesa = (clubId, id) => doc(db, "clubs", clubId, "mesas", id);
+const horaLocal = (d) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
+// Dentro de una transacción: la cuenta a la que apunta el candado de la mesa, si todavía la ocupa (si no, null)
+async function ocupanteEnTx(tx, clubId, mesaId, mesa, cuentaId = null) {
+  const id = mesa?.cuentaAbiertaId;
+  if (!id || id === cuentaId) return null;
+  const snap = await tx.get(ref(clubId, id));
+  const actual = snap.exists() ? conId(snap) : null;
+  return mesaOcupadaPorOtra(mesaId, actual, cuentaId) ? actual : null;
+}
+
+// Abre una cuenta en una mesa libre (comensales sin turno): cuenta "mesa_…", sin reserva ni cancha. Si la mesa ya
+// tiene una cuenta abierta, devuelve esa (la grilla lleva a su detalle). cliente: a nombre de quién (opcional).
+// Devuelve { cuenta, nueva }.
+export const abrirCuentaDeMesa = (clubId, mesaId, { uid, nombre, cliente = "" }) =>
+  runTransaction(db, async (tx) => {
+    const ms = await tx.get(refMesa(clubId, mesaId));
+    if (!ms.exists()) throw new Error("La mesa no existe");
+    const mesa = { id: ms.id, ...ms.data() };
+    if (mesa.activa === false) throw new Error("La mesa está desactivada");
+    const ocupante = await ocupanteEnTx(tx, clubId, mesaId, mesa);
+    if (ocupante) return { cuenta: ocupante, nueva: false };
+    const id = `${PREFIJO_CUENTA_MESA}${doc(col(clubId, "cuentas")).id}`;
+    const ahora = new Date();
+    const cuenta = cuentaDeMesa(mesa, { nombre: cliente, fecha: fechaLocalDe(ahora), hora: horaLocal(ahora), agregadoPor: uid, ahora });
+    cuenta.totales = calcularTotalesCuenta(cuenta);
+    tx.set(ref(clubId, id), {
+      ...cuenta,
+      abiertaPor: uid,
+      abiertaPorNombre: nombre || null,
+      abiertaEn: serverTimestamp(),
+      cerradaPor: null,
+      cerradaEn: null,
+      actualizadoEn: serverTimestamp(),
+    });
+    tx.update(refMesa(clubId, mesaId), { cuentaAbiertaId: id, actualizadoEn: serverTimestamp() });
+    return { cuenta: { id, ...cuenta }, nueva: true };
+  });
+
+// Pasa una cuenta abierta a otra mesa (mesaId) o la saca de la mesa (null: solo una cuenta del turno; una cuenta de
+// mesa siempre está en alguna). La mesa destino tiene que estar libre. Devuelve la mesa destino (o null).
+export const moverCuentaAMesa = (clubId, cuentaId, mesaId) =>
+  runTransaction(db, async (tx) => {
+    const r = ref(clubId, cuentaId);
+    const snap = await tx.get(r);
+    if (!snap.exists()) throw new Error("La cuenta no existe");
+    const cuenta = conId(snap);
+    if (cuenta.estado !== "abierta") throw new CuentaCerradaError("La cuenta ya está cerrada");
+    if (!mesaId && esCuentaDeMesa(cuenta)) throw new Error("Una cuenta de mesa tiene que estar en alguna mesa");
+    if ((mesaId || null) === (cuenta.mesaId || null)) return null;
+    let destino = null;
+    if (mesaId) {
+      const ds = await tx.get(refMesa(clubId, mesaId));
+      if (!ds.exists()) throw new Error("La mesa no existe");
+      destino = { id: ds.id, ...ds.data() };
+      if (destino.activa === false) throw new Error("La mesa está desactivada");
+      const ocupante = await ocupanteEnTx(tx, clubId, mesaId, destino, cuentaId);
+      if (ocupante) throw new MesaOcupadaError(ocupante.id);
+    }
+    let origenRef = null;
+    if (cuenta.mesaId) {
+      const os = await tx.get(refMesa(clubId, cuenta.mesaId));
+      if (os.exists() && os.data().cuentaAbiertaId === cuentaId) origenRef = os.ref;
+    }
+    if (origenRef) tx.update(origenRef, { cuentaAbiertaId: null, actualizadoEn: serverTimestamp() });
+    if (destino) tx.update(refMesa(clubId, mesaId), { cuentaAbiertaId: cuentaId, actualizadoEn: serverTimestamp() });
+    tx.update(r, { mesaId: destino ? destino.id : null, mesaNombre: destino ? destino.nombre || "Mesa" : null, mesaZona: destino ? destino.zona || null : null, actualizadoEn: serverTimestamp() });
+    return destino;
+  });

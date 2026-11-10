@@ -103,3 +103,24 @@ test("B-P3-8b-2: el barrido de las 04:00 nunca anula una cuenta con plata", () =
   // Consumos sin pagar → avisar (como antes)
   assert.equal(d({ items: [{ id: "a" }], pagos: [] }, { pendiente: 3000 }), "avisar");
 });
+
+test("Mesas: el barrido de las 04:00 decide igual con una cuenta de mesa (sin reserva ni cancha)", async () => {
+  const util = await import("./lib/cuentas.mjs");
+  const d = cc.decisionCuentaVencida;
+  const mesa = { id: "mesa_x", ...util.cuentaDeMesa({ id: "m4", nombre: "Mesa 4" }, { fecha: "2026-11-09", hora: "23:30" }) };
+  assert.equal(cc.esCuentaDeMesa(mesa), true);
+  assert.equal(cc.esIdCuentaDeMesa("mesa_x"), true);
+  assert.equal(cc.esIdCuentaDeMesa("r1"), false);
+  assert.equal(cc.lugarDeCuenta(mesa), "Mesa 4");
+  assert.equal(cc.lugarDeCuenta({ canchaNombre: "Cancha 2" }), "Cancha 2");
+  // Vacía → se anula (libera la mesa)
+  assert.equal(d(mesa, { pendiente: util.saldosDeCuenta(mesa).pendiente }), "anular");
+  // Con consumos sin pagar → queda abierta y se avisa
+  const conItems = { ...mesa, items: [util.nuevaLinea({ productoId: "p", nombre: "Pizza", precio: 9000, cantidad: 1 })] };
+  assert.equal(util.saldosDeCuenta(conItems).pendiente, 9000);
+  assert.equal(d(conItems, { pendiente: util.saldosDeCuenta(conItems).pendiente }), "avisar");
+  // Pagada del todo (pero abierta) → se cierra
+  const cobro = util.cobroTodo(conItems);
+  const pagada = util.conPago(conItems, util.nuevoPago({ ventaNumero: "D1-1", participanteIds: ["titular"], piezas: cobro.piezas, medios: [{ medio: "efectivo", monto: 9000 }] }));
+  assert.equal(d(pagada, { pendiente: util.saldosDeCuenta(pagada).pendiente }), "cerrar");
+});

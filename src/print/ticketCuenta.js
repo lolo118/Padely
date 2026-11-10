@@ -3,7 +3,7 @@
 import { escapar } from "./imprimir";
 import { formatPrecio } from "../utils/format";
 import { formatDiaCorto, formatFechaHora } from "../utils/formatDate";
-import { calcularTotalesCuenta, esLegacyDividida, lineasDeVentaParaParte, participantesDe, saldosDeCuenta } from "../utils/cuentas";
+import { calcularTotalesCuenta, esCuentaDeMesa, esLegacyDividida, lineasDeVentaParaParte, lugarDeCuenta, participantesDe, saldosDeCuenta } from "../utils/cuentas";
 import { bloqueQrTicket } from "./ticketVenta";
 import { flag } from "../services/flagsService";
 
@@ -27,10 +27,13 @@ export function htmlTicketCuenta({ club = {}, cuenta = {}, clubId = "" }) {
   partes_.push(`<h1 class="ticket-h1">${escapar(t.encabezado || club.nombre || "Padely")}</h1>`);
   if (direccion) partes_.push(linea(direccion, "ticket-center ticket-muted"));
   partes_.push(sep());
-  partes_.push(`<h2 class="ticket-h2 ticket-center">Cuenta del turno</h2>`);
+  const deMesa = esCuentaDeMesa(cuenta);
+  partes_.push(`<h2 class="ticket-h2 ticket-center">${deMesa ? "Cuenta de la mesa" : "Cuenta del turno"}</h2>`);
   partes_.push(linea(ESTADO[cuenta.estado] || "", "ticket-center ticket-muted"));
-  partes_.push(fila("Cancha", `${cuenta.canchaNombre || "—"}`));
-  partes_.push(fila("Fecha", `${formatDiaCorto(cuenta.fecha)} ${cuenta.horaInicio || ""}${cuenta.horaFin ? `–${cuenta.horaFin}` : ""}`.trim()));
+  if (deMesa) partes_.push(fila("Mesa", lugarDeCuenta(cuenta)));
+  else partes_.push(fila("Cancha", `${cuenta.canchaNombre || "—"}`));
+  if (!deMesa && cuenta.mesaNombre) partes_.push(fila("Mesa", cuenta.mesaNombre));
+  partes_.push(fila(deMesa ? "Abierta" : "Fecha", `${formatDiaCorto(cuenta.fecha)} ${cuenta.horaInicio || ""}${cuenta.horaFin ? `–${cuenta.horaFin}` : ""}`.trim()));
   if (cuenta.nombreJugador) partes_.push(fila("A nombre de", cuenta.nombreJugador));
   partes_.push(sep());
 
