@@ -1,6 +1,6 @@
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Building2, Home, LayoutGrid, LogOut, Menu, ShieldCheck, Trophy, User, X } from "lucide-react";
+import { Building2, Calendar, Home, LayoutGrid, LogOut, Menu, ShieldCheck, Trophy, User, X } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import useThemeStore from "../../store/themeStore";
 import ThemeToggle from "../ThemeToggle";
@@ -20,6 +20,9 @@ const navItems = [
   { to: "/torneos", label: "Torneos", icon: Trophy },
   { to: "/perfil", label: "Perfil", icon: User },
 ];
+
+// En escritorio hay lugar para un quinto: "Mis reservas" (en el teléfono vive en Inicio, Perfil y el menú)
+const navEscritorio = [navItems[0], navItems[1], { to: "/mis-reservas", label: "Reservas", icon: Calendar }, navItems[2], navItems[3]];
 
 // El menú completo (las siete secciones, más las que prende un flag), en todos los anchos
 const menuItems = [
@@ -72,7 +75,7 @@ export default function PlayerLayout() {
       <AppBar wordmarkTo="/inicio" className="sticky top-0 z-30">
         {/* En escritorio la navegación inferior se pliega en la barra */}
         <nav className="hidden md:flex items-center gap-1 mr-2" aria-label="Principal">
-          {navItems.map((item) => {
+          {navEscritorio.map((item) => {
             const Icono = item.icon;
             return (
               <NavLink key={item.to} to={item.to} className="pd-btn pd-btn-ghost pd-btn-sm">

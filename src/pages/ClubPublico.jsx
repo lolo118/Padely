@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   AlertTriangle,
   AtSign,
+  CalendarDays,
   Camera,
   Check,
   ChevronLeft,
@@ -675,6 +676,12 @@ export default function ClubPublico() {
             </div>
           )}
         </div>
+        {/* Volver a las reservas del jugador sin pasar por el menú */}
+        {user && !user.isAnonymous && (
+          <Button as="link" to="/mis-reservas" variant="ghost" size="sm" icon={<CalendarDays className="pd-icon" size={20} aria-hidden="true" />} className="shrink-0">
+            Mis reservas
+          </Button>
+        )}
       </div>
 
       {/* P3-15: partidos abiertos de este club (oculto hasta habilitarlo) */}
