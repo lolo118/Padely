@@ -337,10 +337,10 @@ describe("Mesas", () => {
 describe("mini torneo de un turno", () => {
   const FUTURA = "2099-01-01";
   const sesionAnonima = (uid) => env.authenticatedContext(uid, { firebase: { sign_in_provider: "anonymous" } }).firestore();
-  const jugadoresMini = [1, 2, 3, 4].map((i) => ({ id: `j${i}`, nombre: `J${i}` }));
+  const jugadoresMini = [1, 2, 3, 4, 5, 6].map((i) => ({ id: `j${i}`, nombre: `J${i}` }));
   const mini = (creadorUid, extra = {}) => ({
     clubId: CLUB, clubNombre: "Club Legacy", canchaNombre: "Cancha 1", fecha: FUTURA, horaInicio: "20:00", horaFin: "21:30", reservaGrupoId: "rm1",
-    creadorUid, creadorNombre: "Jugador", editoresUids: [], edicionAbierta: false, nombre: "Mini", modo: "auto", formato: "americano",
+    creadorUid, creadorNombre: "Jugador", editoresUids: [], edicionAbierta: false, nombre: "Mini", modo: "auto", formato: "americanoParejas",
     partidoA: { tipo: "games", valor: 4 }, canchas: 1, jugadores: jugadoresMini, parejas: [], grupos: [], partidos: [], descansos: [], llave: null,
     rondas: 3, estimacionMin: 80, minutosTurno: 90, motivo: "", estado: "en_curso", ...extra,
   });
@@ -364,11 +364,30 @@ describe("mini torneo de un turno", () => {
     await assertFails(setDoc(ref(como("otro"), "m5"), mini("jugador")));
     await assertFails(setDoc(ref(sesionAnonima("anon"), "m6"), mini("anon")));
   });
-  test("solo reservas confirmadas y vigentes, 4 a 16 jugadores, sin campos de más", async () => {
+  test("parejas fijas: número par desde 6 jugadores, formatos nuevos y 3° puesto; el americano rotativo ya no se crea", async () => {
+    await assertFails(setDoc(ref(como("jugador"), "n1"), mini("jugador", { jugadores: jugadoresMini.slice(0, 4) })));
+    await assertFails(setDoc(ref(como("jugador"), "n2"), mini("jugador", { jugadores: jugadoresMini.slice(0, 5) })));
+    await assertFails(setDoc(ref(como("jugador"), "n3"), mini("jugador", { formato: "americano" })));
+    await assertFails(setDoc(ref(como("jugador"), "n4"), mini("jugador", { formato: "mexicano" })));
+    await assertFails(setDoc(ref(como("jugador"), "n5"), mini("jugador", { formato: "eliminacion", tercerPuesto: "si" })));
+    for (const formato of ["americanoParejas", "roundRobin", "grupos", "eliminacion", "rey"]) {
+      await assertSucceeds(setDoc(ref(como("jugador"), `f-${formato}`), mini("jugador", { formato })));
+    }
+    await assertSucceeds(setDoc(ref(como("jugador"), "n6"), mini("jugador", { formato: "eliminacion", tercerPuesto: true })));
+  });
+  test("los mini torneos viejos (americano rotativo de 4) se siguen cargando", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(ref(ctx.firestore(), "viejo"), mini("jugador", { formato: "americano", jugadores: jugadoresMini.slice(0, 4), editoresUids: ["amigo"] }));
+    });
+    await assertSucceeds(updateDoc(ref(como("amigo"), "viejo"), { partidos: [{ id: "a1-1", resultado: { sets: [{ g1: 4, g2: 2 }] } }], estado: "en_curso" }));
+    await assertSucceeds(updateDoc(ref(como("jugador"), "viejo"), { nombre: "Renombrado" }));
+  });
+  test("solo reservas confirmadas y vigentes, 6 a 16 jugadores, sin campos de más", async () => {
     await assertFails(setDoc(ref(como("jugador"), "m2"), mini("jugador", { reservaGrupoId: "rmCancelada" })));
     await assertFails(setDoc(ref(como("jugador"), "m3"), mini("jugador", { reservaGrupoId: "rmPasada", fecha: "2020-01-01" })));
     await assertFails(setDoc(ref(como("jugador"), "m4"), mini("jugador", { fecha: "2099-01-02" })));
     await assertFails(setDoc(ref(como("jugador"), "m5"), mini("jugador", { jugadores: jugadoresMini.slice(0, 3) })));
+    await assertFails(setDoc(ref(como("jugador"), "m8"), mini("jugador", { jugadores: [...jugadoresMini, ...jugadoresMini, ...jugadoresMini] })));
     await assertFails(setDoc(ref(como("jugador"), "m6"), mini("jugador", { email: "x@test.com" })));
     await assertFails(setDoc(ref(como("jugador"), "m7"), mini("jugador", { estado: "finalizado" })));
   });

@@ -1,37 +1,180 @@
-// src/utils/miniTorneo.js — mini torneo dentro de un turno: la gente que juega una reserva arma un torneíto social
-// (americano o parejas fijas) que entra en las horas reservadas. Puro, sin React ni Firebase (miniTorneo.test.js).
-// Reusa el motor de torneos (fixture.js / torneo.js) para round robin, tablas y el cuadro; acá vive solo lo nuevo:
-// la rotación del americano, el armado de parejas, la elección automática del formato y la estimación de tiempo.
+// src/utils/miniTorneo.js — mini torneo dentro de un turno: la gente que juega una reserva arma un torneíto social de
+// parejas fijas (nadie cambia de compañero) que entra en las horas reservadas. Puro, sin React ni Firebase
+// (miniTorneo.test.js). Reusa el motor de torneos (fixture.js / torneo.js) para round robin, tablas y el cuadro; acá
+// vive solo lo nuevo: los mínimos de cada formato (derivados de cómo se arma), el armado de parejas, el rey de la
+// cancha (que se arma a medida que llegan los resultados), la elección automática y la estimación de tiempo.
 // No suma puntos, rankings ni Pase: vive en clubs/{c}/miniTorneos/{id} y ninguna Function lo escucha.
 //
 // Documento: { clubId, clubNombre, canchaNombre, fecha, horaInicio, horaFin, reservaGrupoId, creadorUid, creadorNombre,
 //   editoresUids, edicionAbierta, nombre, modo ("auto" | "manual"), formato, partidoA { tipo: "games" | "minutos", valor },
 //   canchas, jugadores [{ id, nombre }], parejas [{ id, nombrePareja, jugadores: [id, id], grupo? }],
-//   grupos [{ nombre, parejas: [id] }], partidos [...], descansos [{ ronda, jugadores: [id] }],
-//   llave { rondas: [{ partidos: [...] }] } | null, estimacionMin, motivo, estado ("en_curso" | "finalizado") }
-// Partido del americano: { id, fase: "americano", ronda, cancha, equipo1: [id, id], equipo2: [id, id], resultado }
-// Partido de parejas: { id, fase: "rr" | "grupo", grupo?, ronda, cancha, pareja1, pareja2, resultado }
+//   grupos [{ nombre, parejas: [id] }], partidos [...], descansos [], llave { rondas: [{ partidos: [...] }],
+//   tercerPuesto? } | null, rondas, tercerPuesto?, estimacionMin, motivo, estado ("en_curso" | "finalizado") }
+// rondas: en el rey de la cancha, la cantidad de partidos.
+// Partido: { id, fase: "rr" | "grupo" | "rey", grupo?, ronda, cancha, pareja1, pareja2, resultado }
 // resultado = { sets: [{ g1, g2 }] } (un solo "set" de games: el formato del motor, así getGanador y calcularTabla sirven)
+// Legacy: los primeros mini torneos (formato "americano") eran de compañeros rotativos: partidos { fase: "americano",
+// equipo1: [id, id], equipo2: [id, id] } y descansos [{ ronda, jugadores }]. Ya no se crean, pero se siguen viendo y
+// cargando (tablaAmericano, aplicarResultado).
 import { calcularTabla, getGanador } from "./torneo.js";
 import { avanzarGanadores, emparejarConByes, generarFixtureRoundRobin, generarRondas, obtenerCampeonYSub, seedsDesdeGrupos, siguientePotenciaDe2 } from "./fixture.js";
 import { NIVELES, normalizarNivel } from "./categorias.js";
 
-export const MIN_JUGADORES = 4;
-export const MAX_JUGADORES = 16;
 export const MAX_CANCHAS = 4;
 // Tiempos de referencia (juego social): un game ~3,5 min; entre partido y partido 2 min; 10 min para calentar
 export const MIN_POR_GAME = 3.5;
 export const MIN_CAMBIO = 2;
 export const MIN_CALENTAMIENTO = 10;
 export const MIN_PARTIDO_CRONOMETRADO = 8;
+export const MAX_PARTIDOS_REY = 60;
+// Grupos del torneo común: de 3 o 4 parejas (con 2, el grupo es un solo partido; con 5 ya es una liguilla larga)
+export const MIN_PAREJAS_POR_GRUPO = 3;
+export const MAX_PAREJAS_POR_GRUPO = 4;
 
-export const FORMATOS = {
-  americano: { label: "Americano", ayuda: "Cambian de compañero en cada partido. Tabla individual: suma los games que gana cada uno." },
-  roundRobin: { label: "Parejas fijas · todos contra todos", ayuda: "Cada pareja juega contra todas. Gana la que más partidos gana." },
-  grupos: { label: "Parejas fijas · grupos y final", ayuda: "Dos grupos de todos contra todos y después el cuadro con los mejores." },
-  eliminacion: { label: "Parejas fijas · eliminación directa", ayuda: "Cuadro: quien pierde queda afuera. Lo más corto." },
+// ----- Mínimos, derivados de cómo se arma cada formato -----
+// Todos contra todos: P·(P−1)/2 partidos. Hace falta más de uno para que haya torneo → 3 parejas (con 2, un partido).
+export const partidosTodosContraTodos = (P) => (P * (P - 1)) / 2;
+export const minimoTodosContraTodos = () => {
+  let P = 2;
+  while (partidosTodosContraTodos(P) <= 1) P++;
+  return P;
 };
-export const esDeParejas = (formato) => formato === "roundRobin" || formato === "grupos" || formato === "eliminacion";
+// Eliminación: el cuadro es la potencia de 2 siguiente. Hace falta más de una ronda (si no, es solo la final) → 3
+// parejas (una pasa con bye a la final); con 4, el cuadro queda justo.
+export const rondasDeCuadro = (P) => Math.log2(siguientePotenciaDe2(Math.max(1, P)));
+export const minimoEliminacion = () => {
+  let P = 2;
+  while (rondasDeCuadro(P) <= 1) P++;
+  return P;
+};
+// Torneo común: al menos 2 grupos (para que el cuadro cruce grupos) de al menos MIN_PAREJAS_POR_GRUPO → 6 parejas
+export const minimoGrupos = () => 2 * Math.max(MIN_PAREJAS_POR_GRUPO, minimoTodosContraTodos());
+// Rey de la cancha: hace falta alguien esperando en la fila (con 2 parejas juegan siempre las mismas) → 3
+export const minimoRey = () => 3;
+
+// Formatos que se ofrecen, en orden. "americano" (rotativo) queda solo para leer los mini torneos viejos.
+export const FORMATOS = {
+  americanoParejas: {
+    label: "Americano",
+    ayuda: "Todos contra todos con partidos cortos (a 6 games o por tiempo). Gana la pareja que suma más games.",
+    minimo: minimoTodosContraTodos(),
+    razonMinimo: "con 2 parejas es un solo partido",
+  },
+  roundRobin: {
+    label: "Liguilla (todos contra todos)",
+    ayuda: "Todos contra todos con partidos normales. Gana la pareja que más partidos gana; desempata la diferencia de games.",
+    minimo: minimoTodosContraTodos(),
+    razonMinimo: "con 2 parejas es un solo partido",
+  },
+  grupos: {
+    label: "Torneo común (grupos y semis)",
+    ayuda: "Grupos de 3 o 4 parejas; las dos primeras de cada grupo pasan a semis y final.",
+    minimo: minimoGrupos(),
+    razonMinimo: `dos grupos de ${MIN_PAREJAS_POR_GRUPO}`,
+  },
+  eliminacion: {
+    label: "Eliminación directa",
+    ayuda: "Cuadro: la pareja que pierde queda afuera. Lo más corto. Si no son 4 u 8, las mejores pasan con bye.",
+    minimo: minimoEliminacion(),
+    razonMinimo: "con 2 parejas es solo la final",
+  },
+  rey: {
+    label: "Rey de la cancha",
+    ayuda: "En una cancha: la pareja que gana se queda y la que pierde vuelve a la fila. Gana la que más partidos gana.",
+    minimo: minimoRey(),
+    razonMinimo: "con 2 parejas no hay fila",
+  },
+  americano: { label: "Americano (compañeros rotativos)", ayuda: "Formato anterior: cambiaban de compañero en cada partido.", minimo: Infinity, legacy: true },
+};
+export const ORDEN_FORMATOS = ["americanoParejas", "roundRobin", "grupos", "eliminacion", "rey"];
+export const minimoParejas = (formato) => FORMATOS[formato]?.minimo ?? Infinity;
+// Mínimo general: el del formato más chico, en jugadores
+export const MIN_PAREJAS = Math.min(...ORDEN_FORMATOS.map(minimoParejas));
+export const MIN_JUGADORES = 2 * MIN_PAREJAS;
+export const MAX_JUGADORES = 16;
+// Partidos rotativos (solo el americano viejo)
+export const esRotativo = (formato) => formato === "americano";
+// Se arma a medida que llegan los resultados
+export const esDinamico = (formato) => formato === "rey";
+// Todos contra todos (americano de parejas y liguilla)
+export const esTodosContraTodos = (formato) => formato === "americanoParejas" || formato === "roundRobin";
+// El partido por el 3° puesto necesita dos semis de verdad: desde 4 parejas
+export const admiteTercerPuesto = (formato, n) => (formato === "eliminacion" || formato === "grupos") && Math.floor(n / 2) >= 4;
+
+const plural = (k, uno, varios) => (k === 1 ? uno : varios);
+export const textoFaltan = (n) => {
+  const faltan = MIN_JUGADORES - n;
+  return `Faltan ${faltan} ${plural(faltan, "jugador", "jugadores")} para ${MIN_PAREJAS} parejas`;
+};
+export const textoImpar = (n) => `Con ${n} jugadores no se arman parejas: sumá uno o sacá uno.`;
+
+// ¿Se puede jugar `formato` con n jugadores y esas canchas? → { formato, valido, motivo, explicacion }
+// motivo: corto, para la opción deshabilitada ("desde 6 parejas: dos grupos de 3"); explicacion: para "Así queda".
+export function evaluarFormato(formato, n, canchas = 1) {
+  const f = FORMATOS[formato];
+  const no = (motivo, explicacion) => ({ formato, valido: false, motivo, explicacion });
+  if (!f || f.legacy) return no("ya no se arma", "Elegí un formato válido.");
+  const P = Math.floor(n / 2);
+  if (n > MAX_JUGADORES) return no(`hasta ${MAX_JUGADORES / 2} parejas`, `Como máximo ${MAX_JUGADORES} jugadores (${MAX_JUGADORES / 2} parejas).`);
+  if (P < f.minimo) {
+    const motivo = `desde ${f.minimo} parejas: ${f.razonMinimo}`;
+    return no(motivo, n < MIN_JUGADORES ? `${textoFaltan(n)}.` : `${f.label} arranca ${motivo}. Con ${P} parejas, elegí otro formato.`);
+  }
+  if (n % 2 !== 0) return no("con número par", textoImpar(n));
+  if (formato === "rey" && Math.floor(Number(canchas) || 1) > 1) return no("con una sola cancha", "El rey de la cancha se juega en una sola cancha: elegí 1 cancha u otro formato.");
+  return { formato, valido: true, motivo: "", explicacion: "" };
+}
+// Formatos que se pueden jugar con n jugadores, en el orden en que se ofrecen
+export const formatosPosibles = (n, canchas = 1) => ORDEN_FORMATOS.filter((f) => evaluarFormato(f, n, canchas).valido);
+
+// ----- Quiénes juegan: la gente conocida del turno -----
+// Etiquetas de rol que nunca son un nombre (la cuenta arma un titular "Titular" cuando no sabe cómo se llama)
+const ETIQUETAS_DE_ROL = new Set(["titular", "jugador", "invitado", "sin nombre", "yo", "vos"]);
+export const nombreReal = (nombre) => {
+  const limpio = String(nombre || "").trim();
+  return limpio && !ETIQUETAS_DE_ROL.has(limpio.toLowerCase()) ? limpio : "";
+};
+// Nombre de quien arma el torneo: el del perfil, el de la sesión o el de la reserva (si reservó él)
+export function nombreDelCreador({ perfilNombre, displayName, reserva, uid } = {}) {
+  return nombreReal(perfilNombre) || nombreReal(displayName) || (reserva?.jugadorUid && reserva.jugadorUid === uid ? nombreReal(reserva.nombreJugador) : "") || "Jugador";
+}
+// Sugerencias para sumar: los participantes reales de la cuenta del turno y quien reservó, sin el creador (va aparte,
+// siempre primero), sin repetidos y nunca con una etiqueta de rol como nombre. El titular de una cuenta sin uid es
+// quien reservó (cuentas viejas): si reservó el creador, es el creador. → [{ clave, nombre, uid }]
+export function conocidosDelTurno({ participantes = [], reserva = null, creadorUid = null, creadorNombre = "" } = {}) {
+  const lista = [];
+  const uids = new Set(creadorUid ? [creadorUid] : []);
+  const nombres = new Set(nombreReal(creadorNombre) ? [nombreReal(creadorNombre).toLowerCase()] : []);
+  const titularUid = reserva?.jugadorUid || null;
+  const sumar = (uid, nombre, clave) => {
+    if (uid && uids.has(uid)) return;
+    const limpio = nombreReal(nombre);
+    if (!limpio) return;
+    const k = limpio.toLowerCase();
+    if (!uid && nombres.has(k)) return;
+    if (uid) uids.add(uid);
+    nombres.add(k);
+    lista.push({ clave, nombre: limpio, uid: uid || null });
+  };
+  (Array.isArray(participantes) ? participantes : []).forEach((p) => {
+    if (!p || p.estado === "quitado") return;
+    const uid = p.uid || (p.tipo === "titular" ? titularUid : null);
+    sumar(uid, p.nombre, `c:${p.id || uid || p.nombre}`);
+  });
+  if (titularUid) sumar(titularUid, reserva?.nombreJugador, `r:${titularUid}`);
+  return lista;
+}
+// Contador de "¿Quiénes juegan?": "4 jugadores · 2 de 3 parejas mínimo", "5 jugadores · falta 1 para 3 parejas",
+// "7 jugadores · sumá o sacá uno para armar parejas", "6 jugadores · 3 parejas"
+export function textoContador(n) {
+  if (n < MIN_JUGADORES) {
+    const faltan = MIN_JUGADORES - n;
+    if (n % 2 === 0) return `${n} jugadores · ${n / 2} de ${MIN_PAREJAS} parejas mínimo`;
+    return `${n} ${plural(n, "jugador", "jugadores")} · ${plural(faltan, "falta", "faltan")} ${faltan} para ${MIN_PAREJAS} parejas`;
+  }
+  if (n % 2 !== 0) return `${n} jugadores · sumá o sacá uno para armar parejas`;
+  return `${n} jugadores · ${n / 2} parejas`;
+}
 
 // ----- Azar reproducible (los tests pasan una semilla; la app, Date.now()) -----
 export function crearAzar(seed = 1) {
@@ -79,176 +222,21 @@ export const jugadoresPublicos = (jugadores) => (jugadores || []).map((j) => ({ 
 
 export function validarJugadores(jugadores) {
   const n = (jugadores || []).length;
-  if (n < MIN_JUGADORES) return `Hacen falta al menos ${MIN_JUGADORES} jugadores`;
-  if (n > MAX_JUGADORES) return `Como máximo ${MAX_JUGADORES} jugadores`;
+  if (n < MIN_JUGADORES) return textoFaltan(n);
+  if (n > MAX_JUGADORES) return `Como máximo ${MAX_JUGADORES} jugadores (${MAX_JUGADORES / 2} parejas)`;
+  if (n % 2 !== 0) return textoImpar(n);
   const uids = jugadores.map((j) => j.uid).filter(Boolean);
   if (new Set(uids).size !== uids.length) return "Hay un jugador repetido";
   return null;
 }
 
-// ===== Americano =====
-// Partidos simultáneos por ronda: uno por cancha, mientras alcancen los jugadores (4 por partido)
-export function partidosPorRonda(n, canchas = 1) {
-  return Math.max(1, Math.min(Math.max(1, Math.floor(Number(canchas) || 1)), Math.floor(n / 4)));
-}
-// Rondas para que cada jugador pueda jugar una vez con cada uno: n(n-1)/2 compañeros, 2 por partido
-export function rondasAmericanoCompleto(n, canchas = 1) {
-  return Math.ceil((n * (n - 1)) / 4 / partidosPorRonda(n, canchas));
-}
-// Rondas mínimas para que todos jueguen al menos una vez
-export const rondasAmericanoMinimas = (n, canchas = 1) => Math.ceil(n / (4 * partidosPorRonda(n, canchas)));
-// La mayor cantidad de rondas ≤ tope con la que todos juegan la misma cantidad de partidos (si existe ≥ mínimo)
-export function rondasParejas(n, canchas, tope) {
-  const m = partidosPorRonda(n, canchas);
-  const minimo = rondasAmericanoMinimas(n, canchas);
-  for (let r = tope; r >= minimo; r--) if ((r * 4 * m) % n === 0) return r;
-  return Math.max(minimo, tope);
-}
-
-const clave = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
-
-// Todas las formas de partir 4·m jugadores en m partidos (2 vs 2). Para 4 y 8 jugadores se recorren todas
-// (3 y 315); con más se sortean `intentos` al azar.
-function* todosLosPartidos(jugadores) {
-  if (jugadores.length === 0) {
-    yield [];
-    return;
-  }
-  const [a, ...resto] = jugadores;
-  for (let i = 0; i < resto.length; i++) {
-    for (let j = i + 1; j < resto.length; j++) {
-      for (let k = j + 1; k < resto.length; k++) {
-        const grupo = [a, resto[i], resto[j], resto[k]];
-        const quedan = resto.filter((_, x) => x !== i && x !== j && x !== k);
-        for (const sub of todosLosPartidos(quedan)) {
-          const [p, q, r, s] = grupo;
-          yield [[[p, q], [r, s]], ...sub];
-          yield [[[p, r], [q, s]], ...sub];
-          yield [[[p, s], [q, r]], ...sub];
-        }
-      }
-    }
-  }
-}
-function partidosAlAzar(jugadores, azar) {
-  const m = mezclar(jugadores, azar);
-  const partidos = [];
-  for (let i = 0; i < m.length; i += 4) partidos.push([[m[i], m[i + 1]], [m[i + 2], m[i + 3]]]);
-  return partidos;
-}
-
-// Costo de una ronda: repetir compañero pesa mucho; repetir rival, poco
-function costoRonda(partidos, companeros, rivales) {
-  let costo = 0;
-  partidos.forEach(([e1, e2]) => {
-    costo += 1000 * (companeros.get(clave(e1[0], e1[1])) || 0) + 1000 * (companeros.get(clave(e2[0], e2[1])) || 0);
-    e1.forEach((x) => e2.forEach((y) => (costo += 10 * (rivales.get(clave(x, y)) || 0))));
-  });
-  return costo;
-}
-
-function intentoAmericano(ids, m, total, azar) {
-  const n = ids.length;
-  const companeros = new Map();
-  const rivales = new Map();
-  const descansos = Object.fromEntries(ids.map((id) => [id, 0]));
-  const jugados = Object.fromEntries(ids.map((id) => [id, 0]));
-  let descansaronAntes = new Set();
-  const rondas = [];
-  let costoTotal = 0;
-  for (let r = 1; r <= total; r++) {
-    const cantDescansan = n - 4 * m;
-    // Quién descansa: siempre los que menos descansaron (así todos juegan lo mismo, ±1); entre los empatados se
-    // prueban varios grupos. Descansar dos rondas seguidas se evita siempre que descansen menos de los que juegan; si
-    // descansan tantos o más (8 jugadores en una cancha) es solo un costo: evitarlo siempre dejaría dos grupos fijos
-    // de 4 jugando entre ellos.
-    const orden = mezclar(ids, azar).sort((a, b) => descansos[a] - descansos[b] || jugados[b] - jugados[a]);
-    const tope = cantDescansan > 0 ? descansos[orden[cantDescansan - 1]] : 0;
-    const fijos = orden.filter((id) => descansos[id] < tope).slice(0, cantDescansan);
-    const empatados = orden.filter((id) => descansos[id] === tope && !fijos.includes(id));
-    const candidatos = [];
-    if (cantDescansan > 0) {
-      const preferidos = [...empatados].sort((a, b) => Number(descansaronAntes.has(a)) - Number(descansaronAntes.has(b)));
-      candidatos.push([...fijos, ...preferidos.slice(0, cantDescansan - fijos.length)]);
-      const extra = empatados.length > cantDescansan - fijos.length ? (n - 4 * m <= 4 && 4 * m <= 8 ? 12 : 5) : 0;
-      for (let k = 0; k < extra; k++) candidatos.push([...fijos, ...mezclar(empatados, azar).slice(0, cantDescansan - fijos.length)]);
-    } else candidatos.push([]);
-
-    let mejor = null;
-    let mejorCosto = Infinity;
-    let descansan = [];
-    candidatos.forEach((cand) => {
-      const seguidos = cand.filter((id) => descansaronAntes.has(id)).length;
-      const base = (2 * cantDescansan < n ? 5000 : 300) * seguidos;
-      if (base >= mejorCosto) return;
-      const juegan = ids.filter((id) => !cand.includes(id));
-      const probar = (partidos) => {
-        const c = base + costoRonda(partidos, companeros, rivales);
-        if (c < mejorCosto) {
-          mejorCosto = c;
-          mejor = partidos;
-          descansan = cand;
-        }
-      };
-      if (juegan.length <= 8) {
-        for (const partidos of todosLosPartidos(mezclar(juegan, azar))) {
-          probar(partidos);
-          if (mejorCosto === base) break;
-        }
-      } else {
-        for (let t = 0; t < 600 && mejorCosto > base; t++) probar(partidosAlAzar(juegan, azar));
-      }
-    });
-    const juegan = ids.filter((id) => !descansan.includes(id));
-    costoTotal += mejorCosto;
-    mejor.forEach(([e1, e2]) => {
-      companeros.set(clave(e1[0], e1[1]), (companeros.get(clave(e1[0], e1[1])) || 0) + 1);
-      companeros.set(clave(e2[0], e2[1]), (companeros.get(clave(e2[0], e2[1])) || 0) + 1);
-      e1.forEach((x) => e2.forEach((y) => rivales.set(clave(x, y), (rivales.get(clave(x, y)) || 0) + 1)));
-    });
-    juegan.forEach((id) => (jugados[id] += 1));
-    descansan.forEach((id) => (descansos[id] += 1));
-    descansaronAntes = new Set(descansan);
-    rondas.push({ numero: r, partidos: mejor.map(([e1, e2], i) => ({ cancha: i + 1, equipo1: e1, equipo2: e2 })), descansan });
-  }
-  return { rondas, costoTotal };
-}
-
-// Rotación del americano para 4 a 16 jugadores. Devuelve { rondas: [{ numero, partidos: [{ cancha, equipo1, equipo2 }],
-// descansan: [id] }] }. Todos juegan; quien descansa no repite descanso seguido si se puede evitar; los compañeros se
-// reparten (con 4 jugadores, 3 rondas y cada uno juega una vez con cada otro). Se arma varias veces y queda la mejor.
-export function generarAmericano(ids, { canchas = 1, rondas, seed = 1 } = {}) {
-  const n = ids.length;
-  if (n < MIN_JUGADORES || n > MAX_JUGADORES) throw new Error(`El americano es de ${MIN_JUGADORES} a ${MAX_JUGADORES} jugadores`);
-  const m = partidosPorRonda(n, canchas);
-  const total = Math.max(1, Math.floor(Number(rondas) || rondasAmericanoCompleto(n, canchas)));
-  const azar = crearAzar(seed);
-  const intentos = n <= 8 ? 24 : 6;
-  let mejor = null;
-  for (let i = 0; i < intentos; i++) {
-    const intento = intentoAmericano(ids, m, total, azar);
-    if (!mejor || intento.costoTotal < mejor.costoTotal) mejor = intento;
-    if (mejor.costoTotal === 0) break;
-  }
-  return { rondas: mejor.rondas };
-}
-
-export function partidosDeAmericano(rondas) {
-  const partidos = [];
-  const descansos = [];
-  rondas.forEach((r) => {
-    r.partidos.forEach((p) => partidos.push({ id: `a${r.numero}-${p.cancha}`, fase: "americano", ronda: r.numero, cancha: p.cancha, equipo1: [...p.equipo1], equipo2: [...p.equipo2], resultado: null }));
-    if (r.descansan.length) descansos.push({ ronda: r.numero, jugadores: [...r.descansan] });
-  });
-  return { partidos, descansos };
-}
 
 // ===== Parejas =====
 export function indiceNivel(nivel) {
   const n = normalizarNivel(nivel);
   return n ? NIVELES.indexOf(n) : null;
 }
-// ¿Alcanzan los niveles para parejas parejas? (la mitad o más de los jugadores con nivel)
+// ¿Alcanzan los niveles para armar parejas equilibradas? (la mitad o más de los jugadores con nivel)
 export const hayNiveles = (jugadores) => (jugadores || []).filter((j) => indiceNivel(j.nivel) !== null).length * 2 >= (jugadores || []).length && (jugadores || []).length > 0;
 
 const nombreDePareja = (a, b) => `${a.nombre} / ${b.nombre}`;
@@ -281,18 +269,22 @@ export function armarParejas(jugadores, { criterio = "azar", seed = 1 } = {}) {
 // Proyección de una pareja que va dentro de los partidos y del cuadro
 const parejaMin = (p) => (p ? { id: p.id, nombrePareja: p.nombrePareja, ...(p.grupo ? { grupo: p.grupo } : {}) } : null);
 
-// Dos grupos (A y B) en zigzag por semilla: 1→A, 2→B, 3→B, 4→A, 5→A...
-export function repartirEnGrupos(parejas) {
-  const a = [];
-  const b = [];
-  parejas.forEach((p, i) => ((i % 4 === 0 || i % 4 === 3 ? a : b).push(p)));
-  return [
-    { nombre: "A", parejas: a.map((p) => ({ ...p, grupo: "A" })) },
-    { nombre: "B", parejas: b.map((p) => ({ ...p, grupo: "B" })) },
-  ];
+// Grupos de 3 o 4 parejas (al menos 2 grupos), repartidos en zigzag por semilla: 1→A, 2→B, 3→B, 4→A, 5→A...
+export function cantidadDeGrupos(cantParejas) {
+  return Math.max(2, Math.min(Math.floor(cantParejas / MIN_PAREJAS_POR_GRUPO), Math.ceil(cantParejas / MAX_PAREJAS_POR_GRUPO)));
 }
-// Cuántas parejas por grupo pasan al cuadro: con 5 o 6 parejas, el 1° de cada grupo juega la final; con 7 u 8, semis
-export const avanzanPorGrupo = (cantParejas) => (cantParejas >= 7 ? 2 : 1);
+export function repartirEnGrupos(parejas, cantidad = cantidadDeGrupos(parejas.length)) {
+  const grupos = Array.from({ length: cantidad }, (_, g) => ({ nombre: String.fromCharCode(65 + g), parejas: [] }));
+  parejas.forEach((p, i) => {
+    const vuelta = Math.floor(i / cantidad);
+    const g = vuelta % 2 === 0 ? i % cantidad : cantidad - 1 - (i % cantidad);
+    grupos[g].parejas.push({ ...p, grupo: grupos[g].nombre });
+  });
+  return grupos;
+}
+export const tamañosDeGrupos = (cantParejas) => repartirEnGrupos(Array.from({ length: cantParejas }, (_, i) => ({ id: i }))).map((g) => g.parejas.length);
+// Pasan al cuadro los dos primeros de cada grupo (semis y final con 2 grupos)
+export const avanzanPorGrupo = (cantParejas) => (cantParejas >= 4 ? 2 : 1);
 
 function asignarCanchas(partidos, canchas) {
   const porRonda = {};
@@ -313,9 +305,27 @@ export function partidosRoundRobin(parejas, { fase = "rr", grupo = null } = {}) 
   return partidos;
 }
 
-// Cuadro guardable: { rondas: [{ partidos: [{ id, pareja1, pareja2, resultado }] }] } (Firestore no guarda arrays de arrays)
-const aLlave = (rondas) => ({ rondas: rondas.map((r, ri) => ({ partidos: r.map((p, pi) => ({ id: `k${ri + 1}-${pi + 1}`, pareja1: parejaMin(p.pareja1), pareja2: parejaMin(p.pareja2), resultado: p.resultado || null })) })) });
+// Cuadro guardable: { rondas: [{ partidos: [{ id, pareja1, pareja2, resultado }] }], tercerPuesto? } (Firestore no
+// guarda arrays de arrays). tercerPuesto: el partido por el 3° entre quienes pierden las semis (si se pidió).
+const aLlave = (rondas, tercero) => ({
+  rondas: rondas.map((r, ri) => ({ partidos: r.map((p, pi) => ({ id: `k${ri + 1}-${pi + 1}`, pareja1: parejaMin(p.pareja1), pareja2: parejaMin(p.pareja2), resultado: p.resultado || null })) })),
+  ...(tercero ? { tercerPuesto: tercero } : {}),
+});
 const deLlave = (llave) => (llave?.rondas || []).map((r) => (r.partidos || []).map((p) => ({ ...p })));
+export const ID_TERCER_PUESTO = "k3p";
+
+const perdedorDe = (p) => {
+  if (!p?.resultado || !p.pareja1 || !p.pareja2) return null;
+  const g = getGanador(p.resultado);
+  return g === 1 ? p.pareja2 : g === 2 ? p.pareja1 : null;
+};
+// El partido por el 3° puesto a partir de las semis; conserva el resultado si siguen siendo las mismas parejas
+function partidoTercero(rondas, previo) {
+  const semis = rondas.length >= 2 ? rondas[rondas.length - 2] : [];
+  const [a, b] = [perdedorDe(semis[0]), perdedorDe(semis[1])];
+  const mismas = !!previo && (previo.pareja1?.id || null) === (a?.id || null) && (previo.pareja2?.id || null) === (b?.id || null);
+  return { id: ID_TERCER_PUESTO, pareja1: parejaMin(a), pareja2: parejaMin(b), resultado: mismas && a && b ? previo.resultado || null : null };
+}
 
 // Orden clásico de los cruces en el cuadro (1-8, 4-5, 2-7, 3-6...): así las dos mejores semillas solo se cruzan en
 // la final. emparejarConByes arma los cruces (semilla i con la n-1-i, byes a las mejores); acá solo se reordenan.
@@ -323,9 +333,10 @@ export function ordenDeCruces(cantidad) {
   if (cantidad <= 1) return [0];
   return ordenDeCruces(cantidad / 2).flatMap((i) => [i, cantidad - 1 - i]);
 }
-export function crearLlave(seeds) {
+export function crearLlave(seeds, { tercerPuesto = false } = {}) {
   const cruces = emparejarConByes(seeds.map(parejaMin));
-  return aLlave(avanzarGanadores(generarRondas(ordenDeCruces(cruces.length).map((i) => cruces[i]))));
+  const rondas = avanzarGanadores(generarRondas(ordenDeCruces(cruces.length).map((i) => cruces[i])));
+  return aLlave(rondas, tercerPuesto && seeds.length >= 4 ? partidoTercero(rondas, null) : null);
 }
 
 // Rearma el cuadro desde la primera ronda: avanza ganadores ronda por ronda y conserva cada resultado solo si el
@@ -342,7 +353,47 @@ export function reconstruirLlave(llave) {
     });
     rondas = avanzarGanadores(rondas);
   }
-  return aLlave(rondas);
+  return aLlave(rondas, llave?.tercerPuesto ? partidoTercero(rondas, llave.tercerPuesto) : null);
+}
+
+// ===== Rey de la cancha =====
+// Una cancha, parejas fijas. Partido 1: pareja 1 contra la 2; las demás hacen fila. La que gana se queda (pareja1 del
+// partido siguiente); la que pierde va al final de la fila y entra la primera de la fila. Sin empates.
+const partidoRey = (numero, p1, p2) => ({ id: `rey${numero}`, fase: "rey", ronda: numero, cancha: 1, pareja1: parejaMin(p1), pareja2: parejaMin(p2), resultado: null });
+export function siguientePartidoRey(parejas, jugados = []) {
+  const porId = Object.fromEntries((parejas || []).map((p) => [p.id, p]));
+  const ids = (parejas || []).map((p) => p.id);
+  if (ids.length < 2) return null;
+  const orden = [...(jugados || [])].sort((a, b) => a.ronda - b.ronda);
+  if (!orden.length) return partidoRey(1, porId[ids[0]], porId[ids[1]]);
+  const fila = ids.slice(2);
+  let rey = null;
+  let retador = null;
+  for (const m of orden) {
+    const g = getGanador(m.resultado);
+    if (g !== 1 && g !== 2) return null;
+    const [gana, pierde] = g === 1 ? [m.pareja1.id, m.pareja2.id] : [m.pareja2.id, m.pareja1.id];
+    fila.push(pierde);
+    rey = gana;
+    retador = fila.shift();
+  }
+  return partidoRey(orden.length + 1, porId[rey], porId[retador]);
+}
+// Partidos de rey que entran en el turno (al menos uno por pareja)
+export function partidosReyQueEntran(cantParejas, minutos, partidoA) {
+  const caben = Math.floor((Math.max(0, Number(minutos) || 0) - MIN_CALENTAMIENTO) / minutosPorPartido(partidoA));
+  return Math.max(cantParejas, Math.min(MAX_PARTIDOS_REY, caben));
+}
+
+// Si el último partido del rey de la cancha tiene resultado y faltan partidos, el siguiente: { ronda, partidos } o null
+export function siguienteRonda(mini) {
+  const partidos = mini?.partidos || [];
+  if (!esDinamico(mini?.formato) || !partidos.length) return null;
+  const ultima = Math.max(...partidos.map((p) => Number(p.ronda) || 0));
+  if (ultima >= (Number(mini.rondas) || 0)) return null;
+  if (!partidos.filter((p) => p.ronda === ultima).every((p) => !!p.resultado)) return null;
+  const p = siguientePartidoRey(mini.parejas, partidos);
+  return p ? { ronda: ultima + 1, partidos: [p] } : null;
 }
 
 // ===== Tiempo =====
@@ -370,29 +421,30 @@ export function textoPartidoA(partidoA) {
 
 const sumaTandas = (lista, canchas) => lista.reduce((acc, cant) => acc + Math.ceil(cant / Math.max(1, canchas)), 0);
 const partidosPorFechaRR = (p) => Array.from({ length: p % 2 === 0 ? p - 1 : p }, () => Math.floor(p / 2));
-function tamañosDeGrupos(cantParejas) {
-  return [Math.ceil(cantParejas / 2), Math.floor(cantParejas / 2)];
+// Partidos reales por ronda de un cuadro de `seeds` parejas (sin byes); el 3° puesto va con la final
+export function partidosPorRondaDeCuadro(seeds, tercero = false) {
+  const S = siguientePotenciaDe2(seeds);
+  const lista = [seeds - S / 2];
+  for (let k = S / 4; k >= 1; k /= 2) lista.push(k);
+  lista[lista.length - 1] += tercero ? 1 : 0;
+  return lista.filter((x) => x > 0);
 }
-// Tandas (partidos que se juegan uno después del otro; en cada tanda, uno por cancha)
-export function tandas(formato, n, canchas = 1, { rondas } = {}) {
+export const partidosReyPorDefecto = (cantParejas) => 2 * cantParejas;
+// Tandas (partidos que se juegan uno después del otro; en cada tanda, uno por cancha). En el rey de la cancha, los
+// partidos (una sola cancha).
+export function tandas(formato, n, canchas = 1, { rondas, tercerPuesto = false } = {}) {
   const c = Math.max(1, Math.floor(Number(canchas) || 1));
   const P = Math.floor(n / 2);
-  if (formato === "americano") return Math.max(1, Math.floor(Number(rondas) || rondasAmericanoCompleto(n, c)));
-  if (formato === "roundRobin") return sumaTandas(partidosPorFechaRR(P), c);
-  if (formato === "eliminacion") {
-    const S = siguientePotenciaDe2(P);
-    const lista = [P - S / 2];
-    for (let k = S / 4; k >= 1; k /= 2) lista.push(k);
-    return sumaTandas(lista.filter((x) => x > 0), c);
-  }
+  const tercero = !!tercerPuesto && admiteTercerPuesto(formato, n);
+  if (formato === "rey") return Math.max(1, Math.floor(Number(rondas) || partidosReyPorDefecto(P)));
+  if (esTodosContraTodos(formato)) return sumaTandas(partidosPorFechaRR(P), c);
+  if (formato === "eliminacion") return sumaTandas(partidosPorRondaDeCuadro(P, tercero), c);
   if (formato === "grupos") {
-    const [g1, g2] = tamañosDeGrupos(P);
-    const f1 = partidosPorFechaRR(g1);
-    const f2 = partidosPorFechaRR(g2);
-    const fechas = Math.max(f1.length, f2.length);
-    const porFecha = Array.from({ length: fechas }, (_, i) => (f1[i] || 0) + (f2[i] || 0));
-    const llave = avanzanPorGrupo(P) === 2 ? [2, 1] : [1];
-    return sumaTandas(porFecha, c) + sumaTandas(llave, c);
+    const fechasPorGrupo = tamañosDeGrupos(P).map(partidosPorFechaRR);
+    const fechas = Math.max(...fechasPorGrupo.map((f) => f.length));
+    const porFecha = Array.from({ length: fechas }, (_, i) => fechasPorGrupo.reduce((a, f) => a + (f[i] || 0), 0));
+    const seeds = cantidadDeGrupos(P) * avanzanPorGrupo(P);
+    return sumaTandas(porFecha, c) + sumaTandas(partidosPorRondaDeCuadro(seeds, tercero), c);
   }
   return 0;
 }
@@ -400,67 +452,111 @@ export function estimarMinutos(formato, n, canchas, partidoA, opciones = {}) {
   return MIN_CALENTAMIENTO + tandas(formato, n, canchas, opciones) * minutosPorPartido(partidoA);
 }
 
-// Partidos por jugador en el americano (mín y máx) con esas rondas
-export function partidosPorJugadorAmericano(n, canchas, rondas) {
-  const jugadas = rondas * 4 * partidosPorRonda(n, canchas);
-  return { min: Math.floor(jugadas / n), max: Math.ceil(jugadas / n) };
-}
-
-// Formatos que se pueden elegir a mano con n jugadores
-export function formatosPosibles(n) {
-  const lista = ["americano"];
-  if (n % 2 === 0) {
-    const P = n / 2;
-    if (P >= 2 && P <= 6) lista.push("roundRobin");
-    if (P >= 5) lista.push("grupos");
-    if (P >= 3) lista.push("eliminacion");
-  }
-  return lista;
-}
-
-// Duración sugerida para que entre en el turno: a 6, 5, 4 o 3 games; si no, partidos cronometrados; en el americano,
-// si ni así entra la vuelta completa, menos rondas (con la misma cantidad de partidos para todos cuando se puede).
+// Duración sugerida para que entre en el turno: en el americano, a 6 games (partido corto) y si no, por tiempo; en los
+// demás, a 6, 5, 4 o 3 games y si no, por tiempo. En el rey de la cancha, partidos cortos (a 4, 3 o 2 games) y tantos
+// como entren (al menos 2 por pareja).
 export function sugerirPartido(formato, n, canchas, minutosDisponibles, opciones = {}) {
   const disp = Math.max(0, Number(minutosDisponibles) || 0);
-  const rondasPedidas = formato === "americano" ? Math.floor(Number(opciones.rondas) || rondasAmericanoCompleto(n, canchas)) : undefined;
-  for (const valor of [6, 5, 4, 3]) {
-    const partidoA = { tipo: "games", valor };
-    const est = estimarMinutos(formato, n, canchas, partidoA, { rondas: rondasPedidas });
-    if (est <= disp) return { partidoA, rondas: rondasPedidas, estimacionMin: est, entra: true };
-  }
-  const t = tandas(formato, n, canchas, { rondas: rondasPedidas });
-  const porPartido = Math.floor((disp - MIN_CALENTAMIENTO) / t) - MIN_CAMBIO;
-  if (porPartido >= MIN_PARTIDO_CRONOMETRADO) {
-    const partidoA = { tipo: "minutos", valor: porPartido };
-    return { partidoA, rondas: rondasPedidas, estimacionMin: estimarMinutos(formato, n, canchas, partidoA, { rondas: rondasPedidas }), entra: true };
-  }
-  const partidoA = { tipo: "minutos", valor: 10 };
-  if (formato === "americano") {
-    const caben = Math.floor((disp - MIN_CALENTAMIENTO) / minutosPorPartido(partidoA));
-    const rondas = Math.max(rondasAmericanoMinimas(n, canchas), rondasParejas(n, canchas, Math.min(caben, rondasPedidas)));
-    const est = estimarMinutos(formato, n, canchas, partidoA, { rondas });
+  const tercerPuesto = !!opciones.tercerPuesto;
+  if (formato === "rey" && !(Number(opciones.rondas) > 0)) {
+    const P = Math.floor(n / 2);
+    for (const valor of [4, 3, 2]) {
+      const partidoA = { tipo: "games", valor };
+      const caben = Math.floor((disp - MIN_CALENTAMIENTO) / minutosPorPartido(partidoA));
+      if (caben >= 2 * P) {
+        const rondas = Math.min(caben, MAX_PARTIDOS_REY);
+        return { partidoA, rondas, estimacionMin: estimarMinutos(formato, n, 1, partidoA, { rondas }), entra: true };
+      }
+    }
+    const partidoA = { tipo: "games", valor: 2 };
+    const rondas = partidosReyQueEntran(P, disp, partidoA);
+    const est = estimarMinutos(formato, n, 1, partidoA, { rondas });
     return { partidoA, rondas, estimacionMin: est, entra: est <= disp };
   }
-  const minimo = { tipo: "minutos", valor: MIN_PARTIDO_CRONOMETRADO };
-  return { partidoA: minimo, rondas: undefined, estimacionMin: estimarMinutos(formato, n, canchas, minimo), entra: false };
+  const rondas = formato === "rey" ? Math.floor(Number(opciones.rondas)) : undefined;
+  const opts = { rondas, tercerPuesto };
+  for (const valor of formato === "americanoParejas" ? [6] : [6, 5, 4, 3]) {
+    const partidoA = { tipo: "games", valor };
+    const est = estimarMinutos(formato, n, canchas, partidoA, opts);
+    if (est <= disp) return { partidoA, rondas, estimacionMin: est, entra: true };
+  }
+  const t = tandas(formato, n, canchas, opts);
+  const porPartido = Math.min(60, Math.floor((disp - MIN_CALENTAMIENTO) / t) - MIN_CAMBIO);
+  const partidoA = { tipo: "minutos", valor: Math.max(MIN_PARTIDO_CRONOMETRADO, porPartido) };
+  const est = estimarMinutos(formato, n, canchas, partidoA, opts);
+  return { partidoA, rondas, estimacionMin: est, entra: est <= disp };
 }
 
-// Modo automático: el formato según jugadores, canchas y minutos. Devuelve { formato, motivo }.
+// Duración y estimación de un formato (sin armar los partidos): la sugerida para que entre en el turno o, con
+// partidoA (modo manual), la que sale de esa duración. → { partidoA, rondas, estimacionMin, entra }
+export function planDeTiempo(formato, n, canchas, minutos, { partidoA: pedido = null, rondas: rondasPedidas, tercerPuesto = false } = {}) {
+  const c = formato === "rey" ? 1 : canchas;
+  let rondas = formato === "rey" ? Math.floor(Number(rondasPedidas) || 0) || undefined : undefined;
+  let partidoA = pedido ? normalizarPartidoA(pedido) : null;
+  if (!partidoA) ({ partidoA, rondas } = sugerirPartido(formato, n, c, minutos, { rondas, tercerPuesto }));
+  if (formato === "rey") rondas = Math.min(MAX_PARTIDOS_REY, rondas || partidosReyQueEntran(Math.floor(n / 2), minutos, partidoA));
+  const estimacionMin = estimarMinutos(formato, n, c, partidoA, { rondas, tercerPuesto });
+  return { partidoA, rondas, estimacionMin, entra: estimacionMin <= minutos };
+}
+
+// Las opciones de formato para la pantalla: todas, con su explicación; las que no se pueden, con el motivo; las que
+// sí, con la estimación contra el turno. → [{ formato, label, ayuda, valido, motivo, explicacion, estimacionMin?, entra? }]
+export function opcionesDeFormato({ n, canchas = 1, minutos = 60, partidoA = null, tercerPuesto = false }) {
+  return ORDEN_FORMATOS.map((formato) => {
+    const ev = evaluarFormato(formato, n, canchas);
+    const base = { ...ev, label: FORMATOS[formato].label, ayuda: FORMATOS[formato].ayuda };
+    if (!ev.valido) return base;
+    const t = planDeTiempo(formato, n, canchas, minutos, { partidoA, tercerPuesto });
+    return { ...base, estimacionMin: t.estimacionMin, entra: t.entra };
+  });
+}
+
+// Modo automático: entre los formatos que se pueden, según parejas, canchas y minutos. → { formato, motivo }
+// 1) Liguilla, si todos contra todos entra con partidos de 4 games o más. 2) Torneo común (desde 6 parejas), si entra
+// a games o con partidos de 12 minutos o más. 3) Americano, si todos contra todos entra con partidos cortos (a 6 games
+// o de 10 minutos o más). 4) Eliminación directa, lo más corto.
 export function elegirFormatoAuto({ n, canchas = 1, minutos = 60 }) {
-  if (n % 2 !== 0) return { formato: "americano", motivo: `Con ${n} jugadores (impar), el americano hace rotar a todos con descansos parejos.` };
-  if (n <= 8) return { formato: "americano", motivo: `Con ${n} jugadores, el americano hace que todos jueguen con todos.` };
-  if (canchas * 4 >= n) return { formato: "americano", motivo: `Con ${canchas} canchas juegan todos en cada ronda: americano.` };
-  const enGrupos = sugerirPartido("grupos", n, canchas, minutos);
-  if (enGrupos.entra && (enGrupos.partidoA.tipo === "games" || enGrupos.partidoA.valor >= 12)) {
-    return { formato: "grupos", motivo: `Con ${n / 2} parejas y ${minutos} minutos entran dos grupos y el cuadro final.` };
+  const P = Math.floor(n / 2);
+  const ok = (f) => evaluarFormato(f, n, canchas).valido;
+  const rr = ok("roundRobin") && sugerirPartido("roundRobin", n, canchas, minutos);
+  if (rr && rr.entra && rr.partidoA.tipo === "games" && rr.partidoA.valor >= 4) {
+    return { formato: "roundRobin", motivo: `Con ${P} parejas y ${minutos} minutos entra todos contra todos con partidos a ${rr.partidoA.valor} games.` };
   }
-  return { formato: "eliminacion", motivo: `Con ${n / 2} parejas y ${minutos} minutos, lo que entra es eliminación directa.` };
+  const gr = ok("grupos") && sugerirPartido("grupos", n, canchas, minutos);
+  if (gr && gr.entra && (gr.partidoA.tipo === "games" || gr.partidoA.valor >= 12)) {
+    return { formato: "grupos", motivo: `Con ${P} parejas y ${minutos} minutos entran los grupos, las semis y la final.` };
+  }
+  const am = ok("americanoParejas") && sugerirPartido("americanoParejas", n, canchas, minutos);
+  if (am && am.entra && (am.partidoA.tipo === "games" || am.partidoA.valor >= 10)) {
+    return { formato: "americanoParejas", motivo: `Con ${P} parejas y ${minutos} minutos, todos contra todos entra con partidos cortos: americano.` };
+  }
+  if (ok("eliminacion")) return { formato: "eliminacion", motivo: `Con ${P} parejas y ${minutos} minutos, lo que entra es eliminación directa.` };
+  return { formato: null, motivo: "" };
+}
+
+// Total de partidos del torneo (con los del rey que todavía no se armaron, y sin los byes del cuadro)
+export function totalPartidos(mini) {
+  const P = (mini.parejas || []).length;
+  const tercero = mini.llave?.tercerPuesto || mini.tercerPuesto ? 1 : 0;
+  switch (mini.formato) {
+    case "rey":
+      return Number(mini.rondas) || 0;
+    case "eliminacion":
+      return Math.max(0, P - 1) + tercero;
+    case "grupos": {
+      const seeds = (mini.grupos || []).length * avanzanPorGrupo(P);
+      return (mini.partidos || []).filter((p) => p.fase === "grupo").length + Math.max(0, seeds - 1) + tercero;
+    }
+    default:
+      return (mini.partidos || []).length;
+  }
 }
 
 // ===== Armado completo =====
-// entrada: { jugadores (de prepararJugadores), modo, formato?, parejas? ([[idA, idB]] o de armarParejas), criterio?,
-//   canchas, partidoA?, rondas?, horaInicio, horaFin, turnos?, seed }
-// → { formato, motivo, partidoA, canchas, parejas, grupos, partidos, descansos, llave, estimacionMin, minutosTurno, entra, rondas }
+// entrada: { jugadores (de prepararJugadores), modo, formato? (en automático, solo si lo cambió a mano), parejas?
+//   ([[idA, idB]] o de armarParejas), criterio?, canchas, partidoA?, rondas?, tercerPuesto?, horaInicio, horaFin, turnos?, seed }
+// → { formato, motivo, partidoA, canchas, parejas, grupos, partidos, descansos, llave, rondas, tercerPuesto,
+//     estimacionMin, minutosTurno, entra, totalPartidos }
 export function armarMiniTorneo(entrada) {
   const { jugadores, modo = "auto", canchas: canchasIn = 1, horaInicio, horaFin, turnos, seed = 1 } = entrada;
   const error = validarJugadores(jugadores);
@@ -470,37 +566,32 @@ export function armarMiniTorneo(entrada) {
   const minutosTurno = minutosDelTurno(horaInicio, horaFin, turnos);
   let formato = entrada.formato;
   let motivo = "";
-  if (modo === "auto" || !formato) ({ formato, motivo } = elegirFormatoAuto({ n, canchas, minutos: minutosTurno }));
-  if (!formatosPosibles(n).includes(formato)) throw new Error(`${FORMATOS[formato]?.label || "Ese formato"} no se puede con ${n} jugadores`);
+  if (!formato) ({ formato, motivo } = elegirFormatoAuto({ n, canchas, minutos: minutosTurno }));
+  const ev = evaluarFormato(formato, n, canchas);
+  if (!ev.valido) throw new Error(ev.explicacion);
 
-  let partidoA = modo === "manual" && entrada.partidoA ? normalizarPartidoA(entrada.partidoA) : null;
-  let rondas = formato === "americano" ? Math.floor(Number(entrada.rondas) || 0) || undefined : undefined;
-  if (!partidoA) {
-    const s = sugerirPartido(formato, n, canchas, minutosTurno, { rondas });
-    partidoA = s.partidoA;
-    rondas = s.rondas;
+  const tercerPuesto = !!entrada.tercerPuesto && admiteTercerPuesto(formato, n);
+  const tiempo = planDeTiempo(formato, n, canchas, minutosTurno, {
+    partidoA: modo === "manual" && entrada.partidoA ? entrada.partidoA : null,
+    rondas: entrada.rondas,
+    tercerPuesto,
+  });
+  const { partidoA, rondas } = tiempo;
+  const parejas = parejasDeEntrada(jugadores, entrada, seed);
+  const base = { formato, motivo, partidoA, canchas: formato === "rey" ? 1 : canchas, parejas, grupos: [], partidos: [], descansos: [], llave: null, rondas: rondas ?? null, tercerPuesto };
+  if (esTodosContraTodos(formato)) base.partidos = asignarCanchas(partidosRoundRobin(parejas), canchas);
+  else if (formato === "eliminacion") base.llave = crearLlave(parejas, { tercerPuesto });
+  else if (formato === "rey") base.partidos = [siguientePartidoRey(parejas, [])];
+  else {
+    const grupos = repartirEnGrupos(parejas);
+    base.parejas = grupos.flatMap((g) => g.parejas);
+    base.grupos = grupos.map((g) => ({ nombre: g.nombre, parejas: g.parejas.map((p) => p.id) }));
+    base.partidos = asignarCanchas(grupos.flatMap((g) => partidosRoundRobin(g.parejas, { fase: "grupo", grupo: g.nombre })), canchas);
   }
-  if (formato === "americano" && !rondas) rondas = rondasAmericanoCompleto(n, canchas);
-
-  const base = { formato, motivo, partidoA, canchas, parejas: [], grupos: [], partidos: [], descansos: [], llave: null, rondas: rondas ?? null };
-  if (formato === "americano") {
-    const { rondas: plan } = generarAmericano(jugadores.map((j) => j.id), { canchas, rondas, seed });
-    Object.assign(base, partidosDeAmericano(plan));
-  } else {
-    const parejas = parejasDeEntrada(jugadores, entrada, seed);
-    base.parejas = parejas;
-    if (formato === "roundRobin") base.partidos = asignarCanchas(partidosRoundRobin(parejas), canchas);
-    else if (formato === "eliminacion") base.llave = crearLlave(parejas);
-    else {
-      const grupos = repartirEnGrupos(parejas);
-      base.parejas = grupos.flatMap((g) => g.parejas);
-      base.grupos = grupos.map((g) => ({ nombre: g.nombre, parejas: g.parejas.map((p) => p.id) }));
-      base.partidos = asignarCanchas(grupos.flatMap((g) => partidosRoundRobin(g.parejas, { fase: "grupo", grupo: g.nombre })), canchas);
-    }
-  }
-  base.estimacionMin = estimarMinutos(formato, n, canchas, partidoA, { rondas });
+  base.estimacionMin = tiempo.estimacionMin;
   base.minutosTurno = minutosTurno;
-  base.entra = base.estimacionMin <= minutosTurno;
+  base.entra = tiempo.entra;
+  base.totalPartidos = totalPartidos({ ...base, jugadores });
   return base;
 }
 
@@ -532,7 +623,7 @@ export function normalizarPartidoA(p) {
 
 // ===== Resultados =====
 // { g1, g2 } → texto del error o null. A N games: el ganador llega a N (el otro, menos). Cronometrado: cualquier
-// tanteo; el empate solo en el americano (en parejas lo define un punto de oro).
+// tanteo; el empate solo donde la tabla cuenta games (americano), si no lo define un punto de oro.
 export function validarResultado({ g1, g2 } = {}, partidoA, { permiteEmpate = false } = {}) {
   const vacio = (x) => x === null || x === undefined || String(x).trim() === "";
   const a = vacio(g1) ? NaN : Number(g1);
@@ -549,9 +640,11 @@ export function validarResultado({ g1, g2 } = {}, partidoA, { permiteEmpate = fa
 }
 export const resultadoDe = (g1, g2) => ({ sets: [{ g1: Number(g1), g2: Number(g2) }] });
 export const gamesDe = (resultado) => (resultado?.sets?.[0] ? { g1: resultado.sets[0].g1, g2: resultado.sets[0].g2 } : null);
+// ¿Puede quedar empatado? En el americano (cuenta games, no partidos) y en el americano viejo
+export const permiteEmpate = (mini, partido) => partido?.fase === "americano" || (mini?.formato === "americanoParejas" && partido?.fase === "rr");
 
 const gruposCompletos = (mini) => (mini.partidos || []).filter((p) => p.fase === "grupo").every((p) => !!p.resultado);
-const llaveConResultados = (llave) => deLlave(llave).some((r) => r.some((p) => !!p.resultado));
+const llaveConResultados = (llave) => deLlave(llave).some((r) => r.some((p) => !!p.resultado)) || !!llave?.tercerPuesto?.resultado;
 
 export function gruposDeMini(mini) {
   const porId = Object.fromEntries((mini.parejas || []).map((p) => [p.id, p]));
@@ -562,8 +655,23 @@ export function gruposDeMini(mini) {
   }));
 }
 
+// Rey de la cancha: cargar (o borrar) un resultado deja fijos los partidos anteriores, descarta el siguiente si todavía
+// no tiene resultado y, con el resultado cargado, arma el siguiente (la que gana se queda; entra la primera de la fila).
+function aplicarRey(mini, partidoId, resultado) {
+  const partido = (mini.partidos || []).find((p) => p.id === partidoId);
+  if (!partido) return { error: "No encontramos ese partido" };
+  const r = partido.ronda;
+  if ((mini.partidos || []).some((p) => p.ronda > r && p.resultado)) return { error: "Ya se jugó el partido siguiente: este resultado queda fijo" };
+  if (resultado && getGanador(resultado) === null) return { error: "No puede quedar empatado: definan con un punto de oro" };
+  let partidos = (mini.partidos || []).filter((p) => p.ronda <= r).map((p) => (p.id === partidoId ? { ...p, resultado: resultado || null } : { ...p }));
+  const sig = siguienteRonda({ ...mini, partidos });
+  if (sig) partidos = [...partidos, ...sig.partidos];
+  return { partidos, llave: mini.llave || null, estado: terminado({ ...mini, partidos }) ? "finalizado" : "en_curso" };
+}
+
 // Carga (o borra, con resultado null) el resultado de un partido. Devuelve { partidos, llave, estado } o { error }.
 export function aplicarResultado(mini, partidoId, resultado) {
+  if (esDinamico(mini.formato)) return aplicarRey(mini, partidoId, resultado);
   const partidos = (mini.partidos || []).map((p) => ({ ...p }));
   let llave = mini.llave || null;
   const i = partidos.findIndex((p) => p.id === partidoId);
@@ -572,8 +680,12 @@ export function aplicarResultado(mini, partidoId, resultado) {
     partidos[i].resultado = resultado || null;
     if (mini.formato === "grupos") {
       const nuevo = { ...mini, partidos };
-      llave = gruposCompletos(nuevo) ? crearLlave(seedsDesdeGrupos(gruposDeMini(nuevo), avanzanPorGrupo((mini.parejas || []).length))) : null;
+      llave = gruposCompletos(nuevo) ? crearLlave(seedsDesdeGrupos(gruposDeMini(nuevo), avanzanPorGrupo((mini.parejas || []).length)), { tercerPuesto: !!mini.tercerPuesto }) : null;
     }
+  } else if (partidoId === ID_TERCER_PUESTO) {
+    const t = llave?.tercerPuesto;
+    if (!t?.pareja1 || !t?.pareja2) return { error: "Ese partido todavía no tiene rivales" };
+    llave = { ...llave, tercerPuesto: { ...t, resultado: resultado || null } };
   } else {
     const rondas = deLlave(llave);
     let encontrado = false;
@@ -587,20 +699,26 @@ export function aplicarResultado(mini, partidoId, resultado) {
       }),
     );
     if (!encontrado) return { error: "Ese partido todavía no tiene rivales" };
-    llave = reconstruirLlave({ rondas: rondas.map((r) => ({ partidos: r })) });
+    llave = reconstruirLlave({ rondas: rondas.map((r) => ({ partidos: r })), ...(llave?.tercerPuesto ? { tercerPuesto: llave.tercerPuesto } : {}) });
   }
   const estado = terminado({ ...mini, partidos, llave }) ? "finalizado" : "en_curso";
   return { partidos, llave, estado };
 }
 
 export function terminado(mini) {
-  if (mini.formato === "americano" || mini.formato === "roundRobin") return (mini.partidos || []).length > 0 && mini.partidos.every((p) => !!p.resultado);
-  return !!obtenerCampeonYSub(deLlave(mini.llave));
+  const partidos = mini.partidos || [];
+  const todos = partidos.length > 0 && partidos.every((p) => !!p.resultado);
+  if (mini.formato === "americano" || esTodosContraTodos(mini.formato)) return todos;
+  if (mini.formato === "rey") return todos && partidos.length >= (Number(mini.rondas) || 0);
+  if (!obtenerCampeonYSub(deLlave(mini.llave))) return false;
+  return !mini.llave?.tercerPuesto || !!mini.llave.tercerPuesto.resultado;
 }
 export const rondasDeLlave = deLlave;
+export const tercerPuestoDe = (mini) => mini?.llave?.tercerPuesto || null;
 
 // ===== Tablas y podio =====
-// Americano: tabla individual. Puntos = games ganados; desempatan la diferencia y los partidos ganados.
+// Americano viejo (compañeros rotativos): tabla individual. Puntos = games ganados; desempatan la diferencia y los
+// partidos ganados.
 export function tablaAmericano(mini) {
   const stats = Object.fromEntries((mini.jugadores || []).map((j) => [j.id, { id: j.id, nombre: j.nombre, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 }]));
   (mini.partidos || []).forEach((p) => {
@@ -624,41 +742,76 @@ export function tablaAmericano(mini) {
   return Object.values(stats).sort((a, b) => b.pts - a.pts || b.gf - b.gc - (a.gf - a.gc) || b.pg - a.pg || a.nombre.localeCompare(b.nombre));
 }
 
-// Parejas: la tabla del motor (calcularTabla: partidos ganados, diferencia de sets y de games) para todos contra todos
-// o para un grupo
+// Americano (parejas fijas): todos contra todos y gana quien suma más games. pj/pg/pe/pp, gf/gc y pts = games ganados.
+// Desempatan la diferencia de games y los partidos ganados.
+export function tablaAmericanoParejas(mini) {
+  const stats = Object.fromEntries((mini.parejas || []).map((p) => [p.id, { ...p, id: p.id, nombre: p.nombrePareja, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 }]));
+  (mini.partidos || []).forEach((m) => {
+    const g = gamesDe(m.resultado);
+    const s1 = stats[m.pareja1?.id];
+    const s2 = stats[m.pareja2?.id];
+    if (!g || !s1 || !s2) return;
+    [
+      [s1, g.g1, g.g2],
+      [s2, g.g2, g.g1],
+    ].forEach(([s, a, b]) => {
+      s.pj++;
+      s.gf += a;
+      s.gc += b;
+      s.pts += a;
+      if (a > b) s.pg++;
+      else if (a < b) s.pp++;
+      else s.pe++;
+    });
+  });
+  return Object.values(stats).sort((a, b) => b.pts - a.pts || b.gf - b.gc - (a.gf - a.gc) || b.pg - a.pg || a.nombre.localeCompare(b.nombre));
+}
+
+// Parejas: la tabla del motor (calcularTabla: partidos ganados, diferencia de sets y de games) para la liguilla, el
+// rey de la cancha o un grupo
 export function tablaParejas(mini, grupo = null) {
   if (grupo) {
     const g = gruposDeMini(mini).find((x) => x.nombre === grupo);
     return g ? calcularTabla(g) : [];
   }
-  return calcularTabla({ parejas: mini.parejas || [], partidos: (mini.partidos || []).filter((p) => p.fase === "rr") });
+  if (mini.formato === "americanoParejas") return tablaAmericanoParejas(mini);
+  const fase = mini.formato === "rey" ? "rey" : "rr";
+  return calcularTabla({ parejas: mini.parejas || [], partidos: (mini.partidos || []).filter((p) => p.fase === fase) });
 }
 
-// Podio cuando termina: [{ puesto, nombre }] (en el cuadro, el 3° es compartido entre quienes perdieron las semis)
+// Podio cuando termina: [{ puesto, nombre }] (en el cuadro sin partido por el 3°, el 3° es compartido entre quienes
+// perdieron las semis)
 export function podio(mini) {
   if (!terminado(mini)) return null;
   if (mini.formato === "americano") return tablaAmericano(mini).slice(0, 3).map((r, i) => ({ puesto: i + 1, nombre: r.nombre, detalle: `${r.pts} games` }));
-  if (mini.formato === "roundRobin") return tablaParejas(mini).slice(0, 3).map((r, i) => ({ puesto: i + 1, nombre: r.nombre, detalle: `${r.pg} ganados` }));
+  if (mini.formato === "americanoParejas") return tablaAmericanoParejas(mini).slice(0, 3).map((r, i) => ({ puesto: i + 1, nombre: r.nombre, detalle: `${r.pts} games` }));
+  if (mini.formato === "roundRobin" || mini.formato === "rey") return tablaParejas(mini).slice(0, 3).map((r, i) => ({ puesto: i + 1, nombre: r.nombre, detalle: `${r.pg} ganados` }));
   const rondas = deLlave(mini.llave);
   const cs = obtenerCampeonYSub(rondas);
   const lista = [
     { puesto: 1, nombre: cs.campeon.nombrePareja },
     { puesto: 2, nombre: cs.subcampeon.nombrePareja },
   ];
+  const tercero = mini.llave?.tercerPuesto;
+  if (tercero?.resultado) {
+    const g = getGanador(tercero.resultado);
+    const gana = g === 1 ? tercero.pareja1 : g === 2 ? tercero.pareja2 : null;
+    if (gana) lista.push({ puesto: 3, nombre: gana.nombrePareja });
+    return lista;
+  }
   if (rondas.length >= 2) {
     rondas[rondas.length - 2].forEach((p) => {
-      const g = getGanador(p.resultado);
-      const perdedor = g === 1 ? p.pareja2 : g === 2 ? p.pareja1 : null;
+      const perdedor = perdedorDe(p);
       if (perdedor) lista.push({ puesto: 3, nombre: perdedor.nombrePareja });
     });
   }
   return lista;
 }
 
-// Progreso: partidos con resultado / partidos jugables (sin contar los byes del cuadro)
+// Progreso: partidos con resultado / partidos del torneo (sin contar los byes del cuadro)
 export function progreso(mini) {
-  const jugables = [...(mini.partidos || []), ...deLlave(mini.llave).flat().filter((p) => p.pareja1 && p.pareja2)];
-  return { hechos: jugables.filter((p) => !!p.resultado).length, total: jugables.length };
+  const jugados = [...(mini.partidos || []), ...deLlave(mini.llave).flat(), ...(mini.llave?.tercerPuesto ? [mini.llave.tercerPuesto] : [])];
+  return { hechos: jugados.filter((p) => !!p.resultado).length, total: totalPartidos(mini) };
 }
 
 // Mensaje para compartir por WhatsApp

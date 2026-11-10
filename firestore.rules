@@ -877,6 +877,8 @@ service cloud.firestore {
       }
 
       // ----- Mini torneo de un turno (sin efecto en rankings, torneos ni el Pase: ninguna Function lo escucha) -----
+      // Mini torneo de parejas fijas (los creados antes con formato 'americano' eran de compañeros rotativos: se siguen
+      // editando, pero ya no se crean). tercerPuesto (bool) solo si se pidió el partido por el 3° puesto.
       // Lo crea quien reservó (reserva.jugadorUid) o un participante de la cuenta del turno (participantesUids), para
       // una reserva confirmada de hoy en adelante. Lectura pública (el link de WhatsApp): solo nombres de pila, nunca
       // emails ni teléfonos. Todo lo edita quien lo creó; los resultados (partidos, llave, estado) también editoresUids
@@ -904,7 +906,7 @@ service cloud.firestore {
           return ['clubId', 'clubNombre', 'canchaNombre', 'fecha', 'horaInicio', 'horaFin', 'reservaGrupoId', 'creadorUid',
                   'creadorNombre', 'editoresUids', 'edicionAbierta', 'nombre', 'modo', 'formato', 'partidoA', 'canchas',
                   'jugadores', 'parejas', 'grupos', 'partidos', 'descansos', 'llave', 'rondas', 'estimacionMin',
-                  'minutosTurno', 'motivo', 'estado', 'creadoEn', 'actualizadoEn'];
+                  'minutosTurno', 'motivo', 'estado', 'tercerPuesto', 'creadoEn', 'actualizadoEn'];
         }
         function miniDatosValidos(d) {
           return d.keys().hasOnly(miniCampos())
@@ -912,7 +914,8 @@ service cloud.firestore {
             && d.editoresUids is list && d.editoresUids.size() <= 16
             && d.partidos is list && d.partidos.size() <= 200
             && d.estado in ['en_curso', 'finalizado']
-            && d.formato in ['americano', 'roundRobin', 'grupos', 'eliminacion'];
+            && d.formato in ['americano', 'americanoParejas', 'roundRobin', 'grupos', 'eliminacion', 'rey']
+            && (!('tercerPuesto' in d) || d.tercerPuesto is bool);
         }
         function miniCreador() {
           return signedIn() && resource.data.creadorUid == request.auth.uid;
@@ -928,6 +931,9 @@ service cloud.firestore {
           && request.resource.data.creadorUid == request.auth.uid
           && request.resource.data.clubId == clubId
           && miniDatosValidos(request.resource.data)
+          // Nuevos: parejas fijas (número par, desde 3 parejas); 'americano' (compañeros rotativos) solo queda para los viejos
+          && request.resource.data.jugadores.size() >= 6 && request.resource.data.jugadores.size() % 2 == 0
+          && request.resource.data.formato != 'americano'
           && request.resource.data.estado == 'en_curso'
           && miniReserva(request.resource.data.reservaGrupoId).status == 'confirmada'
           && miniReserva(request.resource.data.reservaGrupoId).fecha == request.resource.data.fecha

@@ -46,7 +46,7 @@ export default function MiniTorneoDeReserva({ clubId, grupoId, fecha, confirmada
       ))}
       {vigente && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="body-sm text-ink-2 m-0">{minis.length ? "¿Otro más?" : "¿Son 4 o más? Armen un mini torneo en el turno (no suma puntos)."}</p>
+          <p className="body-sm text-ink-2 m-0">{minis.length ? "¿Otro más?" : "¿Son 6 o más (3 parejas)? Armen un mini torneo en el turno (no suma puntos)."}</p>
           <Button as="link" to={`/mini/nuevo/${clubId}/${grupoId}`} size="sm">
             Armar mini torneo
           </Button>

@@ -14,12 +14,14 @@ import {
   avanzanPorGrupo,
   gamesDe,
   mensajeMini,
+  permiteEmpate,
   podio as calcularPodio,
   progreso,
   rondasDeLlave,
   resultadoDe,
   tablaAmericano,
   tablaParejas,
+  tercerPuestoDe,
   textoPartidoA,
   urlMini,
   validarResultado,
@@ -30,6 +32,9 @@ import { toast } from "../components/Toast";
 import { Alert, Badge, Button, Card, ChampionCard, Field, Input, MatchCard, Standings, Tabs } from "../components/ui";
 
 // Mini torneo de un turno (/mini/:clubId/:id): vista pública y en vivo (link para WhatsApp: solo nombres de pila).
+// Parejas fijas (americano, liguilla, torneo común, eliminación, rey de la cancha); los mini torneos viejos de
+// compañeros rotativos (formato "americano") se siguen viendo. En el rey de la cancha, el partido siguiente se arma al
+// cargar el resultado (aplicarResultado).
 // Cargan resultados quien lo creó, los editores (editoresUids) y, con la carga abierta, quien entra con el link de carga
 // (?carga=<clave>, aun sin cuenta: sesión anónima). Tabla en vivo, cuadro y podio al final. No suma puntos.
 export default function MiniTorneo() {
@@ -121,10 +126,33 @@ export default function MiniTorneo() {
 
   const nombreJugador = Object.fromEntries((mini.jugadores || []).map((j) => [j.id, j.nombre]));
   const equipo = (ids) => (ids || []).map((x) => nombreJugador[x] || "?").join(" / ");
-  const nombreLado = (p, lado) => (p.fase === "americano" ? equipo(lado === 1 ? p.equipo1 : p.equipo2) : (lado === 1 ? p.pareja1 : p.pareja2)?.nombrePareja || "Por definir");
+  const nombreLado = (p, lado) => (p.equipo1 ? equipo(lado === 1 ? p.equipo1 : p.equipo2) : (lado === 1 ? p.pareja1 : p.pareja2)?.nombrePareja || "Por definir");
   const terminado = mini.estado === "finalizado";
   const hayCuadro = mini.formato === "grupos" || mini.formato === "eliminacion";
   const rondasLlave = rondasDeLlave(mini.llave);
+  const tercero = tercerPuestoDe(mini);
+  const esRey = mini.formato === "rey";
+  const reyFaltan = esRey ? Math.max(0, (Number(mini.rondas) || 0) - (mini.partidos || []).length) : 0;
+  const tarjetasCuadro = (soloConParejas) => (
+    <>
+      {rondasLlave.map((r, ri) => {
+        const lista = soloConParejas ? r.filter((p) => p.pareja1 || p.pareja2) : r;
+        if (!lista.length) return null;
+        return (
+          <section key={ri} className="flex flex-col gap-3">
+            <h2 className="heading-md m-0">{nombreRonda(rondasLlave.length, ri)}</h2>
+            {lista.map((p) => tarjetaPartido({ ...p, fase: "llave" }, nombreRonda(rondasLlave.length, ri), ri === rondasLlave.length - 1 ? "final" : ri === rondasLlave.length - 2 ? "semi" : "default"))}
+          </section>
+        );
+      })}
+      {tercero && (!soloConParejas || tercero.pareja1 || tercero.pareja2) && (
+        <section className="flex flex-col gap-3">
+          <h2 className="heading-md m-0">3° puesto</h2>
+          {tarjetaPartido({ ...tercero, fase: "llave" }, "3° puesto")}
+        </section>
+      )}
+    </>
+  );
 
   const guardar = async (partido, resultado) => {
     const r = aplicarResultado(mini, partido.id, resultado);
@@ -225,23 +253,24 @@ export default function MiniTorneo() {
         <div className="flex flex-col gap-6">
           {rondas.map((r) => (
             <section key={r} aria-label={`Ronda ${r}`} className="flex flex-col gap-3">
-              <h2 className="heading-md m-0">{mini.formato === "grupos" ? `Fecha ${r} de grupos` : `Ronda ${r}`}</h2>
-              {(mini.partidos || []).filter((p) => p.ronda === r).map((p) => tarjetaPartido(p, p.grupo ? `Grupo ${p.grupo}` : `Ronda ${r}`))}
+              <h2 className="heading-md m-0">{mini.formato === "grupos" ? `Fecha ${r} de grupos` : esRey ? `Partido ${r}` : `Ronda ${r}`}</h2>
+              {(mini.partidos || []).filter((p) => p.ronda === r).map((p) => tarjetaPartido(p, p.grupo ? `Grupo ${p.grupo}` : esRey ? `Partido ${r}` : `Ronda ${r}`))}
               {descansosDe(r).length > 0 && <p className="body-sm text-ink-3 m-0">Descansan: {equipo(descansosDe(r)).replace(/ \/ /g, ", ")}</p>}
             </section>
           ))}
-          {hayCuadro && rondasLlave.length > 0 && (
-            <section aria-label="Cuadro" className="flex flex-col gap-3">
-              <h2 className="heading-md m-0">Cuadro</h2>
-              {rondasLlave.flatMap((r, ri) => r.filter((p) => p.pareja1 || p.pareja2).map((p) => tarjetaPartido({ ...p, fase: "llave" }, nombreRonda(rondasLlave.length, ri), ri === rondasLlave.length - 1 ? "final" : ri === rondasLlave.length - 2 ? "semi" : "default")))}
-            </section>
+          {esRey && !terminado && reyFaltan > 0 && (
+            <p className="body-sm text-ink-3 m-0">
+              {reyFaltan === 1 ? "Falta 1 partido" : `Faltan ${reyFaltan} partidos`}: el siguiente aparece cuando cargan este resultado (la pareja que gana se queda).
+            </p>
           )}
+          {hayCuadro && rondasLlave.length > 0 && tarjetasCuadro(true)}
           {mini.formato === "grupos" && rondasLlave.length === 0 && <p className="body-sm text-ink-3 m-0">El cuadro final aparece cuando terminan los grupos.</p>}
         </div>
       )}
 
       {vista === "tabla" && mini.formato === "americano" && <TablaAmericano filas={tablaAmericano(mini)} />}
-      {vista === "tabla" && mini.formato === "roundRobin" && <Standings grupo="Posiciones" rows={tablaParejas(mini).map((r) => ({ ...r, pts: r.pg }))} help="Desempatan la diferencia de sets y de games." />}
+      {vista === "tabla" && (mini.formato === "roundRobin" || esRey) && <Standings grupo="Posiciones" rows={tablaParejas(mini).map((r) => ({ ...r, pts: r.pg }))} help="Pts = partidos ganados. Desempata la diferencia de games." />}
+      {vista === "tabla" && mini.formato === "americanoParejas" && <Standings grupo="Posiciones" rows={tablaParejas(mini)} help="Pts = games ganados. Desempatan la diferencia de games y los partidos ganados." />}
       {vista === "tabla" &&
         mini.formato === "grupos" &&
         (mini.grupos || []).map((g) => (
@@ -255,16 +284,7 @@ export default function MiniTorneo() {
 
       {vista === "cuadro" && hayCuadro && (
         <div className="flex flex-col gap-6">
-          {rondasLlave.length === 0 ? (
-            <p className="body-sm text-ink-3 m-0">El cuadro aparece cuando terminan los grupos.</p>
-          ) : (
-            rondasLlave.map((r, ri) => (
-              <section key={ri} className="flex flex-col gap-3">
-                <h2 className="heading-md m-0">{nombreRonda(rondasLlave.length, ri)}</h2>
-                {r.map((p) => tarjetaPartido({ ...p, fase: "llave" }, nombreRonda(rondasLlave.length, ri), ri === rondasLlave.length - 1 ? "final" : ri === rondasLlave.length - 2 ? "semi" : "default"))}
-              </section>
-            ))
-          )}
+          {rondasLlave.length === 0 ? <p className="body-sm text-ink-3 m-0">El cuadro aparece cuando terminan los grupos.</p> : tarjetasCuadro(false)}
         </div>
       )}
 
@@ -329,7 +349,7 @@ function DialogoResultado({ partido, mini, nombres, onCerrar, onGuardar }) {
   const [guardando, setGuardando] = useState(false);
   const enviar = async (e) => {
     e?.preventDefault?.();
-    const err = validarResultado({ g1, g2 }, mini.partidoA, { permiteEmpate: partido.fase === "americano" });
+    const err = validarResultado({ g1, g2 }, mini.partidoA, { permiteEmpate: permiteEmpate(mini, partido) });
     if (err) {
       setError(err);
       return;
