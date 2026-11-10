@@ -50,6 +50,10 @@ const BarCuentaDetalle = lazy(() => import("./pages/admin/bar/CuentaDetalle"));
 const BarBarra = lazy(() => import("./pages/admin/bar/Barra"));
 const BarQr = lazy(() => import("./pages/admin/bar/QrCanchas"));
 const BarReportes = lazy(() => import("./pages/admin/bar/Reportes"));
+// Fichaje de empleados (bar / caja)
+const BarFichar = lazy(() => import("./pages/admin/bar/Fichar"));
+const BarFichajes = lazy(() => import("./pages/admin/bar/Fichajes"));
+const FicharQr = lazy(() => import("./pages/FicharQr"));
 const QrCancha = lazy(() => import("./pages/QrCancha"));
 const TicketPublico = lazy(() => import("./pages/TicketPublico"));
 const UnirseTurno = lazy(() => import("./pages/UnirseTurno"));
@@ -242,6 +246,8 @@ export default function App() {
             <Route path="/t/v/:clubId/:numero" element={<TicketPublico />} />
             {/* P3-16: el QR del carnet de socio (verificación en la puerta del club) */}
             <Route path="/s/:token" element={<VerificarSocio />} />
+            {/* Fichaje: el QR rotativo de la caja, escaneado con la cuenta del staff */}
+            <Route path="/fichar/:clubId/:token" element={<FicharQr />} />
             {/* Cuenta compartida: el link de invitación al turno y la vista del turno (también para anónimos) */}
             <Route path="/t/unirse/:clubId/:token" element={<UnirseTurno />} />
             <Route path="/turno/:clubId/:grupoId" element={<MiCuenta />} />
@@ -302,6 +308,9 @@ export default function App() {
             <Route path="bar/reportes" element={<RequierePro titulo="Reportes"><BarReportes /></RequierePro>} />
             <Route path="bar/caja" element={<RequierePro titulo="La caja"><BarCaja /></RequierePro>} />
             <Route path="bar/productos" element={<RequierePro titulo="Productos"><BarProductos /></RequierePro>} />
+            {/* Fichaje de empleados: el teclado de la caja y la vista del admin */}
+            <Route path="bar/fichar" element={<RequierePro titulo="El fichaje"><BarFichar /></RequierePro>} />
+            <Route path="bar/fichajes" element={<RequierePro titulo="Fichajes"><BarFichajes /></RequierePro>} />
           </Route>
 
           {/* Rutas del organizador - solo organizadores */}

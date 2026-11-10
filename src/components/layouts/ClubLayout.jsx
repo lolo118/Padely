@@ -9,6 +9,8 @@ import Button from "../ui/Button";
 import { armarAudioConGesto } from "../pos/sonido";
 import { estadoPlan } from "../../utils/planes";
 import { formatFechaLarga } from "../../utils/formatDate";
+import { CalendarClock, Clock } from "lucide-react";
+import { PERMISOS_ADMIN_FICHAJE, PERMISOS_FICHAR } from "../../utils/fichajes";
 
 // Cada ítem lleva los permisos que lo habilitan (alguno alcanza); "Hoy" es para todo el que entra al panel.
 // pro: true = sección del plan PRO (P3-9): en FREE se ve con candado y abre la pantalla "Disponible en PRO".
@@ -29,7 +31,12 @@ const navItems = [
   { to: "/admin/bar/caja", label: "Caja", icon: Wallet, permisos: ["abrirCaja", "cerrarCaja", "cerrarCajaAjena", "verCajasCerradas"], pro: true },
   { to: "/admin/bar/productos", label: "Productos", icon: Package, permisos: ["editarProductos", "cargarStock", "importar"], pro: true },
   { to: "/admin/bar/reportes", label: "Reportes", icon: TrendingUp, permisos: ["verReportes"], pro: true },
+  // Fichaje de empleados: el teclado de la PC (cualquiera del bar o la caja) y la vista del admin (equipo)
+  { to: "/admin/bar/fichar", label: "Fichar", icon: Clock, permisos: PERMISOS_FICHAR, pro: true },
+  { to: "/admin/bar/fichajes", label: "Fichajes", icon: CalendarClock, permisos: PERMISOS_ADMIN_FICHAJE, pro: true },
 ];
+// El título "Bar" también se ve para quien solo maneja el fichaje
+navItems.find((i) => i.seccion === "Bar").permisos.push(...PERMISOS_ADMIN_FICHAJE);
 
 export default function ClubLayout() {
   const suspendido = useAuthStore((s) => s.clubActual?.suspendido === true);

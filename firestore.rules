@@ -732,6 +732,27 @@ service cloud.firestore {
         allow delete: if esStaff(clubId, 'gestionarStaff');
       }
 
+      // ----- Fichaje de empleados (bar / caja) -----
+      // Todo lo escriben las Functions (guardarEmpleado, fichar, ficharConQr, editarFichaje, fichajesSinSalida): la
+      // hora de un fichaje es siempre la del servidor y cada corrección manual deja su rastro en fichajesAuditoria.
+      // Empleados, turnos y auditoría los lee quien gestiona el equipo. El hash de los PINs vive en privado/fichaje
+      // (la regla de privado no lo abre a nadie) y los PINs equivocados por dispositivo en fichajeIntentos (nadie).
+      match /empleados/{empleadoId} {
+        allow read: if esStaff(clubId, 'gestionarStaff') || superAdmin();
+        allow write: if false;
+      }
+      match /fichajes/{fichajeId} {
+        allow read: if esStaff(clubId, 'gestionarStaff') || superAdmin();
+        allow write: if false;
+      }
+      match /fichajesAuditoria/{auditoriaId} {
+        allow read: if esStaff(clubId, 'gestionarStaff') || superAdmin();
+        allow write: if false;
+      }
+      match /fichajeIntentos/{uid} {
+        allow read, write: if false;
+      }
+
       match /reservas/{reservaId} {
         allow read: if signedIn();
         // Campos de la Function (onCuentaUpdated, Admin SDK): cuentaCerrada, cuentaTotal, cuentaCerradaEn. Ningún

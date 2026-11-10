@@ -230,3 +230,34 @@ describe("Pase Club (P3-16)", () => {
     await assertFails(getDoc(doc(como("dueno"), "comisionesPase", "p1")));
   });
 });
+
+describe("fichaje de empleados", () => {
+  test("empleados, fichajes y auditoría: los lee quien gestiona el equipo; no los escribe ningún cliente", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "clubs", CLUB, "staff", "gestor"), { uid: "gestor", activo: true, rol: "encargado", permisos: ["gestionarStaff"], descuentoMax: 0 });
+      await setDoc(doc(db, "clubs", CLUB, "empleados", "e1"), { nombre: "Juan", activo: true, staffUid: null, tienePin: true });
+      await setDoc(doc(db, "clubs", CLUB, "fichajes", "f1"), { empleadoId: "e1", nombre: "Juan", entrada: Timestamp.now(), salida: null, origen: "pin" });
+      await setDoc(doc(db, "clubs", CLUB, "fichajesAuditoria", "a1"), { fichajeId: "f1", accion: "editar", nota: "x" });
+      await setDoc(doc(db, "clubs", CLUB, "privado", "fichaje"), { salt: "s", claveQr: "k", pines: { e1: "hash" } });
+      await setDoc(doc(db, "clubs", CLUB, "fichajeIntentos", "cajero"), { fallos: [1] });
+    });
+    const ids = { empleados: "e1", fichajes: "f1", fichajesAuditoria: "a1" };
+    for (const [col, id] of Object.entries(ids)) {
+      await assertSucceeds(getDoc(doc(como("dueno"), "clubs", CLUB, col, id)));
+      await assertSucceeds(getDoc(doc(como("gestor"), "clubs", CLUB, col, id)));
+      await assertSucceeds(getDoc(doc(como("sa"), "clubs", CLUB, col, id)));
+      await assertFails(getDoc(doc(como("cajero"), "clubs", CLUB, col, id)));
+      await assertFails(getDoc(doc(como("jugador"), "clubs", CLUB, col, id)));
+      await assertFails(setDoc(doc(como("dueno"), "clubs", CLUB, col, "nuevo"), { nombre: "x" }));
+      await assertFails(deleteDoc(doc(como("dueno"), "clubs", CLUB, col, id)));
+    }
+    await assertFails(updateDoc(doc(como("dueno"), "clubs", CLUB, "fichajes", "f1"), { salida: Timestamp.now() }));
+    // El hash de los PINs y los PINs equivocados: nadie, ni el dueño
+    await assertFails(getDoc(doc(como("dueno"), "clubs", CLUB, "privado", "fichaje")));
+    await assertFails(getDoc(doc(como("encargado"), "clubs", CLUB, "privado", "fichaje")));
+    await assertFails(setDoc(doc(como("dueno"), "clubs", CLUB, "privado", "fichaje"), { salt: "mio" }));
+    await assertFails(getDoc(doc(como("cajero"), "clubs", CLUB, "fichajeIntentos", "cajero")));
+    await assertFails(deleteDoc(doc(como("cajero"), "clubs", CLUB, "fichajeIntentos", "cajero")));
+  });
+});

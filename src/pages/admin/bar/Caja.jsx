@@ -851,6 +851,10 @@ export default function Caja() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h1 className="heading-lg m-0">Caja</h1>
+        {/* Fichaje de empleados: el teclado del PIN en esta misma PC */}
+        <Button as="link" to="/admin/bar/fichar">
+          Fichar entrada o salida
+        </Button>
       </div>
 
       {puedeHistorial && (

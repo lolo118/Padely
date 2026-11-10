@@ -4471,3 +4471,285 @@ exports.sociosVencidos = onSchedule({ schedule: "40 4 * * *", timeZone: ZONA_HOR
   await escribirEnLotes(reset.docs.filter((d) => d.data().estado !== "activa").map((d) => (b) => b.update(d.ref, { puntos: 0, nivel: "bronce", puntosResetEn: null, puntosDesde: Timestamp.fromMillis(ahora), actualizadoEn: FieldValue.serverTimestamp() })));
   logger.info(`sociosVencidos: ${vencidas.size} vencidos, ${conPuntos} reservas con puntos, ${recalculados} con puntos recalculados (12 meses), ${reset.size} reseteados`);
 });
+
+// ============================================================================
+// Fichaje de empleados (bar / caja). Empleados con o sin cuenta de Padely (clubs/{c}/empleados) con un PIN de 4
+// dígitos (hash con sal del club en privado/fichaje, que ningún cliente lee). Se ficha en la PC de la caja con el
+// PIN (fichar) o con el celular del staff escaneando el QR rotativo de la caja (fichajeQrToken → ficharConQr). La
+// hora es SIEMPRE la del servidor. El admin (dueño o gestionarStaff) maneja empleados y PINs (guardarEmpleado) y
+// corrige turnos con una nota que queda en fichajesAuditoria (editarFichaje). fichajesSinSalida (04:00) cierra los
+// turnos olvidados. Lógica pura en lib/fichajes.mjs (copia de src/utils/fichajes.js); cripto en ./fichaje.js.
+// ============================================================================
+const fichajeCripto = require("./fichaje");
+let fichajesUtilPromesa = null;
+const fichajesUtil = () => (fichajesUtilPromesa ||= import("./lib/fichajes.mjs"));
+// Cualquiera del bar o la caja ficha en la PC (la sesión abierta en esa PC); el resto, dueño o gestionarStaff.
+// Mismas listas que src/utils/fichajes.js (PERMISOS_FICHAR, PERMISOS_ADMIN_FICHAJE; el test lo compara).
+const PERMISOS_FICHAR = ["vender", "cobrarTurnos", "pedidos", "abrirCaja", "cerrarCaja", "cerrarCajaAjena", "verCajasCerradas"];
+const PERMISOS_ADMIN_FICHAJE = ["gestionarStaff"];
+const privadoFichajeRef = (clubRef) => clubRef.collection("privado").doc("fichaje");
+const ES_ID_DOC = /^[A-Za-z0-9_-]{1,128}$/;
+
+function idDoc(v, mensaje = "Falta el dato") {
+  const s = texto(v, 128);
+  if (!ES_ID_DOC.test(s)) throw new HttpsError("invalid-argument", mensaje);
+  return s;
+}
+
+// Dueño o staff activo con alguno de los permisos, en un club con plan PRO
+async function accesoFichaje(request, permisos) {
+  const uid = exigirAuth(request);
+  const clubId = idDoc(request.data && request.data.clubId, "Falta el club");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const acceso = await accesoClub(clubRef, uid, permisos);
+  if (!acceso.esStaff) throw new HttpsError("permission-denied", "No tenés permiso para esto");
+  if (!(await planesUtil()).estadoPlan(acceso.club).pro) throw new HttpsError("failed-precondition", "El fichaje es parte del plan PRO");
+  return { uid, clubId, clubRef, ...acceso };
+}
+
+// Sal de los PINs y clave del QR del club: nacen la primera vez (en transacción, para que dos llamadas no generen dos)
+async function secretosFichajeEnTx(tx, clubRef) {
+  const ref = privadoFichajeRef(clubRef);
+  const snap = await tx.get(ref);
+  const d = snap.exists ? snap.data() : {};
+  const sec = { salt: d.salt || fichajeCripto.nuevoSecreto(), claveQr: d.claveQr || fichajeCripto.nuevoSecreto(), pines: d.pines || {} };
+  return { ...sec, faltaGuardar: !d.salt || !d.claveQr };
+}
+async function asegurarSecretosFichaje(clubRef) {
+  return db.runTransaction(async (tx) => {
+    const sec = await secretosFichajeEnTx(tx, clubRef);
+    if (sec.faltaGuardar) tx.set(privadoFichajeRef(clubRef), { salt: sec.salt, claveQr: sec.claveQr, creadoEn: FieldValue.serverTimestamp() }, { merge: true });
+    return sec;
+  });
+}
+
+const cierreSinSalida = (ts) => ({ salida: ts, minutos: 0, sinSalida: true, actualizadoEn: FieldValue.serverTimestamp() });
+
+// Entrada o salida de un empleado según su turno abierto, con la hora del servidor → { nombre, tipo, hora, minutos }
+async function registrarFichaje(clubRef, empleadoId, { origen, por }) {
+  const F = await fichajesUtil();
+  const empRef = clubRef.collection("empleados").doc(empleadoId);
+  const col = clubRef.collection("fichajes");
+  return db.runTransaction(async (tx) => {
+    const emp = await tx.get(empRef);
+    if (!emp.exists || emp.data().activo === false) throw new HttpsError("not-found", "No encontramos a esa persona en el equipo");
+    const abiertos = (await tx.get(col.where("empleadoId", "==", empleadoId).where("salida", "==", null).limit(10))).docs.sort((a, b) => msDe(b.data().entrada) - msDe(a.data().entrada));
+    const nombre = emp.data().nombre || "";
+    const ahora = Date.now();
+    const ts = Timestamp.fromMillis(ahora);
+    const abierto = abiertos[0] || null;
+    const decision = F.decidirFichaje({ abiertoEntradaMs: abierto ? msDe(abierto.data().entrada) : null, ultimoMs: msDe(emp.data().ultimoFichaje), ahora });
+    if (decision.error) throw new HttpsError("failed-precondition", `${nombre}, ya fichaste recién. Si fue un error, esperá un minuto.`);
+    // Turnos abiertos de más (no deberían existir): quedan como olvidos para que el admin los corrija
+    abiertos.slice(1).forEach((d) => tx.update(d.ref, cierreSinSalida(ts)));
+    let minutos = null;
+    let fichajeId;
+    if (decision.tipo === "salida") {
+      minutos = F.minutosEntre(msDe(abierto.data().entrada), ahora);
+      tx.update(abierto.ref, { salida: ts, minutos, origenSalida: origen, actualizadoEn: FieldValue.serverTimestamp() });
+      fichajeId = abierto.id;
+    } else {
+      if (abierto) tx.update(abierto.ref, cierreSinSalida(ts));
+      const nuevo = col.doc();
+      tx.set(nuevo, { empleadoId, nombre, entrada: ts, salida: null, minutos: null, origen, sinSalida: false, registradoPor: por, creadoEn: FieldValue.serverTimestamp(), actualizadoEn: FieldValue.serverTimestamp() });
+      fichajeId = nuevo.id;
+    }
+    tx.update(empRef, { ultimoFichaje: ts });
+    return { nombre, tipo: decision.tipo, hora: F.horaArgentina(ahora), minutos, fichajeId, cerroOlvido: decision.cerrarOlvidado };
+  });
+}
+
+// Alta / edición de un empleado y su PIN. data: { clubId, empleadoId?, nombre, activo, staffUid?, pin?, quitarPin? }
+exports.guardarEmpleado = onCall({ region: REGION }, async (request) => {
+  const { uid, club, clubRef } = await accesoFichaje(request, PERMISOS_ADMIN_FICHAJE);
+  const F = await fichajesUtil();
+  const d = request.data || {};
+  const empleadoId = d.empleadoId ? idDoc(d.empleadoId, "Empleado inválido") : null;
+  const nombre = texto(d.nombre, 60);
+  if (nombre.length < 2) throw new HttpsError("invalid-argument", "Poné el nombre de la persona");
+  const activo = d.activo !== false;
+  const staffUid = d.staffUid ? idDoc(d.staffUid, "Cuenta inválida") : null;
+  const pin = d.pin === undefined || d.pin === null || d.pin === "" ? null : String(d.pin);
+  if (pin !== null && !F.pinValido(pin)) throw new HttpsError("invalid-argument", `El PIN son ${F.PIN_LARGO} números`);
+  if (staffUid && staffUid !== club.ownerUid) {
+    const s = await clubRef.collection("staff").doc(staffUid).get();
+    if (!s.exists || s.data().activo !== true) throw new HttpsError("invalid-argument", "Esa cuenta no es parte del equipo del club");
+  }
+  const empleadosCol = clubRef.collection("empleados");
+  const ref = empleadoId ? empleadosCol.doc(empleadoId) : empleadosCol.doc();
+  const tienePin = await db.runTransaction(async (tx) => {
+    const [snap, todos, sec] = [await tx.get(ref), await tx.get(empleadosCol), await secretosFichajeEnTx(tx, clubRef)];
+    if (empleadoId && !snap.exists) throw new HttpsError("not-found", "Ese empleado ya no existe");
+    const otros = todos.docs.filter((x) => x.id !== ref.id && x.data().activo !== false);
+    if (staffUid && otros.some((x) => x.data().staffUid === staffUid)) throw new HttpsError("already-exists", "Esa cuenta ya está vinculada a otra persona");
+    const hash = pin ? fichajeCripto.hashPin(pin, sec.salt) : d.quitarPin === true ? null : sec.pines[ref.id] || null;
+    // PIN único entre los activos (también al reactivar a alguien con su PIN de antes)
+    if (activo && hash && fichajeCripto.empleadosConPin(sec.pines, hash, new Set(otros.map((x) => x.id))).length) {
+      throw new HttpsError("already-exists", pin ? "Ese PIN ya lo usa otra persona del club. Elegí otro." : "Su PIN de antes ya lo usa otra persona: poné uno nuevo para reactivarla.");
+    }
+    tx.set(privadoFichajeRef(clubRef), { salt: sec.salt, claveQr: sec.claveQr, pines: { [ref.id]: hash || FieldValue.delete() } }, { merge: true });
+    const datos = { nombre, activo, staffUid: staffUid || null, tienePin: !!hash, actualizadoEn: FieldValue.serverTimestamp(), actualizadoPor: uid };
+    if (!snap.exists) Object.assign(datos, { creadoEn: FieldValue.serverTimestamp(), creadoPor: uid, ultimoFichaje: null });
+    tx.set(ref, datos, { merge: true });
+    return !!hash;
+  });
+  return { empleadoId: ref.id, tienePin };
+});
+
+// PIN en la PC de la caja. data: { clubId, pin } → { nombre, tipo: 'entrada'|'salida', hora, minutos }
+// Hasta INTENTOS_MAX PINs equivocados por sesión (dispositivo) cada INTENTOS_VENTANA_MS: clubs/{c}/fichajeIntentos/{uid}
+exports.fichar = onCall({ region: REGION }, async (request) => {
+  const { uid, clubRef } = await accesoFichaje(request, PERMISOS_FICHAR);
+  const F = await fichajesUtil();
+  const pin = String((request.data && request.data.pin) ?? "");
+  const intentosRef = clubRef.collection("fichajeIntentos").doc(uid);
+  const previos = F.evaluarIntentos(((await intentosRef.get()).data() || {}).fallos, Date.now());
+  if (previos.bloqueado) throw new HttpsError("resource-exhausted", `Demasiados PIN equivocados. Probá de nuevo en ${previos.esperaMin} min.`);
+  const fallar = async (motivo) => {
+    const quedan = await db.runTransaction(async (tx) => {
+      const ahora = Date.now();
+      const r = F.evaluarIntentos(((await tx.get(intentosRef)).data() || {}).fallos, ahora);
+      tx.set(intentosRef, { fallos: [...r.fallos, ahora], actualizadoEn: FieldValue.serverTimestamp() });
+      return r.restantes - 1;
+    });
+    throw new HttpsError("not-found", quedan > 0 ? `${motivo}. Te ${quedan === 1 ? "queda 1 intento" : `quedan ${quedan} intentos`}.` : `${motivo}. Esperá unos minutos para volver a probar.`);
+  };
+  if (!F.pinValido(pin)) return fallar("PIN incorrecto");
+  const sec = await asegurarSecretosFichaje(clubRef);
+  const activos = await clubRef.collection("empleados").where("activo", "==", true).get();
+  const ids = fichajeCripto.empleadosConPin(sec.pines, fichajeCripto.hashPin(pin, sec.salt), new Set(activos.docs.map((x) => x.id)));
+  if (!ids.length) return fallar("PIN incorrecto");
+  if (ids.length > 1) throw new HttpsError("failed-precondition", "Ese PIN está repetido. Pedile al encargado que te ponga otro.");
+  const r = await registrarFichaje(clubRef, ids[0], { origen: "pin", por: uid });
+  logger.info(`fichar: ${clubRef.id} ${ids[0]} ${r.tipo}`);
+  return { nombre: r.nombre, tipo: r.tipo, hora: r.hora, minutos: r.minutos, cerroOlvido: r.cerroOlvido };
+});
+
+// El QR rotativo de la caja: token firmado que vale QR_TOKEN_SEG segundos. data: { clubId } → { token, venceEn }
+exports.fichajeQrToken = onCall({ region: REGION }, async (request) => {
+  const { clubId, clubRef } = await accesoFichaje(request, PERMISOS_FICHAR);
+  const F = await fichajesUtil();
+  const sec = await asegurarSecretosFichaje(clubRef);
+  const venceSeg = Math.floor(Date.now() / 1000) + F.QR_TOKEN_SEG;
+  return { token: fichajeCripto.firmarTokenQr(clubId, sec.claveQr, venceSeg), venceEn: venceSeg * 1000 };
+});
+
+// Fichar desde el celular: la cuenta del staff escaneó el QR de la caja. data: { clubId, token }
+exports.ficharConQr = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  const clubId = idDoc(request.data && request.data.clubId, "El código no es válido: escaneá el QR de la caja.");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const [clubSnap, staffSnap, privSnap] = await Promise.all([clubRef.get(), clubRef.collection("staff").doc(uid).get(), privadoFichajeRef(clubRef).get()]);
+  if (!clubSnap.exists) throw new HttpsError("not-found", "El club no existe");
+  const club = clubSnap.data();
+  if (!(await planesUtil()).estadoPlan(club).pro) throw new HttpsError("failed-precondition", "El fichaje es parte del plan PRO");
+  const claveQr = privSnap.exists ? privSnap.data().claveQr : null;
+  const v = claveQr ? fichajeCripto.verificarTokenQr(clubId, claveQr, request.data && request.data.token, Date.now()) : { ok: false, motivo: "firma" };
+  if (!v.ok) {
+    throw new HttpsError(v.motivo === "vencido" ? "deadline-exceeded" : "invalid-argument", v.motivo === "vencido" ? "El código venció: escaneá de nuevo el QR de la caja." : "El código no es válido: escaneá el QR de la caja.");
+  }
+  if (club.ownerUid !== uid && !(staffSnap.exists && staffSnap.data().activo === true)) throw new HttpsError("permission-denied", "Tu cuenta no es parte del equipo de este club");
+  const emps = await clubRef.collection("empleados").where("staffUid", "==", uid).where("activo", "==", true).limit(1).get();
+  if (emps.empty) throw new HttpsError("not-found", "Tu cuenta no está vinculada a ninguna persona del fichaje. Pedile al encargado que te vincule en Fichajes → Empleados.");
+  const r = await registrarFichaje(clubRef, emps.docs[0].id, { origen: "qr", por: uid });
+  return { nombre: r.nombre, tipo: r.tipo, hora: r.hora, minutos: r.minutos, cerroOlvido: r.cerroOlvido, club: club.nombre || "" };
+});
+
+// Carga, corrección y baja manual de un turno, con nota obligatoria; cada cambio queda en fichajesAuditoria.
+// data: { clubId, accion: 'crear'|'editar'|'borrar', fichajeId?, empleadoId?, entrada (ms), salida (ms|null), nota }
+exports.editarFichaje = onCall({ region: REGION }, async (request) => {
+  const acceso = await accesoFichaje(request, PERMISOS_ADMIN_FICHAJE);
+  const { uid, clubRef } = acceso;
+  const F = await fichajesUtil();
+  const d = request.data || {};
+  const accion = d.accion;
+  if (!["crear", "editar", "borrar"].includes(accion)) throw new HttpsError("invalid-argument", "Acción inválida");
+  const nota = texto(d.nota, 300);
+  const porNombre = await nombreDeUsuario(uid, acceso.nombre || "");
+  const col = clubRef.collection("fichajes");
+  const plano = (x) =>
+    x
+      ? { empleadoId: x.empleadoId || null, nombre: x.nombre || "", entrada: msDe(x.entrada), salida: msDe(x.salida), minutos: x.minutos ?? null, sinSalida: x.sinSalida === true, origen: x.origen || null }
+      : null;
+  const ref = accion === "crear" ? col.doc() : col.doc(idDoc(d.fichajeId, "Turno inválido"));
+  const entradaMs = d.entrada === null || d.entrada === undefined ? NaN : Number(d.entrada);
+  const salidaMs = d.salida === null || d.salida === undefined ? null : Number(d.salida);
+  const empleadoRef = accion === "crear" ? clubRef.collection("empleados").doc(idDoc(d.empleadoId, "Elegí a la persona")) : null;
+  await db.runTransaction(async (tx) => {
+    const ahora = Date.now();
+    const snap = accion === "crear" ? null : await tx.get(ref);
+    const emp = empleadoRef ? await tx.get(empleadoRef) : null;
+    if (snap && !snap.exists) throw new HttpsError("not-found", "Ese turno ya no existe");
+    const antes = snap ? snap.data() : null;
+    let despues = null;
+    if (accion === "borrar") {
+      if (nota.length < F.NOTA_MIN) throw new HttpsError("invalid-argument", "Escribí una nota con el motivo del cambio");
+      tx.delete(ref);
+    } else {
+      if (emp && !emp.exists) throw new HttpsError("not-found", "Esa persona ya no existe");
+      const error = F.validarTurnoManual({ entradaMs, salidaMs, nota, ahora, salidaOpcional: accion === "editar" && msDe(antes.salida) === null && !antes.sinSalida });
+      if (error) throw new HttpsError("invalid-argument", error);
+      const cambios = {
+        entrada: Timestamp.fromMillis(entradaMs),
+        salida: salidaMs === null ? null : Timestamp.fromMillis(salidaMs),
+        minutos: salidaMs === null ? null : F.minutosEntre(entradaMs, salidaMs),
+        sinSalida: false,
+        nota,
+        editadoPor: uid,
+        editadoPorNombre: porNombre,
+        editadoEn: FieldValue.serverTimestamp(),
+        actualizadoEn: FieldValue.serverTimestamp(),
+      };
+      if (accion === "crear") {
+        despues = { empleadoId: emp.id, nombre: emp.data().nombre || "", origen: "manual", registradoPor: uid, creadoEn: FieldValue.serverTimestamp(), ...cambios };
+        tx.set(ref, despues);
+      } else {
+        despues = { ...antes, ...cambios };
+        tx.update(ref, cambios);
+      }
+    }
+    tx.set(clubRef.collection("fichajesAuditoria").doc(), {
+      fichajeId: ref.id,
+      empleadoId: (antes && antes.empleadoId) || (emp && emp.id) || null,
+      nombre: (antes && antes.nombre) || (emp && emp.data().nombre) || "",
+      accion,
+      antes: plano(antes),
+      despues: plano(despues),
+      nota,
+      por: uid,
+      porNombre,
+      en: FieldValue.serverTimestamp(),
+    });
+  });
+  return { fichajeId: ref.id };
+});
+
+// 04:00: los turnos abiertos hace más de TURNO_MAX_HORAS se cierran como olvidos (sinSalida, 0 min) y se avisa a
+// quien gestiona el equipo para que cargue la salida real. Función propia (no toca cerrarCuentasVencidas).
+exports.fichajesSinSalida = onSchedule({ schedule: "every day 04:00", timeZone: ZONA_HORARIA }, async () => {
+  const F = await fichajesUtil();
+  const ahora = Date.now();
+  const clubs = await db.collection("clubs").select().get();
+  let cerrados = 0;
+  for (const c of clubs.docs) {
+    try {
+      const abiertos = await c.ref.collection("fichajes").where("salida", "==", null).get();
+      const olvidados = abiertos.docs.filter((x) => F.esOlvidado(msDe(x.data().entrada), ahora));
+      if (!olvidados.length) continue;
+      const ts = Timestamp.fromMillis(ahora);
+      await escribirEnLotes(olvidados.map((x) => (b) => b.update(x.ref, cierreSinSalida(ts))));
+      cerrados += olvidados.length;
+      const nombres = [...new Set(olvidados.map((x) => x.data().nombre).filter(Boolean))].join(", ");
+      await avisarStaff(c.ref, PERMISOS_ADMIN_FICHAJE, {
+        tipo: "fichaje_sin_salida",
+        titulo: olvidados.length === 1 ? "Un turno quedó sin salida" : `${olvidados.length} turnos quedaron sin salida`,
+        mensaje: `${nombres || "Alguien"} no fichó la salida. Cargá la hora real en Fichajes.`,
+        link: "/admin/bar/fichajes",
+        icono: "⏱️",
+      }).catch((err) => logger.error(`fichajesSinSalida: aviso ${c.id}`, err));
+    } catch (err) {
+      logger.error(`fichajesSinSalida: ${c.id}`, err);
+    }
+  }
+  logger.info(`fichajesSinSalida: ${cerrados} turnos cerrados sin salida (${clubs.size} clubes)`);
+});
