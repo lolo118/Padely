@@ -78,6 +78,9 @@ const SuperPlanes = lazy(() => import("./pages/superadmin/Planes"));
 const AdminSocios = lazy(() => import("./pages/admin/Socios"));
 const MisMembresias = lazy(() => import("./pages/MisMembresias"));
 const VerificarSocio = lazy(() => import("./pages/VerificarSocio"));
+// Mini torneo de un turno (flags.miniTorneo)
+const MiniTorneo = lazy(() => import("./pages/MiniTorneo"));
+const MiniTorneoNuevo = lazy(() => import("./pages/MiniTorneoNuevo"));
 
 // Landing pública en /
 const Landing = lazy(() => import("./pages/Landing"));
@@ -250,6 +253,8 @@ export default function App() {
             <Route path="/s/:token" element={<VerificarSocio />} />
             {/* Fichaje: el QR rotativo de la caja, escaneado con la cuenta del staff */}
             <Route path="/fichar/:clubId/:token" element={<FicharQr />} />
+            {/* Mini torneo de un turno: vista pública en vivo (el link de WhatsApp) */}
+            <Route path="/mini/:clubId/:id" element={<MiniTorneo />} />
             {/* Cuenta compartida: el link de invitación al turno y la vista del turno (también para anónimos) */}
             <Route path="/t/unirse/:clubId/:token" element={<UnirseTurno />} />
             <Route path="/turno/:clubId/:grupoId" element={<MiCuenta />} />
@@ -276,6 +281,7 @@ export default function App() {
             <Route path="/pases" element={<MisMembresias />} />
             <Route path="/mi-cuenta/:clubId/:grupoId" element={<MiCuenta />} />
             <Route path="/pedir/:clubId/:grupoId" element={<Pedir />} />
+            <Route path="/mini/nuevo/:clubId/:grupoId" element={<MiniTorneoNuevo />} />
             <Route path="/noticias" element={<Noticias />} />
             <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/perfil" element={<Perfil />} />

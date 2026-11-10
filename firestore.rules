@@ -875,6 +875,90 @@ service cloud.firestore {
         allow create: if noAnonimo() && request.resource.data.uid == request.auth.uid;
         allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
       }
+
+      // ----- Mini torneo de un turno (sin efecto en rankings, torneos ni el Pase: ninguna Function lo escucha) -----
+      // Lo crea quien reservó (reserva.jugadorUid) o un participante de la cuenta del turno (participantesUids), para
+      // una reserva confirmada de hoy en adelante. Lectura pública (el link de WhatsApp): solo nombres de pila, nunca
+      // emails ni teléfonos. Todo lo edita quien lo creó; los resultados (partidos, llave, estado) también editoresUids
+      // y, con la carga abierta (edicionAbierta), quien entró con el link de carga (editores/{uid}, con la clave de
+      // privado/edicion, que lee solo quien lo creó).
+      match /miniTorneos/{miniId} {
+        function miniRef() {
+          return /databases/$(database)/documents/clubs/$(clubId)/miniTorneos/$(miniId);
+        }
+        function miniReserva(grupoId) {
+          return get(/databases/$(database)/documents/clubs/$(clubId)/reservas/$(grupoId)).data;
+        }
+        function miniParticipante(grupoId) {
+          let cuenta = /databases/$(database)/documents/clubs/$(clubId)/cuentas/$(grupoId);
+          return exists(cuenta) && request.auth.uid in get(cuenta).data.get('participantesUids', []);
+        }
+        // "YYYY-MM-DD" desde ayer (UTC): margen para la diferencia horaria con Argentina
+        function miniFechaVigente(fecha) {
+          let ayer = request.time - duration.value(1, 'd');
+          let mes = ayer.month();
+          let dia = ayer.day();
+          return fecha >= string(ayer.year()) + '-' + (mes < 10 ? '0' : '') + string(mes) + '-' + (dia < 10 ? '0' : '') + string(dia);
+        }
+        function miniCampos() {
+          return ['clubId', 'clubNombre', 'canchaNombre', 'fecha', 'horaInicio', 'horaFin', 'reservaGrupoId', 'creadorUid',
+                  'creadorNombre', 'editoresUids', 'edicionAbierta', 'nombre', 'modo', 'formato', 'partidoA', 'canchas',
+                  'jugadores', 'parejas', 'grupos', 'partidos', 'descansos', 'llave', 'rondas', 'estimacionMin',
+                  'minutosTurno', 'motivo', 'estado', 'creadoEn', 'actualizadoEn'];
+        }
+        function miniDatosValidos(d) {
+          return d.keys().hasOnly(miniCampos())
+            && d.jugadores is list && d.jugadores.size() >= 4 && d.jugadores.size() <= 16
+            && d.editoresUids is list && d.editoresUids.size() <= 16
+            && d.partidos is list && d.partidos.size() <= 200
+            && d.estado in ['en_curso', 'finalizado']
+            && d.formato in ['americano', 'roundRobin', 'grupos', 'eliminacion'];
+        }
+        function miniCreador() {
+          return signedIn() && resource.data.creadorUid == request.auth.uid;
+        }
+        function miniEditor() {
+          return signedIn()
+            && (request.auth.uid in resource.data.get('editoresUids', [])
+                || (resource.data.get('edicionAbierta', false) == true
+                    && exists(/databases/$(database)/documents/clubs/$(clubId)/miniTorneos/$(miniId)/editores/$(request.auth.uid))));
+        }
+        allow read: if true;
+        allow create: if noAnonimo()
+          && request.resource.data.creadorUid == request.auth.uid
+          && request.resource.data.clubId == clubId
+          && miniDatosValidos(request.resource.data)
+          && request.resource.data.estado == 'en_curso'
+          && miniReserva(request.resource.data.reservaGrupoId).status == 'confirmada'
+          && miniReserva(request.resource.data.reservaGrupoId).fecha == request.resource.data.fecha
+          && miniFechaVigente(request.resource.data.fecha)
+          && (miniReserva(request.resource.data.reservaGrupoId).get('jugadorUid', null) == request.auth.uid
+              || miniParticipante(request.resource.data.reservaGrupoId));
+        allow update: if miniDatosValidos(request.resource.data)
+          && ((miniCreador()
+               && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['creadorUid', 'clubId', 'reservaGrupoId', 'fecha', 'creadoEn']))
+              || (miniEditor() && changedOnly(['partidos', 'llave', 'estado', 'actualizadoEn'])));
+        allow delete: if miniCreador();
+
+        // Clave del link de carga: solo quien lo creó (se escribe en el mismo batch que el mini torneo: getAfter)
+        match /privado/{docId} {
+          allow read: if docId == 'edicion' && signedIn() && get(miniRef()).data.creadorUid == request.auth.uid;
+          allow create, update: if docId == 'edicion' && signedIn()
+            && getAfter(miniRef()).data.creadorUid == request.auth.uid
+            && request.resource.data.keys().hasOnly(['clave', 'creadoEn'])
+            && request.resource.data.clave is string && request.resource.data.clave.size() >= 16;
+          allow delete: if docId == 'edicion' && signedIn() && get(miniRef()).data.creadorUid == request.auth.uid;
+        }
+        // Quien entra con el link de carga (sesión real o anónima) se anota con la clave; vale mientras la carga siga abierta
+        match /editores/{uid} {
+          allow read: if isSelf(uid) || (signedIn() && get(miniRef()).data.creadorUid == request.auth.uid);
+          allow create: if isSelf(uid)
+            && get(miniRef()).data.get('edicionAbierta', false) == true
+            && request.resource.data.keys().hasOnly(['clave', 'creadoEn'])
+            && request.resource.data.clave == get(/databases/$(database)/documents/clubs/$(clubId)/miniTorneos/$(miniId)/privado/edicion).data.clave;
+          allow update, delete: if false;
+        }
+      }
     }
 
     match /tournaments/{tid} {

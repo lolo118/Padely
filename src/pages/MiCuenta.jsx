@@ -13,6 +13,7 @@ import { formatDiaCorto, formatHora } from "../utils/formatDate";
 import { toast } from "../components/Toast";
 import { Alert, Badge, Button, Card, Pills } from "../components/ui";
 import ChipsParticipantes from "../components/cuenta/ChipsParticipantes";
+import MiniTorneoDeReserva from "../components/MiniTorneoDeReserva";
 import AsignarSheet from "../components/cuenta/AsignarSheet";
 import SumarJugadorDialog from "../components/cuenta/SumarJugadorDialog";
 import PedirUI from "../components/pedidos/PedirUI";
@@ -282,6 +283,9 @@ export default function MiCuenta() {
           )}
         </div>
       )}
+
+      {/* Mini torneo del turno (oculto hasta flags.miniTorneo; con sesión real) */}
+      {abierta && !anonimo && <MiniTorneoDeReserva clubId={clubId} grupoId={grupoId} fecha={cuenta.fecha} confirmada uid={user?.uid} />}
 
       {/* Todos */}
       {saldos && !saldos.legacy && participantes.length > 0 && (
