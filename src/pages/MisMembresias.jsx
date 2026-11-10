@@ -5,7 +5,7 @@ import { useAuthStore } from "../store/authStore";
 import { cancelarPase, escucharMiSocio, getMisMembresias, getPase } from "../services/membresiasService";
 import { toast } from "../components/Toast";
 import { confirmar } from "../components/ConfirmDialog";
-import { DIAS_CONSERVA_PUNTOS, ESTADOS_SOCIO, ETIQUETA_NIVEL, TONO_NIVEL, estadoSocio, proximoNivel, textosBeneficios } from "../utils/membresias";
+import { DIAS_CONSERVA_PUNTOS, ESTADOS_SOCIO, ETIQUETA_NIVEL, TONO_NIVEL, estadoSocio, nombrePase, proximoNivel, textosBeneficios } from "../utils/membresias";
 import { svgQr } from "../utils/qr";
 import { formatFechaLarga } from "../utils/formatDate";
 import useTituloPagina from "../hooks/useTituloPagina";
@@ -134,7 +134,7 @@ function PaseCard({ socio, confirmando, onCambio }) {
         <span className="flex items-center gap-2">
           <Crown className="pd-icon text-ink-3" size={20} aria-hidden="true" />
           <Link to={`/club/${socio.clubId}`} className="heading-md hover:underline">
-            Pase Club {socio.clubNombre || ""}
+            {nombrePase({ nombre: socio.clubNombre })}
           </Link>
         </span>
         <span className="pd-badge-group">

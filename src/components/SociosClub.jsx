@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Crown } from "lucide-react";
 import { suscribirPase } from "../services/membresiasService";
-import { ETIQUETA_NIVEL, NIVELES, TONO_NIVEL, PESOS_POR_PUNTO, estadoSocio, nombrePase, textoCada, textosBeneficios } from "../utils/membresias";
+import { ETIQUETA_NIVEL, NIVELES, TONO_NIVEL, PESOS_POR_PUNTO, beneficiosDeNivel, estadoSocio, nombrePase, textoCada, textosBeneficios } from "../utils/membresias";
 import { formatPrecio } from "../utils/format";
 import { formatFechaLarga } from "../utils/formatDate";
 import Dialogo from "./Dialogo";
@@ -80,7 +80,8 @@ export default function SociosClub({ club, pase, miSocio, user }) {
       </Card>
       <div className="grid gap-3 md:grid-cols-3">
         {NIVELES.map((n) => {
-          const textos = textosBeneficios(pase.beneficios?.[n]);
+          // Con los sponsors del club que dan descuento en ese nivel (pase.beneficios no los trae)
+          const textos = textosBeneficios(beneficiosDeNivel(pase, n));
           const esMio = est.activa && (miSocio?.nivel || "bronce") === n;
           return (
             <Card key={n}>

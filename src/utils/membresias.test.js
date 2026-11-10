@@ -120,3 +120,12 @@ test("cobro: frecuencia de la suscripción, día ancla y gracia", async () => {
   assert.equal(c.vence, AR("2026-04-30T23:59:59"));
   assert.equal(c.historial[c.historial.length - 1].tipo, "renovacion");
 });
+
+test("nombrePase: no repite 'Club' (P3-16h)", async () => {
+  const { nombrePase } = await import("./membresias.js");
+  assert.equal(nombrePase({ nombre: "Club Padely Central" }), "Pase Club Padely Central");
+  assert.equal(nombrePase({ nombre: "club del Lago" }), "Pase club del Lago");
+  assert.equal(nombrePase({ nombre: "Padely Central" }), "Pase Club Padely Central");
+  assert.equal(nombrePase({ nombre: "Clubhouse Norte" }), "Pase Club Clubhouse Norte");
+  assert.equal(nombrePase({}), "Pase Club");
+});

@@ -139,7 +139,11 @@ export function puntosVigentes(movimientos = [], ahora = Date.now()) {
   const desde = ahora - DIAS_PUNTOS * 86400000;
   return movimientos.reduce((acc, m) => acc + ((aMs(m && m.en) ?? 0) >= desde ? Number(m.cantidad) || 0 : 0), 0);
 }
-export const nombrePase = (club) => `Pase Club ${(club && club.nombre) || ""}`.trim();
+// "Pase Club Central"; si el nombre ya empieza con "Club" no se repite: "Club Padely Central" → "Pase Club Padely Central"
+export function nombrePase(club) {
+  const nombre = String((club && club.nombre) || "").trim();
+  return /^club\b/i.test(nombre) ? `Pase ${nombre}` : `Pase Club ${nombre}`.trim();
+}
 
 // "Martes y jueves de 08:00 a 17:00" · "Lun a vie de 08:00 a 17:00"
 export function textoFranja(f) {

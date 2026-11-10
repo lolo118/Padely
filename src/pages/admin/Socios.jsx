@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { cancelarPase, getPase, getSocios, guardarPase } from "../../services/membresiasService";
-import { DIAS_SEMANA, ESTADOS_SOCIO, ETIQUETA_NIVEL, MAX_EXTRAS, MAX_SPONSORS, MESES_PASE, NIVELES, PESOS_POR_PUNTO, SUGERENCIAS_EXTRAS, TONO_NIVEL, UMBRALES_DEFECTO, estadoSocio, nombrePase, normalizarPase, textoCada, textosBeneficios } from "../../utils/membresias";
+import { DIAS_SEMANA, ESTADOS_SOCIO, ETIQUETA_NIVEL, MAX_EXTRAS, MAX_SPONSORS, MESES_PASE, NIVELES, PESOS_POR_PUNTO, SUGERENCIAS_EXTRAS, TONO_NIVEL, UMBRALES_DEFECTO, beneficiosDeNivel, estadoSocio, nombrePase, normalizarPase, textoCada, textosBeneficios } from "../../utils/membresias";
 import { formatPrecio } from "../../utils/format";
 import { formatFechaLarga } from "../../utils/formatDate";
 import SinPermiso from "../../components/SinPermiso";
@@ -388,7 +388,7 @@ function ConfigPase({ club, pase, onGuardado }) {
           <strong>
             Así lo ve el jugador: {formatPrecio(validacion.precio)} {textoCada(validacion.meses)}.
           </strong>{" "}
-          {NIVELES.map((n) => `${ETIQUETA_NIVEL[n]}: ${textosBeneficios(validacion.beneficios[n]).join(", ") || "—"}`).join(" · ")}
+          {NIVELES.map((n) => `${ETIQUETA_NIVEL[n]}: ${textosBeneficios(beneficiosDeNivel(validacion, n)).join(", ") || "—"}`).join(" · ")}
         </Alert>
       )}
       <div>
