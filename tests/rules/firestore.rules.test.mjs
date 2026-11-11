@@ -426,3 +426,98 @@ describe("mini torneo de un turno", () => {
     await assertFails(getDoc(clave(anonimo())));
   });
 });
+
+// ----- Profes (flags.profes) -----
+describe("profes", () => {
+  const perfil = (uid, extra = {}) => ({ uid, nombre: "Caro Profe", bio: "Clases para todos", clases: [{ tipo: "individual", activa: true, precio: 15000, duracion: 60, capacidad: 1 }], mostrarWhatsapp: false, whatsapp: "", activo: true, ...extra });
+  const vinculo = (uid, extra = {}) => ({ uid, nombre: "Caro Profe", estado: "pendiente", origen: "profe", cobra: "profe", bloqueaCancha: true, canchas: [], tarifas: {}, ...extra });
+  const sembrarProfes = () =>
+    env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "profes", "profe"), { ...perfil("profe"), clubIds: [CLUB], clubes: { [CLUB]: { estado: "activo" } }, elogios: { total: 1, tags: { divertido: 1 } } });
+      await setDoc(doc(db, "profes", "profe2"), perfil("profe2"));
+      await setDoc(doc(db, "clubs", CLUB, "profes", "profe"), vinculo("profe", { estado: "activo" }));
+      await setDoc(doc(db, "clubs", CLUB, "profes", "invitada"), vinculo("invitada", { estado: "invitado", origen: "club" }));
+      await setDoc(doc(db, "profes", "invitada"), perfil("invitada"));
+      await setDoc(doc(db, "clases", "profe_2026-11-16_1800"), { profeUid: "profe", clubId: CLUB, fecha: "2026-11-16", alumnosUids: ["jugador"], uidsHistorial: ["jugador", "seFue"], estado: "confirmada" });
+      await setDoc(doc(db, "profesOcupacion", "profe_2026-11-16_1800"), { profeUid: "profe", claseId: "profe_2026-11-16_1800", fecha: "2026-11-16", hora: "18:00" });
+      await setDoc(doc(db, "reportesProfes", "x_jugador"), { clubId: CLUB, uid: "jugador", texto: "algo pasó" });
+      await setDoc(doc(db, "clubs", CLUB, "reservas", "c1_2026-11-16_1800"), { canchaId: "c1", fecha: "2026-11-16", hora: "18:00", status: "confirmada", tipo: "clase", claseId: "profe_2026-11-16_1800", jugadorUid: null });
+    });
+  beforeEach(sembrarProfes);
+
+  test("perfil: público; lo crea y edita solo el propio profe con cuenta real, sin tocar lo de las Functions", async () => {
+    await assertSucceeds(getDoc(doc(anonimo(), "profes", "profe")));
+    await assertSucceeds(setDoc(doc(como("nuevo"), "profes", "nuevo"), perfil("nuevo")));
+    await assertFails(setDoc(doc(como("otro"), "profes", "nuevo2"), perfil("nuevo2")));
+    await assertFails(setDoc(doc(como("nuevo3"), "profes", "nuevo3"), { ...perfil("nuevo3"), elogios: { total: 99 } }));
+    await assertFails(setDoc(doc(como("nuevo4"), "profes", "nuevo4"), { ...perfil("nuevo4"), clubIds: [CLUB] }));
+    const anon = env.authenticatedContext("anon", { firebase: { sign_in_provider: "anonymous" } }).firestore();
+    await assertFails(setDoc(doc(anon, "profes", "anon"), perfil("anon")));
+    await assertSucceeds(updateDoc(doc(como("profe"), "profes", "profe"), { bio: "Nueva bio" }));
+    await assertFails(updateDoc(doc(como("profe"), "profes", "profe"), { "elogios.total": 50 }));
+    await assertFails(updateDoc(doc(como("profe"), "profes", "profe"), { clubIds: ["otroClub"] }));
+    await assertFails(updateDoc(doc(como("jugador"), "profes", "profe"), { bio: "hackeo" }));
+    await assertFails(deleteDoc(doc(como("profe"), "profes", "profe")));
+  });
+  test("perfil: el WhatsApp solo se guarda si el profe eligió mostrarlo", async () => {
+    await assertFails(updateDoc(doc(como("profe"), "profes", "profe"), { whatsapp: "5493854123456" }));
+    await assertSucceeds(updateDoc(doc(como("profe"), "profes", "profe"), { mostrarWhatsapp: true, whatsapp: "5493854123456" }));
+  });
+  test("disponibilidad pública; la escribe solo el profe. Elogios públicos, nadie los escribe", async () => {
+    await assertSucceeds(getDoc(doc(anonimo(), "profes", "profe", "disponibilidad", CLUB)));
+    await assertSucceeds(setDoc(doc(como("profe"), "profes", "profe", "disponibilidad", CLUB), { semanal: {}, excepciones: [] }));
+    await assertFails(setDoc(doc(como("jugador"), "profes", "profe", "disponibilidad", CLUB), { semanal: {} }));
+    await assertSucceeds(getDoc(doc(anonimo(), "profes", "profe", "elogios", "e1")));
+    await assertFails(setDoc(doc(como("jugador"), "profes", "profe", "elogios", "e1"), { tags: ["divertido"] }));
+    await assertFails(setDoc(doc(como("profe"), "profes", "profe", "elogios", "e1"), { tags: ["divertido"] }));
+  });
+  test("vínculo: el profe pide sumarse (pendiente, cobra el profe); no se aprueba solo", async () => {
+    await assertSucceeds(setDoc(doc(como("profe2"), "clubs", CLUB, "profes", "profe2"), vinculo("profe2")));
+    await assertFails(setDoc(doc(como("sinPerfil"), "clubs", CLUB, "profes", "sinPerfil"), vinculo("sinPerfil")));
+    await assertFails(setDoc(doc(como("profe2"), "clubs", CLUB_FREE, "profes", "profe2"), vinculo("profe2", { estado: "activo" })));
+    await assertFails(setDoc(doc(como("profe2"), "clubs", CLUB_FREE, "profes", "profe2"), vinculo("profe2", { cobra: "club" })));
+    await assertFails(setDoc(doc(como("jugador"), "clubs", CLUB, "profes", "profe2"), vinculo("profe2")));
+    await assertSucceeds(getDoc(doc(anonimo(), "clubs", CLUB, "profes", "profe")));
+  });
+  test("vínculo: el club (configurarClub) aprueba y configura; el cajero no; el profe acepta la invitación o se da de baja", async () => {
+    await assertSucceeds(updateDoc(doc(como("dueno"), "clubs", CLUB, "profes", "profe"), { cobra: "club", bloqueaCancha: false, tarifas: { individual: 20000 } }));
+    await assertSucceeds(updateDoc(doc(como("encargado"), "clubs", CLUB, "profes", "profe"), { estado: "baja" }));
+    await assertFails(updateDoc(doc(como("cajero"), "clubs", CLUB, "profes", "invitada"), { estado: "activo" }));
+    await assertFails(updateDoc(doc(como("dueno"), "clubs", CLUB, "profes", "invitada"), { estado: "jefe" }));
+    await assertFails(updateDoc(doc(como("profe"), "clubs", CLUB, "profes", "invitada"), { estado: "activo" }));
+    await assertSucceeds(updateDoc(doc(como("invitada"), "clubs", CLUB, "profes", "invitada"), { estado: "activo" }));
+    await assertFails(updateDoc(doc(como("invitada"), "clubs", CLUB, "profes", "invitada"), { cobra: "club" }));
+    await assertSucceeds(updateDoc(doc(como("invitada"), "clubs", CLUB, "profes", "invitada"), { estado: "baja" }));
+  });
+  test("clases: las leen el profe, sus alumnos (también los que cancelaron), el club y el super-admin; nadie las escribe", async () => {
+    const clase = (db) => doc(db, "clases", "profe_2026-11-16_1800");
+    await assertSucceeds(getDoc(clase(como("profe"))));
+    await assertSucceeds(getDoc(clase(como("jugador"))));
+    await assertSucceeds(getDoc(clase(como("seFue"))));
+    await assertSucceeds(getDoc(clase(como("encargado"))));
+    await assertSucceeds(getDoc(clase(como("sa"))));
+    await assertFails(getDoc(clase(como("otro"))));
+    await assertFails(getDoc(clase(como("cajero"))));
+    await assertFails(getDoc(clase(anonimo())));
+    await assertFails(updateDoc(clase(como("profe")), { estado: "dada" }));
+    await assertFails(setDoc(doc(como("jugador"), "clases", "nueva"), { profeUid: "profe", alumnosUids: ["jugador"] }));
+  });
+  test("ocupación del profe pública y solo de las Functions; reportes y comisiones privados", async () => {
+    await assertSucceeds(getDoc(doc(anonimo(), "profesOcupacion", "profe_2026-11-16_1800")));
+    await assertFails(setDoc(doc(como("profe"), "profesOcupacion", "profe_2026-11-16_1900"), { profeUid: "profe" }));
+    await assertSucceeds(getDoc(doc(como("dueno"), "reportesProfes", "x_jugador")));
+    await assertSucceeds(getDoc(doc(como("sa"), "reportesProfes", "x_jugador")));
+    await assertFails(getDoc(doc(como("profe"), "reportesProfes", "x_jugador")));
+    await assertFails(getDoc(doc(como("encargado"), "reportesProfes", "x_jugador")));
+    await assertFails(setDoc(doc(como("jugador"), "reportesProfes", "y_jugador"), { clubId: CLUB }));
+    await assertFails(getDoc(doc(como("dueno"), "comisionesClases", "p1")));
+  });
+  test("la reserva de cancha de una clase (tipo clase) es de las Functions: ni el club ni un jugador la tocan", async () => {
+    const slot = (db) => doc(db, "clubs", CLUB, "reservas", "c1_2026-11-16_1800");
+    await assertFails(updateDoc(slot(como("dueno")), { status: "cancelada" }));
+    await assertFails(deleteDoc(slot(como("dueno"))));
+    await assertFails(setDoc(doc(como("dueno"), "clubs", CLUB, "reservas", "c1_2026-11-16_1900"), { canchaId: "c1", fecha: "2026-11-16", hora: "19:00", status: "confirmada", tipo: "clase", jugadorUid: null }));
+    await assertSucceeds(getDoc(slot(como("jugador"))));
+  });
+});
