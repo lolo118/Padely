@@ -10,7 +10,8 @@ import { Badge, Button, Card } from "./ui";
 
 // Partidos abiertos (P3-15) en el Hub (todos, filtrados por ciudad) y en la página del club (los de ese club).
 // Oculto hasta que la plataforma prenda configuracionPadely/flags.partidosAbiertos.
-export default function PartidosAbiertos({ clubId = null, ciudad = "", titulo = "Partidos abiertos", className = "" }) {
+//   max: muestra como mucho esos (el Inicio), con "Ver todos" al Hub cuando hay más
+export default function PartidosAbiertos({ clubId = null, ciudad = "", titulo = "Partidos abiertos", className = "", max = null }) {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const [activo, setActivo] = useState(false);
@@ -33,6 +34,7 @@ export default function PartidosAbiertos({ clubId = null, ciudad = "", titulo = 
   const c = String(ciudad || "").toLowerCase();
   const lista = c ? partidos.filter((p) => String(p.ciudad || "").toLowerCase().includes(c)) : partidos;
   if (!lista.length) return null;
+  const visibles = max ? lista.slice(0, max) : lista;
 
   const sumarme = async (p) => {
     if (!user || user.isAnonymous) {
@@ -59,7 +61,7 @@ export default function PartidosAbiertos({ clubId = null, ciudad = "", titulo = 
         <span className="pd-count">{lista.length}</span>
       </h2>
       <div className="grid gap-3 sm:grid-cols-2">
-        {lista.map((p) => (
+        {visibles.map((p) => (
           <Card key={p.id}>
             <Card.Row>
               <p className="pd-eyebrow m-0">
@@ -83,6 +85,11 @@ export default function PartidosAbiertos({ clubId = null, ciudad = "", titulo = 
           </Card>
         ))}
       </div>
+      {visibles.length < lista.length && (
+        <Link to="/clubes" className="body-sm font-semibold underline self-start">
+          Ver todos los partidos
+        </Link>
+      )}
     </section>
   );
 }

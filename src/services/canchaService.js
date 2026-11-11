@@ -18,9 +18,10 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { getTodayLocal, horaActualStr } from "../utils/formatDate";
+import { getTodayLocal } from "../utils/formatDate";
 import { horasDeReserva, sumarHoras } from "../utils/tarifas";
 import { agruparReservas, mismaReserva, normalizarReserva } from "../utils/reservas";
+import { clubesHabituales, horaMinutos, reservasProximas } from "../utils/inicio";
 import { conReintentoSinLimite, limiteEnTx } from "./limitesService";
 
 // --- CANCHAS ---
@@ -295,29 +296,37 @@ export const eliminarReserva = async (clubId, reservaId) => {
   await deleteDoc(contactoReservaRef(clubId, reservaId));
 };
 
-// Próxima reserva del jugador (misma consulta de grupo que "Mis reservas"), agrupada (horaInicio – horaFin,
-// precioTotal, seña), o null
-export const getProximaReservaJugador = async (uid) => {
+// Inicio del jugador: UNA consulta a sus reservas (la misma de Mis reservas) → las que vienen (la primera es la
+// próxima, agrupada: horaInicio – horaFin, precioTotal, seña), los clubes donde suele reservar y cuántas reservas
+// tiene. Cada club que se muestra se lee una sola vez (como mucho maxClubes + 1 lecturas, en paralelo): nombre,
+// dirección y ubicación para "Cómo llegar".
+export const getInicioReservasJugador = async (uid, { maxClubes = 3, favoritos = [] } = {}) => {
   const q = query(collectionGroup(db, "reservas"), where("jugadorUid", "==", uid));
   const snap = await getDocs(q);
-  const hoy = getTodayLocal();
-  const horaAhora = horaActualStr();
-  const slots = snap.docs
-    .map((d) => normalizarReserva({ id: d.id, clubId: d.ref.parent.parent.id, ...d.data() }))
-    .filter((r) => r.status !== "cancelada" && r.fecha);
-  const proximas = agruparReservas(slots).filter(
-    (r) => r.fecha > hoy || (r.fecha === hoy && (r.horaFin || r.hora || "") > horaAhora),
+  const grupos = agruparReservas(snap.docs.map((d) => normalizarReserva({ id: d.id, clubId: d.ref.parent.parent.id, ...d.data() })));
+  const proximas = reservasProximas(grupos, { hoy: getTodayLocal(), hora: horaMinutos(new Date()) });
+  const habituales = clubesHabituales(grupos, { max: maxClubes, favoritos });
+  const ids = [...new Set([proximas[0]?.clubId, ...habituales.map((h) => h.clubId)].filter(Boolean))];
+  const pares = await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const s = await getDoc(doc(db, "clubs", id));
+        if (!s.exists() || clubSuspendido(s.data())) return [id, null];
+        const c = s.data();
+        return [id, { id, nombre: c.nombre || c.name || "", direccion: c.direccion || "", ciudad: c.ciudad || "", provincia: c.provincia || "", lat: c.lat ?? null, lng: c.lng ?? null, ubicacion: c.ubicacion || null }];
+      } catch (err) {
+        console.error("Error leyendo un club del inicio:", err);
+        return [id, null];
+      }
+    }),
   );
-  const proxima = proximas[0];
-  if (!proxima) return null;
-  try {
-    const clubSnap = await getDoc(doc(db, "clubs", proxima.clubId));
-    proxima.clubNombre = clubSnap.exists() ? clubSnap.data().nombre || "" : "";
-  } catch (err) {
-    console.error("Error cargando el club de la próxima reserva:", err);
-    proxima.clubNombre = "";
-  }
-  return proxima;
+  const clubes = Object.fromEntries(pares);
+  return {
+    total: grupos.filter((r) => r.status !== "cancelada").length,
+    proximas: proximas.map((r) => ({ ...r, clubNombre: clubes[r.clubId]?.nombre || "" })),
+    clubes,
+    habituales: habituales.filter((h) => clubes[h.clubId]).map((h) => ({ ...h, club: clubes[h.clubId] })),
+  };
 };
 
 // --- CANCHAS PÚBLICAS (para el hub del jugador) ---

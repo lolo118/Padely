@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { CircleDot, MapPin, Star } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import PartidosAbiertos from "../components/PartidosAbiertos";
@@ -32,12 +32,15 @@ export default function Hub() {
   const [reservasPorClub, setReservasPorClub] = useState({});
   const [turnosFijosPorClub, setTurnosFijosPorClub] = useState({});
   const [cargando, setCargando] = useState(true);
-  const [busqueda, setBusqueda] = useState("");
+  // El buscador del Inicio llega con location.state.busqueda
+  const location = useLocation();
+  const [busqueda, setBusqueda] = useState(() => String(location.state?.busqueda || ""));
   const [filtroSuperficie, setFiltroSuperficie] = useState("");
   const [filtroTechada, setFiltroTechada] = useState("");
   const [favoritos, setFavoritos] = useState([]);
   const [ciudadJugador, setCiudadJugador] = useState("");
-  const [verTodasCiudades, setVerTodasCiudades] = useState(false);
+  // Una búsqueda que viene del Inicio mira todas las ciudades
+  const [verTodasCiudades, setVerTodasCiudades] = useState(() => !!location.state?.busqueda);
   const [horaDesde, setHoraDesde] = useState("");
   const [horaHasta, setHoraHasta] = useState("");
 

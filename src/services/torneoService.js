@@ -9,6 +9,7 @@ import {
   query,
   where,
   orderBy,
+  or,
   serverTimestamp,
   setDoc,
   writeBatch,
@@ -324,33 +325,30 @@ export const actualizarInscripcion = async (torneoId, inscripcionId, datos) => {
   );
 };
 
-export const getInscripcionesByJugador = async (userId) => {
-  const q = query(
-    collection(db, "tournaments"),
-    where("inscripcionAbierta", "==", true),
-  );
-  const snap = await getDocs(q);
-  const resultados = [];
-
-  for (const torneoDoc of snap.docs) {
-    const inscSnap = await getDocs(
-      collection(db, "tournaments", torneoDoc.id, "inscripciones"),
-    );
-    inscSnap.docs.forEach((d) => {
-      const data = d.data();
-      if (data.jugador1Uid === userId || data.jugador2Uid === userId) {
-        resultados.push({
-          id: d.id,
-          torneoId: torneoDoc.id,
-          torneoNombre: torneoDoc.data().nombre,
-          ...data,
-        });
+// Torneos con la inscripción abierta y, de cada uno, las inscripciones del jugador (como jugador 1 o 2): una consulta
+// por torneo filtrada por uid (or), en paralelo, así se leen solo sus inscripciones y no la subcolección entera.
+// Devuelve { abiertos, inscripciones } (los abiertos sirven al Inicio para "Torneos para anotarte", sin otra lectura).
+export const getTorneosYMisInscripciones = async (userId) => {
+  const snap = await getDocs(query(collection(db, "tournaments"), where("inscripcionAbierta", "==", true)));
+  const abiertos = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const porTorneo = await Promise.all(
+    abiertos.map(async (t) => {
+      const col = collection(db, "tournaments", t.id, "inscripciones");
+      let docs;
+      try {
+        docs = (await getDocs(query(col, or(where("jugador1Uid", "==", userId), where("jugador2Uid", "==", userId))))).docs;
+      } catch (err) {
+        // Sin la consulta "or" (índice o SDK), la lectura de siempre: la subcolección entera
+        console.error("Inscripciones del jugador: vuelvo a la lectura completa", err);
+        docs = (await getDocs(col)).docs.filter((d) => d.data().jugador1Uid === userId || d.data().jugador2Uid === userId);
       }
-    });
-  }
-
-  return resultados;
+      return docs.map((d) => ({ id: d.id, torneoId: t.id, torneoNombre: t.nombre, torneoFechaInicio: t.fechaInicio || "", ...d.data() }));
+    }),
+  );
+  return { abiertos, inscripciones: porTorneo.flat() };
 };
+
+export const getInscripcionesByJugador = async (userId) => (await getTorneosYMisInscripciones(userId)).inscripciones;
 
 export const getTorneosPublicos = async () => {
   const q = query(

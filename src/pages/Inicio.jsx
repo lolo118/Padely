@@ -1,253 +1,229 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Calendar, CircleDot, LayoutGrid, ShoppingBag, Trophy, User } from "lucide-react";
+import { ChevronRight, TriangleAlert } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
-import { getInscripcionesByJugador } from "../services/torneoService";
-import { getProximaReservaJugador } from "../services/canchaService";
-import { formatDiaCorto } from "../utils/formatDate";
-import { formatPrecio } from "../utils/format";
-import { estadoSeña, rangoHoras } from "../utils/reservas";
-import { Badge, Button, Card, RankMark, StatTile } from "../components/ui";
-import CuentaTurnoResumen from "../components/CuentaTurnoResumen";
-import { escucharMisCuentasAbiertas } from "../services/cuentasService";
+import { getInicioReservasJugador } from "../services/canchaService";
+import { getTorneosYMisInscripciones } from "../services/torneoService";
+import { escucharCuentasDondeParticipo, escucharMisCuentasAbiertas } from "../services/cuentasService";
 import { escucharMisPedidos } from "../services/pedidosService";
+import { getMisMembresias } from "../services/membresiasService";
+import { cargarFlags } from "../services/flagsService";
+import { getTodayLocal } from "../utils/formatDate";
+import { esJugadorNuevo, pendientesDeInicio, saludoPorHora, torneosParaInscribirse } from "../utils/inicio";
+import { Card, RankMark } from "../components/ui";
+import PartidosAbiertos from "../components/PartidosAbiertos";
+import ProximaReserva from "../components/inicio/ProximaReserva";
+import Pendientes from "../components/inicio/Pendientes";
+import ReservarDeNuevo from "../components/inicio/ReservarDeNuevo";
+import PasesInicio from "../components/inicio/PasesInicio";
+import TorneosInicio from "../components/inicio/TorneosInicio";
+import BuscarClub from "../components/inicio/BuscarClub";
+import Bienvenida from "../components/inicio/Bienvenida";
 
-// Accesos directos del inicio (mismas rutas de siempre), cada uno con su ícono Lucide
-const ACCESOS = [
-  { to: "/clubes", label: "Reservar cancha", sub: "Ver canchas disponibles", icon: LayoutGrid },
-  { to: "/mis-reservas", label: "Mis reservas", sub: "Próximas y anteriores", icon: Calendar },
-  { to: "/torneos", label: "Torneos", sub: "Inscribite o mirá resultados", icon: Trophy },
-  { to: "/perfil", label: "Mi perfil", sub: "Datos y estadísticas", icon: User },
-  { to: "/marketplace", label: "Tienda", sub: "Equipamiento y accesorios", icon: ShoppingBag },
-];
-
-// "pendiente_aprobacion" → "Pendiente aprobacion" (solo presentación, sentence case)
-function sentenceCase(s) {
-  const texto = String(s || "").replace(/_/g, " ");
-  return texto.charAt(0).toUpperCase() + texto.slice(1);
-}
-
-// Fila de una inscripción dentro de una tarjeta: toda la fila es el link al torneo
-function filaInscripcion(insc, badge) {
-  return (
-    <li key={insc.id}>
-      <Link
-        to={`/torneos/${insc.torneoId}`}
-        className="flex items-center justify-between gap-3 rounded-md px-4 py-3 bg-surface-sunken hover:bg-surface-hover"
-      >
-        <div className="min-w-0">
-          <p className="heading-sm truncate">{insc.torneoNombre}</p>
-          <p className="body-sm text-ink-2">
-            {insc.apellido1} / {insc.apellido2}
-          </p>
-        </div>
-        {badge}
-      </Link>
-    </li>
-  );
-}
+// Inicio del jugador: lo que quiere hacer en cinco segundos. Arriba la próxima reserva (o "Reservar cancha"), lo que
+// tiene pendiente, reservar de nuevo en sus clubes, su Pase, sus torneos y el buscador; los números van al final.
+// Lecturas: sus reservas (1 consulta + los clubes que se muestran), torneos abiertos con sus inscripciones, sus
+// cuentas abiertas (titular y participante) y sus pedidos (escuchas), y sus Pases si flags.membresias.
+const vacio = { total: 0, proximas: [], clubes: {}, habituales: [] };
 
 export default function Inicio() {
   const { user, perfil } = useAuthStore();
-  const [inscripciones, setInscripciones] = useState([]);
-  const [proximaReserva, setProximaReserva] = useState(null);
-  const [cuentasAbiertas, setCuentasAbiertas] = useState([]);
-  const [misPedidos, setMisPedidos] = useState([]);
+  const uid = user?.uid || null;
+  const [hoy] = useState(() => getTodayLocal());
+  const [reservas, setReservas] = useState(null);
+  const [torneos, setTorneos] = useState(null);
+  const [cuentasTitular, setCuentasTitular] = useState([]);
+  const [cuentasParticipo, setCuentasParticipo] = useState([]);
+  const [pedidos, setPedidos] = useState([]);
+  const [flags, setFlags] = useState({});
+  const [socios, setSocios] = useState(null); // null: sin leer (o flags.membresias apagado)
+
+  // Favoritos del perfil (users/{uid}.favoritos): completan "Reservar de nuevo" si hay lugar
+  const favoritosClave = (perfil?.favoritos || []).join(",");
+
   useEffect(() => {
-    if (!user) return undefined;
-    const unsub = escucharMisCuentasAbiertas(user.uid, setCuentasAbiertas, (err) => console.error("Error escuchando mis cuentas:", err));
-    const unsubPedidos = escucharMisPedidos(user.uid, setMisPedidos, (err) => console.error("Error escuchando mis pedidos:", err));
+    let vivo = true;
+    cargarFlags().then((f) => vivo && setFlags(f || {}));
     return () => {
-      unsub();
-      unsubPedidos();
+      vivo = false;
     };
-  }, [user]);
-  const [loading, setLoading] = useState(true);
-
-  // Nombre real del perfil (users/{uid}); si no hay, el prefijo del email
-  const nombre = perfil?.nombre || user?.email?.split("@")[0] || "Jugador";
+  }, []);
 
   useEffect(() => {
-    if (!user) return;
-    const cargar = async () => {
-      try {
-        const [insc, proxima] = await Promise.all([
-          getInscripcionesByJugador(user.uid),
-          getProximaReservaJugador(user.uid).catch((err) => {
-            console.error("Error cargando la próxima reserva:", err);
-            return null;
-          }),
-        ]);
-        setInscripciones(insc);
-        setProximaReserva(proxima);
-      } catch (err) {
-        console.error("Error:", err);
-      }
-      setLoading(false);
+    if (!uid) return undefined;
+    let vivo = true;
+    const favoritos = favoritosClave ? favoritosClave.split(",") : [];
+    getInicioReservasJugador(uid, { favoritos })
+      .then((r) => vivo && setReservas(r))
+      .catch((err) => {
+        console.error("Error cargando las reservas del inicio:", err);
+        if (vivo) setReservas(vacio);
+      });
+    return () => {
+      vivo = false;
     };
-    cargar();
-  }, [user]);
+  }, [uid, favoritosClave]);
 
-  if (loading) {
+  useEffect(() => {
+    if (!uid) return undefined;
+    let vivo = true;
+    getTorneosYMisInscripciones(uid)
+      .then((t) => vivo && setTorneos(t))
+      .catch((err) => {
+        console.error("Error cargando los torneos del inicio:", err);
+        if (vivo) setTorneos({ abiertos: [], inscripciones: [] });
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) return undefined;
+    const corteTitular = escucharMisCuentasAbiertas(uid, setCuentasTitular, (err) => console.error("Error escuchando mis cuentas:", err));
+    const corteParticipo = escucharCuentasDondeParticipo(uid, setCuentasParticipo, (err) => console.error("Error escuchando los turnos donde participo:", err));
+    const cortePedidos = escucharMisPedidos(uid, setPedidos, (err) => console.error("Error escuchando mis pedidos:", err));
+    return () => {
+      corteTitular();
+      corteParticipo();
+      cortePedidos();
+    };
+  }, [uid]);
+
+  // Pases (P3-16): solo con flags.membresias
+  useEffect(() => {
+    if (!uid || flags.membresias !== true) return undefined;
+    let vivo = true;
+    getMisMembresias(uid).then((l) => vivo && setSocios(l || []));
+    return () => {
+      vivo = false;
+    };
+  }, [uid, flags.membresias]);
+
+  const datos = reservas || vacio;
+  const proxima = datos.proximas[0] || null;
+  const claveProxima = proxima ? `${proxima.clubId}/${proxima.grupoId || proxima.id}` : null;
+  const cuentaProxima = proxima ? cuentasTitular.find((c) => `${c.clubId}/${c.id}` === claveProxima) || cuentasParticipo.find((c) => `${c.clubId}/${c.id}` === claveProxima) || null : null;
+  const pedidosProxima = proxima ? pedidos.filter((p) => `${p.clubId}/${p.cuentaId}` === claveProxima) : [];
+  const inscripciones = useMemo(() => torneos?.inscripciones || [], [torneos]);
+  const cuentas = useMemo(() => [...cuentasTitular, ...cuentasParticipo], [cuentasTitular, cuentasParticipo]);
+  const pendientes = useMemo(() => pendientesDeInicio({ uid, proximas: datos.proximas, cuentas, inscripciones, excluir: claveProxima }), [uid, datos.proximas, cuentas, inscripciones, claveProxima]);
+  const nombresClub = useMemo(() => Object.fromEntries(Object.entries(datos.clubes).map(([id, c]) => [id, c?.nombre || ""])), [datos.clubes]);
+
+  const nombre = perfil?.nombre || user?.email?.split("@")[0] || "Jugador";
+  const saludo = saludoPorHora(new Date().getHours());
+  const encabezado = (
+    <header>
+      <p className="pd-eyebrow">{saludo}</p>
+      <h1 className="heading-lg m-0 truncate">{nombre}</h1>
+    </header>
+  );
+
+  if (!reservas || !torneos || (flags.membresias === true && socios === null)) {
     return (
       <div className="flex flex-col gap-4" aria-busy="true">
+        {encabezado}
         <p className="sr-only">Cargando inicio…</p>
-        <div className="pd-skeleton h-4 w-24" />
-        <div className="pd-skeleton h-10 w-48 mb-2" />
         <div className="pd-skeleton h-44 rounded-lg!" />
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <div className="pd-skeleton h-24 rounded-lg!" />
-          <div className="pd-skeleton h-24 rounded-lg!" />
-          <div className="pd-skeleton h-24 rounded-lg!" />
-        </div>
+        <div className="pd-skeleton h-24 rounded-lg!" />
+        <div className="pd-skeleton h-24 rounded-lg!" />
       </div>
     );
   }
 
-  const inscPendientes = inscripciones.filter(
-    (i) => i.status !== "confirmada" && i.status !== "rechazada"
-  );
-  const inscConfirmadas = inscripciones.filter((i) => i.status === "confirmada");
   // La categoría (nivel) la asigna el sistema de puntos, no cuenta como dato faltante
-  const perfilIncompleto = perfil && (!perfil.telefono || !perfil.genero);
+  const perfilIncompleto = !!perfil && (!perfil.telefono || !perfil.genero);
+  const confirmadas = inscripciones.filter((i) => i.status === "confirmada");
+  const abiertos = torneosParaInscribirse(torneos.abiertos, inscripciones, { hoy, max: confirmadas.length ? 2 : 3 });
+  const nuevo = esJugadorNuevo({ reservas: datos.total, cuentas: cuentas.length, pases: socios?.length || 0, inscripciones: inscripciones.length });
+  const conNumeros = !!perfil && ((Number(perfil.puntos) || 0) > 0 || (Number(perfil.torneosJugados) || 0) > 0 || !!perfil.nivel);
+  const partidos = flags.partidosAbiertos === true && <PartidosAbiertos ciudad={perfil?.ciudad || ""} titulo="Partidos que buscan jugadores" max={3} />;
 
-  const hora = new Date().getHours();
-  const saludo = hora < 12 ? "Buenos días" : hora < 19 ? "Buenas tardes" : "Buenas noches";
-
-  const reservaConfirmada = proximaReserva?.status === "confirmada";
-  // Seña de la próxima reserva (null cuando el club no pide); una reserva vieja de una hora ya viene normalizada
-  const señaProxima = proximaReserva ? estadoSeña(proximaReserva) : null;
+  if (nuevo) {
+    return (
+      <div className="flex flex-col gap-6">
+        {encabezado}
+        <Bienvenida perfilIncompleto={perfilIncompleto} />
+        <BuscarClub />
+        <TorneosInicio abiertos={abiertos} />
+        {partidos}
+        <LinksChicos />
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      <header className="mb-2">
-        <p className="pd-eyebrow">{saludo}</p>
-        <h1 className="display-lg">{nombre}</h1>
-      </header>
+    <div className="flex flex-col gap-6">
+      {encabezado}
 
-      {/* Mis reservas: la próxima si hay, y el link a la lista (ya no está en la navegación inferior) */}
-      <Card>
-        <Card.Row>
-          <Card.Title as="h2">Mis reservas</Card.Title>
-          {proximaReserva && (
-            <span className="flex flex-wrap items-center justify-end gap-2">
-              {señaProxima && (
-                <Badge tone={señaProxima.tone}>
-                  {señaProxima.tone === "success" ? señaProxima.label : `Seña ${formatPrecio(señaProxima.monto)} pendiente`}
-                </Badge>
-              )}
-              <Badge dot tone={reservaConfirmada ? "success" : "warning"}>
-                {reservaConfirmada ? "Confirmada" : "Pendiente"}
-              </Badge>
-            </span>
-          )}
-        </Card.Row>
-        {proximaReserva ? (
-          <div className="mt-3">
-            <p className="pd-eyebrow">Tu próxima reserva</p>
-            <p className="heading-sm truncate mt-1">
-              {proximaReserva.clubNombre || "Club"} · {proximaReserva.canchaName || "Cancha"}
-            </p>
-            <p className="body-sm text-ink-2 pd-tnum">
-              {formatDiaCorto(proximaReserva.fecha)} ·{" "}
-              {rangoHoras(proximaReserva.horaInicio || proximaReserva.hora, proximaReserva.horaFin)}
-              {proximaReserva.precioTotal > 0 && ` · ${formatPrecio(proximaReserva.precioTotal)}`}
-            </p>
-            <CuentaTurnoResumen
-              reserva={proximaReserva}
-              cuenta={cuentasAbiertas.find((c) => c.id === (proximaReserva.grupoId || proximaReserva.id) && c.clubId === proximaReserva.clubId) || null}
-              pedidos={misPedidos.filter((p) => p.cuentaId === (proximaReserva.grupoId || proximaReserva.id) && p.clubId === proximaReserva.clubId)}
-              compacto
-            />
-          </div>
-        ) : (
-          <Card.Meta>Todavía no tenés reservas. Reservá una cancha y la vas a ver acá.</Card.Meta>
-        )}
-        <Card.Foot>
-          <Button as="link" to="/mis-reservas" icon={<Calendar className="pd-icon" size={20} aria-hidden="true" />}>
-            Mis reservas
-          </Button>
-        </Card.Foot>
-      </Card>
+      <ProximaReserva reserva={proxima} club={proxima ? datos.clubes[proxima.clubId] : null} cuenta={cuentaProxima} pedidos={pedidosProxima} hoy={hoy} uid={uid} otras={Math.max(0, datos.proximas.length - 1)} />
+
+      <Pendientes items={pendientes} hoy={hoy} nombresClub={nombresClub} />
 
       {perfilIncompleto && (
-        <Card variant="hover" as={Link} to="/perfil" className="block">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="pd-icon text-warning mt-0.5" size={20} aria-hidden="true" />
-            <div>
-              <p className="heading-sm">Completá tu perfil</p>
-              <p className="body-sm text-ink-2 mt-1">Necesitamos tus datos para inscribirte a torneos</p>
-            </div>
-          </div>
-        </Card>
+        <Link to="/perfil" className="pd-card pd-card-hover p-3! flex items-center gap-3">
+          <TriangleAlert className="pd-icon text-warning shrink-0" size={20} aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            <span className="heading-sm block">Completá tu perfil</span>
+            <span className="body-sm text-ink-2 block">Teléfono y género, para inscribirte a torneos</span>
+          </span>
+          <ChevronRight className="pd-icon text-ink-3 shrink-0" size={16} aria-hidden="true" />
+        </Link>
       )}
 
-      {/* Puntos, categoría y torneos: salen del perfil ya cargado en el store */}
-      {perfil && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <StatTile value={perfil.puntos || 0} label="Puntos" />
-          <StatTile value={perfil.nivel || "—"} label="Categoría">
-            <RankMark nivel={perfil.nivel} size={40} />
-          </StatTile>
-          <StatTile value={perfil.torneosJugados || 0} label="Torneos jugados" />
-        </div>
-      )}
+      <ReservarDeNuevo clubes={datos.habituales} hoy={hoy} />
 
-      {/* Accesos directos */}
-      <div className="grid grid-cols-2 gap-4">
-        {ACCESOS.map((acceso) => {
-          const Icono = acceso.icon;
-          return (
-            <Card key={acceso.to} variant="hover" as={Link} to={acceso.to} className="block">
-              <Icono className="pd-icon text-ink-2 mb-3" size={20} aria-hidden="true" />
-              <p className="heading-sm">{acceso.label}</p>
-              <p className="body-sm text-ink-2 mt-1">{acceso.sub}</p>
-            </Card>
-          );
-        })}
-      </div>
+      {flags.membresias === true && <PasesInicio socios={socios} />}
 
-      {inscPendientes.length > 0 && (
-        <Card>
-          <Card.Title as="h2">
-            Inscripciones pendientes <span className="pd-count text-ink-3 font-semibold">{inscPendientes.length}</span>
-          </Card.Title>
-          <ul className="flex flex-col gap-2 mt-3">
-            {inscPendientes.map((insc) =>
-              filaInscripcion(
-                insc,
-                <Badge dot tone="warning">
-                  {sentenceCase(insc.status)}
-                </Badge>
-              )
-            )}
-          </ul>
-        </Card>
-      )}
+      <TorneosInicio inscripciones={confirmadas} abiertos={abiertos} />
 
-      {inscConfirmadas.length > 0 && (
-        <Card>
-          <Card.Title as="h2">Mis torneos activos</Card.Title>
-          <ul className="flex flex-col gap-2 mt-3">
-            {inscConfirmadas.slice(0, 3).map((insc) =>
-              filaInscripcion(
-                insc,
-                <Badge dot tone="success">
-                  Inscripto
-                </Badge>
-              )
-            )}
-          </ul>
-        </Card>
-      )}
+      {partidos}
 
-      {inscPendientes.length === 0 && inscConfirmadas.length === 0 && (
-        <Card className="text-center">
-          <CircleDot className="pd-icon-lg mx-auto mb-3 text-ink-3" size={24} aria-hidden="true" />
-          <p className="heading-sm">Bienvenido a Padely</p>
-          <p className="body-sm text-ink-2 mt-1">Reservá una cancha o inscribite a un torneo para empezar.</p>
-        </Card>
-      )}
+      <BuscarClub />
+
+      {conNumeros && <Numeros perfil={perfil} />}
+
+      <LinksChicos />
     </div>
+  );
+}
+
+// Puntos, categoría y torneos jugados: secundarios, en una fila chica que lleva al perfil
+function Numeros({ perfil }) {
+  return (
+    <Card as={Link} to="/perfil" variant="hover" className="p-3! grid grid-cols-3 gap-2 text-center">
+      <span className="flex flex-col items-center">
+        <span className="numeral-md pd-tnum">{perfil.puntos || 0}</span>
+        <span className="caption text-ink-3">Puntos</span>
+      </span>
+      <span className="flex flex-col items-center">
+        <span className="flex items-center gap-1">
+          <RankMark nivel={perfil.nivel} size={20} />
+          <span className="numeral-md">{perfil.nivel || "—"}</span>
+        </span>
+        <span className="caption text-ink-3">Categoría</span>
+      </span>
+      <span className="flex flex-col items-center">
+        <span className="numeral-md pd-tnum">{perfil.torneosJugados || 0}</span>
+        <span className="caption text-ink-3">Torneos</span>
+      </span>
+    </Card>
+  );
+}
+
+// Lo que no entra en las secciones: links chicos (la Tienda y Noticias viven también en el menú)
+function LinksChicos() {
+  return (
+    <nav aria-label="Más" className="flex flex-wrap justify-center gap-x-4 gap-y-2 body-sm">
+      <Link to="/mis-reservas" className="text-ink-2 underline">
+        Mis reservas
+      </Link>
+      <Link to="/marketplace" className="text-ink-2 underline">
+        Tienda
+      </Link>
+      <Link to="/noticias" className="text-ink-2 underline">
+        Noticias
+      </Link>
+    </nav>
   );
 }
