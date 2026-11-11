@@ -218,7 +218,46 @@ const FLAGS_PLATAFORMA = [
   { id: "partidosAbiertos", label: "Partidos abiertos (los jugadores buscan compañeros)", ayuda: "Prender después del deploy de las Functions de P3-15." },
   { id: "membresias", label: "Pase Club (membresía de cada club)", ayuda: "Prender después del deploy de P3-16 (reglas, índices y Functions)." },
   { id: "miniTorneo", label: "Mini torneo en el turno (americano o parejas entre los que juegan)", ayuda: "Prender después de desplegar las reglas de Firestore (miniTorneos). No usa Functions ni suma puntos." },
+  { id: "profes", label: "Profes (clases con profes, directorio, agenda y elogios)", ayuda: "Prender después del deploy de reglas, índices, Storage y las Functions de profes." },
 ];
+
+// Profes: comisión de Padely sobre las clases pagadas online con el Mercado Pago del club (5 % por defecto)
+function ComisionClasesCard() {
+  const [pct, setPct] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  useEffect(() => {
+    getDatosFacturacion()
+      .then((d) => setPct(d.comisionClasesPct !== undefined && d.comisionClasesPct !== null ? String(d.comisionClasesPct) : "5"))
+      .catch(() => setPct("5"));
+  }, []);
+  if (pct === null) return <div className="pd-skeleton h-24 rounded-lg" aria-busy="true" aria-label="Cargando" />;
+  const guardar = async (e) => {
+    e.preventDefault();
+    setGuardando(true);
+    try {
+      const n = Math.min(30, Math.max(0, Number(String(pct).replace(",", ".")) || 0));
+      await guardarDatosFacturacion({ comisionClasesPct: n });
+      setPct(String(n));
+      toast.success("Comisión de clases guardada");
+    } catch (err) {
+      console.error("Error guardando la comisión de clases:", err);
+      toast.error("No pudimos guardar.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+  return (
+    <Card as="form" onSubmit={guardar} noValidate>
+      <Card.Title as="h2">Clases con profes</Card.Title>
+      <Field label="Comisión sobre clases pagadas online (%)" help="Mercado Pago la retiene de cada clase que cobra el club online (marketplace_fee); queda anotada en comisionesClases. 0 a 30, 5 % por defecto." className="mt-3 max-w-sm">
+        <Input value={pct} onChange={(e) => setPct(e.target.value)} type="number" min="0" max="30" step="0.5" inputMode="decimal" className="pd-tnum" />
+      </Field>
+      <Button type="submit" className="mt-4" cargando={guardando ? "Guardando…" : ""}>
+        Guardar
+      </Button>
+    </Card>
+  );
+}
 function FlagsCard() {
   const [valores, setValores] = useState(() => Object.fromEntries(FLAGS_PLATAFORMA.map((f) => [f.id, flag(f.id)])));
   const [guardando, setGuardando] = useState("");
@@ -474,6 +513,8 @@ export default function Planes() {
       <MigracionPrivacidadCard />
 
       <FlagsCard />
+
+      <ComisionClasesCard />
 
       {dialogo?.modo === "plan" && (
         <CambiarPlanDialog

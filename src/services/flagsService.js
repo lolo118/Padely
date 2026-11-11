@@ -6,6 +6,8 @@ import { db } from "../lib/firebase";
 //   privacidadMigrada: plan.historial y los datos de la cuenta de MP viven en clubs/{c}/privado/*
 //   inscripcionesOnline: pago de inscripciones a torneos con Mercado Pago (organizadores)
 //   miniTorneo: "Armar mini torneo" en Mis reservas y Mi cuenta (clubs/{c}/miniTorneos, sin Functions)
+//   profes: clases con profes (/profes, /profe/:id, /mis-clases, /profe/panel, /profe/agenda, /admin/profes, pestaña
+//     Profes del club); las callables de profes también lo exigen en el servidor
 // Sin el documento (o sin permiso para leerlo) todo queda apagado: la app se porta como antes.
 let flags = {};
 let promesa = null;

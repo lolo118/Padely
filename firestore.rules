@@ -147,12 +147,13 @@ service cloud.firestore {
       let despues = request.resource.data.get('club', null);
       return antes != null && despues != null && despues.id == antes.id && despues.estado == antes.estado;
     }
-    // Turnos bloqueados por un torneo (tipo "torneo"): los escriben solo las Cloud Functions
+    // Turnos bloqueados por un torneo (tipo "torneo") o por una clase de un profe (tipo "clase", flags.profes): los
+    // escriben solo las Cloud Functions (sincronizarBloqueosTorneo, reservarClase / cancelarClase)
     function reservaDeTorneo() {
-      return resource.data.get('tipo', null) == 'torneo';
+      return resource.data.get('tipo', null) in ['torneo', 'clase'];
     }
     function nuevaReservaDeTorneo() {
-      return request.resource.data.get('tipo', null) == 'torneo';
+      return request.resource.data.get('tipo', null) in ['torneo', 'clase'];
     }
     // P3-12: límites de frecuencia. users/{uid}/limites/{tipo} = { ventanaInicio, cuenta, actualizadoEn } se escribe
     // en el mismo batch/transacción que la reserva o la inscripción del jugador (src/services/limitesService.js):
@@ -252,6 +253,64 @@ service cloud.firestore {
 
     match /superadmins/{uid} {
       allow read: if isSelf(uid);
+      allow write: if false;
+    }
+
+    // ----- PROFES (flags.profes) -----
+    // Perfil público del profe: lo escribe el propio profe (cuenta real). clubIds, clubes y elogios los escriben solo
+    // las Functions (onProfeClubEscrito, elogiarClase). El WhatsApp se guarda solo si el profe eligió mostrarlo.
+    function perfilProfeValido() {
+      let d = request.resource.data;
+      return d.nombre is string && d.nombre.size() >= 2 && d.nombre.size() <= 80
+        && d.get('bio', '') is string && d.get('bio', '').size() <= 600
+        && d.get('clases', []) is list && d.get('clases', []).size() <= 4
+        && (d.get('mostrarWhatsapp', false) == true || d.get('whatsapp', '') == '');
+    }
+    match /profes/{uid} {
+      allow read: if true;
+      allow create: if isSelf(uid) && noAnonimo()
+        && request.resource.data.uid == uid
+        && !request.resource.data.keys().hasAny(['clubIds', 'clubes', 'elogios'])
+        && perfilProfeValido();
+      allow update: if isSelf(uid) && noAnonimo()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['uid', 'clubIds', 'clubes', 'elogios'])
+        && perfilProfeValido();
+      allow delete: if false;
+      // Horario semanal + excepciones por club (lo usa la grilla de clases: lectura pública, sin datos personales)
+      match /disponibilidad/{clubId} {
+        allow read: if true;
+        allow write: if isSelf(uid) && noAnonimo();
+      }
+      // Elogios (solo positivos): públicos, los escribe elogiarClase
+      match /elogios/{elogioId} {
+        allow read: if true;
+        allow write: if false;
+      }
+    }
+    // Horas ocupadas de cada profe (sin nombres): las escribe reservarClase / cancelarClase
+    match /profesOcupacion/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+    // Clases: las leen el profe, sus alumnos (también los que cancelaron su lugar: uidsHistorial), el club donde se
+    // dan y el super-admin. Solo las Functions las escriben.
+    match /clases/{claseId} {
+      allow read: if signedIn()
+        && (resource.data.profeUid == request.auth.uid
+            || request.auth.uid in resource.data.get('uidsHistorial', [])
+            || esStaff(resource.data.clubId, 'gestionarReservas')
+            || esStaff(resource.data.clubId, 'configurarClub')
+            || superAdmin());
+      allow write: if false;
+    }
+    // "Avisar de un problema" de una clase: privado (dueño del club y super-admin); lo escribe reportarClase
+    match /reportesProfes/{id} {
+      allow read: if superAdmin() || clubOwner(resource.data.clubId);
+      allow write: if false;
+    }
+    // Comisión de Padely por cada clase pagada online (MP la retiene como marketplace_fee)
+    match /comisionesClases/{paymentId} {
+      allow read: if superAdmin();
       allow write: if false;
     }
 
@@ -868,6 +927,34 @@ service cloud.firestore {
               && request.resource.data.jugadorUid == request.auth.uid
               && getAfter(/databases/$(database)/documents/clubs/$(clubId)/reservas/$(reservaId)).data.jugadorUid
                  == request.auth.uid);
+      }
+
+      // ----- Profes del club (flags.profes): vínculo profe ↔ club (sin datos de contacto: lectura pública). El profe
+      // pide sumarse (pendiente) o acepta una invitación (invitado → activo; la crea la Function invitarProfe); el club
+      // (configurarClub) aprueba, configura quién cobra, si bloquea cancha, las canchas y las tarifas, o da de baja.
+      // El espejo en profes/{uid}.clubes / clubIds lo escribe la Function onProfeClubEscrito.
+      match /profes/{profeUid} {
+        allow read: if true;
+        allow create: if isSelf(profeUid) && noAnonimo()
+          && exists(/databases/$(database)/documents/profes/$(profeUid))
+          && request.resource.data.keys().hasOnly(['uid', 'nombre', 'estado', 'origen', 'cobra', 'bloqueaCancha', 'canchas', 'tarifas', 'creadoEn', 'actualizadoEn'])
+          && request.resource.data.uid == profeUid
+          && request.resource.data.estado == 'pendiente'
+          && request.resource.data.origen == 'profe'
+          && request.resource.data.get('cobra', 'profe') == 'profe'
+          && clubActivo(clubId);
+        allow update: if (esStaff(clubId, 'configurarClub')
+              && request.resource.data.uid == resource.data.uid
+              && request.resource.data.estado in ['pendiente', 'invitado', 'activo', 'baja']
+              && request.resource.data.get('cobra', 'profe') in ['club', 'profe']
+              && request.resource.data.get('canchas', []) is list
+              && request.resource.data.get('tarifas', {}) is map)
+          || (isSelf(profeUid) && noAnonimo()
+              && changedOnly(['estado', 'actualizadoEn'])
+              && ((resource.data.estado == 'invitado' && request.resource.data.estado == 'activo')
+                  || request.resource.data.estado == 'baja'
+                  || (resource.data.estado == 'baja' && request.resource.data.estado == 'pendiente')));
+        allow delete: if esStaff(clubId, 'configurarClub') || isSelf(profeUid);
       }
 
       match /reviews/{reviewId} {

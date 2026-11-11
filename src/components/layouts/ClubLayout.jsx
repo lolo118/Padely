@@ -9,7 +9,7 @@ import Button from "../ui/Button";
 import { armarAudioConGesto } from "../pos/sonido";
 import { estadoPlan } from "../../utils/planes";
 import { formatFechaLarga } from "../../utils/formatDate";
-import { CalendarClock, Clock } from "lucide-react";
+import { CalendarClock, Clock, GraduationCap } from "lucide-react";
 import { PERMISOS_ADMIN_FICHAJE, PERMISOS_FICHAR } from "../../utils/fichajes";
 
 // Cada ítem lleva los permisos que lo habilitan (alguno alcanza); "Hoy" es para todo el que entra al panel.
@@ -20,6 +20,8 @@ const navItems = [
   { to: "/admin/canchas", label: "Canchas", icon: LayoutGrid, permisos: ["gestionarReservas", "tarifas"] },
   // P3-16: Pases (membresías del club; oculto hasta configuracionPadely/flags.membresias)
   { to: "/admin/socios", label: "Pase Club", icon: IdCard, permisos: ["gestionarReservas", "configurarClub"], pro: true, flag: "membresias" },
+  // Profes del club (oculto hasta configuracionPadely/flags.profes; todos los planes)
+  { to: "/admin/profes", label: "Profes", icon: GraduationCap, permisos: ["configurarClub", "gestionarReservas"], flag: "profes" },
   { to: "/admin/estadisticas", label: "Estadísticas", icon: BarChart3, permisos: ["verReportes"] },
   { to: "/admin/configuracion", label: "Configuración", icon: Settings, permisos: ["configurarClub", "gestionarStaff"] },
   { to: "/admin/plan", label: "Mi plan", icon: BadgeCheck, permisos: ["configurarClub"] },

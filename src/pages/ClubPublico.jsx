@@ -25,6 +25,8 @@ import { cargarFlags } from "../services/flagsService";
 import { getMiSocio, getPase } from "../services/membresiasService";
 import { beneficiosVigentes, diasAnticipacionCon, preciosConSocio, señaConSocio } from "../utils/membresias";
 import SociosClub from "../components/SociosClub";
+import { getProfesDeClub } from "../services/profesService";
+import ProfeCard from "../components/profes/ProfeCard";
 import { formatFecha, getTodayLocal, addDaysLocal, horaActualStr } from "../utils/formatDate";
 import { formatPrecio, ubicacionCorta } from "../utils/format";
 import {
@@ -212,6 +214,21 @@ export default function ClubPublico() {
       vivo = false;
     };
   }, [club?.id, user?.uid, user?.isAnonymous]);
+  // Profes: los profes activos del club (pestaña "Profes", solo con flags.profes; null = apagado o cargando)
+  const [profesClub, setProfesClub] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    if (!club?.id) return undefined;
+    cargarFlags().then((f) => {
+      if (!vivo || f?.profes !== true) return;
+      getProfesDeClub(club.id)
+        .then((l) => vivo && setProfesClub(l))
+        .catch(() => vivo && setProfesClub([]));
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [club?.id]);
   const beneficiosSocio = beneficiosVigentes(miSocio);
   const diasExtraSocio = beneficiosSocio ? Number(beneficiosSocio.diasExtraReserva) || 0 : 0;
   const [canchas, setCanchas] = useState([]);
@@ -621,6 +638,8 @@ export default function ClubPublico() {
     { value: "info", label: "Info" },
     ...(pase ? [{ value: "socios", label: "Pase" }] : []),
     { value: "reviews", label: "Reviews", count: reviews.length },
+    // Profes del club (flags.profes)
+    ...(profesClub ? [{ value: "profes", label: "Profes", count: profesClub.length }] : []),
   ];
 
   // Un día por pastilla, desde hoy hasta el máximo de anticipación del club
@@ -783,6 +802,10 @@ export default function ClubPublico() {
                             />
                           );
                         }
+                        // Profes: el turno lo ocupa una clase (tipo "clase", lo escribe la Function reservarClase)
+                        if (reserva?.tipo === "clase") {
+                          return <SlotCell key={cancha.id} estado="reservada" linea1="Clase" linea2={reserva.profeNombre ? `Profe ${reserva.profeNombre}` : undefined} />;
+                        }
                         if (estado !== "libre") {
                           return (
                             <SlotCell
@@ -887,6 +910,29 @@ export default function ClubPublico() {
       {/* Tab: Info */}
       {tab === "socios" && pase && (
         <SociosClub club={club} pase={pase} miSocio={miSocio} user={user} />
+      )}
+
+      {/* Tab: Profes del club (flags.profes) */}
+      {tab === "profes" && profesClub && (
+        <div className="flex flex-col gap-4">
+          {profesClub.length === 0 ? (
+            <Card className="text-center py-10!">
+              <span className="pd-ball mx-auto mb-3 block!" aria-hidden="true" />
+              <p className="body-md text-ink-2 m-0">Este club todavía no tiene profes en Padely.</p>
+            </Card>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {profesClub.map((p) => (
+                <ProfeCard key={p.id} profe={p} />
+              ))}
+            </div>
+          )}
+          {user && !user.isAnonymous && (
+            <p className="body-sm text-ink-3 m-0">
+              ¿Das clases acá? <Link to={`/profe/panel?club=${club.id}`} className="underline">Pedí sumarte como profe</Link>.
+            </p>
+          )}
+        </div>
       )}
 
       {tab === "info" && (

@@ -81,6 +81,14 @@ const VerificarSocio = lazy(() => import("./pages/VerificarSocio"));
 // Mini torneo de un turno (flags.miniTorneo)
 const MiniTorneo = lazy(() => import("./pages/MiniTorneo"));
 const MiniTorneoNuevo = lazy(() => import("./pages/MiniTorneoNuevo"));
+// Profes: clases con profes (flags.profes)
+const Profes = lazy(() => import("./pages/profes/Profes"));
+const PerfilProfe = lazy(() => import("./pages/profes/PerfilProfe"));
+const ReservarClase = lazy(() => import("./pages/profes/ReservarClase"));
+const PanelProfe = lazy(() => import("./pages/profes/PanelProfe"));
+const AgendaProfe = lazy(() => import("./pages/profes/AgendaProfe"));
+const MisClases = lazy(() => import("./pages/MisClases"));
+const AdminProfes = lazy(() => import("./pages/admin/Profes"));
 
 // Landing pública en /
 const Landing = lazy(() => import("./pages/Landing"));
@@ -263,6 +271,9 @@ export default function App() {
             <Route path="/estado" element={<Estado />} />
             <Route path="/terminos" element={<Terminos />} />
             <Route path="/privacidad" element={<Privacidad />} />
+            {/* Profes (flags.profes): el directorio y el perfil público de cada profe */}
+            <Route path="/profes" element={<Profes />} />
+            <Route path="/profe/:id" element={<PerfilProfe />} />
           </Route>
           {/* Alias viejo del hub de canchas */}
           <Route path="/hub" element={<Navigate to="/clubes" replace />} />
@@ -285,6 +296,11 @@ export default function App() {
             <Route path="/noticias" element={<Noticias />} />
             <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/perfil" element={<Perfil />} />
+            {/* Profes (flags.profes): reservar, mis clases, el panel y la agenda del profe */}
+            <Route path="/profe/:id/reservar" element={<ReservarClase />} />
+            <Route path="/profe/panel" element={<PanelProfe />} />
+            <Route path="/profe/agenda" element={<AgendaProfe />} />
+            <Route path="/mis-clases" element={<MisClases />} />
           </Route>
 
           {/* Rutas del admin club - solo clubs */}
@@ -306,6 +322,8 @@ export default function App() {
             <Route path="plan" element={<AdminMiPlan />} />
             <Route path="socios" element={<RequierePro titulo="El Pase Club"><AdminSocios /></RequierePro>} />
             <Route path="empezar" element={<AdminEmpezar />} />
+            {/* Profes del club (flags.profes) */}
+            <Route path="profes" element={<AdminProfes />} />
             {/* Bar: secciones del plan PRO (P3-9); en FREE muestran "Disponible en PRO" */}
             <Route path="bar/vender" element={<RequierePro titulo="Vender"><BarVender /></RequierePro>} />
             <Route path="bar/kiosk" element={<RequierePro titulo="El kiosco"><BarKiosk /></RequierePro>} />

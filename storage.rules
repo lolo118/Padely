@@ -20,6 +20,11 @@ service firebase.storage {
         && (firestore.get(/databases/(default)/documents/clubs/$(clubId)).data.ownerUid == request.auth.uid
             || staffConfigura(clubId));
     }
+    // Profes (flags.profes): la foto del perfil público de profe la sube el propio profe; se ve sin sesión (directorio)
+    match /profe-fotos/{userId}/{file} {
+      allow read: if true;
+      allow write: if signedIn() && request.auth.uid == userId && isImage();
+    }
     match /org-logos/{orgId}/{file} {
       allow read: if signedIn();
       allow write: if signedIn() && isImage()

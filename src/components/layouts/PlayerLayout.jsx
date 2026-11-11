@@ -31,6 +31,10 @@ const menuItems = [
   { to: "/mis-reservas", label: "Mis reservas" },
   // P3-16: oculto hasta configuracionPadely/flags.membresias
   { to: "/membresias", label: "Mis pases", flag: "membresias" },
+  // Profes: ocultos hasta configuracionPadely/flags.profes
+  { to: "/profes", label: "Profes", flag: "profes" },
+  { to: "/mis-clases", label: "Mis clases", flag: "profes" },
+  { to: "/profe/panel", label: "Soy profe", flag: "profes" },
   { to: "/torneos", label: "Torneos" },
   { to: "/noticias", label: "Noticias" },
   { to: "/marketplace", label: "Tienda" },

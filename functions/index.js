@@ -764,7 +764,7 @@ exports.expirarReservasPendientes = onSchedule(
               const fresh = await tx.get(doc.ref);
               if (!fresh.exists) return false;
               const reserva = fresh.data();
-              if (reserva.status !== "pendiente" || reserva.tipo === "torneo") return false;
+              if (reserva.status !== "pendiente" || reserva.tipo === "torneo" || reserva.tipo === "clase") return false;
               const clubNombre = club.nombre || "el club";
               const cancha = reserva.canchaName || reserva.canchaId || "cancha";
               const fecha = reserva.fecha || "";
@@ -2785,6 +2785,8 @@ async function aplicarPagoAprobado(clubRef, pagoMpRef, pago) {
       tx.update(pagoMpRef, { estado: "aprobado", paymentId, aprobadoEn: FieldValue.serverTimestamp(), ventaNumero: null, montoPagado, montoAplicado: 0, excedente: montoPagado, excedenteDevuelto: null, pagoTardio: true, estadoMp: pago.status, actualizadoEn: FieldValue.serverTimestamp() });
       return { resultado: decision.resultado, pm, excedente: montoPagado, tardio: true };
     }
+    // Profes: el pago online de una clase (pagosMp tipo "clase", sección PROFES al final)
+    if (pm.tipo === "clase") return aplicarPagoClaseEnTx(tx, { clubRef, pagoMpRef, pm, pago, paymentId, montoPagado });
     if (pm.tipo === "seña") {
       const cabezaRef = clubRef.collection("reservas").doc(pm.reservaId);
       const contadorRef = clubRef.collection("contadoresDispositivos").doc("MP");
@@ -2941,6 +2943,10 @@ async function aplicarPagoLeido(clubRef, pago) {
       }
       return `pago ${paymentId}: ${r.resultado}`;
     }
+    if (r.resultado === "clase pagada") {
+      await avisarClasePagada(clubRef, r).catch((err) => logger.error(`mpWebhook ${clubId}/${pagoMpId}: avisos de clase`, err));
+      return `pago ${paymentId}: ${r.resultado}`;
+    }
     if (r.resultado !== "aplicado" && r.resultado !== "seña aplicada") return `pago ${paymentId}: ${r.resultado}`;
     const pm = r.pm;
     const club = (await clubRef.get()).data() || {};
@@ -2991,7 +2997,7 @@ async function aplicarPagoLeido(clubRef, pago) {
     const pm = snap.exists ? snap.data() : null;
     if (pm && pm.pagador && pm.pagador.uid) {
       try {
-        await avisoA(pm.pagador.uid, { tipo: "mp_pago_rechazado", titulo: "Pago rechazado", mensaje: `Mercado Pago no aprobó tu pago${pago.status_detail ? ` (${pago.status_detail})` : ""}. Podés intentar de nuevo o pagar en el mostrador.`, link: pm.tipo === "seña" ? "/mis-reservas" : `/mi-cuenta/${clubId}/${pm.grupoId}`, icono: "💳" });
+        await avisoA(pm.pagador.uid, { tipo: "mp_pago_rechazado", titulo: "Pago rechazado", mensaje: `Mercado Pago no aprobó tu pago${pago.status_detail ? ` (${pago.status_detail})` : ""}. Podés intentar de nuevo o pagar en el mostrador.`, link: pm.tipo === "clase" ? "/mis-clases" : pm.tipo === "seña" ? "/mis-reservas" : `/mi-cuenta/${clubId}/${pm.grupoId}`, icono: "💳" });
       } catch (err) {
         logger.error(`mpWebhook ${clubId}/${pagoMpId}: aviso de rechazo`, err);
       }
@@ -3366,7 +3372,7 @@ exports.onClubCreated = onDocumentCreated("clubs/{clubId}", async (event) => {
 
 // La primera reserva confirmada (no de torneo) arranca la prueba. Lectura barata primero; transacción solo si toca.
 async function iniciarPruebaDelClub(clubId, reserva) {
-  if (!reserva || reserva.tipo === "torneo") return;
+  if (!reserva || reserva.tipo === "torneo" || reserva.tipo === "clase") return;
   try {
     const clubRef = db.collection("clubs").doc(clubId);
     const snap = await clubRef.get();
@@ -4765,3 +4771,647 @@ exports.fichajesSinSalida = onSchedule({ schedule: "every day 04:00", timeZone: 
   }
   logger.info(`fichajesSinSalida: ${cerrados} turnos cerrados sin salida (${clubs.size} clubes)`);
 });
+
+// ============================================================================
+// PROFES (clases con profes, flags.profes). La lógica pura es src/utils/profes.js (copiada a functions/lib/profes.mjs).
+// El perfil (profes/{uid}) y la disponibilidad los escribe el profe; el vínculo con cada club (clubs/{c}/profes/{uid})
+// lo pide el profe o lo invita el club, y lo aprueba el club. Todo lo que mueve clases pasa por acá:
+//   reservarClase · cancelarClase · marcarClase · repetirClase · elogiarClase · reportarClase · invitarProfe
+//   mpPagarClase (pago online cuando cobra el club y tiene MP: pagosMp tipo "clase" → aplicarPagoAprobado)
+//   onProfeClubEscrito (espejo de clubes en el perfil + avisos) · onUserDeletedProfe
+// clases/{profeUid_fecha_HHMM} y profesOcupacion/{profeUid_fecha_HHMM} tienen id determinista: un profe no puede
+// tener dos clases en la misma hora (la transacción relee las ocupaciones). Con bloqueaCancha, la clase reserva la
+// cancha en clubs/{c}/reservas (tipo "clase", ids por cancha/fecha/hora como crearReserva y los torneos).
+// ============================================================================
+let profesUtilPromesa = null;
+const profesUtil = () => (profesUtilPromesa ||= import("./lib/profes.mjs"));
+const profeDocRef = (uid) => db.collection("profes").doc(uid);
+const claseDocRef = (id) => db.collection("clases").doc(id);
+const ocupacionDocRef = (id) => db.collection("profesOcupacion").doc(id);
+const ES_FECHA_CLASE = /^\d{4}-\d{2}-\d{2}$/;
+const ES_HORA_CLASE = /^([01]\d|2[0-3]):00$/;
+const PERMISOS_PROFES_CLUB = ["configurarClub", "gestionarReservas"];
+const DIAS_PLURAL = ["domingos", "lunes", "martes", "miércoles", "jueves", "viernes", "sábados"];
+
+async function exigirFlagProfes() {
+  const snap = await db.collection("configuracionPadely").doc("flags").get();
+  if (!snap.exists || snap.data().profes !== true) throw new HttpsError("failed-precondition", "Las clases con profes todavía no están habilitadas");
+}
+const textoClase = (c) => `${fechaCortaArgentina(c.fecha)} ${c.horaInicio || ""}`.trim();
+const primerNombre = (n) => String(n || "").trim().split(/\s+/)[0] || "Alumno";
+
+// Perfil, vínculo activo, club y disponibilidad del profe en ese club (validado)
+async function datosDeClase(profeUid, clubId) {
+  const clubRef = db.collection("clubs").doc(clubId);
+  const [pSnap, vSnap, cSnap, dSnap] = await Promise.all([profeDocRef(profeUid).get(), clubRef.collection("profes").doc(profeUid).get(), clubRef.get(), profeDocRef(profeUid).collection("disponibilidad").doc(clubId).get()]);
+  if (!pSnap.exists || pSnap.data().activo === false) throw new HttpsError("not-found", "El profe no está dando clases");
+  if (!cSnap.exists) throw new HttpsError("not-found", "El club no existe");
+  const club = cSnap.data();
+  if (club.suspendido === true) throw new HttpsError("failed-precondition", "El club no está disponible");
+  if (!vSnap.exists || vSnap.data().estado !== "activo") throw new HttpsError("failed-precondition", "El profe no da clases en ese club");
+  return { clubRef, perfil: pSnap.data(), vinculo: vSnap.data(), club, disponibilidad: dSnap.exists ? dSnap.data() : null };
+}
+
+// Reserva (o se suma a) una clase. uid = quien reserva (el alumno, también cuando la arma el profe con "repetir").
+// Devuelve { claseId, unirse, monto, pagarOnline, clase, inscripto }.
+async function reservarClaseInterna({ uid, nombre, profeUid, clubId, tipo, fecha, hora, participantes = [], datos, porProfe = false, ahoraMs = Date.now() }) {
+  const P = await profesUtil();
+  const { clubRef, perfil, vinculo, club, disponibilidad } = datos;
+  const conf = P.claseDelPerfil(perfil, tipo);
+  if (!conf) throw new HttpsError("invalid-argument", "El profe no da ese tipo de clase");
+  if (!ES_FECHA_CLASE.test(fecha || "") || !ES_HORA_CLASE.test(hora || "")) throw new HttpsError("invalid-argument", "fecha (YYYY-MM-DD) y hora (HH:00)");
+  const inicio = P.inicioClaseMs(fecha, hora);
+  const maxDias = porProfe ? P.MAX_SEMANAS_REPETIR * 7 + 14 : P.DIAS_ANTICIPACION_CLASE;
+  if (inicio <= ahoraMs) throw new HttpsError("failed-precondition", "Ese horario ya pasó");
+  if (inicio > ahoraMs + (maxDias + 1) * 86400000) throw new HttpsError("failed-precondition", "Esa fecha está demasiado lejos");
+  const horas = P.horasDeClase(hora, conf.duracion);
+  const libresProfe = P.horasDisponiblesProfe(disponibilidad, fecha);
+  if (!horas.every((h) => libresProfe.includes(h))) throw new HttpsError("failed-precondition", "El profe no da clases en ese horario");
+  const precio = P.precioEnClub(perfil, vinculo, tipo);
+  const lista = P.normalizarParticipantes(participantes, { reservaUid: uid, max: Math.max(0, conf.capacidad - 1) });
+  const lugares = 1 + lista.length;
+  const id = P.idClase(profeUid, fecha, hora);
+  const bloquea = vinculo.bloqueaCancha !== false;
+
+  // Canchas candidatas (fuera de la transacción: canchas y turnos fijos, como la grilla); las reservas se releen adentro
+  let candidatas = [];
+  if (bloquea) {
+    const [canchasSnap, fijosSnap] = await Promise.all([clubRef.collection("canchas").get(), clubRef.collection("turnosFijos").where("status", "==", "activo").get()]);
+    candidatas = P.canchasLibresPara({ canchas: canchasSnap.docs.map((d) => ({ id: d.id, ...d.data() })), permitidas: vinculo.canchas || [], fecha, horas, reservas: [], turnosFijos: fijosSnap.docs.map((d) => d.data()) });
+  }
+
+  const resultado = await db.runTransaction(async (tx) => {
+    const cRef = claseDocRef(id);
+    const ocRefs = horas.map((h) => ocupacionDocRef(P.idOcupacion(profeUid, fecha, h)));
+    const [cSnap, ...ocSnaps] = await Promise.all([tx.get(cRef), ...ocRefs.map((r) => tx.get(r))]);
+    const previa = cSnap.exists ? cSnap.data() : null;
+    const viva = previa && previa.estado !== "cancelada" ? previa : null;
+    if (ocSnaps.some((s) => s.exists && s.data().claseId !== id)) throw new HttpsError("failed-precondition", "El profe ya tiene una clase en ese horario");
+    if (viva && (viva.clubId !== clubId || viva.estado !== "confirmada")) throw new HttpsError("failed-precondition", "El profe ya tiene una clase en ese horario");
+    const v = P.validarReservaClase({ clase: viva, tipo, capacidad: viva ? viva.capacidad : conf.capacidad, lugares, uid, profeUid });
+    if (!v.ok) throw new HttpsError("failed-precondition", v.motivo);
+    const inscripto = { uid, nombre: texto(nombre, 80) || "Alumno", participantes: lista, lugares, precio, monto: P.montoReserva(precio, lugares), pago: { estado: "pendiente", medio: "enClub" }, asistencia: null, creadoEnMs: ahoraMs, porProfe: !!porProfe };
+
+    if (viva) {
+      const inscriptos = { ...(viva.inscriptos || {}), [uid]: inscripto };
+      const ocupados = P.ocupadosDe({ inscriptos });
+      const nuevosUids = P.alumnosUidsDe({ [uid]: inscripto });
+      tx.update(cRef, { [`inscriptos.${uid}`]: inscripto, alumnosUids: P.alumnosUidsDe(inscriptos), uidsHistorial: FieldValue.arrayUnion(...nuevosUids), ocupados, actualizadoEn: FieldValue.serverTimestamp() });
+      ocRefs.forEach((r) => tx.update(r, { ocupados, actualizadoEn: FieldValue.serverTimestamp() }));
+      return { claseId: id, unirse: true, clase: { ...viva, inscriptos }, inscripto };
+    }
+
+    let cancha = null;
+    let slots = [];
+    if (bloquea) {
+      for (const c of candidatas) {
+        const refs = horas.map((h) => clubRef.collection("reservas").doc(slotIdDe(c.id, fecha, h)));
+        const snaps = await Promise.all(refs.map((r) => tx.get(r)));
+        if (snaps.every((s) => !s.exists || s.data().status === "cancelada")) {
+          cancha = c;
+          slots = refs.map((ref, i) => ({ ref, existia: snaps[i].exists }));
+          break;
+        }
+      }
+      if (!cancha) throw new HttpsError("failed-precondition", "No queda una cancha libre en el club para ese horario");
+    }
+    const inscriptos = { [uid]: inscripto };
+    const comun = { profeUid, claseId: id, clubId, fecha, horaInicio: hora, tipoClase: tipo, capacidad: conf.capacidad, ocupados: lugares, canchaId: cancha ? cancha.id : null };
+    const clase = {
+      profeUid,
+      profeNombre: perfil.nombre || "Profe",
+      profeFoto: perfil.foto || null,
+      clubId,
+      clubNombre: club.nombre || "",
+      clubCiudad: club.ciudad || "",
+      tipoClase: tipo,
+      fecha,
+      horaInicio: hora,
+      horaFin: P.horaFinClase(hora, conf.duracion),
+      duracion: conf.duracion,
+      horas,
+      capacidad: conf.capacidad,
+      precio,
+      cobra: vinculo.cobra === "club" ? "club" : "profe",
+      bloqueaCancha: bloquea,
+      canchaId: cancha ? cancha.id : null,
+      canchaName: cancha ? cancha.nombre || "" : null,
+      reservaId: slots.length ? slots[0].ref.id : null,
+      inscriptos,
+      alumnosUids: P.alumnosUidsDe(inscriptos),
+      // Quienes estuvieron alguna vez (aunque después cancelen su lugar): "Mis clases" y la regla de lectura
+      uidsHistorial: P.alumnosUidsDe(inscriptos),
+      ocupados: lugares,
+      estado: "confirmada",
+      elogiadoPor: [],
+      bajas: [],
+      creadoPor: porProfe ? profeUid : uid,
+      creadoEn: FieldValue.serverTimestamp(),
+      actualizadoEn: FieldValue.serverTimestamp(),
+    };
+    tx.set(cRef, clase);
+    ocRefs.forEach((r, i) => tx.set(r, { ...comun, hora: horas[i], actualizadoEn: FieldValue.serverTimestamp() }));
+    const nombreReserva = `Clase · ${perfil.nombre || "Profe"}`;
+    slots.forEach(({ ref, existia }, i) => {
+      if (existia) tx.delete(clubRef.collection("contactosReservas").doc(ref.id));
+      tx.set(ref, {
+        canchaId: cancha.id,
+        canchaName: cancha.nombre || "",
+        fecha,
+        hora: horas[i],
+        status: "confirmada",
+        tipo: "clase",
+        claseId: id,
+        profeUid,
+        profeNombre: perfil.nombre || "Profe",
+        tipoClase: tipo,
+        nombreJugador: nombreReserva,
+        jugadorUid: null,
+        grupoId: slots[0].ref.id,
+        horaInicio: hora,
+        horaFin: P.numAHora(P.horaANum(hora) + horas.length),
+        turnos: horas.length,
+        precio: 0,
+        precioTotal: 0,
+        seña: 0,
+        señaPagada: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+    return { claseId: id, unirse: false, clase, inscripto };
+  });
+  return { ...resultado, monto: resultado.inscripto.monto, pagarOnline: P.pagoOnlineDisponible(vinculo, club) };
+}
+
+// Avisos de una reserva de clase: al profe (si no la armó él), a quien reservó (si la armó el profe) y a los
+// acompañantes que son jugadores de Padely
+async function avisarReservaClase(r, { uid, nombre, porProfe = false }) {
+  const P = await profesUtil();
+  const c = r.clase;
+  const que = `${P.labelTipoClase(c.tipoClase)} · ${c.clubNombre} · ${textoClase(c)}`;
+  const avisos = [];
+  if (!porProfe) avisos.push(avisoA(c.profeUid, { tipo: "clase_reservada", titulo: r.unirse ? "Se sumó un alumno a tu clase" : "Nueva clase reservada", mensaje: `${nombre || "Un alumno"} · ${que}`, link: "/profe/agenda", icono: "🎾" }));
+  else avisos.push(avisoA(uid, { tipo: "clase_reservada", titulo: "Tu profe te reservó una clase", mensaje: `${c.profeNombre} · ${que}`, link: "/mis-clases", icono: "🎾" }));
+  (r.inscripto.participantes || []).filter((p) => p.uid).forEach((p) => avisos.push(avisoA(p.uid, { tipo: "clase_reservada", titulo: "Te sumaron a una clase", mensaje: `${nombre || "Un amigo"} te anotó: ${c.profeNombre} · ${que}`, link: "/mis-clases", icono: "🎾" })));
+  await Promise.all(avisos.map((a) => a.catch((err) => logger.error("avisarReservaClase", err))));
+}
+
+exports.reservarClase = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  await exigirFlagProfes();
+  const d = request.data || {};
+  const profeUid = texto(d.profeUid, 128);
+  const clubId = texto(d.clubId, 80);
+  const tipo = texto(d.tipo, 20);
+  if (!profeUid || !clubId || !tipo) throw new HttpsError("invalid-argument", "profeUid, clubId, tipo, fecha y hora");
+  const datos = await datosDeClase(profeUid, clubId);
+  const nombre = await nombreDeUsuario(uid, "Alumno");
+  const r = await reservarClaseInterna({ uid, nombre, profeUid, clubId, tipo, fecha: texto(d.fecha, 10), hora: texto(d.hora, 5), participantes: Array.isArray(d.participantes) ? d.participantes.slice(0, 30) : [], datos });
+  await avisarReservaClase(r, { uid, nombre });
+  logger.info(`reservarClase ${r.claseId}: ${uid} (${r.unirse ? "se sumó" : "nueva"}, ${r.inscripto.lugares} lugares)`);
+  return { ok: true, claseId: r.claseId, unirse: r.unirse, monto: r.monto, pagarOnline: r.pagarOnline };
+});
+
+// Profe: "repetir semanal" → la misma clase para el mismo alumno (y sus acompañantes) las N semanas siguientes. Cada
+// una es una reserva normal; las que chocan (profe ocupado, sin cancha) se saltean y se informan.
+exports.repetirClase = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  await exigirFlagProfes();
+  const P = await profesUtil();
+  const d = request.data || {};
+  const snap = await claseDocRef(texto(d.claseId, 200)).get();
+  if (!snap.exists) throw new HttpsError("not-found", "La clase no existe");
+  const clase = snap.data();
+  if (clase.profeUid !== uid) throw new HttpsError("permission-denied", "Solo el profe repite sus clases");
+  const alumnoUid = texto(d.alumnoUid, 128);
+  const insc = clase.inscriptos && clase.inscriptos[alumnoUid];
+  if (!insc) throw new HttpsError("invalid-argument", "Elegí un alumno de la clase");
+  const fechas = P.fechasSemanales(clase.fecha, d.semanas);
+  if (!fechas.length) throw new HttpsError("invalid-argument", `De 1 a ${P.MAX_SEMANAS_REPETIR} semanas`);
+  const datos = await datosDeClase(uid, clase.clubId);
+  const resultados = [];
+  for (const fecha of fechas) {
+    try {
+      const r = await reservarClaseInterna({ uid: alumnoUid, nombre: insc.nombre, profeUid: uid, clubId: clase.clubId, tipo: clase.tipoClase, fecha, hora: clase.horaInicio, participantes: insc.participantes || [], datos, porProfe: true });
+      resultados.push({ fecha, ok: true, claseId: r.claseId });
+    } catch (err) {
+      resultados.push({ fecha, ok: false, motivo: err instanceof HttpsError ? err.message : "No se pudo reservar" });
+      if (!(err instanceof HttpsError)) logger.error(`repetirClase ${fecha}`, err);
+    }
+  }
+  const ok = resultados.filter((x) => x.ok);
+  if (ok.length) {
+    await avisoA(alumnoUid, { tipo: "clase_reservada", titulo: ok.length === 1 ? "Tu profe te reservó una clase más" : `Tu profe te reservó ${ok.length} clases`, mensaje: `${clase.profeNombre} · ${P.labelTipoClase(clase.tipoClase)} · ${clase.clubNombre} · los ${DIAS_PLURAL[P.diaDeSemana(clase.fecha)]} ${clase.horaInicio}`, link: "/mis-clases", icono: "🎾" }).catch(() => {});
+  }
+  logger.info(`repetirClase ${snap.id}: ${ok.length}/${resultados.length} reservadas para ${alumnoUid}`);
+  return { ok: true, resultados };
+});
+
+// Cancela una clase entera (profe o club) o el lugar de un alumno (el propio). Libera la ocupación del profe y la
+// cancha; un pago online se devuelve según la política de seña del club (si cancela el profe o el club: siempre).
+exports.cancelarClase = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  await exigirFlagProfes();
+  const P = await profesUtil();
+  const d = request.data || {};
+  const claseId = texto(d.claseId, 200);
+  const motivo = texto(d.motivo, 200) || null;
+  const ref = claseDocRef(claseId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError("not-found", "La clase no existe");
+  const clase0 = snap.data();
+  const clubRef = db.collection("clubs").doc(clase0.clubId);
+  const esProfe = clase0.profeUid === uid;
+  const esClub = !esProfe && !(clase0.inscriptos && clase0.inscriptos[uid]) && (await accesoClub(clubRef, uid, PERMISOS_PROFES_CLUB)).esStaff;
+  const quiere = P.puedeCancelarClase(clase0, { uid, esProfe, esClub });
+  if (!quiere.ok) throw new HttpsError("failed-precondition", quiere.motivo);
+  const canceladaPor = esProfe ? "profe" : esClub ? "club" : "alumno";
+
+  const r = await db.runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    const clase = s.data();
+    const chequeo = P.puedeCancelarClase(clase, { uid, esProfe, esClub });
+    if (!chequeo.ok) throw new HttpsError("failed-precondition", chequeo.motivo);
+    const horas = clase.horas || [clase.horaInicio];
+    const ocRefs = horas.map((h) => ocupacionDocRef(P.idOcupacion(clase.profeUid, clase.fecha, h)));
+    const slotRefs = clase.canchaId ? horas.map((h) => clubRef.collection("reservas").doc(slotIdDe(clase.canchaId, clase.fecha, h))) : [];
+    const slotSnaps = await Promise.all(slotRefs.map((sr) => tx.get(sr)));
+    const quitados = chequeo.todo ? P.inscriptosDe(clase) : [clase.inscriptos[uid]];
+    const restantes = { ...(clase.inscriptos || {}) };
+    quitados.forEach((i) => delete restantes[i.uid]);
+    const bajas = quitados.map((i) => ({ ...i, bajaPor: canceladaPor, bajaEn: Timestamp.now() }));
+    const todaLaClase = chequeo.todo || Object.keys(restantes).length === 0;
+    const extraBajas = bajas.length ? { bajas: FieldValue.arrayUnion(...bajas) } : {};
+    if (todaLaClase) {
+      tx.update(ref, { estado: "cancelada", canceladaPor, canceladaPorUid: uid, motivoCancelacion: motivo, canceladaEn: FieldValue.serverTimestamp(), inscriptos: {}, ocupados: 0, ...extraBajas, actualizadoEn: FieldValue.serverTimestamp() });
+      ocRefs.forEach((o) => tx.delete(o));
+      slotSnaps.forEach((ss) => {
+        // Como los bloqueos de torneo: el turno se borra (las reglas no dejan re-reservar un documento tipo "clase")
+        if (ss.exists && ss.data().tipo === "clase" && ss.data().claseId === claseId) tx.delete(ss.ref);
+      });
+    } else {
+      const ocupados = P.ocupadosDe({ inscriptos: restantes });
+      tx.update(ref, { [`inscriptos.${uid}`]: FieldValue.delete(), alumnosUids: P.alumnosUidsDe(restantes), ocupados, ...extraBajas, actualizadoEn: FieldValue.serverTimestamp() });
+      ocRefs.forEach((o) => tx.update(o, { ocupados, actualizadoEn: FieldValue.serverTimestamp() }));
+    }
+    return { clase, quitados, todaLaClase };
+  });
+
+  // Pagos online: devolución según la política del club; se anula la venta y onVentaUpdated pide la devolución a MP
+  const senas = await senasUtil();
+  const club = (await clubRef.get()).data() || {};
+  const devoluciones = [];
+  for (const i of r.quitados) {
+    const pago = i.pago || {};
+    if (pago.estado !== "pagado" || pago.medio !== "mercadopago" || !pago.ventaNumero) continue;
+    const dec = senas.resolverSeñaCancelada({ canceladaPor: canceladaPor === "alumno" ? "jugador" : "club", politica: senas.politicaDe(club), inicioTurnoMs: P.inicioClaseMs(r.clase.fecha, r.clase.horaInicio), ahoraMs: Date.now(), señaPagada: true, monto: Number(i.monto) || 0, medio: "mercadopago" });
+    devoluciones.push({ uid: i.uid, accion: dec.accion, motivo: dec.motivo, monto: Number(i.monto) || 0 });
+    if (dec.accion === "reembolso_mp") {
+      await clubRef
+        .collection("ventas")
+        .doc(String(pago.ventaNumero))
+        .update({ estado: "anulada", anulacion: { por: "sistema", porNombre: "Padely", motivo: `Clase cancelada: ${dec.motivo}`, en: Timestamp.now(), origen: "claseCancelada" }, actualizadoEn: FieldValue.serverTimestamp() })
+        .catch((err) => logger.error(`cancelarClase ${claseId}: anular venta ${pago.ventaNumero}`, err));
+    }
+  }
+  if (devoluciones.length) await ref.update({ devoluciones: FieldValue.arrayUnion(...devoluciones) }).catch(() => {});
+
+  // Avisos
+  const c = r.clase;
+  const que = `${P.labelTipoClase(c.tipoClase)} · ${c.clubNombre} · ${textoClase(c)}`;
+  const avisos = [];
+  const textoDevolucion = (u) => {
+    const dv = devoluciones.find((x) => x.uid === u);
+    if (!dv) return "";
+    return dv.accion === "reembolso_mp" ? " Te devolvemos el pago por Mercado Pago." : ` El pago no se devuelve (${dv.motivo}).`;
+  };
+  if (canceladaPor === "alumno") {
+    const yo = r.quitados[0];
+    avisos.push(avisoA(c.profeUid, { tipo: "clase_cancelada", titulo: r.todaLaClase ? "Se canceló una clase" : "Un alumno canceló su lugar", mensaje: `${yo.nombre || "Un alumno"} · ${que}`, link: "/profe/agenda", icono: "🎾" }));
+  } else {
+    const quien = canceladaPor === "profe" ? c.profeNombre : c.clubNombre || "El club";
+    const uids = new Set();
+    r.quitados.forEach((i) => {
+      if (i.uid) uids.add(i.uid);
+      (i.participantes || []).forEach((p) => p.uid && uids.add(p.uid));
+    });
+    uids.forEach((u) => avisos.push(avisoA(u, { tipo: "clase_cancelada", titulo: "Se canceló tu clase", mensaje: `${quien} canceló la clase: ${c.profeNombre} · ${que}.${motivo ? ` ${motivo}.` : ""}${textoDevolucion(u)}`, link: "/mis-clases", icono: "🎾" })));
+    if (canceladaPor === "club") avisos.push(avisoA(c.profeUid, { tipo: "clase_cancelada", titulo: "El club canceló una clase tuya", mensaje: `${que}${motivo ? ` · ${motivo}` : ""}`, link: "/profe/agenda", icono: "🎾" }));
+  }
+  await Promise.all(avisos.map((a) => a.catch((err) => logger.error("cancelarClase aviso", err))));
+  logger.info(`cancelarClase ${claseId}: ${canceladaPor} ${uid} · ${r.todaLaClase ? "clase entera" : "un lugar"} · ${devoluciones.length} pagos online`);
+  return { ok: true, todaLaClase: r.todaLaClase, devoluciones };
+});
+
+// Profe (o el club): "dada" (la clase entera, desde que empezó), asistencia "ausente"/"presente" de un alumno, o
+// "cobrado" (el alumno pagó en el club / al profe)
+exports.marcarClase = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  await exigirFlagProfes();
+  const P = await profesUtil();
+  const d = request.data || {};
+  const claseId = texto(d.claseId, 200);
+  const que = texto(d.que, 20);
+  if (!["dada", "ausente", "presente", "cobrado"].includes(que)) throw new HttpsError("invalid-argument", "que: dada | ausente | presente | cobrado");
+  const ref = claseDocRef(claseId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError("not-found", "La clase no existe");
+  const c0 = snap.data();
+  const esProfe = c0.profeUid === uid;
+  if (!esProfe && !(await accesoClub(db.collection("clubs").doc(c0.clubId), uid, PERMISOS_PROFES_CLUB)).esStaff) throw new HttpsError("permission-denied", "Solo el profe o el club");
+  const alumnoUid = texto(d.alumnoUid, 128);
+  const clase = await db.runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    const c = s.data();
+    if (c.estado === "cancelada") throw new HttpsError("failed-precondition", "La clase está cancelada");
+    const empezo = P.inicioClaseMs(c.fecha, c.horaInicio) <= Date.now();
+    if (que === "dada") {
+      if (!empezo) throw new HttpsError("failed-precondition", "La clase todavía no empezó");
+      if (c.estado === "dada") return c;
+      tx.update(ref, { estado: "dada", dadaEn: FieldValue.serverTimestamp(), dadaPor: uid, actualizadoEn: FieldValue.serverTimestamp() });
+      return { ...c, estado: "dada", nueva: true };
+    }
+    if (!c.inscriptos || !c.inscriptos[alumnoUid]) throw new HttpsError("invalid-argument", "Elegí un alumno de la clase");
+    if (que === "cobrado") {
+      const pago = c.inscriptos[alumnoUid].pago || {};
+      if (pago.estado === "pagado") return c;
+      tx.update(ref, { [`inscriptos.${alumnoUid}.pago`]: { estado: "pagado", medio: "enClub", monto: Number(c.inscriptos[alumnoUid].monto) || 0, porUid: uid, en: Timestamp.now() }, actualizadoEn: FieldValue.serverTimestamp() });
+      return c;
+    }
+    if (!empezo) throw new HttpsError("failed-precondition", "La asistencia se marca cuando empieza la clase");
+    tx.update(ref, { [`inscriptos.${alumnoUid}.asistencia`]: que, actualizadoEn: FieldValue.serverTimestamp() });
+    return c;
+  });
+  if (que === "dada" && clase.nueva) {
+    const ausentes = new Set(P.inscriptosDe(clase).filter((i) => i.asistencia === "ausente").map((i) => i.uid));
+    await Promise.all((clase.alumnosUids || []).filter((u) => !ausentes.has(u)).map((u) => avisoA(u, { tipo: "clase_dada", titulo: "¿Qué tal la clase?", mensaje: `Si te gustó la clase con ${clase.profeNombre}, dejale un elogio.`, link: "/mis-clases", icono: "🎾" }).catch(() => {})));
+  }
+  return { ok: true };
+});
+
+// Alumno: elogio (solo positivo) de una clase dada. Uno por alumno por clase (id fijo claseId_uid).
+exports.elogiarClase = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  await exigirFlagProfes();
+  const P = await profesUtil();
+  const d = request.data || {};
+  const v = P.validarElogio({ tags: d.tags, comentario: d.comentario });
+  if (v.error) throw new HttpsError("invalid-argument", v.error);
+  const claseId = texto(d.claseId, 200);
+  const cRef = claseDocRef(claseId);
+  const nombre = primerNombre(await nombreDeUsuario(uid, "Alumno"));
+  const clase = await db.runTransaction(async (tx) => {
+    const cSnap = await tx.get(cRef);
+    if (!cSnap.exists) throw new HttpsError("not-found", "La clase no existe");
+    const c = cSnap.data();
+    const puede = P.puedeElogiar(c, uid);
+    if (!puede.ok) throw new HttpsError("failed-precondition", puede.motivo);
+    const eRef = profeDocRef(c.profeUid).collection("elogios").doc(`${claseId}_${uid}`);
+    const [eSnap, pSnap] = await Promise.all([tx.get(eRef), tx.get(profeDocRef(c.profeUid))]);
+    if (eSnap.exists) throw new HttpsError("already-exists", "Ya dejaste tu elogio para esta clase");
+    tx.set(eRef, { uid, nombre, tags: v.tags, comentario: v.comentario, claseId, clubId: c.clubId, clubNombre: c.clubNombre || "", tipoClase: c.tipoClase, fecha: c.fecha, creadoEn: FieldValue.serverTimestamp() });
+    if (pSnap.exists) tx.update(pSnap.ref, { elogios: P.sumarElogio(pSnap.data().elogios, v.tags) });
+    tx.update(cRef, { elogiadoPor: FieldValue.arrayUnion(uid) });
+    return c;
+  });
+  await avisoA(clase.profeUid, { tipo: "elogio", titulo: "¡Recibiste un elogio!", mensaje: `${nombre}: ${v.tags.map((t) => P.labelElogio(t)).join(", ")}`, link: `/profe/${clase.profeUid}`, icono: "⭐" }).catch(() => {});
+  return { ok: true };
+});
+
+// Alumno: "Avisar de un problema" (privado) → reportesProfes/{claseId_uid}; avisa al dueño del club y al super-admin
+exports.reportarClase = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  await exigirFlagProfes();
+  const d = request.data || {};
+  const claseId = texto(d.claseId, 200);
+  const detalle = texto(d.texto, 1000);
+  if (detalle.length < 10) throw new HttpsError("invalid-argument", "Contanos qué pasó (al menos 10 letras)");
+  const snap = await claseDocRef(claseId).get();
+  if (!snap.exists) throw new HttpsError("not-found", "La clase no existe");
+  const c = snap.data();
+  const estuvo = (c.alumnosUids || []).includes(uid) || (c.bajas || []).some((b) => b && b.uid === uid);
+  if (!estuvo) throw new HttpsError("permission-denied", "No estuviste en esta clase");
+  const ref = db.collection("reportesProfes").doc(`${claseId}_${uid}`);
+  const nombre = await nombreDeUsuario(uid, "Alumno");
+  try {
+    await ref.create({ uid, nombre, claseId, profeUid: c.profeUid, profeNombre: c.profeNombre || "", clubId: c.clubId, clubNombre: c.clubNombre || "", fecha: c.fecha, texto: detalle, estado: "nuevo", creadoEn: FieldValue.serverTimestamp() });
+  } catch (err) {
+    if (err && (err.code === 6 || /already exists/i.test(String(err.message)))) throw new HttpsError("already-exists", "Ya nos avisaste de esta clase: lo estamos viendo");
+    throw err;
+  }
+  const club = (await db.collection("clubs").doc(c.clubId).get()).data() || {};
+  const admins = await db.collection("superadmins").get();
+  const destinos = new Set([club.ownerUid, ...admins.docs.map((a) => a.id)].filter(Boolean));
+  const aviso = { tipo: "reporte_profe", titulo: "Aviso sobre una clase", mensaje: `${nombre} avisó de un problema con la clase de ${c.profeNombre} (${textoClase(c)}): "${detalle.slice(0, 140)}${detalle.length > 140 ? "…" : ""}"`, link: "/admin/profes", icono: "⚠️" };
+  await Promise.all([...destinos].map((u) => avisoA(u, aviso).catch(() => {})));
+  logger.info(`reportarClase ${claseId}: ${uid} → ${destinos.size} avisos`);
+  return { ok: true };
+});
+
+// Club (configurarClub): invita a un profe por email (con cuenta y perfil de profe) o por uid (desde el directorio).
+// Si el profe ya había pedido sumarse, la invitación lo aprueba. Sin cuenta o sin perfil: { ok: false, motivo }.
+exports.invitarProfe = onCall({ region: REGION }, async (request) => {
+  const uid = exigirAuth(request);
+  await exigirFlagProfes();
+  const d = request.data || {};
+  const clubId = texto(d.clubId, 80);
+  if (!clubId) throw new HttpsError("invalid-argument", "clubId");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const acceso = await accesoClub(clubRef, uid, ["configurarClub"]);
+  if (!acceso.esStaff) throw new HttpsError("permission-denied", "Solo quien configura el club invita profes");
+  let profeUid = texto(d.profeUid, 128);
+  const email = texto(d.email, 200).toLowerCase();
+  if (!profeUid) {
+    if (!email.includes("@")) throw new HttpsError("invalid-argument", "Poné el email del profe");
+    try {
+      profeUid = (await getAuth().getUserByEmail(email)).uid;
+    } catch (err) {
+      if (err && err.code === "auth/user-not-found") return { ok: false, motivo: "sin-cuenta" };
+      throw err;
+    }
+  }
+  const pSnap = await profeDocRef(profeUid).get();
+  if (!pSnap.exists) return { ok: false, motivo: "sin-perfil" };
+  const vRef = clubRef.collection("profes").doc(profeUid);
+  const estado = await db.runTransaction(async (tx) => {
+    const v = await tx.get(vRef);
+    const actual = v.exists ? v.data().estado : null;
+    if (actual === "activo" || actual === "invitado") return actual;
+    if (actual === "pendiente") {
+      tx.update(vRef, { estado: "activo", aprobadoPor: uid, actualizadoEn: FieldValue.serverTimestamp() });
+      return "activo";
+    }
+    tx.set(vRef, { uid: profeUid, nombre: pSnap.data().nombre || "", estado: "invitado", origen: "club", cobra: "profe", bloqueaCancha: true, canchas: [], tarifas: {}, invitadoPor: uid, creadoEn: FieldValue.serverTimestamp(), actualizadoEn: FieldValue.serverTimestamp() });
+    return "invitado";
+  });
+  if (estado === "invitado") await avisoA(profeUid, { tipo: "profe_invitacion", titulo: "Te invitaron a dar clases", mensaje: `${acceso.club.nombre || "Un club"} quiere sumarte como profe. Aceptá desde tu panel de profe.`, link: "/profe/panel", icono: "🎾" }).catch(() => {});
+  return { ok: true, estado, profeUid };
+});
+
+// Espejo del vínculo en el perfil del profe (clubIds para el directorio, clubes para mostrar) + avisos
+exports.onProfeClubEscrito = onDocumentWritten("clubs/{clubId}/profes/{uid}", async (event) => {
+  const { clubId, uid } = event.params;
+  const antes = event.data && event.data.before && event.data.before.exists ? event.data.before.data() : null;
+  const despues = event.data && event.data.after && event.data.after.exists ? event.data.after.data() : null;
+  const clubRef = db.collection("clubs").doc(clubId);
+  try {
+    const [clubSnap, pSnap] = await Promise.all([clubRef.get(), profeDocRef(uid).get()]);
+    const club = clubSnap.exists ? clubSnap.data() : {};
+    const estado = despues ? despues.estado : null;
+    if (pSnap.exists) {
+      const cambios = {};
+      if (!despues || estado === "baja") {
+        cambios[`clubes.${clubId}`] = FieldValue.delete();
+        cambios.clubIds = FieldValue.arrayRemove(clubId);
+      } else {
+        cambios[`clubes.${clubId}`] = { nombre: club.nombre || "", ciudad: club.ciudad || "", provincia: club.provincia || "", estado, cobra: despues.cobra === "club" ? "club" : "profe" };
+        cambios.clubIds = estado === "activo" ? FieldValue.arrayUnion(clubId) : FieldValue.arrayRemove(clubId);
+      }
+      await pSnap.ref.update(cambios);
+    }
+    const era = antes ? antes.estado : null;
+    if (era === estado) return;
+    const nombre = (despues && despues.nombre) || (antes && antes.nombre) || "Un profe";
+    if (estado === "pendiente") {
+      await avisarStaff(clubRef, ["configurarClub"], { tipo: "profe_solicitud", titulo: "Un profe quiere dar clases en el club", mensaje: `${nombre} pidió sumarse como profe. Aprobalo desde Profes.`, link: "/admin/profes", icono: "🎾" });
+    } else if (estado === "activo" && era === "pendiente") {
+      await avisoA(uid, { tipo: "profe_aprobado", titulo: "¡Ya das clases en el club!", mensaje: `${club.nombre || "El club"} te aprobó como profe. Cargá tus horarios ahí.`, link: "/profe/panel", icono: "🎾" });
+    } else if (estado === "activo" && era === "invitado") {
+      await avisarStaff(clubRef, ["configurarClub"], { tipo: "profe_acepto", titulo: "Un profe aceptó la invitación", mensaje: `${nombre} ya figura como profe del club.`, link: "/admin/profes", icono: "🎾" });
+    } else if ((estado === "baja" || !despues) && era === "activo") {
+      await avisoA(uid, { tipo: "profe_baja", titulo: "Ya no figurás en un club", mensaje: `Tu vínculo como profe con ${club.nombre || "un club"} quedó dado de baja. Las clases ya reservadas siguen en tu agenda.`, link: "/profe/panel", icono: "🎾" });
+    }
+  } catch (err) {
+    logger.error(`onProfeClubEscrito ${clubId}/${uid}`, err);
+  }
+});
+
+// Cuenta eliminada: el perfil público de profe (con elogios y disponibilidad) y sus vínculos con clubes se van
+exports.onUserDeletedProfe = functionsV1
+  .region(REGION)
+  .auth.user()
+  .onDelete(async (user) => {
+    const uid = user.uid;
+    const ref = profeDocRef(uid);
+    const snap = await ref.get();
+    if (!snap.exists) return;
+    const clubIds = Object.keys(snap.data().clubes || {});
+    await db.recursiveDelete(ref);
+    await escribirEnLotes(clubIds.map((c) => (b) => b.delete(db.collection("clubs").doc(c).collection("profes").doc(uid))));
+    logger.info(`onUserDeletedProfe ${uid}: perfil de profe borrado (${clubIds.length} clubes)`);
+  });
+
+// ----- Pago online de una clase (cobra el club, con su Mercado Pago) -----
+// pagosMp tipo "clase" { claseId, alumnoUid }: el webhook lo aplica en aplicarPagoAprobado → aplicarPagoClaseEnTx
+exports.mpPagarClase = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, async (request) => {
+  const uid = exigirAuth(request);
+  await exigirFlagProfes();
+  const P = await profesUtil();
+  const claseId = texto(request.data && request.data.claseId, 200);
+  const snap = await claseDocRef(claseId).get();
+  if (!snap.exists) throw new HttpsError("not-found", "La clase no existe");
+  const c = snap.data();
+  const insc = c.inscriptos && c.inscriptos[uid];
+  if (!insc) throw new HttpsError("permission-denied", "No reservaste esta clase");
+  if (c.estado !== "confirmada") throw new HttpsError("failed-precondition", "La clase no está confirmada");
+  if ((insc.pago || {}).estado === "pagado") throw new HttpsError("failed-precondition", "Ya está paga");
+  if (P.inicioClaseMs(c.fecha, c.horaInicio) <= Date.now()) throw new HttpsError("failed-precondition", "La clase ya empezó: pagala en el club");
+  const clubRef = db.collection("clubs").doc(c.clubId);
+  const [clubSnap, vSnap, factSnap] = await Promise.all([clubRef.get(), clubRef.collection("profes").doc(c.profeUid).get(), db.collection("configuracionPadely").doc("facturacion").get()]);
+  const club = clubSnap.exists ? clubSnap.data() : {};
+  const vinculo = vSnap.exists ? vSnap.data() : null;
+  if (!P.pagoOnlineDisponible(vinculo, club)) throw new HttpsError("failed-precondition", "Esta clase se paga en el club o al profe");
+  const tokens = await tokensDelClub(clubRef);
+  if (!tokens || !tokens.accessToken) throw new HttpsError("failed-precondition", "El club no tiene Mercado Pago conectado");
+  const monto = Number(insc.monto) || 0;
+  if (monto <= 0) throw new HttpsError("failed-precondition", "No hay nada para pagar");
+  const comisionPct = P.comisionClasesPct(factSnap.exists ? factSnap.data() : null);
+  // Una preferencia pendiente y vigente del mismo alumno y monto se reutiliza
+  const pendientes = await clubRef.collection("pagosMp").where("claseId", "==", claseId).where("estado", "==", "pendiente").get();
+  const previa = pendientes.docs.map((x) => ({ id: x.id, ...x.data() })).find((p) => p.alumnoUid === uid && p.monto === monto && p.venceEn && p.venceEn.toMillis() > Date.now());
+  if (previa) return { ok: true, initPoint: previa.initPoint, monto: previa.monto, reutilizado: true };
+  const nombre = insc.nombre || (await nombreDeUsuario(uid, "Alumno"));
+  const pagoMpRef = clubRef.collection("pagosMp").doc();
+  const pref = mp.cuerpoPreferencia({ titulo: `${club.nombre || "Club"} · Clase con ${c.profeNombre} · ${textoClase(c)}`, monto, pagoMpId: pagoMpRef.id, pagador: { uid, nombre }, notificationUrl: `${MP_WEBHOOK_URL}?club=${c.clubId}`, backUrl: `${APP_URL}/mis-clases`, comisionPct });
+  let r;
+  try {
+    r = await mpFetch("/checkout/preferences", { method: "POST", token: tokens.accessToken, body: pref.body, idempotencia: pagoMpRef.id });
+  } catch (err) {
+    logger.error(`mpPagarClase ${c.clubId}: preferencia rechazada (${err.status || ""}) ${err.message}`);
+    throw new HttpsError("unavailable", "Mercado Pago no aceptó el cobro. Probá de nuevo en un momento.");
+  }
+  const initPoint = r.init_point || r.sandbox_init_point || null;
+  if (!r.id || !initPoint) throw new HttpsError("unavailable", "Mercado Pago no devolvió el link de pago");
+  await pagoMpRef.set({ tipo: "clase", estado: "pendiente", clubId: c.clubId, claseId, alumnoUid: uid, profeUid: c.profeUid, grupoId: null, reservaId: null, creditoAplicado: 0, creditoIds: [], participanteIds: [], lineas: [], piezas: [], monto: pref.total, comision: pref.fee, comisionPct, preferenceId: String(r.id), initPoint, linkCorto: null, pedido: null, sandboxInitPoint: r.sandbox_init_point || null, paymentId: null, pagador: { uid, nombre }, creadoPor: uid, creadoEn: FieldValue.serverTimestamp(), venceEn: Timestamp.fromMillis(pref.venceEnMs), aprobadoEn: null, ventaNumero: null, devolucion: null, liveMode: tokens.liveMode === true, actualizadoEn: FieldValue.serverTimestamp() });
+  logger.info(`mpPagarClase ${c.clubId}/${pagoMpRef.id}: clase ${claseId} $${pref.total} (comisión ${comisionPct} %) por ${uid}`);
+  return { ok: true, initPoint, monto: pref.total, reutilizado: false };
+});
+
+// Dentro de la transacción de aplicarPagoAprobado: el pago de una clase. Venta online (MP-…, línea "clase"), el pago
+// del inscripto queda "pagado" y la comisión de Padely se anota en comisionesClases/{paymentId} (MP ya la retuvo como
+// marketplace_fee). Si la clase se canceló o el alumno ya no está, el pago queda como excedente para devolver.
+async function aplicarPagoClaseEnTx(tx, { clubRef, pagoMpRef, pm, pago, paymentId, montoPagado }) {
+  const cRef = claseDocRef(String(pm.claseId));
+  const contadorRef = clubRef.collection("contadoresDispositivos").doc("MP");
+  const comRef = db.collection("comisionesClases").doc(paymentId);
+  const [cSnap, contSnap, comSnap] = await Promise.all([tx.get(cRef), tx.get(contadorRef), tx.get(comRef)]);
+  if (comSnap.exists) return { resultado: "ya aplicado", pm };
+  const clase = cSnap.exists ? cSnap.data() : null;
+  const insc = clase && clase.inscriptos ? clase.inscriptos[pm.alumnoUid] : null;
+  if (!clase || clase.estado === "cancelada" || !insc || (insc.pago || {}).estado === "pagado") {
+    tx.update(pagoMpRef, { estado: "aprobado", paymentId, aprobadoEn: FieldValue.serverTimestamp(), ventaNumero: null, montoPagado, montoAplicado: 0, excedente: montoPagado, excedenteDevuelto: null, pagoTardio: true, estadoMp: pago.status, actualizadoEn: FieldValue.serverTimestamp() });
+    return { resultado: "clase cancelada o ya paga → excedente", pm, excedente: montoPagado, tardio: true };
+  }
+  const n = (Number(contSnap.exists ? contSnap.data().usado : 0) || 0) + 1;
+  const numero = mp.numeroMp(n);
+  const monto = Number(pm.monto) || 0;
+  const nombreLinea = `Clase · ${clase.profeNombre || "Profe"} · ${fechaCortaArgentina(clase.fecha)} ${clase.horaInicio || ""}`.trim();
+  tx.set(clubRef.collection("ventas").doc(numero), {
+    numero,
+    publicId: cc.generarToken(16),
+    dispositivo: "Online",
+    codigoDispositivo: "MP",
+    secuencia: n,
+    cajaId: null,
+    items: [{ productoId: null, nombre: nombreLinea, precio: monto, cantidad: 1, descuento: 0, subtotal: monto, tipoLinea: "clase", costo: null }],
+    subtotal: monto,
+    descuento: null,
+    descuentoTotal: 0,
+    total: monto,
+    pagos: [{ medio: "mercadopago", monto, ref: paymentId }],
+    pagado: monto,
+    vuelto: 0,
+    cuentaId: null,
+    reservaId: null,
+    claseId: pm.claseId,
+    participanteIds: [],
+    cliente: { nombre: (pm.pagador && pm.pagador.nombre) || insc.nombre || null },
+    creadoPor: (pm.pagador && pm.pagador.uid) || pm.creadoPor || "mercadopago",
+    creadoPorNombre: (pm.pagador && pm.pagador.nombre) || "Mercado Pago",
+    estado: "ok",
+    anulacion: null,
+    aplicado: false,
+    fiscal: null,
+    mpPaymentId: paymentId,
+    pagoMpId: pagoMpRef.id,
+    mpMontoCobrado: montoPagado,
+    mpExcedente: 0,
+    creadoEn: FieldValue.serverTimestamp(),
+    actualizadoEn: FieldValue.serverTimestamp(),
+  });
+  tx.set(contadorRef, { codigo: "MP", dispositivo: "Online", usado: n, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
+  tx.update(cRef, { [`inscriptos.${pm.alumnoUid}.pago`]: { estado: "pagado", medio: "mercadopago", monto, pagoMpId: pagoMpRef.id, paymentId, ventaNumero: numero, en: Timestamp.now() }, actualizadoEn: FieldValue.serverTimestamp() });
+  tx.set(comRef, { clubId: clubRef.id, claseId: pm.claseId, profeUid: clase.profeUid, uid: pm.alumnoUid, monto, pct: Number(pm.comisionPct) || 0, comision: Number(pm.comision) || 0, retenidaPorMp: true, facturada: false, en: FieldValue.serverTimestamp() });
+  tx.update(pagoMpRef, { estado: "aprobado", paymentId, aprobadoEn: FieldValue.serverTimestamp(), ventaNumero: numero, montoPagado, montoAplicado: monto, excedente: 0, estadoMp: pago.status, actualizadoEn: FieldValue.serverTimestamp() });
+  return { resultado: "clase pagada", pm, clase, numero, total: monto };
+}
+
+async function avisarClasePagada(clubRef, r) {
+  const c = r.clase;
+  const monto = `$ ${Math.round(Number(r.total) || 0).toLocaleString("es-AR")}`;
+  const quien = (r.pm.pagador && r.pm.pagador.nombre) || "Un alumno";
+  const avisos = [avisoA(c.profeUid, { tipo: "clase_pagada", titulo: "Clase pagada por Mercado Pago", mensaje: `${quien} pagó ${monto} · ${textoClase(c)} en ${c.clubNombre}.`, link: "/profe/agenda", icono: "💳" })];
+  if (r.pm.alumnoUid) avisos.push(avisoA(r.pm.alumnoUid, { tipo: "mp_pago_aprobado", titulo: `Clase pagada · ${monto}`, mensaje: `Tu clase con ${c.profeNombre} (${textoClase(c)}) quedó paga con Mercado Pago.`, link: "/mis-clases", icono: "💳" }));
+  avisos.push(avisarStaff(clubRef, PERMISOS_COBRO, { tipo: "mp_clase", titulo: "Clase pagada por Mercado Pago", mensaje: `${quien} pagó ${monto} de la clase con ${c.profeNombre} (${textoClase(c)}).`, link: "/admin/profes", icono: "💳" }));
+  await Promise.all(avisos.map((a) => a.catch((err) => logger.error("avisarClasePagada", err))));
+}

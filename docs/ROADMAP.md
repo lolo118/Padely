@@ -49,3 +49,15 @@ esquema.
 - Fichaje: control de turnos manuales superpuestos; límite de PIN por IP además de por sesión de la PC.
 - Mini torneo: limpiar `editores/*` al borrar; validar en el servidor los nombres escritos a mano (hoy no).
 - Correr `npm run test:rules` (hace falta instalar Java) para los tests de reglas de P3-17.
+
+## Follow-ups de Profes (flags.profes)
+- **Mercado Pago del profe**: hoy el pago online de una clase existe solo cuando cobra el club (con su MP conectado).
+  Que el profe conecte su propia cuenta (OAuth como clubes y organizadores, `profes/{uid}/privado/mercadopago`, webhook
+  `?profe=`) queda para después.
+- Super-admin: pantalla con los avisos de `reportesProfes` (hoy llegan como notificación al dueño del club y al
+  super-admin) y con `comisionesClases` (hoy se ven en la consola).
+- Cuenta eliminada: las clases futuras donde la persona es alumna no se cancelan solas (el perfil de profe sí se borra).
+- Dar de baja a un profe no cancela sus clases futuras en el club (se cancelan a mano desde Profes → Clases).
+- Clases de 90 min bloquean 2 horas de cancha (la grilla es por hora); slots de media hora si algún club lo pide.
+- Elogios: moderación de comentarios (hoy cualquiera de 200 letras se publica tal cual).
+- Correr `npm run test:rules` para los tests de reglas de profes.
