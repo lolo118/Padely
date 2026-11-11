@@ -11,6 +11,7 @@
 // Versión fija de la Graph API (v26.0 salió el 2026-07-29; ver docs/WHATSAPP.md). Cambiarla es una decisión explícita.
 const GRAPH_API_VERSION = "v26.0";
 const GRAPH_URL = "https://graph.facebook.com";
+const tel = require("./telefonos");
 
 const LIM = { boton: 20, botones: 3, cuerpoInteractivo: 1024, cuerpoLista: 4096, texto: 4096, fila: 24, descripcion: 72, filas: 10, botonLista: 20, seccion: 24, cta: 20, idFila: 200 };
 
@@ -74,10 +75,41 @@ function payloadCtaUrl(to, body, textoBoton, url) {
 }
 
 // Sender real. fetchImpl se inyecta en los tests; nunca registra el token.
-function crearSender({ phoneNumberId, token, fetchImpl = globalThis.fetch, version = GRAPH_API_VERSION, logger = null }) {
+// formatos (opcional): { conocido(to) → Promise<string|null>, recordar(to, usado) → Promise } — el formato del número
+// que ya funcionó para ese chat (celulares argentinos: ver telefonos.js). Si Meta rechaza el destinatario (131030), se
+// prueba UNA vez cada formato alternativo; el que anda se recuerda (en memoria y con formatos.recordar).
+function crearSender({ phoneNumberId, token, fetchImpl = globalThis.fetch, version = GRAPH_API_VERSION, logger = null, formatos = null }) {
   if (!phoneNumberId || !token) throw new Error("crearSender: phoneNumberId y token");
   const url = `${GRAPH_URL}/${version}/${encodeURIComponent(phoneNumberId)}/messages`;
+  const recordados = new Map();
   async function enviar(payload) {
+    if (!payload.to) return enviarUna(payload);
+    const to = String(payload.to);
+    let primero = recordados.get(to);
+    if (!primero && formatos && formatos.conocido) primero = (await formatos.conocido(to).catch(() => null)) || null;
+    primero = primero || to;
+    try {
+      return await enviarUna({ ...payload, to: primero });
+    } catch (err) {
+      if (!tel.esErrorDeDestinatario(err)) throw err;
+      let ultimo = err;
+      for (const alt of tel.alternativas(to)) {
+        if (alt === primero) continue;
+        try {
+          const r = await enviarUna({ ...payload, to: alt });
+          recordados.set(to, alt);
+          if (logger) logger.info(`whatsapp: destinatario aceptado con el formato alternativo n.º ${tel.alternativas(to).indexOf(alt)}`);
+          if (formatos && formatos.recordar) await formatos.recordar(to, alt).catch(() => {});
+          return r;
+        } catch (e) {
+          if (!tel.esErrorDeDestinatario(e)) throw e;
+          ultimo = e;
+        }
+      }
+      throw ultimo;
+    }
+  }
+  async function enviarUna(payload) {
     const res = await fetchImpl(url, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(payload) });
     const txt = await res.text();
     let json = null;

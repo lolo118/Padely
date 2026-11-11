@@ -55,7 +55,8 @@ const soloDigitos = (s) => String(s || "").replace(/\D/g, "");
 // Id del chat y de la identidad del invitado: HMAC del teléfono (los números son pocos: un SHA-256 pelado se adivina).
 // 24 caracteres hex: cabe en ids de documentos y en un link.
 function hashTelefono(waId, secreto) {
-  return crypto.createHmac("sha256", clave(secreto, "telefono")).update(soloDigitos(waId)).digest("hex").slice(0, 24);
+  // Sobre la forma canónica (549…): el mismo celular argentino escrito con o sin 9 / 15 es el mismo chat e invitado
+  return crypto.createHmac("sha256", clave(secreto, "telefono")).update(require("./telefonos").canonico(waId)).digest("hex").slice(0, 24);
 }
 
 // "+54 9 381 ••• 1234" — lo que ve el club y cualquiera con sesión en la grilla (el número entero va en contactosReservas)

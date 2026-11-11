@@ -135,7 +135,10 @@ La Graph API está fija en **v26.0** (`functions/whatsapp/graph.js`, `GRAPH_API_
 6. **App secret → Secret Manager**: App settings → Basic → App secret → `WA_APP_SECRET`. Elegir un verify token → `WA_VERIFY_TOKEN`, y `WA_TOKEN_KEY`. Ver los comandos de arriba.
 7. **Deploy** de reglas, índices (TTL de `whatsappMensajes`) y functions, con un script `.phase3-logs\NN-whatsapp-deploy.cmd` que verifique que existan los tres secretos.
 8. **Webhook**: en WhatsApp → *Configuration* → Webhook → Edit:
-   - Callback URL: la URL de `waWebhook`. Sale en el log del deploy, algo como `https://wawebhook-xxxxx-uc.a.run.app`.
+   - Callback URL: la URL de `waWebhook`. Cualquiera de las dos sirve:
+     - `https://us-central1-padely-dev.cloudfunctions.net/waWebhook` (la de siempre de las Functions 2nd gen), o
+     - la de Cloud Run que muestra el deploy: `https://wawebhook-<hash>-uc.a.run.app` (para padely-dev el hash es `u7bbo225xq`, el mismo que `mpwebhook`, así que sería `https://wawebhook-u7bbo225xq-uc.a.run.app`; confirmarlo en el log).
+   - En Meta la página ya no está en "WhatsApp → Configuration": está en **WhatsApp → Step 2. Production setup → Configure Webhooks** (nov. 2026).
    - Verify token: el valor de `WA_VERIFY_TOKEN`.
    - Meta hace el GET de verificación; tiene que quedar en verde.
 9. **Campos del webhook**: suscribirse a **`messages`**. Para coexistencia (más adelante) también a **`smb_message_echoes`**, `smb_app_state_sync` y `history`.
@@ -143,7 +146,8 @@ La Graph API está fija en **v26.0** (`functions/whatsapp/graph.js`, `GRAPH_API_
     - `waConectarClub` valida el token contra Meta (`GET /{phone-number-id}`) y suscribe la app a la WABA (`POST /{waba-id}/subscribed_apps`).
     - Después guarda el token cifrado y crea el índice.
 11. **Prender el flag**: Super-admin → Planes → Funciones de la plataforma → *Bot de reservas por WhatsApp*.
-12. **Probar**: desde tu celular (destinatario verificado), escribí "hola" al número de prueba.
+12. **Probar**: desde tu celular (destinatario verificado), escribí "hola" al número de prueba. Si no contesta, ver "Si el webhook verifica pero los mensajes reales no llegan" más abajo.
+    - Celulares argentinos: Meta manda el número como `549…` pero el número de prueba suele aceptar la respuesta solo como `54…` sin el 9 (error 131030). El bot prueba solo los otros formatos (sin el 9 y con 15) y recuerda el que anduvo para ese chat; en el log queda `whatsapp: destinatario aceptado con el formato alternativo…`.
     - Para la seña con MP, el club tiene que tener Mercado Pago conectado (cuentas de prueba de MP) y una seña configurada.
     - El link de MP se abre mejor en una ventana de incógnito (ver handoff).
 
@@ -156,7 +160,21 @@ node functions/whatsapp/simular.js
 
 Usa un club y una grilla en memoria. Los comandos son `/pagar`, `/eco`, `/mas 31`, `/reservas`, `/estado` y `/salir`.
 
-## Para otros clubes: verificación, Tech Provider y Embedded Signup
+## Si el webhook verifica pero los mensajes reales no llegan (modo Development)
+
+Meta avisa en la página de webhooks que, **mientras la app está en modo Development, el webhook solo recibe los eventos de prueba que se mandan desde el panel**. Cómo darse cuenta y qué hacer:
+
+1. **Mirar el log**: `npx firebase functions:log --only waWebhook --project padely-dev`. Cada POST con firma válida deja una línea `waWebhook: POST firmado OK · campos … · {"nuevos":…}` (también los estados sent/delivered/read, que aparecen como `messages(statuses)`).
+   - Si al escribirle "hola" al número de prueba **no aparece ninguna línea**, Meta no está entregando: es el modo Development.
+   - Si aparece `waWebhook: firma …`, el `WA_APP_SECRET` no coincide con el App secret de la app.
+   - Si aparece la línea pero con `"ignorados":1`, el número no está conectado a un club (paso 10) o el flag está apagado.
+2. **Pasar la app a Live**: arriba en el panel de la app, el selector **App mode: Development → Live**. Pide antes, en *App settings → Basic*:
+   - **Privacy policy URL**: `https://padely.netlify.app/privacidad` (la página de privacidad de Padely, ya publicada). Con dominio propio, cambiarla.
+   - (Si la pide) **Terms of service URL**: `https://padely.netlify.app/terminos`; categoría de la app; ícono.
+   - Para usar el número de prueba y el propio negocio **no hace falta App Review** ni la verificación del negocio: el App Review (Advanced Access) es para atender números de otros negocios (los clubes), ver la sección siguiente.
+3. Volver a escribir "hola" y mirar el log otra vez.
+
+
 
 El número de prueba solo escribe a destinatarios verificados. Para que cada club conecte **su** número:
 

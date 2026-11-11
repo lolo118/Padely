@@ -50,6 +50,19 @@ function eventosDePayload(body) {
   return eventos;
 }
 
+// "messages", "smb_message_echoes"… (con "statuses" si el cambio de messages solo trae estados), para el log
+function camposDelPayload(body) {
+  const campos = new Set();
+  for (const entry of (body && Array.isArray(body.entry) && body.entry) || []) {
+    for (const change of (entry && entry.changes) || []) {
+      if (!change || !change.field) continue;
+      const v = change.value || {};
+      campos.add(change.field === "messages" && !v.messages && v.statuses ? "messages(statuses)" : change.field);
+    }
+  }
+  return [...campos];
+}
+
 // deps: { appSecret(), verifyToken(), rutear(phoneNumberId) → Promise<clubId|null>, guardarEvento(evento, clubId) →
 // Promise<boolean (true = nuevo)>, logger }
 function crearManejadorWebhook(deps) {
@@ -95,10 +108,12 @@ function crearManejadorWebhook(deps) {
       res.status(500).send("error");
       return { ...resumen, error: true };
     }
-    if (resumen.nuevos || resumen.duplicados || resumen.ignorados) log.info(`waWebhook: ${JSON.stringify(resumen)}`);
+    // Una línea por CADA POST con firma válida (también los de estados sent/delivered/read): así el log dice si Meta
+    // está entregando. Sin datos personales: solo los campos y los contadores.
+    log.info(`waWebhook: POST firmado OK · campos ${camposDelPayload(req.body).join(",") || "ninguno"} · ${JSON.stringify(resumen)}`);
     res.status(200).send("ok");
     return resumen;
   };
 }
 
-module.exports = { eventosDePayload, crearManejadorWebhook };
+module.exports = { eventosDePayload, camposDelPayload, crearManejadorWebhook };

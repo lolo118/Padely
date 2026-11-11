@@ -5469,7 +5469,17 @@ async function waSenderDelClub(clubId) {
   const snap = await waPrivadoRef(clubId).get();
   const c = snap.exists ? snap.data() : null;
   if (!c || c.estado !== "conectado" || !c.tokenRef || !c.phoneNumberId) return null;
-  return waGraph.crearSender({ phoneNumberId: c.phoneNumberId, token: waSeg.descifrarToken(c.tokenRef, WA_TOKEN_KEY.value()), logger });
+  // Celulares argentinos: el formato del número que Meta aceptó para ese chat (waIdEnvio). Va en un doc aparte
+  // (whatsappChats/{h}/meta/formato) porque el motor reescribe el chat entero en cada paso. Solo Functions.
+  const chatRef = (to) => db.collection("clubs").doc(clubId).collection("whatsappChats").doc(waSeg.hashTelefono(to, WA_TOKEN_KEY.value())).collection("meta").doc("formato");
+  const formatos = {
+    conocido: async (to) => {
+      const s = await chatRef(to).get();
+      return s.exists ? s.data().waIdEnvio || null : null;
+    },
+    recordar: (to, usado) => chatRef(to).set({ waIdEnvio: usado }, { merge: true }),
+  };
+  return waGraph.crearSender({ phoneNumberId: c.phoneNumberId, token: waSeg.descifrarToken(c.tokenRef, WA_TOKEN_KEY.value()), logger, formatos });
 }
 
 // Seña de una reserva del bot: el MISMO camino que mpCrearPago (crearPreferenciaMp), sin uid (el invitado no tiene cuenta)
