@@ -521,3 +521,54 @@ describe("profes", () => {
     await assertSucceeds(getDoc(slot(como("jugador"))));
   });
 });
+
+describe("bot de WhatsApp", () => {
+  const BOT = { canchaId: "c1", fecha: "2026-11-20", hora: "20:00", grupoId: "c1_2026-11-20_2000", status: "confirmada", jugadorUid: null, nombreJugador: "Ana", origen: "whatsapp", waHash: "abc123", telefonoMascara: "+549 ••• 1234", seña: 0, señaPagada: false };
+  const { origen: _o, waHash: _w, telefonoMascara: _t, ...SIN_MARCA } = BOT;
+  const botRef = (db) => doc(db, "clubs", CLUB, "reservas", "c1_2026-11-20_2000");
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(botRef(db), BOT);
+      await setDoc(doc(db, "clubs", CLUB, "privado", "whatsapp"), { phoneNumberId: "111", wabaId: "222", tokenRef: "v1.x.y.z", estado: "conectado" });
+      await setDoc(doc(db, "whatsappNumeros", "111"), { clubId: CLUB, estado: "conectado" });
+      await setDoc(doc(db, "whatsappMensajes", "m1"), { clubId: CLUB, waId: "5493815551234" });
+      await setDoc(doc(db, "clubs", CLUB, "whatsappChats", "abc123"), { waId: "5493815551234", paso: "inicio" });
+    });
+  });
+  test("privado/whatsapp (token cifrado), los mensajes y los chats: ningún cliente, ni el dueño ni el super-admin", async () => {
+    for (const quien of ["dueno", "encargado", "sa"]) {
+      await assertFails(getDoc(doc(como(quien), "clubs", CLUB, "privado", "whatsapp")));
+      await assertFails(getDoc(doc(como(quien), "clubs", CLUB, "whatsappChats", "abc123")));
+      await assertFails(getDoc(doc(como(quien), "whatsappMensajes", "m1")));
+    }
+    await assertFails(setDoc(doc(como("dueno"), "clubs", CLUB, "privado", "whatsapp"), { tokenRef: "x" }));
+    await assertFails(setDoc(doc(como("dueno"), "clubs", CLUB, "whatsappChats", "abc123"), { paso: "pago" }));
+  });
+  test("índice whatsappNumeros: lo lee solo el super-admin; nadie lo escribe", async () => {
+    await assertSucceeds(getDoc(doc(como("sa"), "whatsappNumeros", "111")));
+    await assertFails(getDoc(doc(como("dueno"), "whatsappNumeros", "111")));
+    await assertFails(getDoc(doc(anonimo(), "whatsappNumeros", "111")));
+    await assertFails(setDoc(doc(como("sa"), "whatsappNumeros", "999"), { clubId: CLUB, estado: "conectado" }));
+  });
+  test("las reservas del bot se leen como cualquier otra (grilla) y el club las gestiona sin tocar la marca", async () => {
+    await assertSucceeds(getDoc(botRef(como("jugador"))));
+    await assertSucceeds(updateDoc(botRef(como("dueno")), { status: "cancelada" }));
+    await assertFails(updateDoc(botRef(como("dueno")), { waHash: "otro" }));
+    await assertFails(updateDoc(botRef(como("dueno")), { origen: "web" }));
+    await assertFails(updateDoc(botRef(como("dueno")), { telefonoMascara: "+54 ••• 0000" }));
+  });
+  test("ningún cliente crea una reserva con la marca del bot", async () => {
+    const nueva = (db) => doc(db, "clubs", CLUB, "reservas", "c1_2026-11-21_2000");
+    await assertFails(setDoc(nueva(como("dueno")), { ...BOT, fecha: "2026-11-21", grupoId: "c1_2026-11-21_2000" }));
+    await assertFails(setDoc(nueva(como("dueno")), { ...SIN_MARCA, origen: "whatsapp", fecha: "2026-11-21", grupoId: "c1_2026-11-21_2000" }));
+    await assertSucceeds(setDoc(nueva(como("dueno")), { ...SIN_MARCA, fecha: "2026-11-21", grupoId: "c1_2026-11-21_2000" }));
+  });
+  test("un turno del bot cancelado se puede volver a reservar desde la app (el documento nuevo no lleva la marca)", async () => {
+    await env.withSecurityRulesDisabled((ctx) => updateDoc(botRef(ctx.firestore()), { status: "cancelada" }));
+    await assertSucceeds(setDoc(botRef(como("dueno")), { ...SIN_MARCA, nombreJugador: "Bloqueo" }));
+  });
+  test("el jugador no cancela una reserva del bot que no está en su cuenta", async () => {
+    await assertFails(updateDoc(botRef(como("jugador")), { status: "cancelada" }));
+  });
+});

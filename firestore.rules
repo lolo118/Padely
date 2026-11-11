@@ -180,6 +180,27 @@ service cloud.firestore {
         && !request.resource.data.keys().hasAny(['señaMedio', 'señaPagoMpId', 'señaResultado', 'canceladaPor']);
     }
 
+    // Bot de WhatsApp: las reservas que hace el bot (origen 'whatsapp', waHash = id del chat) las escriben solo las
+    // Functions. Ningún cliente crea una con esa marca ni la cambia; sí puede pisar un turno cancelado (la saca entera).
+    function reservaBotIntacta() {
+      let nuevo = request.resource.data;
+      return (nuevo.get('waHash', null) == null && nuevo.get('origen', null) != 'whatsapp')
+        || (resource != null
+            && nuevo.get('waHash', null) == resource.data.get('waHash', null)
+            && nuevo.get('origen', null) == resource.data.get('origen', null)
+            && nuevo.get('telefonoMascara', null) == resource.data.get('telefonoMascara', null));
+    }
+
+    // Bot de WhatsApp (docs/WHATSAPP.md): índice número de Meta → club (lo lee el super-admin para el formulario de
+    // conexión; lo escriben waConectarClub / waDesconectarClub) y los mensajes recibidos (idempotencia; solo Functions)
+    match /whatsappNumeros/{phoneNumberId} {
+      allow read: if superAdmin();
+      allow write: if false;
+    }
+    match /whatsappMensajes/{mensajeId} {
+      allow read, write: if false;
+    }
+
     // "Mis reservas": a player reads his reservations across clubs (collection group query)
     match /{path=**}/reservas/{reservaId} {
       allow read: if signedIn();
@@ -869,6 +890,7 @@ service cloud.firestore {
         // Email y teléfono de quien reserva van en contactosReservas/{reservaId}, nunca acá.
         allow create: if sinContacto(['email', 'telefono'])
           && !nuevaReservaDeTorneo()
+          && reservaBotIntacta()
           && (esStaff(clubId, 'gestionarReservas')
               || (noAnonimo()
                   && request.resource.data.jugadorUid == request.auth.uid
@@ -879,6 +901,7 @@ service cloud.firestore {
                       || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente'))));
         // The club manages; a player may cancel his own, or re-book a slot whose previous reservation was cancelled
         allow update: if !reservaDeTorneo() && !nuevaReservaDeTorneo()
+          && reservaBotIntacta()
           && (esStaff(clubId, 'gestionarReservas')
               || (noAnonimo() && resource.data.get('jugadorUid', null) == request.auth.uid
                   && changedOnly(['status']) && request.resource.data.status == 'cancelada')
@@ -891,6 +914,12 @@ service cloud.firestore {
                   && ((clubReservaDirecta(clubId) && request.resource.data.status == 'confirmada')
                       || (!clubReservaDirecta(clubId) && request.resource.data.status == 'pendiente'))));
         allow delete: if !reservaDeTorneo() && esStaff(clubId, 'gestionarReservas');
+      }
+
+      // Bot de WhatsApp: la conversación de cada teléfono (paso, datos, pausa, uid vinculado). privado/whatsapp (el
+      // token cifrado del número) ya queda cerrado por la regla de privado. Solo Functions.
+      match /whatsappChats/{chatId} {
+        allow read, write: if false;
       }
 
       // P3-16: el Pase Club (planesSocio/pase): lectura pública; lo configura quien configura el club (plan PRO)

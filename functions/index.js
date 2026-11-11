@@ -2683,6 +2683,12 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
     };
   }
 
+  return crearPreferenciaMp({ clubRef, clubId, tipo, destino, tokens, comisionPct, uid, anonimo });
+});
+
+// Crea (o reutiliza, si hay una igual pendiente y vigente) la preferencia de Checkout Pro de un destino ya armado y
+// guarda el pagoMp. La usan mpCrearPago y el bot de WhatsApp (seña de una reserva hecha por un invitado sin cuenta).
+async function crearPreferenciaMp({ clubRef, clubId, tipo, destino, tokens, comisionPct, uid, anonimo = false }) {
   // ¿Ya hay una preferencia pendiente y vigente igual? Se devuelve esa
   const previa = await pagoMpPendiente(clubRef, destino.filtro);
   if (previa) return { ok: true, pagoMpId: previa.id, initPoint: previa.initPoint, linkCorto: previa.linkCorto || null, monto: previa.monto, venceEn: previa.venceEn.toMillis(), reutilizado: true };
@@ -2733,7 +2739,7 @@ exports.mpCrearPago = onCall({ region: REGION, secrets: [MP_CLIENT_SECRET] }, as
   });
   logger.info(`mpCrearPago ${clubId}/${pagoMpRef.id}: ${tipo} $${pref.total} por ${uid}${anonimo ? " (anónimo)" : ""}`);
   return { ok: true, pagoMpId: pagoMpRef.id, initPoint, linkCorto, monto: pref.total, venceEn: pref.venceEnMs, reutilizado: false };
-});
+}
 
 // Link corto para el QR del mostrador: pagosMpIndice/{id} → clubs/{c}/pagosMp/{id} → 302 al checkout de Mercado Pago
 exports.mpIr = onRequest({ region: REGION }, async (req, res) => {
@@ -2967,6 +2973,8 @@ async function aplicarPagoLeido(clubRef, pago) {
       const quien = (pm.pagador && pm.pagador.nombre) || "Un jugador";
       if (pm.tipo === "seña") {
         await avisarStaff(clubRef, ["gestionarReservas", ...PERMISOS_COBRO], { tipo: "mp_seña", titulo: "Seña pagada por Mercado Pago", mensaje: `${quien} pagó la seña ($ ${monto}) del turno ${r.reserva ? `${r.reserva.canchaName || ""} ${fechaCortaArgentina(r.reserva.fecha)} ${r.reserva.horaInicio || r.reserva.hora || ""}` : ""}.`, link: `/admin/canchas?fecha=${(r.reserva && r.reserva.fecha) || ""}&turno=${pm.reservaId}`, icono: "💳" });
+        // Bot de WhatsApp: la reserva la hizo el bot → confirmación y link a Padely por WhatsApp (nunca tira error)
+        if (r.reserva && r.reserva.origen === "whatsapp") await waAvisarSeñaPagada(clubId, pm.reservaId);
       } else {
         await avisarStaff(clubRef, PERMISOS_COBRO, { tipo: "mp_pago", titulo: "Pago por Mercado Pago", mensaje: `${quien} pagó su parte por Mercado Pago ($ ${monto}) · ${r.cuenta ? horaCorta(r.cuenta) : ""}${r.saldada ? " · la cuenta se cerró" : ""}.`, link: `/admin/bar/cuentas/${pm.grupoId}`, icono: "💳" });
         if (r.excedente > 0) {
@@ -5415,3 +5423,276 @@ async function avisarClasePagada(clubRef, r) {
   avisos.push(avisarStaff(clubRef, PERMISOS_COBRO, { tipo: "mp_clase", titulo: "Clase pagada por Mercado Pago", mensaje: `${quien} pagó ${monto} de la clase con ${c.profeNombre} (${textoClase(c)}).`, link: "/admin/profes", icono: "💳" }));
   await Promise.all(avisos.map((a) => a.catch((err) => logger.error("avisarClasePagada", err))));
 }
+
+// BOT DE RESERVAS POR WHATSAPP (Cloud API de Meta, el número de CADA club). Diseño y pasos de Meta: docs/WHATSAPP.md.
+// El código vive en functions/whatsapp/*.js (motor, webhook, sender, repo); acá solo se cablea.
+//   whatsappNumeros/{phoneNumberId}        → { clubId, clubNombre, wabaId, estado, numeroVisible, conectadoEn } (índice;
+//                                            lo lee el super-admin)
+//   clubs/{c}/privado/whatsapp            → { phoneNumberId, wabaId, tokenRef (token cifrado AES-GCM con WA_TOKEN_KEY),
+//                                            estado, conectadoEn, … } (solo Functions)
+//   whatsappMensajes/{sha256(wamid)}      → cada mensaje entrante/eco UNA vez (idempotencia), TTL expiraEn (7 días)
+//   clubs/{c}/whatsappChats/{hash}        → la conversación (paso, datos, pausadoHasta, expiraEn) (solo Functions)
+// Prendido por configuracionPadely/flags.whatsappBot (Super-admin → Planes). Secretos: WA_APP_SECRET (firma de Meta),
+// WA_VERIFY_TOKEN (verificación del webhook) y WA_TOKEN_KEY (cifra los tokens, el hash del teléfono y el link firmado).
+//
+// FUTURO (Embedded Signup + coexistencia): el botón "Conectar WhatsApp" del dueño del club abre el Embedded Signup de
+// Meta (Facebook Login for Business con config_id y featureType "whatsapp_business_app_onboarding"); el código que
+// devuelve se canjea en una callable nueva (waCanjearCodigo) por un token de Business Integration System User y se llama
+// a la MISMA función guardarConexionWa({ clubId, phoneNumberId, wabaId, token, por }) que usa hoy waConectarClub. El
+// resto (índice, webhook, motor) no cambia. Requiere ser Tech Provider (ver docs/WHATSAPP.md).
+// ============================================================================
+const waGraph = require("./whatsapp/graph");
+const waSeg = require("./whatsapp/seguridad");
+const waMotor = require("./whatsapp/motor");
+const { crearManejadorWebhook: waCrearManejador } = require("./whatsapp/webhook");
+const { crearRepoFirestore: waCrearRepo } = require("./whatsapp/repoFirestore");
+const WA_APP_SECRET = defineSecret("WA_APP_SECRET");
+const WA_VERIFY_TOKEN = defineSecret("WA_VERIFY_TOKEN");
+const WA_TOKEN_KEY = defineSecret("WA_TOKEN_KEY");
+const WA_MENSAJE_TTL_DIAS = 7;
+const waPrivadoRef = (clubId) => db.collection("clubs").doc(clubId).collection("privado").doc("whatsapp");
+const waIndiceRef = (phoneNumberId) => db.collection("whatsappNumeros").doc(String(phoneNumberId));
+const waIdDeMensaje = (wamid) => require("node:crypto").createHash("sha256").update(String(wamid)).digest("hex").slice(0, 40);
+
+// Flags con un caché corto (el webhook recibe ráfagas)
+let waFlagsCache = { en: 0, valor: {} };
+async function waFlagPrendido() {
+  if (Date.now() - waFlagsCache.en > 60 * 1000) {
+    const s = await db.collection("configuracionPadely").doc("flags").get();
+    waFlagsCache = { en: Date.now(), valor: s.exists ? s.data() : {} };
+  }
+  return waFlagsCache.valor.whatsappBot === true;
+}
+
+// El sender del número del club (token descifrado en memoria; nunca se registra)
+async function waSenderDelClub(clubId) {
+  const snap = await waPrivadoRef(clubId).get();
+  const c = snap.exists ? snap.data() : null;
+  if (!c || c.estado !== "conectado" || !c.tokenRef || !c.phoneNumberId) return null;
+  return waGraph.crearSender({ phoneNumberId: c.phoneNumberId, token: waSeg.descifrarToken(c.tokenRef, WA_TOKEN_KEY.value()), logger });
+}
+
+// Seña de una reserva del bot: el MISMO camino que mpCrearPago (crearPreferenciaMp), sin uid (el invitado no tiene cuenta)
+async function waCrearPagoSeña(clubId, reservaId, pagador) {
+  const clubRef = db.collection("clubs").doc(clubId);
+  const club = (await clubRef.get()).data() || {};
+  if (!club.mercadoPago || club.mercadoPago.conectado !== true) return null;
+  const tokens = await tokensDelClub(clubRef);
+  if (!tokens || !tokens.accessToken) return null;
+  const r = (await clubRef.collection("reservas").doc(reservaId).get()).data();
+  if (!r || r.status === "cancelada" || r.señaPagada || !(Number(r.seña) > 0)) return null;
+  const comisionPct = (await planesUtil()).comisionPct(club);
+  const nombre = texto(pagador && pagador.nombre, 60) || r.nombreJugador || "";
+  const seña = Number(r.seña);
+  const destino = { monto: seña, creditoAplicado: 0, creditoIds: [], titulo: `${club.nombre || "Club"} · ${r.canchaName || "Cancha"} · ${fechaCortaArgentina(r.fecha)} ${r.horaInicio || r.hora || ""} · Seña`, backUrl: `${APP_URL}/pago-recibido`, pagador: { uid: null, nombre, origen: "whatsapp" }, participanteIds: [], lineas: [], piezas: [], grupoId: null, reservaId, filtro: { reservaId, monto: seña, participanteIds: [] } };
+  const p = await crearPreferenciaMp({ clubRef, clubId, tipo: "seña", destino, tokens, comisionPct, uid: "whatsapp", anonimo: false });
+  // El link corto (mpIr) cabe mejor en WhatsApp que el init_point
+  return { link: p.linkCorto || p.initPoint, pagoMpId: p.pagoMpId, venceEnMs: p.venceEn };
+}
+
+function waRepo() {
+  return waCrearRepo({
+    db,
+    FieldValue,
+    Timestamp,
+    crearPagoSeña: waCrearPagoSeña,
+    // Al dueño y al staff que gestiona reservas (una campana por persona)
+    avisarClub: (clubId, aviso) => avisarStaff(db.collection("clubs").doc(clubId), ["gestionarReservas"], { ...aviso, icono: "💬" }),
+    linkVincular: (clubId, hash, venceMs) => `${APP_URL}/whatsapp/vincular?c=${encodeURIComponent(clubId)}&h=${hash}&v=${venceMs}&s=${waSeg.firmarVinculo({ clubId, hash, venceMs }, WA_TOKEN_KEY.value())}`,
+  });
+}
+
+// Webhook de Meta: GET verifica la suscripción; POST valida la firma, rutea por phone_number_id y guarda cada mensaje
+// una sola vez. Responde enseguida; la conversación corre en waProcesarMensaje.
+exports.waWebhook = onRequest({ region: REGION, secrets: [WA_APP_SECRET, WA_VERIFY_TOKEN], timeoutSeconds: 30 }, (req, res) =>
+  waCrearManejador({
+    appSecret: () => WA_APP_SECRET.value(),
+    verifyToken: () => WA_VERIFY_TOKEN.value(),
+    logger,
+    // Números de clubes sin el flag o sin conexión: se ignoran (200 igual, para que Meta no reintente)
+    rutear: async (phoneNumberId) => {
+      if (!(await waFlagPrendido())) return null;
+      const s = await waIndiceRef(phoneNumberId).get();
+      return s.exists && s.data().estado === "conectado" && s.data().clubId ? s.data().clubId : null;
+    },
+    guardarEvento: async (ev, clubId) => {
+      try {
+        await db.collection("whatsappMensajes").doc(waIdDeMensaje(ev.id)).create({ ...ev, clubId, estado: "nuevo", recibidoEn: FieldValue.serverTimestamp(), expiraEn: Timestamp.fromMillis(Date.now() + WA_MENSAJE_TTL_DIAS * 86400000) });
+        return true;
+      } catch (err) {
+        if (err && (err.code === 6 || err.code === "already-exists")) return false; // ya estaba: reintento de Meta
+        throw err;
+      }
+    },
+  })(req, res),
+);
+
+// La conversación: un mensaje nuevo (o un eco del club) → el motor. Los errores se registran y quedan en el documento.
+exports.waProcesarMensaje = onDocumentCreated({ document: "whatsappMensajes/{id}", region: REGION, secrets: [WA_TOKEN_KEY, MP_CLIENT_SECRET] }, async (event) => {
+  const ev = event.data && event.data.data();
+  if (!ev || !ev.clubId || !ev.waId) return;
+  const ref = event.data.ref;
+  try {
+    const sender = await waSenderDelClub(ev.clubId);
+    if (!sender) {
+      await ref.update({ estado: "ignorado", resultado: "club sin conexión" });
+      return;
+    }
+    if (ev.tipo === "mensaje") sender.leido(ev.id).catch(() => {});
+    const chatId = waSeg.hashTelefono(ev.waId, WA_TOKEN_KEY.value());
+    const resultado = await waMotor.procesarEvento({ clubId: ev.clubId, chatId, evento: ev, repo: waRepo(), sender, ahoraMs: Date.now() });
+    await ref.update({ estado: "procesado", resultado: String(resultado).slice(0, 200), procesadoEn: FieldValue.serverTimestamp() });
+    logger.info(`waProcesarMensaje ${ev.clubId}/${chatId}: ${resultado}`);
+  } catch (err) {
+    logger.error(`waProcesarMensaje ${ev.clubId}: ${err && err.message ? err.message : err}`);
+    await ref.update({ estado: "error", error: String((err && err.message) || err).slice(0, 300) }).catch(() => {});
+  }
+});
+
+// Desde mpWebhook (aplicarPagoLeido): la seña de una reserva del bot quedó pagada → confirmación por WhatsApp
+async function waAvisarSeñaPagada(clubId, reservaId) {
+  try {
+    const snap = await db.collection("clubs").doc(clubId).collection("reservas").doc(reservaId).get();
+    if (!snap.exists) return;
+    const sender = await waSenderDelClub(clubId);
+    if (!sender) return;
+    const r = await waMotor.notificarSeñaPagada({ clubId, reserva: { id: snap.id, ...snap.data() }, repo: waRepo(), sender, ahoraMs: Date.now() });
+    logger.info(`whatsapp: seña pagada ${clubId}/${reservaId} → ${r}`);
+  } catch (err) {
+    logger.error(`whatsapp: aviso de seña pagada ${clubId}/${reservaId}: ${err && err.message ? err.message : err}`);
+  }
+}
+
+// Conexión del número de un club (hoy la hace el super-admin con los datos de Meta; mañana, Embedded Signup)
+async function guardarConexionWa({ clubId, phoneNumberId, wabaId, token, por }) {
+  const clubRef = db.collection("clubs").doc(clubId);
+  const club = await clubRef.get();
+  if (!club.exists) throw new HttpsError("not-found", "El club no existe");
+  // Se valida el token contra Meta (el número existe y el token lo ve) y se suscribe la app a la WABA para los webhooks
+  let info = null;
+  try {
+    const res = await fetch(`${waGraph.GRAPH_URL}/${waGraph.GRAPH_API_VERSION}/${encodeURIComponent(phoneNumberId)}?fields=display_phone_number,verified_name`, { headers: { Authorization: `Bearer ${token}` } });
+    info = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((info && info.error && info.error.message) || `HTTP ${res.status}`);
+  } catch (err) {
+    logger.warn(`waConectarClub ${clubId}: Meta no aceptó el número/token (${err.message})`);
+    throw new HttpsError("failed-precondition", `Meta no aceptó el número o el token: ${String(err.message).slice(0, 160)}`);
+  }
+  try {
+    const res = await fetch(`${waGraph.GRAPH_URL}/${waGraph.GRAPH_API_VERSION}/${encodeURIComponent(wabaId)}/subscribed_apps`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) logger.warn(`waConectarClub ${clubId}: subscribed_apps → HTTP ${res.status}`);
+  } catch (err) {
+    logger.warn(`waConectarClub ${clubId}: subscribed_apps (${err.message})`);
+  }
+  const numeroVisible = (info && info.display_phone_number) || null;
+  const nombreVerificado = (info && info.verified_name) || null;
+  await db.runTransaction(async (tx) => {
+    const idx = await tx.get(waIndiceRef(phoneNumberId));
+    if (idx.exists && idx.data().clubId !== clubId && idx.data().estado === "conectado") throw new HttpsError("already-exists", "Ese número ya está conectado a otro club");
+    const prev = await tx.get(waPrivadoRef(clubId));
+    if (prev.exists && prev.data().phoneNumberId && prev.data().phoneNumberId !== phoneNumberId) tx.delete(waIndiceRef(prev.data().phoneNumberId));
+    tx.set(waPrivadoRef(clubId), { phoneNumberId, wabaId, tokenRef: waSeg.cifrarToken(token, WA_TOKEN_KEY.value()), estado: "conectado", conectadoEn: FieldValue.serverTimestamp(), conectadoPor: por, numeroVisible, nombreVerificado, metodo: "superadmin" });
+    tx.set(waIndiceRef(phoneNumberId), { clubId, clubNombre: club.data().nombre || null, wabaId, estado: "conectado", numeroVisible, nombreVerificado, conectadoEn: FieldValue.serverTimestamp() });
+  });
+  logger.info(`waConectarClub ${clubId}: número ${phoneNumberId} conectado por ${por}`);
+  return { ok: true, numeroVisible, nombreVerificado };
+}
+
+async function waExigirSuperAdmin(request) {
+  const uid = exigirAuth(request);
+  const admin = await db.collection("superadmins").doc(uid).get();
+  if (!admin.exists) throw new HttpsError("permission-denied", "Solo el super-admin");
+  return uid;
+}
+
+exports.waConectarClub = onCall({ region: REGION, secrets: [WA_TOKEN_KEY] }, async (request) => {
+  const uid = await waExigirSuperAdmin(request);
+  const d = request.data || {};
+  const clubId = texto(d.clubId, 80);
+  const phoneNumberId = texto(d.phoneNumberId, 40);
+  const wabaId = texto(d.wabaId, 40);
+  const token = String(d.token || "").trim();
+  if (!clubId || !/^\d{5,30}$/.test(phoneNumberId) || !/^\d{5,30}$/.test(wabaId) || token.length < 20 || token.length > 2000 || /\s/.test(token)) {
+    throw new HttpsError("invalid-argument", "clubId, phoneNumberId y wabaId (números de Meta) y el token de acceso");
+  }
+  return guardarConexionWa({ clubId, phoneNumberId, wabaId, token, por: uid });
+});
+
+exports.waDesconectarClub = onCall({ region: REGION }, async (request) => {
+  const uid = await waExigirSuperAdmin(request);
+  const clubId = texto(request.data && request.data.clubId, 80);
+  if (!clubId) throw new HttpsError("invalid-argument", "clubId");
+  const snap = await waPrivadoRef(clubId).get();
+  if (!snap.exists) return { ok: true, yaDesconectado: true };
+  const batch = db.batch();
+  if (snap.data().phoneNumberId) batch.delete(waIndiceRef(snap.data().phoneNumberId));
+  batch.set(waPrivadoRef(clubId), { estado: "desconectado", tokenRef: FieldValue.delete(), desconectadoEn: FieldValue.serverTimestamp(), desconectadoPor: uid }, { merge: true });
+  await batch.commit();
+  logger.info(`waDesconectarClub ${clubId}: desconectado por ${uid}`);
+  return { ok: true };
+});
+
+// Link de la confirmación (/whatsapp/vincular?c=&h=&v=&s=): suma a la cuenta las reservas próximas que ese teléfono
+// hizo por el bot en ese club, y las que haga después (el chat recuerda el uid)
+exports.waVincularReservas = onCall({ region: REGION, secrets: [WA_TOKEN_KEY] }, async (request) => {
+  const uid = exigirAuth(request);
+  if (esAnonimoReq(request)) throw new HttpsError("permission-denied", "Entrá con tu cuenta de Padely");
+  const d = request.data || {};
+  const clubId = texto(d.c, 80);
+  const hash = texto(d.h, 40);
+  const venceMs = Number(d.v);
+  const v = waSeg.vinculoValido({ clubId, hash, venceMs, firma: texto(d.s, 64) }, WA_TOKEN_KEY.value());
+  if (!v.ok) throw new HttpsError(v.motivo === "vencido" ? "deadline-exceeded" : "permission-denied", v.motivo === "vencido" ? "El link venció. Pedí uno nuevo reservando por WhatsApp." : "El link no es válido");
+  const clubRef = db.collection("clubs").doc(clubId);
+  const hoy = fechaLocalArgentina();
+  const snap = await clubRef.collection("reservas").where("waHash", "==", hash).get();
+  const slots = snap.docs.filter((x) => x.data().status !== "cancelada" && (x.data().fecha || "") >= hoy);
+  const ajenas = slots.filter((x) => x.data().jugadorUid && x.data().jugadorUid !== uid);
+  if (ajenas.length) throw new HttpsError("failed-precondition", "Estas reservas ya están en otra cuenta de Padely");
+  const nombre = await nombreDeUsuario(uid, "");
+  const batch = db.batch();
+  const grupos = new Set();
+  slots.forEach((x) => {
+    grupos.add(x.data().grupoId || x.id);
+    batch.update(x.ref, { jugadorUid: uid, vinculadaEn: FieldValue.serverTimestamp() });
+    batch.set(clubRef.collection("contactosReservas").doc(x.id), { jugadorUid: uid }, { merge: true });
+  });
+  batch.set(clubRef.collection("whatsappChats").doc(hash), { uidVinculado: uid, ...(nombre ? { nombre } : {}), vinculadoEn: Date.now() }, { merge: true });
+  await batch.commit();
+  const club = (await clubRef.get()).data() || {};
+  logger.info(`waVincularReservas ${clubId}/${hash}: ${grupos.size} reservas → ${uid}`);
+  return { ok: true, reservas: grupos.size, clubNombre: club.nombre || null };
+});
+
+// Cada 10 minutos: los turnos que el bot guardó esperando la seña y no se pagaron se liberan. El pago pendiente se da
+// por vencido en la MISMA transacción (si llega tarde, mpWebhook lo trata como pago tardío y avisa al club).
+exports.waLiberarReservas = onSchedule({ schedule: "every 10 minutes", timeZone: ZONA_HORARIA, secrets: [WA_TOKEN_KEY] }, async () => {
+  const ahora = Date.now();
+  // Mismo índice que expirarReservasPendientes (status + createdAt, collection group)
+  const snap = await db.collectionGroup("reservas").where("status", "==", "pendiente").where("createdAt", "<=", Timestamp.fromMillis(ahora - waMotor.RETENCION_MIN * 60000)).get();
+  const cabezas = snap.docs.filter((x) => {
+    const r = x.data();
+    return r.origen === "whatsapp" && !r.señaPagada && Number(r.waRetencionHasta) > 0 && Number(r.waRetencionHasta) <= ahora && (r.grupoId || x.id) === x.id;
+  });
+  let liberadas = 0;
+  for (const cabeza of cabezas) {
+    const clubRef = cabeza.ref.parent.parent;
+    try {
+      const liberada = await db.runTransaction(async (tx) => {
+        const [slots, pagos] = await Promise.all([tx.get(clubRef.collection("reservas").where("grupoId", "==", cabeza.id)), tx.get(clubRef.collection("pagosMp").where("reservaId", "==", cabeza.id).where("estado", "==", "pendiente"))]);
+        const vivos = slots.docs.filter((x) => x.data().status === "pendiente" && x.data().origen === "whatsapp" && !x.data().señaPagada);
+        if (!vivos.length) return false;
+        vivos.forEach((x) => tx.update(x.ref, { status: "cancelada", motivo: "seña sin pagar (WhatsApp)", canceladaEn: FieldValue.serverTimestamp() }));
+        pagos.docs.forEach((p) => tx.update(p.ref, { estado: "vencido", actualizadoEn: FieldValue.serverTimestamp() }));
+        return true;
+      });
+      if (!liberada) continue;
+      liberadas += 1;
+      const sender = await waSenderDelClub(clubRef.id);
+      if (sender) await waMotor.notificarRetencionVencida({ clubId: clubRef.id, reserva: { id: cabeza.id, ...cabeza.data() }, repo: waRepo(), sender, ahoraMs: Date.now() }).catch((err) => logger.error(`waLiberarReservas aviso ${cabeza.ref.path}`, err));
+    } catch (err) {
+      logger.error(`waLiberarReservas ${cabeza.ref.path}`, err);
+    }
+  }
+  if (liberadas) logger.info(`waLiberarReservas: ${liberadas} turnos liberados`);
+});
