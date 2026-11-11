@@ -306,6 +306,8 @@ export default function FichaTurno({ clubId, club, reserva: reservaProp = null, 
               <Card.Meta className="mt-2!">Reserva cancelada.</Card.Meta>
             ) : reserva.tipo === "torneo" ? (
               <Card.Meta className="mt-2!">Lo bloquea un torneo: lo libera la organización.</Card.Meta>
+            ) : reserva.tipo === "clase" ? (
+              <Card.Meta className="mt-2!">Es una clase{reserva.profeNombre ? ` de ${reserva.profeNombre}` : ""}: se cancela desde Profes → Clases.</Card.Meta>
             ) : (
               <div className="pd-btn-group mt-3">
                 {reserva.status === "pendiente" && (

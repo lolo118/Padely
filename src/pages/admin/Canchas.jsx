@@ -56,9 +56,14 @@ const motivoDeBloqueo = (nombre) => (nombre || "").replace(/^🔒\s*/, "");
 
 // Turno bloqueado por un partido de torneo: lo escribe la Cloud Function (tipo "torneo") y el club no lo
 // puede confirmar, cancelar ni borrar. En las grillas es una celda quieta sin acciones.
-const esBloqueoTorneo = (reserva) => reserva?.tipo === "torneo";
-const nombreTorneo = (reserva) => reserva?.torneoNombre || "";
-const tituloBloqueoTorneo = (reserva) => `Lo bloquea el torneo ${nombreTorneo(reserva)}`.trim();
+// Profes (flags.profes): una clase con cancha (tipo "clase", la escribe la Function reservarClase) se trata igual: sin
+// acciones acá; se cancela desde Profes → Clases
+const esBloqueoTorneo = (reserva) => reserva?.tipo === "torneo" || reserva?.tipo === "clase";
+const esClase = (reserva) => reserva?.tipo === "clase";
+const etiquetaBloqueo = (reserva) => (esClase(reserva) ? "Clase" : "Torneo");
+const nombreTorneo = (reserva) => (esClase(reserva) ? (reserva?.profeNombre ? `Profe ${reserva.profeNombre}` : "") : reserva?.torneoNombre || "");
+const tituloBloqueoTorneo = (reserva) =>
+  esClase(reserva) ? `Clase de ${reserva?.profeNombre || "un profe"}: se gestiona en Profes` : `Lo bloquea el torneo ${nombreTorneo(reserva)}`.trim();
 
 // "Pareja A vs Pareja B" del partido que bloquea el turno, o "" si el bloqueo no trae el partido
 const partidoDeBloqueo = (reserva) => {
@@ -185,7 +190,7 @@ function WeeklyGrid({ canchas, fechaBase, getReservasForDate, getTurnosFijosData
                           <SlotCell
                             key={d.date}
                             estado="bloqueada"
-                            linea1="Torneo"
+                            linea1={etiquetaBloqueo(reserva)}
                             linea2={nombreTorneo(reserva) || undefined}
                             title={tituloBloqueoTorneo(reserva)}
                           />
@@ -436,7 +441,7 @@ function ReservasTab({ clubId, canchas, clubNombre }) {
                     {getCanchaName(r.canchaId)} · {formatFecha(r.fecha)} · {rangoHoras(r.horaInicio, r.horaFin)}
                   </Card.Eyebrow>
                   {esBloqueoTorneo(r) ? (
-                    <Badge tone="night">Torneo</Badge>
+                    <Badge tone="night">{etiquetaBloqueo(r)}</Badge>
                   ) : (
                     <Badge tone={statusTone[r.status] || statusTone.pendiente} dot>
                       {statusLabel[r.status] || "Pendiente"}
@@ -1465,7 +1470,7 @@ export default function Canchas() {
                                 <SlotCell
                                   key={cancha.id}
                                   estado="bloqueada"
-                                  linea1="Torneo"
+                                  linea1={etiquetaBloqueo(reserva)}
                                   linea2={nombreTorneo(reserva) || undefined}
                                   title={tituloBloqueoTorneo(reserva)}
                                 />

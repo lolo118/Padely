@@ -78,7 +78,7 @@ export class CuentaNoEditableError extends Error {
 export const escucharReservasDeHoy = (clubId, onDatos, onError) =>
   onSnapshot(
     query(col(clubId, "reservas"), where("status", "==", "confirmada"), where("fecha", "==", getTodayLocal())),
-    (snap) => onDatos(agruparReservas(snap.docs.map((d) => normalizarReserva({ id: d.id, clubId, ...d.data() }))).filter((r) => r.tipo !== "torneo")),
+    (snap) => onDatos(agruparReservas(snap.docs.map((d) => normalizarReserva({ id: d.id, clubId, ...d.data() }))).filter((r) => r.tipo !== "torneo" && r.tipo !== "clase")),
     onError,
   );
 
