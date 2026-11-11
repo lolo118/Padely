@@ -460,6 +460,12 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "whatsappMensajes",
+      "fieldPath": "expiraEn",
+      "ttl": true,
+      "indexes": []
+    },
+    {
       "collectionGroup": "contactosReservas",
       "fieldPath": "jugadorUid",
       "ttl": false,
