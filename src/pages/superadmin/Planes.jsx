@@ -11,6 +11,7 @@ import { db } from "../../lib/firebase";
 import { ETIQUETA_PLAN, cambiarPlan, escalonDe, estadoPlan, precioAnual, registrarPago } from "../../utils/planes";
 import { formatPrecio } from "../../utils/format";
 import { formatFechaHora, formatFechaLarga } from "../../utils/formatDate";
+import WhatsappCard from "./WhatsappCard";
 
 // /superadmin/planes (P3-9): planes de los clubes. Pago recibido (+1 mes, o +12 al precio de 10) con el monto del
 // escalón según las canchas activas de ese momento; cambio manual de plan; avisos "Ya pagué"; cobro de torneos y los
@@ -218,6 +219,8 @@ const FLAGS_PLATAFORMA = [
   { id: "partidosAbiertos", label: "Partidos abiertos (los jugadores buscan compañeros)", ayuda: "Prender después del deploy de las Functions de P3-15." },
   { id: "membresias", label: "Pase Club (membresía de cada club)", ayuda: "Prender después del deploy de P3-16 (reglas, índices y Functions)." },
   { id: "miniTorneo", label: "Mini torneo en el turno (americano o parejas entre los que juegan)", ayuda: "Prender después de desplegar las reglas de Firestore (miniTorneos). No usa Functions ni suma puntos." },
+  // Bot de WhatsApp (docs/WHATSAPP.md)
+  { id: "whatsappBot", label: "Bot de reservas por WhatsApp (el número de cada club)", ayuda: "Prender después del deploy de las Functions wa* y de cargar los secretos WA_APP_SECRET, WA_VERIFY_TOKEN y WA_TOKEN_KEY. Apagado, el webhook ignora todos los mensajes." },
 ];
 function FlagsCard() {
   const [valores, setValores] = useState(() => Object.fromEntries(FLAGS_PLATAFORMA.map((f) => [f.id, flag(f.id)])));
@@ -474,6 +477,9 @@ export default function Planes() {
       <MigracionPrivacidadCard />
 
       <FlagsCard />
+
+      {/* Bot de WhatsApp: conexión del número de cada club */}
+      <WhatsappCard clubes={clubes} />
 
       {dialogo?.modo === "plan" && (
         <CambiarPlanDialog

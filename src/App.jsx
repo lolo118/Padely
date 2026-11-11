@@ -91,6 +91,7 @@ const Privacidad = lazy(() => import("./pages/Privacidad"));
 const AceptarInvitacion = lazy(() => import("./pages/AceptarInvitacion"));
 const AceptarInvitacionStaff = lazy(() => import("./pages/AceptarInvitacionStaff"));
 const VincularJugador = lazy(() => import("./pages/VincularJugador"));
+const VincularWhatsapp = lazy(() => import("./pages/VincularWhatsapp")); // bot de WhatsApp
 const NoEncontrado = lazy(() => import("./pages/NoEncontrado"));
 
 function LoadingFallback() {
@@ -235,6 +236,8 @@ export default function App() {
             element={<AceptarInvitacion />}
           />
           <Route path="vincular/:torneoId/:parejaId/:posicion" element={<VincularJugador />} />
+          {/* Bot de WhatsApp: el link de la confirmación suma las reservas del teléfono a la cuenta */}
+          <Route path="/whatsapp/vincular" element={<VincularWhatsapp />} />
           {/* Invitacion al equipo de un club (staff): la acepta el invitado con su cuenta */}
           <Route path="equipo/invitacion/:clubId/:invId" element={<AceptarInvitacionStaff />} />
           <Route path="/t/:id" element={<RedirigirTorneo />} />
